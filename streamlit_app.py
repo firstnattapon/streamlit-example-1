@@ -9,4 +9,4 @@ q = st.number_input('asset')
 p = z+q
 y = -742+1500 * np.log(x)
 st.write("Price", x ,"=" , y) 
-st.write("==",p - y) 
+st.write( 'cf' ,"=",p - y) 
