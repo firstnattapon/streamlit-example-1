@@ -1,6 +1,5 @@
 import streamlit as st
 import numpy as np
-import datetime
 
 st.write("สมการ ","  =  -742+1500ln x "  , "fix 1500 : Initial Port" , "เริ่ม 6.88") 
 st.write("")
@@ -15,26 +14,34 @@ st.write( 'cf' ,"=", p - y)
 
 button_NEW = st.button("NEW_DATA")
 if button_NEW:
-    np.save('my_array.npy', np.array([]))
-    st.write('complete_NEW_DATA') 
-
+    try:
+        np.save('my_array.npy', np.array([]))
+        my_array_1 = np.load('my_array.npy')
+        st.write(my_array_1) 
+    except:pass
+        
 button_LOAD = st.button("LOAD_DATA")
 if button_LOAD:
-    my_array = np.load('my_array.npy')
-    st.write(my_array) 
+    try:
+        my_array_2 = np.load('my_array.npy')
+        st.write(my_array_2) 
+    except:pass
 
 button_ADD = st.button("ADD_CF")
-if button_ADD:
-    now = datetime.datetime.now()
-    
-    my_array_a = np.load('my_array.npy')
-    my_array_b = np.append(my_array_a, [now , p - y])
-    np.save('my_array.npy', my_array_b)
-    st.write( p - y) 
+if button_ADD:    
+    try:
+        my_array_a = np.load('my_array.npy')
+        my_array_b = np.append(my_array_a, p - y)
+        np.save('my_array.npy', my_array_b)
+        st.write( p - y) 
+    except:pass
     
 button_DEL = st.button("DEL_CF")
 if button_DEL:
-    my_array_a = np.load('my_array.npy')
-    my_array_b = np.delete(my_array_a, -1)
-    np.save('my_array.npy', my_array_b)
-    st.write('complete_DEL_CF') 
+    try:
+        my_array_c = np.load('my_array.npy')
+        my_array_d = np.delete(my_array_c, -1)
+        np.save('my_array.npy', my_array_d)
+        my_array_3 = np.load('my_array.npy')
+        st.write(my_array_3)     
+     except:pass   
