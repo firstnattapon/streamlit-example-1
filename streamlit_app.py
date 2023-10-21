@@ -20,14 +20,14 @@ if button_NEW:
 button_LOAD = st.button("LOAD_DATA")
 if button_LOAD:
     my_array = np.load('my_array.npy')
-    st.write('complete_LOAD_DATA') 
+    st.write(my_array) 
 
 button_ADD = st.button("ADD_CF")
 if button_ADD:
     my_array_a = np.load('my_array.npy')
     my_array_b = np.append(my_array_a, p - y)
     np.save('my_array.npy', my_array_b)
-    st.write('complete_ADD_CF') 
+    st.write( p - y) 
     
 button_DEL = st.button("DEL_CF")
 if button_DEL:
