@@ -8,5 +8,11 @@ z = st.number_input('cash')
 q = st.number_input('asset')
 p = z+q
 y = -742+1500 * np.log(x)
+
 st.write("Price", x ,"=" , y) 
-st.write( 'cf' ,"=",p - y) 
+st.write( 'cf' ,"=", p - y) 
+
+
+if st.button('ADD CF'):
+  np.save("my_array.npy", p - y)
+
