@@ -27,7 +27,7 @@ if button_ADD:
     my_array_a = np.load('my_array.npy')
     my_array_b = np.append(my_array_a, p - y)
     np.save('my_array.npy', my_array_b)
-    st.write( button_ADD)
+    st.write( p - y)
     
 button_DEL = st.button("DEL_CF")
 if button_DEL:
