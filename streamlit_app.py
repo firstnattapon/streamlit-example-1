@@ -13,6 +13,17 @@ st.write("Price", x ,"=" , y)
 st.write( 'cf' ,"=", p - y) 
 
 
-if st.button('ADD CF'):
-  np.save("my_array.npy", p - y)
+def save_numpy_array(array, filename):
+    np.save(filename, array)
 
+st.title("Save Numpy Array to File")
+
+array = np.random.randint(0, 100, size=(100,))
+
+button = st.button("Save Array")
+
+if button:
+    filename = "array.npy"
+    save_numpy_array(array, filename)
+
+    st.write("Array saved to file: {}".format(filename))
