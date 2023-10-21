@@ -27,3 +27,8 @@ if button:
     save_numpy_array(array, filename)
 
     st.write("Array saved to file: {}".format(filename))
+
+
+my_array = np.load('my_array.npy')
+
+st.write( my_array) 
