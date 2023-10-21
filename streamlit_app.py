@@ -44,4 +44,4 @@ if button_DEL:
         np.save('my_array.npy', my_array_d)
         my_array_3 = np.load('my_array.npy')
         st.write(my_array_3)     
-     except:pass   
+    except:pass   
