@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import datetime
 
 st.write("สมการ ","  =  -742+1500ln x "  , "fix 1500 : Initial Port" , "เริ่ม 6.88") 
 st.write("")
@@ -31,7 +32,7 @@ button_ADD = st.button("ADD_CF")
 if button_ADD:    
     try:
         my_array_a = np.load('my_array.npy')
-        my_array_b = np.append(my_array_a, '{}_{}'.format( 1 , p - y) )
+        my_array_b = np.append(my_array_a, '{}_____{}'.format( datetime.datetime.now() , p - y) )
         np.save('my_array.npy', my_array_b)
         st.write( p - y) 
     except:pass
