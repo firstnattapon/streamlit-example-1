@@ -23,7 +23,7 @@ array = np.random.randint(0, 100, size=(100,))
 button = st.button("Save Array")
 
 if button:
-    filename = "array.npy"
+    filename = "my_array.npy"
     save_numpy_array(array, filename)
 
     st.write("Array saved to file: {}".format(filename))
