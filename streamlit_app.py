@@ -38,7 +38,7 @@ if Check_ADD :
     if button_ADD:    
         try:
             my_array_a = np.load('my_array.npy')
-            my_array_b = np.append(my_array_a, '({:.2f}):({:.2f}):({:.2f})'.format( datetime.datetime.now() , p - y , (p - y)/2150 ))
+            my_array_b = np.append(my_array_a, '({}):({:.2f}):({:.2f})'.format( datetime.datetime.now() , p - y , (p - y)/2150 ))
             np.save('my_array.npy', my_array_b)
             st.write( p - y) 
         except:pass
