@@ -32,7 +32,7 @@ button_ADD = st.button("ADD_CF")
 if button_ADD:    
     try:
         my_array_a = np.load('my_array.npy')
-        my_array_b = np.append(my_array_a, '({}):({})'.format( datetime.datetime.now() , p - y ))
+        my_array_b = np.append(my_array_a, '({}):({}):({})'.format( datetime.datetime.now() , p - y , (p - y)/2150 ))
         np.save('my_array.npy', my_array_b)
         st.write( p - y) 
     except:pass
