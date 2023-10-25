@@ -37,9 +37,9 @@ if button_ADD:
         st.write( p - y) 
     except:pass
         
-button_DEL = st.checkbox('DEL_CF')
-if button_DEL :
-    button_DEL = st.button("DEL_CF")
+Check_DEL = st.checkbox('DEL_CF')
+if Check_DEL :
+    button_DEL = st.button("DEL_CF ")
     if button_DEL:
         try:
             my_array_c = np.load('my_array.npy')
