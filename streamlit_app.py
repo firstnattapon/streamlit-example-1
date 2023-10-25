@@ -32,17 +32,19 @@ button_ADD = st.button("ADD_CF")
 if button_ADD:    
     try:
         my_array_a = np.load('my_array.npy')
-        my_array_b = np.append(my_array_a, '({}):({}):({})'.format( datetime.datetime.now() , p - y , (p - y)/2150 ))
+        my_array_b = np.append(my_array_a, '({:.2f}):({:.2f}):({:.2f})'.format( datetime.datetime.now() , p - y , (p - y)/2150 ))
         np.save('my_array.npy', my_array_b)
         st.write( p - y) 
     except:pass
-
-button_DEL = st.button("DEL_CF")
-if button_DEL:
-    try:
-        my_array_c = np.load('my_array.npy')
-        my_array_d = np.delete(my_array_c, -1)
-        np.save('my_array.npy', my_array_d)
-        my_array_3 = np.load('my_array.npy')
-        st.write(my_array_3)     
-    except:pass   
+        
+button_DEL = st.checkbox('DEL_CF')
+if button_DEL :
+    button_DEL = st.button("DEL_CF")
+    if button_DEL:
+        try:
+            my_array_c = np.load('my_array.npy')
+            my_array_d = np.delete(my_array_c, -1)
+            np.save('my_array.npy', my_array_d)
+            my_array_3 = np.load('my_array.npy')
+            st.write(my_array_3)     
+        except:pass   
