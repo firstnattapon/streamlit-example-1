@@ -33,7 +33,7 @@ if Check_LOAD :
         except:pass
         
 Check_ADD = st.checkbox('ADD_CF ')
-if Check_ADD 
+if Check_ADD :
     button_ADD = st.button("ADD_CF")
     if button_ADD:    
         try:
