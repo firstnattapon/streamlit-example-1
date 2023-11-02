@@ -1,6 +1,11 @@
 import streamlit as st
 import numpy as np
 import datetime
+import thingspeak
+
+channel_id = 2329127
+write_api_key = 'V10DE0HKR4JKB014'
+client = thingspeak.Channel(channel_id, write_api_key)
 
 st.write("สมการ ","  =  -742+1500ln x "  , "fix 1500 : Initial Port" , "เริ่ม 6.88") 
 st.write("")
@@ -37,9 +42,10 @@ if Check_ADD :
     button_ADD = st.button("ADD_CF")
     if button_ADD:    
         try:
-            my_array_a = np.load('my_array.npy')
-            my_array_b = np.append(my_array_a, '({}):({:.2f}):({:.2f})'.format( datetime.datetime.now() , p - y , (p - y)/2150 ))
-            np.save('my_array.npy', my_array_b)
+            # my_array_a = np.load('my_array.npy')
+            # my_array_b = np.append(my_array_a, '({}):({:.2f}):({:.2f})'.format( datetime.datetime.now() , p - y , (p - y)/2150 ))
+            # np.save('my_array.npy', my_array_b)
+            client.update(  {'field1': p - y } )
             st.write( p - y) 
         except:pass
         
