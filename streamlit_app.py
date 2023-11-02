@@ -59,6 +59,6 @@ if Check_DEL :
             # np.save('my_array.npy', my_array_d)
             # my_array_3 = np.load('my_array.npy')
             latest_entry_id = client.get_latest_entry_id()
-            client.delete_data_point(latest_entry_id)
+            # client.delete_data_point(latest_entry_id)
             st.write(latest_entry_id)     
         except:pass   
