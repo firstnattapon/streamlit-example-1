@@ -45,8 +45,8 @@ if Check_ADD :
             # my_array_a = np.load('my_array.npy')
             # my_array_b = np.append(my_array_a, '({}):({:.2f}):({:.2f})'.format( datetime.datetime.now() , p - y , (p - y)/2150 ))
             # np.save('my_array.npy', my_array_b)
-            client.update(  {'field1': p - y } )
-            st.write( p - y) 
+            client.update(  {'field1': p - y , 'field2':(p - y)/2150 } )
+            st.write({'field1': p - y , 'field2':(p - y)/2150 }) 
         except:pass
 
 # Check_DEL = st.checkbox('DEL_CF ')
