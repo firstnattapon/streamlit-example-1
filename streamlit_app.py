@@ -58,3 +58,6 @@ if Check_ADD :
 #                         client.delete_feed(last_data_point['id'])
 #                         st.write(last_data_point['id'])     
 #                 except:pass   
+
+
+st.write('https://thingspeak.com/channels/2329127')
