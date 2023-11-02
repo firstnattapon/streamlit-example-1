@@ -18,24 +18,24 @@ y = -742+1500 * np.log(x)
 st.write("Price", x ,"=" , y) 
 st.write( 'cf' ,"=", p - y) 
 
-Check_NEW = st.checkbox('NEW_DATA ')
-if Check_NEW :
-    button_NEW = st.button("NEW_DATA")
-    if button_NEW:
-        try:
-            np.save('my_array.npy', np.array([]))
-            my_array_1 = np.load('my_array.npy')
-            st.write(my_array_1) 
-        except:pass
+# Check_NEW = st.checkbox('NEW_DATA ')
+# if Check_NEW :
+#     button_NEW = st.button("NEW_DATA")
+#     if button_NEW:
+#         try:
+#             np.save('my_array.npy', np.array([]))
+#             my_array_1 = np.load('my_array.npy')
+#             st.write(my_array_1) 
+#         except:pass
 
-Check_LOAD = st.checkbox('LOAD_DATA ')
-if Check_LOAD :
-    button_LOAD = st.button("LOAD_DATA")
-    if button_LOAD:
-        try:
-            my_array_2 = np.load('my_array.npy')
-            st.write(my_array_2) 
-        except:pass
+# Check_LOAD = st.checkbox('LOAD_DATA ')
+# if Check_LOAD :
+#     button_LOAD = st.button("LOAD_DATA")
+#     if button_LOAD:
+#         try:
+#             my_array_2 = np.load('my_array.npy')
+#             st.write(my_array_2) 
+#         except:pass
         
 Check_ADD = st.checkbox('ADD_CF ')
 if Check_ADD :
@@ -54,9 +54,11 @@ if Check_DEL :
     button_DEL = st.button("DEL_CF")
     if button_DEL:
         try:
-            my_array_c = np.load('my_array.npy')
-            my_array_d = np.delete(my_array_c, -1)
-            np.save('my_array.npy', my_array_d)
-            my_array_3 = np.load('my_array.npy')
-            st.write(my_array_3)     
+            # my_array_c = np.load('my_array.npy')
+            # my_array_d = np.delete(my_array_c, -1)
+            # np.save('my_array.npy', my_array_d)
+            # my_array_3 = np.load('my_array.npy')
+            latest_entry_id = client.get_latest_entry_id()
+            client.delete_data_point(latest_entry_id)
+            st.write(latest_entry_id)     
         except:pass   
