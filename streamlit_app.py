@@ -48,13 +48,13 @@ if Check_ADD :
             client.update(  {'field1': p - y } )
             st.write( p - y) 
         except:pass
-        
+
 Check_DEL = st.checkbox('DEL_CF ')
 if Check_DEL :
-    button_DEL = st.button("DEL_CF")
-    if button_DEL:
-        try:
-                last_data_point = client.get_latest_feed()
-                client.delete_feed(last_data_point['id'])
-                st.write(last_data_point['id'])     
-        except:pass   
+        button_DEL = st.button("DEL_CF")
+        if button_DEL:
+                try:
+                        last_data_point = client.get_latest_feed()
+                        client.delete_feed(last_data_point['id'])
+                        st.write(last_data_point['id'])     
+                except:pass   
