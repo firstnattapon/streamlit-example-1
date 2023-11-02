@@ -54,11 +54,7 @@ if Check_DEL :
     button_DEL = st.button("DEL_CF")
     if button_DEL:
         try:
-            # my_array_c = np.load('my_array.npy')
-            # my_array_d = np.delete(my_array_c, -1)
-            # np.save('my_array.npy', my_array_d)
-            # my_array_3 = np.load('my_array.npy')
-            latest_entry_id = client.get_latest_entry_id()
-            # client.delete_data_point(latest_entry_id)
-            st.write(latest_entry_id)     
+                last_data_point = client.get_latest_feed()
+                client.delete_feed(last_data_point['id'])
+                st.write(last_data_point['id'])     
         except:pass   
