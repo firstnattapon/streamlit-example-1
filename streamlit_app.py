@@ -51,8 +51,8 @@ if re :
         df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
         st.table(df)
         col1, col2, col3,  col4, col5, col6 = st.columns(6)
-        final = dict(client.get_field_last(field='1'))
+        final = client.get_field_last(field='1')
     
-        st.write(type(final))
+        st.write(dict(final))
         col3.write(tickerData.tail(1).Close.values[0])
         st.stop()
