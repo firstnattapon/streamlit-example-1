@@ -20,9 +20,9 @@ if Check_ADD :
         client.update(  {'field1': x } )
         st.write(x)
 
-col1, col2, col3,  col4, col5, col6 = st.columns(6)
+col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
 
-re = col6.button("Rerun")
+re = col7.button("Rerun")
 if re :
         # np.random.seed(1074)
         # data = np.random.randint(2, size=500)[-251:]
