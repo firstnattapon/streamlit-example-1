@@ -3,8 +3,8 @@ import numpy as np
 import yfinance as yf
 import pandas as pd
 
-
-st.write("FFWM")
+col1, col2, col3 = st.columns(3)
+col2.write("FFWM")
 
 re = st.button("Rerun")
 if re :
