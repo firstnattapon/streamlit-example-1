@@ -53,12 +53,10 @@ if re :
         st.table(df)
         col1, col2, col3,  col4, col5, col6 = st.columns(6)
         last_v = tickerData.tail(1).Close.values[0]
-        col3.write(last_v)
 
         final = client.get_field_last(field='1')
         final_js = float(json.loads(final)["field1"])
-        col3.write(final_js)
     
-        col3.write(round( 1500 * last_v / final_js , 4 ) )
+        col6.write( "=" ,round( 1500 * last_v / final_js , 2 ) )
 
         st.stop()
