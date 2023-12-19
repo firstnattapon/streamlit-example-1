@@ -10,7 +10,7 @@ write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
 col1, col2, col3,  col4, col5, col6 = st.columns(6)
-col4.write("FFWM")
+col3.write("FFWM")
 
 Check_ADD = st.checkbox('Add_Last.Re.Price')
 if Check_ADD :
