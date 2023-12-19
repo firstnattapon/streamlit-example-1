@@ -14,9 +14,9 @@ col4.write("FFWM")
 col1, col2, col3,  col4 = st.columns(4)
 Check_ADD = col2.checkbox('ADD_Last.Re.Price')
 if Check_ADD :
+    x = col2.number_input('Updated ')
     button_ADD = col2.button("Last.Re.Price")
     if button_ADD:
-        x = col2.number_input('Last.Re.Price')
         client.update(  {'field1': x } )
         col2.write(x)
 
