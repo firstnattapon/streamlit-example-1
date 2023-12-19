@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import yfinance as yf
 
 # np.random.seed(1074)
 # data = np.random.randint(2, size=500)[-251:]
