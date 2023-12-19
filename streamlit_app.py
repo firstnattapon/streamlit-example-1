@@ -6,7 +6,7 @@ import thingspeak
 
 channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
-client = thingspeak.Channel(channel_id, write_api_key)
+client = thingspeak.Channel(channel_id, write_api_key , , fmt='json')
 
 col1, col2, col3,  col4, col5, col6 = st.columns(6)
 col4.write("FFWM")
