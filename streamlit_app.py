@@ -15,7 +15,9 @@ Check_ADD = st.checkbox('ADD_Last.Re.Price')
 if Check_ADD :
     button_ADD = st.button("Last.Re.Price")
     if button_ADD:
-           st.write("FFWM")
+        x = st.number_input('Last.Re.Price')
+        client.update(  {'field1': x } )
+        st.write(x)
 
 re = st.button("Rerun")
 if re :
