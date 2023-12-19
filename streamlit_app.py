@@ -2,9 +2,20 @@ import streamlit as st
 import numpy as np
 import yfinance as yf
 import pandas as pd
+import thingspeak
+
+channel_id = 2385118
+write_api_key = 'IPSG3MMMBJEB9DY8'
+client = thingspeak.Channel(channel_id, write_api_key)
 
 col1, col2, col3,  col4, col5, col6 = st.columns(6)
 col4.write("FFWM")
+
+Check_ADD = st.checkbox('ADD_CF ')
+if Check_ADD :
+    button_ADD = st.button("ADD_CF")
+    if button_ADD:
+           st.write("FFWM")
 
 re = st.button("Rerun")
 if re :
