@@ -21,4 +21,4 @@ tickerData = tickerData.history(period= 'max' ,  start='2023-12-19')[['Close']]
 tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 tickerData['action'] = data[: len(tickerData)]
 
-st.dataframe(tickerData)
+st.table(tickerData)
