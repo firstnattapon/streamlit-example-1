@@ -51,6 +51,6 @@ if re :
         df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
         st.table(df)
         col1, col2, col3,  col4, col5, col6 = st.columns(6)
-        col3..write(tickerData)
+        col3.write(tickerData)
 
         st.stop()
