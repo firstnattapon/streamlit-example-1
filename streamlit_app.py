@@ -9,8 +9,16 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
-col4.write("FFWM")
+# col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
+# col4.write("FFWM")
+
+Check_ADD = st.checkbox('Add_Last.Re.Price')
+if Check_ADD :
+    x = st.number_input('Updated ')
+    button_ADD = st.button("Updated")
+    if button_ADD:
+        client.update(  {'field1': x } )
+        st.write(x)
 
 
 col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
@@ -52,10 +60,3 @@ if re :
         st.table(df)
         st.stop()
 
-Check_ADD = st.checkbox('Add_Last.Re.Price')
-if Check_ADD :
-    x = st.number_input('Updated ')
-    button_ADD = st.button("Updated")
-    if button_ADD:
-        client.update(  {'field1': x } )
-        st.write(x)
