@@ -2,8 +2,9 @@ import streamlit as st
 import numpy as np
 import yfinance as yf
 import pandas as pd
-pd.options.display.float_format = "{:.1f}".format
 
+
+st.table("FFWM")
 
 re = st.button("Rerun")
 if re :
