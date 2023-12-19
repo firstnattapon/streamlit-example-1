@@ -53,8 +53,9 @@ if re :
         st.table(df)
         col1, col2, col3,  col4, col5, col6 = st.columns(6)
         final = client.get_field_last(field='1')
-        final_js = json.loads(final)
-        final_cf  = float(final_js["field1"])
-        st.write(final_cf)
+
+    
+        final_js = float(json.loads(final)["field1"])
+        st.write(final_js)
         col3.write(tickerData.tail(1).Close.values[0])
         st.stop()
