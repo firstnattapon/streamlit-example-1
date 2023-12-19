@@ -50,4 +50,4 @@ if re :
        
        df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
        col1.table(df)
-       col1.stop()
+       st.stop()
