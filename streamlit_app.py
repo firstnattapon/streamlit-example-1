@@ -51,6 +51,6 @@ if re :
         df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
         st.table(df)
         col1, col2, col3,  col4, col5, col6 = st.columns(6)
-        st.write(client.get())
+        st.write(client.get()['channel'])
         col3.write(tickerData.tail(1).Close.values[0])
         st.stop()
