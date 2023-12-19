@@ -59,6 +59,6 @@ if re :
         final_js = float(json.loads(final)["field1"])
         col3.write(final_js)
     
-        col3.write(last_v / final_js)
+        col3.write(round(last_v / final_js , 3))
 
         st.stop()
