@@ -22,7 +22,7 @@ if Check_ADD :
 
 col1, col2, col3,  col4, col5, col6 = st.columns(6)
 
-re = col5.button("Rerun")
+re = col2.button("Rerun")
 if re :
         # np.random.seed(1074)
         # data = np.random.randint(2, size=500)[-251:]
