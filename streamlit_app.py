@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import yfinance as yf
 import pandas as pd
-pd.options.display.float_format = "{:.2f}".format
+pd.options.display.float_format = "{:.1f}".format
 
 
 re = st.button("Rerun")
