@@ -49,5 +49,5 @@ if re :
        tickerData_1.index = ['+1' , "+2" , "+3"]
        
        df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
-       st.table(df)
-       st.stop()
+       col1.table(df)
+       col1.stop()
