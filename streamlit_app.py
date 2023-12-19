@@ -52,6 +52,6 @@ if re :
         st.table(df)
         col1, col2, col3,  col4, col5, col6 = st.columns(6)
         final = client.get_field_last(field='1')
-        st.write(final{"field1"})
+        st.write(type(final))
         col3.write(tickerData.tail(1).Close.values[0])
         st.stop()
