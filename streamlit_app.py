@@ -26,6 +26,10 @@ if re :
        tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
        tickerData['action'] = data[: len(tickerData)]
        
-       st.table(tickerData)
+       tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
+       tickerData_1['action'] = data[len(tickerData) : len(tickerData)+3] 
+       tickerData_1.index = ['+1' , "+2" , "+3"]
+       
+       df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
+       st.table(df)
        st.stop()
-
