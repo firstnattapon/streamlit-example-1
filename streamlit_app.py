@@ -50,7 +50,6 @@ if re :
         tickerData_1.index = ['+1' , "+2" ]
        
         df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
-        st.table(df)
         col1, col2, col3,  col4, col5, col6 , col7 , col8  = st.columns(8)
         last_v = tickerData.tail(1).Close.values[0]
 
@@ -58,4 +57,5 @@ if re :
         final_js = float(json.loads(final)["field1"])
         col7.write ("=")
         col8.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
+        st.table(df)
         st.stop()
