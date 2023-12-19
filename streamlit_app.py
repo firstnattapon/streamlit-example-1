@@ -52,10 +52,13 @@ if re :
         df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
         st.table(df)
         col1, col2, col3,  col4, col5, col6 = st.columns(6)
-        col3.write(tickerData.tail(1).Close.values[0])
+        last_v = tickerData.tail(1).Close.values[0]
+        col3.write(last_v)
 
         final = client.get_field_last(field='1')
         final_js = float(json.loads(final)["field1"])
         col3.write(final_js)
     
+        col3.write(last_v / final_js)
+
         st.stop()
