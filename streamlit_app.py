@@ -12,13 +12,13 @@ col1, col2, col3,  col4, col5, col6 = st.columns(6)
 col4.write("FFWM")
 
 col1, col2, col3,  col4, col5, col6 = st.columns(6)
-Check_ADD = col6.checkbox('ADD_Last.Re.Price')
+Check_ADD = col4.checkbox('ADD_Last.Re.Price')
 if Check_ADD :
-    button_ADD = st.button("Last.Re.Price")
+    button_ADD = col4.button("Last.Re.Price")
     if button_ADD:
-        x = st.number_input('Last.Re.Price')
+        x = col4.number_input('Last.Re.Price')
         client.update(  {'field1': x } )
-        st.write(x)
+        col4.write(x)
 
 re = st.button("Rerun")
 if re :
