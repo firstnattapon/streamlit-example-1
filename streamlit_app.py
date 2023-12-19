@@ -51,7 +51,6 @@ if re :
         df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
         st.table(df)
         col1, col2, col3,  col4, col5, col6 = st.columns(6)
-        col2.write(client.get(1))
+        col2.write(client.get({'results': 2}))
         col3.write(tickerData.tail(1).Close.values[0])
- 
         st.stop()
