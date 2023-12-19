@@ -8,7 +8,6 @@ col4.write("FFWM")
 
 re = st.button("Rerun")
 if re :
-       
        # np.random.seed(1074)
        # data = np.random.randint(2, size=500)[-251:]
        data = [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1,
@@ -29,7 +28,6 @@ if re :
        tickerData = round(tickerData , 3)
        tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
        tickerData['Action'] = data[: len(tickerData)]
-       
        
        tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
        tickerData_1['Action'] = data[len(tickerData) : len(tickerData)+3] 
