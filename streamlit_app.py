@@ -11,14 +11,14 @@ client = thingspeak.Channel(channel_id, write_api_key)
 col1, col2, col3,  col4, col5, col6 = st.columns(6)
 col4.write("FFWM")
 
-col1, col2, col3,  col4, col5  = st.columns(5)
-Check_ADD = col4.checkbox('ADD_Last.Re.Price')
+col1, col2, col3,  col4, col5  = st.columns(4)
+Check_ADD = col2.checkbox('ADD_Last.Re.Price')
 if Check_ADD :
-    button_ADD = col4.button("Last.Re.Price")
+    button_ADD = col2.button("Last.Re.Price")
     if button_ADD:
-        x = col4.number_input('Last.Re.Price')
+        x = col2.number_input('Last.Re.Price')
         client.update(  {'field1': x } )
-        col4.write(x)
+        col2.write(x)
 
 re = st.button("Rerun")
 if re :
