@@ -11,7 +11,7 @@ client = thingspeak.Channel(channel_id, write_api_key)
 col1, col2, col3,  col4, col5, col6 = st.columns(6)
 col4.write("FFWM")
 
-col1, col2, col3,  col4, col5, col6 = st.columns(6)
+col1, col2, col3,  col4, col5  = st.columns(5)
 Check_ADD = col4.checkbox('ADD_Last.Re.Price')
 if Check_ADD :
     button_ADD = col4.button("Last.Re.Price")
