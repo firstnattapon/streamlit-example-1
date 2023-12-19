@@ -4,7 +4,7 @@ import yfinance as yf
 import pandas as pd
 
 
-st.table("FFWM")
+st.table(["FFWM"])
 
 re = st.button("Rerun")
 if re :
