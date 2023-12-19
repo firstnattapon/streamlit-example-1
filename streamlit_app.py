@@ -19,7 +19,9 @@ if Check_ADD :
         client.update(  {'field1': x } )
         st.write(x)
 
-re = st.button("Rerun")
+col1, col2, col3,  col4, col5, col6 = st.columns(6)
+
+re = col6.button("Rerun")
 if re :
        # np.random.seed(1074)
        # data = np.random.randint(2, size=500)[-251:]
