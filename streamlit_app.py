@@ -57,6 +57,5 @@ if re :
         final = client.get_field_last(field='1')
         final_js = float(json.loads(final)["field1"])
         col5.write ("=")
-        col6.write(  round ((((1500 * (last_v / final_js)) - 1500) , 2 ) )
-
+        col6.write(  round ((((1500 * (last_v / final_js)) - 1500) , 2 ) ))
         st.stop()
