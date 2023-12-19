@@ -3,6 +3,7 @@ import numpy as np
 import yfinance as yf
 import pandas as pd
 import thingspeak
+import json
 
 channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
