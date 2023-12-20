@@ -27,22 +27,24 @@ if Check_ADD :
 col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
 re = col7.button("Rerun")
 if re :
+        #1519
         tickerData = yf.Ticker( 'FFWM')
-        tickerData = tickerData.history(period= 'max' ,  start='2023-12-18')[['Close']]
-        tickerData = round(tickerData , 3)
+        tickerData = tickerData.history(period= 'max' )[['Close']]
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-
+        filter_date = '2022-12-21 12:00:00+07:00'
+        tickerData = tickerData[tickerData.index >= filter_date]
         np.random.seed(68)
-        data = np.random.randint(2, size = 500)[-252:]
-        tickerData['action'] = data[ :  len(tickerData)]
+        data = np.random.randint(2, size = len(tickerData))
+        tickerData['action'] = data
+        tickerData['index'] = [ i+1 for i in range(len(tickerData))]
+        
         tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
-        tickerData_1['action'] = data[len(tickerData) : len(tickerData)+5]
+        tickerData_1['action'] = np.random.randint(2, size = len(tickerData)+5)[-5:]
         tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
         df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
-    
+
         col1, col2, col3,  col4, col5, col6 , col7 , col8  = st.columns(8)
         last_v = tickerData.tail(1).Close.values[0]
-
         final = client.get_field_last(field='1')
         final_js = float(json.loads(final)["field1"])
         col8.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
