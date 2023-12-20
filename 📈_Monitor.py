@@ -23,8 +23,8 @@ if Check_ADD :
         client.update(  {'field1': x } )
         st.write(x)
 
-col1, col2, col3,  col4, col5, col6   = st.columns(6)
-re_0 = col6.button("Rerun_RE")
+col1, col2 = st.columns(2)
+re_0 = col2.button("Rerun_RE")
 if re_0 :
     tickerData = yf.Ticker( 'FFWM')
     tickerData = tickerData.history(period= 'max' )[['Close']]
