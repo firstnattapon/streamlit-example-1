@@ -6,10 +6,7 @@ import thingspeak
 import json
 
 
-
-st.set_page_config(page_title="Plotting Demo", page_icon="📈")
-st.sidebar.success("Select a demo above.")
-
+st.set_page_config(page_title="Monitor", page_icon="📈")
 
 
 channel_id = 2385118
