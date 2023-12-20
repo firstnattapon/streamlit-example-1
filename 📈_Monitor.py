@@ -33,14 +33,13 @@ if re :
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 
         np.random.seed(68)
-        data = np.random.randint(2, size=500)[-252:]
-        tickerData['Action'] = data[: len(tickerData)]
-        
+        data = np.random.randint(2, size = 500)[-252:]
+        tickerData['action'] = data[ :  len(tickerData)]
         tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
-        tickerData_1['Action'] = data[len(tickerData) : len(tickerData)+4] 
-        tickerData_1.index = ['+1' , "+2" , "+3" ,  "+4" ]
-       
+        tickerData_1['action'] = data[len(tickerData) : len(tickerData)+5]
+        tickerData_1.index = ['+1' , "+2" , "+3" , "+4" , "+5"]
         df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
+    
         col1, col2, col3,  col4, col5, col6 , col7 , col8  = st.columns(8)
         last_v = tickerData.tail(1).Close.values[0]
 
