@@ -32,8 +32,8 @@ if re_0 :
     last_v = tickerData.tail(1).Close.values[0]
     final = client.get_field_last(field='1')
     final_js = float(json.loads(final)["field1"])
-    st.write(round(last_v , 3))
-    st.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
+    col2.write(round(last_v , 3))
+    col2.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
     # st.stop()
 
 
