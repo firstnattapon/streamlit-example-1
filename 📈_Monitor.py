@@ -33,7 +33,7 @@ if re :
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 
         np.random.seed(68)
-        data = np.random.randint(2, size=248+len(tickerData)) 
+        data = np.random.randint(2, size=500)[-252:]
     
         tickerData['Action'] = data[: len(tickerData)]
         
