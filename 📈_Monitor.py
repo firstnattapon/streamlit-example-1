@@ -33,13 +33,14 @@ if re_0 :
     last_v = tickerData.tail(1).Close.values[0]
     final = client.get_field_last(field='1')
     final_js = float(json.loads(final)["field1"])
+    st.write(last_v)
     st.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
     st.stop()
 
 
 
-col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
-re = col7.button("Rerun_TB")
+col1, col2, col3,  col4, col5, col6   = st.columns(6)
+re = col6.button("Rerun_TB")
 if re :
         #1519
         tickerData = yf.Ticker( 'FFWM')
