@@ -25,7 +25,21 @@ if Check_ADD :
 
 
 col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
-re = col7.button("Rerun")
+re_0 = col7.button("Rerun_RE")
+if re_0 :
+    tickerData = yf.Ticker( 'FFWM')
+    tickerData = tickerData.history(period= 'max' )[['Close']]
+
+    last_v = tickerData.tail(1).Close.values[0]
+    final = client.get_field_last(field='1')
+    final_js = float(json.loads(final)["field1"])
+    st.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
+    st.stop()
+
+
+
+col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
+re = col7.button("Rerun_TB")
 if re :
         #1519
         tickerData = yf.Ticker( 'FFWM')
@@ -43,6 +57,9 @@ if re :
         tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
         df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
         st.table(df)
+        st.stop()
+
+
 
         # col1, col2, col3,  col4, col5, col6 , col7 , col8  = st.columns(8)
         # last_v = tickerData.tail(1).Close.values[0]
