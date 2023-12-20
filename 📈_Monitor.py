@@ -41,13 +41,14 @@ if re :
         tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
         tickerData_1['action'] = np.random.randint(2, size = len(tickerData)+5)[-5:]
         tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
-        df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
-
-        col1, col2, col3,  col4, col5, col6 , col7 , col8  = st.columns(8)
-        last_v = tickerData.tail(1).Close.values[0]
-        final = client.get_field_last(field='1')
-        final_js = float(json.loads(final)["field1"])
-        col8.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
+        df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
         st.table(df)
-        st.stop()
+
+        # col1, col2, col3,  col4, col5, col6 , col7 , col8  = st.columns(8)
+        # last_v = tickerData.tail(1).Close.values[0]
+        # final = client.get_field_last(field='1')
+        # final_js = float(json.loads(final)["field1"])
+        # col8.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
+        # st.table(df)
+        # st.stop()
 
