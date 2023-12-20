@@ -5,10 +5,10 @@ import pandas as pd
 import thingspeak
 import json
 
-st.set_page_config(
-    page_title="Hello",
-    page_icon="👋",
-)
+
+
+st.set_page_config(page_title="Plotting Demo", page_icon="📈")
+
 
 
 channel_id = 2385118
