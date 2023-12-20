@@ -57,7 +57,8 @@ if re :
         tickerData_1['action'] = np.random.randint(2, size = len(tickerData)+5)[-5:]
         tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
         df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
-        st.table(round(df, 2))
+        df = round(df , 3 )
+        st.table(df)
         # st.stop()
 
 
