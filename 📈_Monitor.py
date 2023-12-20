@@ -28,7 +28,7 @@ col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
 re = col7.button("Rerun")
 if re :
         tickerData = yf.Ticker( 'FFWM')
-        tickerData = tickerData.history(period= 'max' ,  start='2023-12-19')[['Close']]
+        tickerData = tickerData.history(period= 'max' ,  start='2023-12-18')[['Close']]
         tickerData = round(tickerData , 3)
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 
