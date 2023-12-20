@@ -23,7 +23,6 @@ if Check_ADD :
         client.update(  {'field1': x } )
         st.write(x)
 
-
 col1, col2, col3,  col4, col5, col6   = st.columns(6)
 re_0 = col6.button("Rerun_RE")
 if re_0 :
@@ -33,10 +32,9 @@ if re_0 :
     last_v = tickerData.tail(1).Close.values[0]
     final = client.get_field_last(field='1')
     final_js = float(json.loads(final)["field1"])
-    st.write(last_v)
+    st.write(round(last_v , 3))
     st.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
     # st.stop()
-
 
 
 col1, col2, col3,  col4, col5, col6   = st.columns(6)
@@ -60,14 +58,6 @@ if re :
         st.table(df)
         # st.stop()
 
-
 st.stop()
 
-        # col1, col2, col3,  col4, col5, col6 , col7 , col8  = st.columns(8)
-        # last_v = tickerData.tail(1).Close.values[0]
-        # final = client.get_field_last(field='1')
-        # final_js = float(json.loads(final)["field1"])
-        # col8.write(round(((1500 * (last_v / final_js)) - 1500) , 2 ))
-        # st.table(df)
-        # st.stop()
 
