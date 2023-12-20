@@ -6,12 +6,9 @@ import thingspeak
 import json
 
 
-# st.set_page_config(page_title="Monitor", page_icon="📈")
+st.set_page_config(page_title="Monitor", page_icon="📈")
 
-st.set_page_config(
-    page_title="Hello",
-    page_icon="👋",
-)
+
 
 channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
