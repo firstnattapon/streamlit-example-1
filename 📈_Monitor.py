@@ -27,13 +27,14 @@ if Check_ADD :
 col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
 re = col7.button("Rerun")
 if re :
-        np.random.seed(68)
-        data = np.random.randint(2, size=250) 
-
         tickerData = yf.Ticker( 'FFWM')
         tickerData = tickerData.history(period= 'max' ,  start='2023-12-18')[['Close']]
         tickerData = round(tickerData , 3)
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+
+        np.random.seed(68)
+        data = np.random.randint(2, size=250+len(tickerData)) 
+    
         tickerData['Action'] = data[: len(tickerData)]
         
         tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
