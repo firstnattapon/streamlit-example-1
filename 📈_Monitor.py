@@ -31,7 +31,7 @@ if re :
         data = np.random.randint(2, size=250) 
 
         tickerData = yf.Ticker( 'FFWM')
-        tickerData = tickerData.history(period= 'max' ,  start='2023-12-15')[['Close']]
+        tickerData = tickerData.history(period= 'max' ,  start='2023-12-18')[['Close']]
         tickerData = round(tickerData , 3)
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
         tickerData['Action'] = data[: len(tickerData)]
