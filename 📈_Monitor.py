@@ -37,7 +37,7 @@ if re :
         tickerData['action'] = data[ :  len(tickerData)]
         tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
         tickerData_1['action'] = data[len(tickerData) : len(tickerData)+5]
-        tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
+        tickerData_1.index = ['250+0' , "+1" , "+2" , "+3" , "+4"]
         df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
     
         col1, col2, col3,  col4, col5, col6 , col7 , col8  = st.columns(8)
