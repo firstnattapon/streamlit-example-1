@@ -24,8 +24,8 @@ if Check_ADD :
         st.write(x)
 
 
-col1, col2, col3,  col4, col5, col6 ,col7  = st.columns(7)
-re_0 = col7.button("Rerun_RE")
+col1, col2, col3,  col4, col5, col6   = st.columns(6)
+re_0 = col6.button("Rerun_RE")
 if re_0 :
     tickerData = yf.Ticker( 'FFWM')
     tickerData = tickerData.history(period= 'max' )[['Close']]
