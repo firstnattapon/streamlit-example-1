@@ -44,7 +44,7 @@ re = col6.button("Rerun_TB")
 if re :
         #1519
         tickerData = yf.Ticker( 'FFWM')
-        tickerData = tickerData.history(period= 'max' )[['Close']]
+        tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
         filter_date = '2022-12-21 12:00:00+07:00'
         tickerData = tickerData[tickerData.index >= filter_date]
@@ -57,7 +57,6 @@ if re :
         tickerData_1['action'] = np.random.randint(2, size = len(tickerData)+5)[-5:]
         tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
         df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
-        df = round(df , 3 )
         st.table(df)
         # st.stop()
 
