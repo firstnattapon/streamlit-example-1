@@ -121,8 +121,8 @@ for i in range(1):
     siz = len(pred)
     z = int( pred.delta.values[-1])
     
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    progress_bar = st.sidebar.progress(0)
+    status_text = st.sidebar.empty()
 
     o.append(['x' ,  z])
     # print( 'x' ,  z )
@@ -133,6 +133,7 @@ for i in range(1):
         if  y > z :
             o.append([ i , y])
             z = y
+            status_text.text("%i%% Complete" % i)
             progress_bar.progress(i)
             
 progress_bar.empty()
