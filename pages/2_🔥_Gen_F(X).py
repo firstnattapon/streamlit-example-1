@@ -126,6 +126,5 @@ for i in range(1):
         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
         y = int( pred.delta.values[-1])
         if  y > z :
-            st.write( i)
-            st.write( y)
+            st.write( i , y)
             z = y
