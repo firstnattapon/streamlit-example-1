@@ -116,6 +116,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
 
 o = []
 
+
 for i in range(1):
     Ticker = 'FFWM'
     pred  = delta2(Ticker=Ticker)
@@ -132,4 +133,4 @@ for i in range(1):
             o.append([ i , y])
             z = y
             
-st.write(o)
+st.write(srt(o))
