@@ -116,17 +116,14 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
 
 o = []
 
-progress_text = "Operation in progress. Please wait."
-my_bar = st.progress(1, text=progress_text)
-
 for i in range(1):
     Ticker = 'FFWM'
     pred  = delta2(Ticker=Ticker)
     siz = len(pred)
     z = int( pred.delta.values[-1])
-    
     o.append(['x' ,  z])
     # print( 'x' ,  z )
+    
     for i in range(2000):
         np.random.seed(i)
         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
@@ -134,7 +131,6 @@ for i in range(1):
         if  y > z :
             o.append([ i , y])
             z = y
-            my_bar.progress(percent_complete + 1, text=progress_text)
             
-my_bar.empty()
+st.success('This is a success message!', icon="✅")
 st.write(o)
