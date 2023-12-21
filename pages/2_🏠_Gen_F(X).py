@@ -123,28 +123,29 @@ write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
 container = st.container(border=True)
-re = st.button("Rerun_Gen")
 fx = [0]
 
-if re :
-    
-    for j in range(1):
-        Ticker = 'FFWM'
-        pred  = delta2(Ticker=Ticker)
-        siz = len(pred)
-        z = int( pred.delta.values[-1])
-        container.write("x , {}".format(z))
-         
-        for i in range(2000):
-            np.random.seed(i)
-            pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
-            y = int( pred.delta.values[-1])
-            if  y > z :
-                container.write("{} , {}".format(i,y))
-                z = y
-                fx.append(i)
-        
-    client.update(  {'field2': fx[-1] } )
+Check_Gen = st.checkbox('Check_Gen')
+if Check_Gen :
+    re = st.button("Rerun_Gen")
+    if re :
+        for j in range(1):
+            Ticker = 'FFWM'
+            pred  = delta2(Ticker=Ticker)
+            siz = len(pred)
+            z = int( pred.delta.values[-1])
+            container.write("x , {}".format(z))
+             
+            for i in range(2000):
+                np.random.seed(i)
+                pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
+                y = int( pred.delta.values[-1])
+                if  y > z :
+                    container.write("{} , {}".format(i,y))
+                    z = y
+                    fx.append(i)
+            
+        client.update(  {'field2': fx[-1] } )
 
 
 
