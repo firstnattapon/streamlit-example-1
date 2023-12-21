@@ -46,6 +46,7 @@ if re :
         tickerData_1['action'] = np.random.randint(2, size = len(tickerData)+5)[-5:]
         tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
         df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
+        st.write("f(x) {}".format(fx_js))
         st.table(df)
         st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
         # st.stop()
