@@ -33,7 +33,7 @@ if re :
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
         filter_date = '2022-12-21 12:00:00+07:00'
         tickerData = tickerData[tickerData.index >= filter_date]
-        np.random.seed(68)
+        np.random.seed(1756)
         data = np.random.randint(2, size = len(tickerData))
         tickerData['action'] = data
         tickerData['index'] = [ i+1 for i in range(len(tickerData))]
