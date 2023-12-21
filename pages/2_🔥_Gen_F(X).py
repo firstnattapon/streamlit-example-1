@@ -114,6 +114,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
 
+
 for i in range(1):
     Ticker = 'FFWM'
     pred  = delta2(Ticker=Ticker)
@@ -125,5 +126,6 @@ for i in range(1):
         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
         y = int( pred.delta.values[-1])
         if  y > z :
-            st.write( i , y )
+            st.write( i)
+            st.write( y)
             z = y
