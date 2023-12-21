@@ -126,6 +126,7 @@ re = st.button("Rerun_Gen")
 fx = [0]
 
 if re :
+    
     for j in range(1):
         Ticker = 'FFWM'
         pred  = delta2(Ticker=Ticker)
@@ -141,9 +142,8 @@ if re :
                 container.write("{} , {}".format(i,y))
                 z = y
                 fx.append(i)
-
-            for l in range(1):
-                client.update(  {'field2': fx[-1] } )
+        
+    client.update(  {'field2': fx[-1] } )
 
 
 
