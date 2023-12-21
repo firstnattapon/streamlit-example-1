@@ -36,7 +36,6 @@ if re :
 
         fx = client.get_field_last(field='2')
         fx_js = int(json.loads(fx)["field2"])
-
         np.random.seed(fx_js)
         data = np.random.randint(2, size = len(tickerData))
         tickerData['action'] = data
@@ -47,7 +46,7 @@ if re :
         tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
         df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
         st.write("f(x) {}".format(fx_js))
-        st.table(df)
+        st.table(df.tail(5))
         st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
         # st.stop()
 
