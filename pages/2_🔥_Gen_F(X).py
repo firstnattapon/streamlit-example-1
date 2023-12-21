@@ -120,6 +120,11 @@ for i in range(1):
     pred  = delta2(Ticker=Ticker)
     siz = len(pred)
     z = int( pred.delta.values[-1])
+    
+    progress_bar = st.sidebar.progress(0)
+    status_text = st.sidebar.empty()
+
+    
     o.append(['x' ,  z])
     # print( 'x' ,  z )
     for i in range(2000):
@@ -129,5 +134,7 @@ for i in range(1):
         if  y > z :
             o.append([ i , y])
             z = y
-
-st.table(o)
+            progress_bar.progress(i)
+            
+progress_bar.empty()
+st.write(o)
