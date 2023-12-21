@@ -121,10 +121,9 @@ for i in range(1):
     siz = len(pred)
     z = int( pred.delta.values[-1])
     
-    progress_bar = st.sidebar.progress(0)
-    status_text = st.sidebar.empty()
+    progress_bar = st.progress(0)
+    status_text = st.empty()
 
-    
     o.append(['x' ,  z])
     # print( 'x' ,  z )
     for i in range(2000):
