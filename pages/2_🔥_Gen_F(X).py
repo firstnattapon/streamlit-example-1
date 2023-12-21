@@ -115,7 +115,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
     except:pass
 
 # o = []
-container = st.container(border=True)
+container_ = st.container(border=True)
 
 for i in range(1):
     Ticker = 'FFWM'
@@ -123,15 +123,15 @@ for i in range(1):
     siz = len(pred)
     z = int( pred.delta.values[-1])
     # o.append(['x' ,  z])
-    container.write("x , {}".format(z))
+    container_.write("x , {}".format(z))
     # print( 'x' ,  z )
      
-    # for i in range(2000):
-    #     np.random.seed(i)
-    #     pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
-    #     y = int( pred.delta.values[-1])
-    #     if  y > z :
-    #         # o.append([ i , y])
-    #         container.write("{} , {}".format(i,y))
-    #         z = y
+    for i in range(2000):
+        np.random.seed(i)
+        pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
+        y = int( pred.delta.values[-1])
+        if  y > z :
+            # o.append([ i , y])
+            container_.write("{} , {}".format(i,y))
+            z = y
             
