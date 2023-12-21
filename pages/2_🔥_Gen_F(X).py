@@ -117,6 +117,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
     except:pass
 
 container = st.container(border=True)
+my_bar = st.progress(0)
 
 re = st.button("Rerun_Gen")
 if re :
@@ -134,3 +135,7 @@ if re :
             if  y > z :
                 container.write("{} , {}".format(i,y))
                 z = y
+                my_bar.progress(i + 1)
+
+
+
