@@ -116,7 +116,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
 
 # o = []
 
-re = col6.button("Rerun_TB")
+re = st.button("Rerun_TB")
 if re :
     for i in range(1):
         container_ = st.container()
