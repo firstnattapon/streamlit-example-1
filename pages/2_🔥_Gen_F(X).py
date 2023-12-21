@@ -123,7 +123,7 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
 container = st.container(border=True)
 re = st.button("Rerun_Gen")
-fx = []
+fx = [0]
 
 if re :
     for j in range(1):
