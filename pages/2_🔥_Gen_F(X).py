@@ -128,5 +128,5 @@ for i in range(1):
         y = int( pred.delta.values[-1])
         if  y > z :
             o.append([ i , y])
-            st.write( i , y)
+            # st.write( o)
             z = y
