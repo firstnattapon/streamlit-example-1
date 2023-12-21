@@ -125,7 +125,7 @@ if re :
         pred  = delta2(Ticker=Ticker)
         siz = len(pred)
         z = int( pred.delta.values[-1])
-        container_.write("x , {}".format(z))
+        container_.write("{}".format(z))
          
         for i in range(2000):
             np.random.seed(i)
