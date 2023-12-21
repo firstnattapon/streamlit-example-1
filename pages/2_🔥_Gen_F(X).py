@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from stqdm import stqdm
 
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
@@ -115,7 +116,6 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
     except:pass
 
 o = []
-my_bar = st.progress(1)
 
 for i in range(1):
     Ticker = 'FFWM'
@@ -125,14 +125,12 @@ for i in range(1):
     o.append(['x' ,  z])
     # print( 'x' ,  z )
     
-    for i in range(2000):
+    for i in stqdm(range(2000), st_container=st.sidebar):
         np.random.seed(i)
         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
         y = int( pred.delta.values[-1])
         if  y > z :
             o.append([ i , y])
             z = y
-        my_bar.progress(i + 1)
         
-st.button("Rerun", 1 )
 st.write(o)
