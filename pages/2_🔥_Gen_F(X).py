@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import streamlit as st
-
+import thingspeak
+import json
 
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
@@ -116,12 +117,16 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
 
-container = st.container(border=True)
-my_bar = st.progress(0)
+channel_id = 2385118
+write_api_key = 'IPSG3MMMBJEB9DY8'
+client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
+container = st.container(border=True)
 re = st.button("Rerun_Gen")
+fx = []
+
 if re :
-    for i in range(1):
+    for j in range(1):
         Ticker = 'FFWM'
         pred  = delta2(Ticker=Ticker)
         siz = len(pred)
@@ -135,7 +140,14 @@ if re :
             if  y > z :
                 container.write("{} , {}".format(i,y))
                 z = y
-                my_bar.progress(i + 1)
+                fx.append(i)
+
+            for l in range(1):
+                client.update(  {'field2': fx[-1] } )
+
+
+
+
 
 
 
