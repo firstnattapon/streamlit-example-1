@@ -125,13 +125,12 @@ if re :
         pred  = delta2(Ticker=Ticker)
         siz = len(pred)
         z = int( pred.delta.values[-1])
-        oooo = srt(z)
-        container_.write(oooo)
+        container.write("x , {}".format(z))
          
         for i in range(2000):
             np.random.seed(i)
             pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
             y = int( pred.delta.values[-1])
             if  y > z :
-                container_.write("{} , {}".format(i,y))
+                container.write("{} , {}".format(i,y))
                 z = y
