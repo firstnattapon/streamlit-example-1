@@ -115,8 +115,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
     except:pass
 
 o = []
-progress_text = "Operation in progress. Please wait."
-my_bar = st.progress(0, text=progress_text)
+my_bar = st.progress(0)
 
 for i in range(1):
     Ticker = 'FFWM'
@@ -133,6 +132,7 @@ for i in range(1):
         if  y > z :
             o.append([ i , y])
             z = y
-        my_bar.progress(i + 1, text=progress_text)
+        my_bar.progress(i + 1)
+        
 st.button("Rerun")
 st.write(o)
