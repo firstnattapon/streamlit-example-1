@@ -126,9 +126,10 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
     except:pass
 
 container = st.container(border=True)
-
+container_2  = st.container(border=True)
 all = []
 all_id = []
+
 for i in range(1):
     Ticker = 'FFWM'
     pred  = delta2(Ticker=Ticker)
@@ -149,11 +150,11 @@ for i in range(1):
             all.append(prd_y)
             all_id.append(i)
             container.write("x , {}".format(i))
+            container_2.chart_data(prd_y)
 
-
-for i , v in enumerate(all) :
-    with st.container():
-        st.chart_data(v)
+# for i , v in enumerate(all) :
+#     with st.container():
+#         st.chart_data(v)
 
 
 # import matplotlib.pyplot as plt
