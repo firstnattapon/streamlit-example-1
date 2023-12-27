@@ -147,15 +147,13 @@ for i in range(1):
             all.append(prd_y)
             all_id.append(i)
 
-for i , v in enumerate(all) :
-    with st.container():
-        st.chart_data(i)
-
-
-
-
-# import matplotlib.pyplot as plt
 # for i , v in enumerate(all) :
-#     plt.plot(v ,  label=all_id[i] )
-# plt.legend()
-# plt.show()
+#     with st.container():
+#         st.chart_data(i)
+
+
+import matplotlib.pyplot as plt
+for i , v in enumerate(all) :
+    plt.plot(v ,  label=all_id[i] )
+plt.legend()
+st.pyplot(plt)
