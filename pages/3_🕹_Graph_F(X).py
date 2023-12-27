@@ -136,7 +136,7 @@ for i in range(1):
     all.append(prd_x)
     all_id.append(i)
     print( 'x' ,  z )
-    for i in range(2000):
+    for i in range(100):
         np.random.seed(i)
         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
         prd_y = pred.net_pv.values
