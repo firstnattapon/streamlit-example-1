@@ -125,6 +125,8 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
 
+container = st.container(border=True)
+
 all = []
 all_id = []
 for i in range(1):
@@ -135,25 +137,27 @@ for i in range(1):
     z = int(prd_x[-1])
     all.append(prd_x)
     all_id.append(i)
-    print( 'x' ,  z )
+    # print( 'x' ,  z )
     for i in range(100):
         np.random.seed(i)
         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
         prd_y = pred.net_pv.values
         y = int(prd_y[-1])
         if  y > z :
-            print( i , y )
+            # print( i , y )
             z = y
             all.append(prd_y)
             all_id.append(i)
+            container.write("x , {}".format(i))
+
 
 # for i , v in enumerate(all) :
 #     with st.container():
 #         st.chart_data(i)
 
 
-import matplotlib.pyplot as plt
-for i , v in enumerate(all) :
-    plt.plot(v ,  label=all_id[i] )
-plt.legend()
-st.pyplot(plt)
+# import matplotlib.pyplot as plt
+# for i , v in enumerate(all) :
+#     plt.plot(v ,  label=all_id[i] )
+# plt.legend()
+# st.pyplot(plt)
