@@ -151,8 +151,7 @@ for i in range(1):
             all_id.append(i)
             container.write("x , {}".format(i))
             
-# test_list = [i for i in  all]
 
-chart_data = pd.DataFrame(all , columns= all_id)
+chart_data = pd.DataFrame(all-1 , columns= all_id[-1])
 st.line_chart(chart_data)
 st.stop()
