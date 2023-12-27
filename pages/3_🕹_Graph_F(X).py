@@ -139,7 +139,7 @@ for i in range(1):
     all_id.append(i)
     # print( 'x' ,  z )
     
-    for i in range(100):
+    for i in range(20):
         np.random.seed(i)
         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
         prd_y = pred.net_pv.values
@@ -150,12 +150,8 @@ for i in range(1):
             z = y
             all.append(prd_y)
             all_id.append(i)
-
-
-
-import matplotlib.pyplot as plt
-for i , v in enumerate(all) :
-    plt.plot(v ,  label=all_id[i] )
-plt.legend()
-st.pyplot(plt)
+            
+test_list = [all_id]
+chart_data = pd.DataFrame(test_list , columns= all_id)
+st.line_chart(chart_data)
 st.stop()
