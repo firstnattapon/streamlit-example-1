@@ -124,3 +124,38 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             # final_1 = tickerData[['delta' , 'Close' , 'Production_Costs' ,'P/E' , 'y%' ]]
             return  final
     except:pass
+
+all = []
+all_id = []
+for i in range(1):
+    Ticker = 'FFWM'
+    pred  = delta2(Ticker=Ticker)
+    siz = len(pred)
+    prd_x =  pred.net_pv.values
+    z = int(prd_x[-1])
+    all.append(prd_x)
+    all_id.append(i)
+    print( 'x' ,  z )
+    for i in range(2000):
+        np.random.seed(i)
+        pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
+        prd_y = pred.net_pv.values
+        y = int(prd_y[-1])
+        if  y > z :
+            print( i , y )
+            z = y
+            all.append(prd_y)
+            all_id.append(i)
+
+for i , v in enumerate(all) :
+    with st.container():
+        st.chart_data(i)
+
+
+
+
+# import matplotlib.pyplot as plt
+# for i , v in enumerate(all) :
+#     plt.plot(v ,  label=all_id[i] )
+# plt.legend()
+# plt.show()
