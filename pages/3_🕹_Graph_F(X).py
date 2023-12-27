@@ -152,7 +152,7 @@ for i in range(1):
             container.write("x , {}".format(i))
             
 
-chart_data = pd.DataFrame(all )
+chart_data = pd.DataFrame(np.array(all).T )
 
 st.line_chart(chart_data)
 st.stop()
