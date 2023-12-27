@@ -151,9 +151,9 @@ for i in range(1):
             container.write("x , {}".format(i))
 
 
-# for i , v in enumerate(all) :
-#     with st.container():
-#         st.chart_data(i)
+for i , v in enumerate(all) :
+    with st.container():
+        st.chart_data(i)
 
 
 # import matplotlib.pyplot as plt
