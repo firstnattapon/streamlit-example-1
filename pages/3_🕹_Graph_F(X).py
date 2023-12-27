@@ -153,5 +153,7 @@ for i in range(1):
             
 
 chart_data = pd.DataFrame(all[-1] )
+chart_data = pd.DataFrame(all[-2] )
+
 st.line_chart(chart_data)
 st.stop()
