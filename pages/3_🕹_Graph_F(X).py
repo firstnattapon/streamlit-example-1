@@ -153,7 +153,7 @@ for i in range(1):
 
 for i , v in enumerate(all) :
     with st.container():
-        st.chart_data(i)
+        st.chart_data(v)
 
 
 # import matplotlib.pyplot as plt
