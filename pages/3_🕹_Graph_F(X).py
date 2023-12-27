@@ -161,3 +161,4 @@ for i , v in enumerate(all) :
 #     plt.plot(v ,  label=all_id[i] )
 # plt.legend()
 # st.pyplot(plt)
+st.stop()
