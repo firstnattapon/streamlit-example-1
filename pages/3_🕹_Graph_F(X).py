@@ -155,6 +155,6 @@ if Graph :
                     all_id.append(i)
                     container.write("{} , {}".format(i,y))
                         
-            chart_data = pd.DataFrame(np.array(all).T , columns= all_id)
+            chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
             st.line_chart(chart_data)
 st.stop()
