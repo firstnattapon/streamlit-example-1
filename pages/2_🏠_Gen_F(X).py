@@ -6,12 +6,25 @@ import thingspeak
 import json
 st.set_page_config(page_title="Gen_F(X)", page_icon="🔥")
 
+# @title delta2
+import numpy as np
+import pandas as pd
+pd.options.display.float_format = "{:.2f}".format
+pd.options.mode.chained_assignment = None
+import plotly.express as px
+import yfinance as yf
+import seaborn as sns
+from tqdm import tqdm
+sns.set(color_codes=True)
+np.seterr(invalid='ignore')
+
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
 
         # tickerData = tickerData.history(period= '30m' ,  start='2000-01-01', end='2025-01-01')[-limit:].reset_index()[['Close']]
         # tickerData = tickerData.history(period= 'max' )[-limit:][['Close']]
+        # tickerData = tickerData.history(period= '30m' ,  start='2000-01-01', end='2025-01-01')[['Close']]
         tickerData = tickerData.history(period= 'max' )[['Close']]
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
         filter_date = filter_date
@@ -19,14 +32,15 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
         entry  = tickerData.Close[0] ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
 
         if entry < 10000 :
-            samples = np.arange( 0  ,  entry *3 + step  ,  step)
+            samples = np.arange( 0  ,  np.around(entry, 2) * 3 + step  ,  step)
 
             df = pd.DataFrame()
             df['Asset_Price'] =   np.around(samples, 2)
             df['Fixed_Asset_Value'] = Fixed_Asset_Value
             df['Amount_Asset']  =   df['Fixed_Asset_Value']  / df['Asset_Price']
 
-            df_top = df[int(len(samples)/2):]
+            # df_top = df[int(len(samples)/2):]
+            df_top = df[df.Asset_Price >= np.around(entry, 2) ]
             df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) *  df_top['Asset_Price']
             df_top.fillna(0, inplace=True)
             np_Cash_Balan_top = df_top['Cash_Balan_top'].values
@@ -42,7 +56,8 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             df_top  = df_top.sort_values(by='Amount_Asset')
             df_top  = df_top[:-1]
 
-            df_down =  df[:int(len(samples)/2+1)]
+            # df_down =  df[:int(len(samples)/2+1)]
+            df_down = df[df.Asset_Price <= np.around(entry, 2) ]
             df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) -  df_down['Amount_Asset'])     *  df_down['Asset_Price']
             df_down.fillna(0, inplace=True)
             df_down = df_down.sort_values(by='Asset_Price' , ascending=False)
@@ -110,10 +125,14 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
 
             tickerData['Production_Costs'] = abs(Production_Costs)
             tickerData['refer_model'] = refer_model
-            tickerData['delta'] = tickerData['Cash_Balan'] - tickerData['refer_model']
+            # tickerData['delta'] = tickerData['Cash_Balan'] - tickerData['refer_model']
             # tickerData['P/E'] =  1 /  (tickerData['delta'] / tickerData['Production_Costs'] )
             # tickerData['y%']  =  (tickerData['delta'] / tickerData['Production_Costs'] ) * 100
-            final = tickerData[['delta' , 'Close' , 'pred' , 're' ]]
+            tickerData['pv'] =  tickerData['Cash_Balan'] + ( tickerData['Amount_Asset'] * tickerData['Close']  )
+            tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value
+            tickerData['net_pv'] =   tickerData['pv'] - tickerData['refer_pv']  
+            # final = tickerData[['delta' , 'Close' , 'pred' , 're' , 'Cash_Balan' , 'refer_model' , 'Amount_Asset' , 'pv' , 'refer_pv' , 'net_pv']]
+            final = tickerData[['net_pv']]
             # final_1 = tickerData[['delta' , 'Close' , 'Production_Costs' ,'P/E' , 'y%' ]]
             return  final
     except:pass
@@ -133,23 +152,17 @@ if Check_Gen :
             Ticker = 'FFWM'
             pred  = delta2(Ticker=Ticker)
             siz = len(pred)
-            z = int( pred.delta.values[-1])
+            z = int( pred.net_pv.values[-1])
             container.write("x , {}".format(z))
              
             for i in range(2000):
                 np.random.seed(i)
                 pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz) )
-                y = int( pred.delta.values[-1])
+                y = int( pred.net_pv.values[-1])
                 if  y > z :
                     container.write("{} , {}".format(i,y))
                     z = y
                     fx.append(i)
             
         client.update(  {'field2': fx[-1] } )
-
-
-
-
-
-
 
