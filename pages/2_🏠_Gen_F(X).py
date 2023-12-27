@@ -6,18 +6,6 @@ import thingspeak
 import json
 st.set_page_config(page_title="Gen_F(X)", page_icon="🔥")
 
-# @title delta2
-import numpy as np
-import pandas as pd
-pd.options.display.float_format = "{:.2f}".format
-pd.options.mode.chained_assignment = None
-import plotly.express as px
-import yfinance as yf
-import seaborn as sns
-from tqdm import tqdm
-sns.set(color_codes=True)
-np.seterr(invalid='ignore')
-
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
