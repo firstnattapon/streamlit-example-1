@@ -26,6 +26,7 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 # re = col6.button("Rerun_TB")
 # if re :
 #1519
+
 tickerData = yf.Ticker( 'FFWM')
 tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
 tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
@@ -45,6 +46,8 @@ tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
 df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
 st.write("f(x) {}".format(fx_js))
 st.table(df.tail(7))
+st.table(tickerData)
+
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
         # st.stop()
 
