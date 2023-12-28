@@ -67,4 +67,4 @@ st.write('https://thingspeak.com/channels/2329127')
 
 
 import streamlit.components.v1 as components
-components.html('https://thingspeak.com/channels/2329127/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15')
+components.iframe('https://thingspeak.com/channels/2329127/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=500, height=500,)
