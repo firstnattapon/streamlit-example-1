@@ -65,7 +65,7 @@ if Check_ADD :
 
 st.write('https://thingspeak.com/channels/2329127')
 
-# col1, col2  = st.columns(2)
+col1, col2  = st.columns(2)
 import streamlit.components.v1 as components
-components.iframe('https://thingspeak.com/channels/2329127/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=1000, height=200)
+col1.components.iframe('https://thingspeak.com/channels/2329127/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=1000, height=200)
 components.iframe('https://thingspeak.com/channels/2329127/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=1000, height=200)
