@@ -5,6 +5,9 @@ import pandas as pd
 import thingspeak
 import json
 
+st.rerun()
+
+
 st.set_page_config( page_title="Monitor", page_icon="📈")
 
 channel_id = 2385118
