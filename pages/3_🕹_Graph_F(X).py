@@ -191,8 +191,7 @@ if Graph :
 #     st.stop()
 
 title =  st.text_input('input')
-options = st.multiselect('multiselect',title )
-st.write('You selected:', options)
+st.write(title)
 
 
 
