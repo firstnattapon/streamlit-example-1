@@ -167,6 +167,7 @@ number_3 =  st.number_input('Insert a number{}'.format(3),step=1 , value=1024  ,
 all_id_m = []
 all_m = []
 number = [number_1 , number_2 , number_3]
+container_1 = st.container(border=True)
 
 for i in range(1):
     Ticker = 'FFWM'
@@ -176,8 +177,7 @@ for i in range(1):
     z = int(prd_x[-1])
     all_m.append(prd_x)
     all_id_m.append(i)
-    container.write("x , {}".format(z))
-    # print( 'x' ,  z )
+    container_1.write("x , {}".format(z))
 
     for i in number:
         np.random.seed(i)
@@ -187,7 +187,7 @@ for i in range(1):
         z = y
         all.append(prd_y)
         all_id.append(i)
-        container.write("{} , {}".format(i,y))
+        container_1.write("{} , {}".format(i,y))
                 
     chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
     st.line_chart(chart_data)
