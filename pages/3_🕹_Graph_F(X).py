@@ -172,33 +172,33 @@ container_1 = st.container(border=True)
 Graph_M = st.checkbox('Graph_F(X)_M')
 if Graph_M :
     re_M = st.button("Rerun_Graph_M")
-        if re_M :
-            for i in range(1):
-                Ticker = 'FFWM'
-                pred  = delta2(Ticker=Ticker)
-                siz = len(pred)
-                prd_x =  pred.net_pv.values
-                z = int(prd_x[-1])
-                all_m.append(prd_x)
+    if re_M :
+        for i in range(1):
+            Ticker = 'FFWM'
+            pred  = delta2(Ticker=Ticker)
+            siz = len(pred)
+            prd_x =  pred.net_pv.values
+            z = int(prd_x[-1])
+            all_m.append(prd_x)
+            all_id_m.append(i)
+            container_1.write("x , {}".format(z))
+        
+            for i in number:
+                np.random.seed(i)
+                pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
+                prd_y = pred.net_pv.values
+                y = int(prd_y[-1])
+                all_m.append(prd_y)
                 all_id_m.append(i)
-                container_1.write("x , {}".format(z))
+                container_1.write("{} , {}".format(i,y))
+                        
+            chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
+            st.line_chart(chart_data)
+            st.stop()
             
-                for i in number:
-                    np.random.seed(i)
-                    pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
-                    prd_y = pred.net_pv.values
-                    y = int(prd_y[-1])
-                    all_m.append(prd_y)
-                    all_id_m.append(i)
-                    container_1.write("{} , {}".format(i,y))
-                            
-                chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
-                st.line_chart(chart_data)
-                st.stop()
-        
-        
-        
-
+            
+            
+    
 
 
 
