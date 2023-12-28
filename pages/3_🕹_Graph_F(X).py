@@ -177,10 +177,9 @@ if Graph_M :
             siz = len(pred)
             prd_x =  pred.net_pv.values
             z = int(prd_x[-1])
-            op = z
             all_m.append(prd_x)
             all_id_m.append(i)
-            container_1.write("x , {} , {}".format(z , +0.0 ))
+            container_1.write("x , {}".format(z))
         
             for i in number:
                 np.random.seed(i)
@@ -189,7 +188,7 @@ if Graph_M :
                 y = int(prd_y[-1])
                 all_m.append(prd_y)
                 all_id_m.append(i)
-                container_1.write("{} , {} , {}".format(i , y  ,  (y/op)-1 ))
+                container_1.write("{} , {} ".format(i , y ))
 
             chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
             st.line_chart(chart_data)
