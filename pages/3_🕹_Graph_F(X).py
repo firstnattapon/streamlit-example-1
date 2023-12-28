@@ -190,7 +190,8 @@ if Graph :
 #     st.line_chart(chart_data)
 #     st.stop()
 
-title =  list(st.text_input('input' , []))
+title =  (st.text_input('input' , )
+          
 st.write(title)
 
 
