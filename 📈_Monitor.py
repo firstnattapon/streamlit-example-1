@@ -47,6 +47,7 @@ df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
 st.write("f(x) {}".format(fx_js))
 st.table(df.tail(7))
 st.table(tickerData.tail(7))
+st.table(tickerData_1)
 
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
         # st.stop()
