@@ -41,7 +41,7 @@ tickerData['action'] = data
 tickerData['index'] = [ i+1 for i in range(len(tickerData))]
 
 tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
-tickerData_1['action'] = np.random.randint(2, size = len(tickerData)+5)[-5:]
+tickerData_1['action'] = np.random.randint(2, size = len(tickerData)+5)#[-5:]
 tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
 df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
 st.write("f(x) {}".format(fx_js))
