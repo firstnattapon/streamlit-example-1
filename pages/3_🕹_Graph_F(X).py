@@ -184,8 +184,8 @@ for i in range(1):
         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
         prd_y = pred.net_pv.values
         y = int(prd_y[-1])
-        all.append(prd_y)
-        all_id.append(i)
+        all_m.append(prd_y)
+        all_id_m.append(i)
         container_1.write("{} , {}".format(i,y))
                 
     chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
