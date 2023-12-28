@@ -191,10 +191,9 @@ if Graph :
 #     st.stop()
 
 title =  str(st.text_input('input'))
-title = [title]
+result = [int(item) for item in title]
 
-
-st.write(title)
+st.write(result)
 
 
 
