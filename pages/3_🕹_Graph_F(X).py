@@ -193,7 +193,7 @@ if Graph :
 
 number = st.number_input('Insert a number',step=1 , key=99 )
 for i in range(number) :
-    number+i = st.number_input('Insert a number{}'.format(i),step=1 , key=i )
+    number"{}".format(i) = st.number_input('Insert a number{}'.format(i),step=1 , key=i )
 
 st.write(number+2)
 
