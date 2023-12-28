@@ -163,12 +163,13 @@ if Graph :
 
 Graph_M = st.checkbox('Graph_F(X)_M')
 if Graph_M :
-    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=38 ,  key=1 )
-    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=68  , key=2 )
-    number_3 =  st.number_input('Insert a number{}'.format(3),step=1 , value=1024  , key=3 )
-    all_id_m = []
-    all_m = []
-    number = [number_1 , number_2 , number_3]
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=68  ,  key=1 )
+    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=36   , key=2 )
+    number_3 =  st.number_input('Insert a number{}'.format(3),step=1 , value=34   , key=3 )
+    number_4 =  st.number_input('Insert a number{}'.format(3),step=1 , value=28   , key=4 )
+    number_5 =  st.number_input('Insert a number{}'.format(3),step=1 , value=np.nan   , key=5 )
+    all_id_m = [] ; all_m = []
+    number = [number_1 , number_2 , number_3, number_4 , number_5]
     container_1 = st.container(border=True)
     re_M = st.button("Rerun_Graph_M")
     if re_M :
