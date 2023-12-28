@@ -44,7 +44,7 @@ tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
 tickerData_1['action'] = np.random.randint(2, size = len(tickerData)+6)[-5:]
 tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
 df = pd.concat([tickerData.tail(5), tickerData_1], axis=0).fillna("")
-df['re_calk] = np.random.randint(2, size = len(df))
+df['re_check'] = np.random.randint(2, size = len(df))
 st.write("f(x) {}".format(fx_js))
 st.table(df.tail(7))
 
