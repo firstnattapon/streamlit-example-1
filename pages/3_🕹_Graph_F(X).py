@@ -167,7 +167,7 @@ if Graph_M :
     number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=36   , key=2 )
     number_3 =  st.number_input('Insert a number{}'.format(3),step=1 , value=34   , key=3 )
     number_4 =  st.number_input('Insert a number{}'.format(4),step=1 , value=28   , key=4 )
-    number_5 =  st.number_input('Insert a number{}'.format(5),step=1 , value=np.nan   , key=5 )
+    number_5 =  st.number_input('Insert a number{}'.format(5),step=1 , value= nan   , key=5 )
     all_id_m = [] ; all_m = []
     number = [number_1 , number_2 , number_3, number_4 , number_5]
     container_1 = st.container(border=True)
