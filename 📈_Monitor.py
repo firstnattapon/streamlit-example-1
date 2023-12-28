@@ -45,7 +45,7 @@ tickerData_1['action'] =  [ i for i in range(5)]
 tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
 df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
 np.random.seed(fx_js)
-df['re_check'] = np.random.randint(2, size = len(df))
+df['action'] = np.random.randint(2, size = len(df))
 st.write("f(x) {}".format(fx_js))
 st.table(df)
 
