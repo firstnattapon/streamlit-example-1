@@ -191,9 +191,6 @@ if Graph :
 #     st.stop()
 
 
-title =  str(st.text_input('input'))
-result = [int(item) for item in title]
-
 
 for i in range(5) :
     number = st.number_input('Insert a number',step=1 , key=i )
