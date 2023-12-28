@@ -189,7 +189,7 @@ if Graph_M :
                 y = int(prd_y[-1])
                 all_m.append(prd_y)
                 all_id_m.append(i)
-                container_1.write("{} , {} , {}".format(i , y  , op/y ))
+                container_1.write("{} , {} , {}".format(i , y  ,  y/op ))
                 op = y
             chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
             st.line_chart(chart_data)
