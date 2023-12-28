@@ -6,10 +6,12 @@ import thingspeak
 import json
 
 
-if st.button("rerun"):
-    st.rerun()
 
 st.set_page_config( page_title="Monitor", page_icon="📈")
+
+
+if st.button("rerun"):
+    st.rerun()
 
 channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
