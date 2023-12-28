@@ -5,10 +5,9 @@ import pandas as pd
 import thingspeak
 import json
 
-st.rerun()
-
 
 st.set_page_config( page_title="Monitor", page_icon="📈")
+st.rerun()
 
 channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
