@@ -184,7 +184,6 @@ for i in range(1):
         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
         prd_y = pred.net_pv.values
         y = int(prd_y[-1])
-        z = y
         all.append(prd_y)
         all_id.append(i)
         container_1.write("{} , {}".format(i,y))
