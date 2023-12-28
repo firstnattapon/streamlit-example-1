@@ -192,10 +192,9 @@ if Graph :
 
 title =  str(st.text_input('input'))
 title = [title]
-title_z = list(map(int, title))
 
 
-st.write(title_z)
+st.write(title)
 
 
 
