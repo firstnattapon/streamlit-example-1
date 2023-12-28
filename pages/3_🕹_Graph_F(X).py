@@ -191,7 +191,7 @@ for i in range(1):
             all_id.append(i)
             container.write("{} , {}".format(i,y))
                 
-    chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
+    chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
     st.line_chart(chart_data)
     st.stop()
 
