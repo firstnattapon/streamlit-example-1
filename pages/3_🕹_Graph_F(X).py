@@ -191,9 +191,9 @@ if Graph :
 #     st.stop()
 
 
-number = st.number_input('Insert a number',step=1 , key=i )
+number = st.number_input('Insert a number',step=1 , key=99 )
 for i in range(number) :
-    i = st.number_input('Insert a number{}'.format(i),step=1 , key=i )
+    number = st.number_input('Insert a number{}'.format(i),step=1 , key=i )
 
 
 
