@@ -160,6 +160,7 @@ if Check_Gen_M :
     re_ = st.button("Rerun_Gen_M")
     if re_ :
         client.update(  {'field2': input } )
+        st.write(input)
         
         
 
