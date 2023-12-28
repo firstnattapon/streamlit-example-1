@@ -160,45 +160,40 @@ if Graph :
             st.stop()
 
 
-# all_id_m = []
-# all_m = []
-# in_m = []
-# for i in range(1):
-#     Ticker = 'FFWM'
-#     pred  = delta2(Ticker=Ticker)
-#     siz = len(pred)
-#     prd_x =  pred.net_pv.values
-#     z = int(prd_x[-1])
-#     all_m.append(prd_x)
-#     all_id_m.append(i)
-#     container.write("x , {}".format(z))
-#     # print( 'x' ,  z )
+number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=38 ,  key=1 )
+number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=68  , key=2 )
+number_3 =  st.number_input('Insert a number{}'.format(3),step=1 , value=1024  , key=3 )
 
-#     for i in in_m:
-#         np.random.seed(i)
-#         pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
-#         prd_y = pred.net_pv.values
-#         y = int(prd_y[-1])
-#         if  y > z :
-#             # print( i , y )
-#             z = y
-#             all.append(prd_y)
-#             all_id.append(i)
-#             container.write("{} , {}".format(i,y))
+all_id_m = []
+all_m = []
+number = [number_1 , number_2 , number_3]
+
+for i in range(1):
+    Ticker = 'FFWM'
+    pred  = delta2(Ticker=Ticker)
+    siz = len(pred)
+    prd_x =  pred.net_pv.values
+    z = int(prd_x[-1])
+    all_m.append(prd_x)
+    all_id_m.append(i)
+    container.write("x , {}".format(z))
+    # print( 'x' ,  z )
+
+    for i in number:
+        np.random.seed(i)
+        pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
+        prd_y = pred.net_pv.values
+        y = int(prd_y[-1])
+        if  y > z :
+            # print( i , y )
+            z = y
+            all.append(prd_y)
+            all_id.append(i)
+            container.write("{} , {}".format(i,y))
                 
-#     chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
-#     st.line_chart(chart_data)
-#     st.stop()
-
-
-number_1  = st.number_input('Insert a number{}'.format(1),step=1 , key=1 )
-number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , key=2 )
-
-st.write(number_1 , number_2 )
-
-
-
-
+    chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
+    st.line_chart(chart_data)
+    st.stop()
 
 
 
