@@ -194,7 +194,6 @@ if Graph_M :
         st.line_chart(chart_data)
         st.stop()
 
-# st.cache_data.clear()
 
 
         
