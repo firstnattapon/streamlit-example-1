@@ -193,4 +193,7 @@ if Graph_M :
         chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
         st.line_chart(chart_data)
         st.stop()
+        st.cache_data.clear()
+
+
         
