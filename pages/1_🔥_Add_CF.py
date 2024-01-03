@@ -10,7 +10,7 @@ write_api_key = 'V10DE0HKR4JKB014'
 client = thingspeak.Channel(channel_id, write_api_key)
 
 def NEGG(entry = 1.26 ,ref = 1.26  ):
-    try:
+    # try:
         entry  = entry ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
         if entry < 10000 :
             samples = np.arange( 0  ,  np.around(entry, 2) * 3 + step  ,  step)
@@ -54,7 +54,7 @@ def NEGG(entry = 1.26 ,ref = 1.26  ):
             df['net_pv'] = df['Fixed_Asset_Value'] + df['Cash_Balan']
             df =  df [df['Asset_Price'] <= np.around(ref, 2) ]['net_pv'].values
             return    df
-    except:pass
+    # except:pass
 
 
 x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01  )
