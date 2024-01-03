@@ -53,7 +53,7 @@ def NEGG(entry = 1.26 ,ref = 1.26  ):
             df = pd.concat([df_top, df_down], axis=0)
             df['net_pv'] = df['Fixed_Asset_Value'] + df['Cash_Balan']
             df =  df [df['Asset_Price'] <= np.around(ref, 2) ]['net_pv'].values
-            return    df[-1]
+            return    df
     except:pass
 
 
