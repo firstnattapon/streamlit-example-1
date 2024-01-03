@@ -150,8 +150,8 @@ def Gen_fx (Ticker =  'FFWM' ,  field = 2 ):
     client.update(  {'field{}'.format(field) : fx[-1] } )
 
 
-Check_Gen = st.checkbox('Check_Gen')
-if Check_Gen :
+FFWM_Check_Gen = st.checkbox('FFWM_Check_Gen')
+if FFWM_Check_Gen :
     re = st.button("Rerun_Gen")
     if re :
         Gen_fx (Ticker = 'FFWM' , field = 2 )
@@ -165,7 +165,13 @@ if FFWM_Check_Gen_M :
         client.update(  {'field2': input } )
         st.write(input)        
 st.write("_____") 
-    
+
+NEGG_Check_Gen = st.checkbox('NEGG_Check_Gen')
+if NEGG_Check_Gen :
+    re = st.button("Rerun_Gen")
+    if re :
+        Gen_fx (Ticker = 'NEGG' , field = 3 )
+
 NEGG_Check_Gen_M = st.checkbox('NEGG_Check_Gen_M')
 if NEGG_Check_Gen_M :    
     input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
