@@ -113,6 +113,7 @@ z_1 = st.number_input('Adjust', step=0.01 , value = -3000 )
 
 q_1 =  NEGG( ref = x_1 )
 q_2 =  FFWM( ref = x_2 )
+
 st.write("ราคา_NEGG_1.26",  q_1) 
 st.write("ราคา_FFWM_6.88",  q_2) 
 
@@ -124,7 +125,6 @@ if Check_ADD :
             client.update(  {'field1': p - y , 'field2':(p - y)/2150 } )
             st.write({'Cashflow': p - y , 'Yield':(p - y)/2150 }) 
         except:pass
-
 
 st.write('https://thingspeak.com/channels/2329127')
 import streamlit.components.v1 as components
