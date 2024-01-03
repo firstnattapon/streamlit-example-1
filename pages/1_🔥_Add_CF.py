@@ -9,7 +9,7 @@ channel_id = 2329127
 write_api_key = 'V10DE0HKR4JKB014'
 client = thingspeak.Channel(channel_id, write_api_key)
 
-def NEGG(entry = 1.26 , ref = 1.26):
+def NEGG(entry = 1.26 ,ref = 1.26  ):
     try:
         entry  = entry ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
         if entry < 10000 :
@@ -62,7 +62,7 @@ x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 )
 y_1 = st.number_input('portfolio_cash', step=0.01 )
 y_2 = st.number_input('portfolio_asset', step=0.01 )
 z_1 = st.number_input('Adjust', step=0.01)
-q_1 = NEGG(ref = x_1 )
+q_1 = NEGG(entry = 1.26 , ref = x_1)
 st.write("ราคา_NEGG_1.26", q_1 ) 
 st.write(q_1) 
 
