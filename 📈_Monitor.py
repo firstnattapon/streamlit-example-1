@@ -64,29 +64,31 @@ def Production(Ticker = "FFWM" ):
             return   abs(Production_Costs)
     except:pass
 
+def Monitor (Ticker = 'FFWM' , field = 2 ):
+    tickerData = yf.Ticker( Ticker)
+    tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
+    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+    filter_date = '2022-12-21 12:00:00+07:00'
+    tickerData = tickerData[tickerData.index >= filter_date]
+    
+    fx = client.get_field_last(field='{}'.format(field))
+    fx_js = int(json.loads(fx)["field{}".format(field)])
+    np.random.seed(fx_js)
+    data = np.random.randint(2, size = len(tickerData))
+    tickerData['action'] = data
+    tickerData['index'] = [ i+1 for i in range(len(tickerData))]
+    
+    tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
+    tickerData_1['action'] =  [ i for i in range(5)]
+    tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
+    df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
+    np.random.seed(fx_js)
+    df['action'] = np.random.randint(2, size = len(df))
+    return df.tail(7)
 
-tickerData = yf.Ticker( 'FFWM')
-tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
-tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-filter_date = '2022-12-21 12:00:00+07:00'
-tickerData = tickerData[tickerData.index >= filter_date]
-
-fx = client.get_field_last(field='2')
-fx_js = int(json.loads(fx)["field2"])
-np.random.seed(fx_js)
-data = np.random.randint(2, size = len(tickerData))
-tickerData['action'] = data
-tickerData['index'] = [ i+1 for i in range(len(tickerData))]
-
-tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
-tickerData_1['action'] =  [ i for i in range(5)]
-tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
-df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
-np.random.seed(fx_js)
-df['action'] = np.random.randint(2, size = len(df))
-st.write( 'FFWM')
+st.write( 'FFWM', field = 2)
 st.write("f(x): {}".format(fx_js) ," , " , "Production: {}".format(    np.around(Production('FFWM'), 2) ))
-st.table(df.tail(7))
+st.table( Monitor(Ticker = 'FFWM'))
 st.write("_____") 
 
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
