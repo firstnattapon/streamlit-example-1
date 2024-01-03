@@ -6,8 +6,8 @@ import pandas as pd
 
 st.set_page_config(page_title="Add_CF", page_icon="🔥")
 
-channel_id = 2329127
-write_api_key = 'V10DE0HKR4JKB014'
+channel_id = 2394198
+write_api_key = 'OVZNYQBL57GJW5JF'
 client = thingspeak.Channel(channel_id, write_api_key)
 
 def NEGG(entry = 1.26 ,ref = 1.26  ):
@@ -123,8 +123,10 @@ k_1 =  (y_1 + y_2) + j_1
 k_2 = (q_1 + q_2) + z_1
 
 # st.write(x_1 , x_2 ,  y_1 , y_2 , j_1 ,z_1 , q_1 , q_2 , k_1)
-st.write('ref:' , k_2) 
-st.write('cf:' ,  k_1 - k_2 ) 
+ref = k_2
+cf = k_1 - k_2
+st.write('ref:' , ref) 
+st.write('cf:' , cf ) 
 
 st.write("_____") 
 
@@ -133,11 +135,13 @@ if Check_ADD :
     button_ADD = st.button("ADD_CF")
     if button_ADD:    
         try:
-            client.update(  {'field1': p - y , 'field2':(p - y)/ 2150 } )
-            st.write({'Cashflow': p - y , 'Yield':(p - y)/2150 }) 
+            client.update(  {'field1': cf , 'field2': cf / k_2 } )
+            st.write({'Cashflow': cf , 'Yield': cf / k_2 }) 
         except:pass
 
 st.write('https://thingspeak.com/channels/2329127')
 import streamlit.components.v1 as components
-components.iframe('https://thingspeak.com/channels/2329127/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-components.iframe('https://thingspeak.com/channels/2329127/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+st.write("_____") 
+components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+st.write("_____") 
+components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
