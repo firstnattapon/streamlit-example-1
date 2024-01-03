@@ -92,5 +92,11 @@ st.write("f(x): {}".format(fx_js) ," , " , "Production: {}".format(    np.around
 st.table(df_7)
 st.write("_____") 
 
+df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
+st.write( 'NEGG')
+st.write("f(x): {}".format(fx_js_1) ," , " , "Production: {}".format(    np.around(Production('NEGG'), 2) ))
+st.table(df_7_1)
+st.write("_____") 
+
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
 st.stop()
