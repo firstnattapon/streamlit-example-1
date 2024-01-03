@@ -136,7 +136,7 @@ if Check_ADD :
     button_ADD = st.button("ADD_CF")
     if button_ADD:    
         try:
-            client.update(  {'field1': cf , 'field2': cf / k_2 } )
+            client.update(  {'field1': cf , 'field2': cf / k_2 } , 'field3': j_1  )
             st.write({'Cashflow': cf , 'Yield': cf / k_2 }) 
         except:pass
 
@@ -145,7 +145,8 @@ st.write("_____")
 components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
 st.write("_____") 
 components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-
+st.write("_____") 
+components.iframe('https://thingspeak.com/channels/2394198/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
 st.write("_____") 
 st.write('https://thingspeak.com/channels/2394198')
 st.stop()
