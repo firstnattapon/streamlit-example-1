@@ -154,8 +154,8 @@ if Check_Gen :
             
         client.update(  {'field2': fx[-1] } )
 
-Check_Gen_M = st.checkbox('Check_Gen_M')
-if Check_Gen_M :    
+FFWM_Check_Gen_M = st.checkbox('FFWM_Check_Gen_M')
+if FFWM_Check_Gen_M :    
     input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
     re_ = st.button("Rerun_Gen_M")
     if re_ :
