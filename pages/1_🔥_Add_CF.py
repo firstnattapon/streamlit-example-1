@@ -3,6 +3,7 @@ import numpy as np
 import datetime
 import thingspeak
 import pandas as pd
+import yfinance as yf
 
 st.set_page_config(page_title="Add_CF", page_icon="🔥")
 
@@ -116,7 +117,7 @@ st.write("_____")
 z_1 = st.number_input('Adjust', step=0.01 , value = -1000.00 )
 st.write("_____") 
 
-q_1 =  NEGG( ref = x_1 )
+q_1 =  NEGG( ref = yf.Ticker('NEGG').tickerData.fast_info['lastPrice']  )
 q_2 =  FFWM( ref = x_2 )
 
 k_1 =  (y_1 + y_2) + j_1
