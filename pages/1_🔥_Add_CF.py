@@ -11,7 +11,7 @@ write_api_key = 'V10DE0HKR4JKB014'
 client = thingspeak.Channel(channel_id, write_api_key)
 
 def NEGG(entry = 1.26 ,ref = 1.26  ):
-    # try:
+    try:
         entry  = entry ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
         if entry < 10000 :
             samples = np.arange( 0  ,  np.around(entry, 2) * 3 + step  ,  step)
@@ -53,9 +53,9 @@ def NEGG(entry = 1.26 ,ref = 1.26  ):
             df_down = df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'})
             df = pd.concat([df_top, df_down], axis=0)
             df['net_pv'] = df['Fixed_Asset_Value'] + df['Cash_Balan']
-            df =  df [df['Asset_Price'] <= np.around(ref, 2) ]['net_pv'].values
+            df =  df [df['Asset_Price'] == np.around(ref, 2) ]['net_pv'].values
             return    df[-1]
-    # except:pass
+    except:pass
 
 
 x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 , value = 1.26 )
@@ -63,8 +63,9 @@ x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 )
 y_1 = st.number_input('portfolio_cash', step=0.01 )
 y_2 = st.number_input('portfolio_asset', step=0.01 )
 z_1 = st.number_input('Adjust', step=0.01)
+
 q_1 =  NEGG( ref = x_1 )
-st.write("ราคา_NEGG_1.26",  q_1 ) 
+st.write("ราคา_NEGG_1.26",  NEGG( ref = q_1 ) ) 
 
 
 Check_ADD = st.checkbox('ADD_CF ')
