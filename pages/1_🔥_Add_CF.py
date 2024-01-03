@@ -65,7 +65,7 @@ y_2 = st.number_input('portfolio_asset', step=0.01 )
 z_1 = st.number_input('Adjust', step=0.01)
 
 q_1 =  NEGG( ref = x_1 )
-st.write("ราคา_NEGG_1.26",  NEGG( ref = q_1 ) ) 
+st.write("ราคา_NEGG_1.26",  q_1) 
 
 
 Check_ADD = st.checkbox('ADD_CF ')
