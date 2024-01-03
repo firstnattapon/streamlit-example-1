@@ -160,9 +160,15 @@ if FFWM_Check_Gen_M :
     re_ = st.button("Rerun_Gen_M")
     if re_ :
         client.update(  {'field2': input } )
-        st.write(input)
-        
-        
-
+        st.write(input)        
+st.write("_____") 
+    
+NEGG_Check_Gen_M = st.checkbox('NEGG_Check_Gen_M')
+if NEGG_Check_Gen_M :    
+    input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
+    re_ = st.button("Rerun_Gen_M")
+    if re_ :
+        client.update(  {'field3': input } )
+        st.write(input)    
 
 
