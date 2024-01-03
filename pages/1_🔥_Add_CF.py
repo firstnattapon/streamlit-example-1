@@ -104,25 +104,27 @@ def FFWM(entry = 6.88 ,ref = 6.88  ):
             return    df[-1]
     except:pass
 
-
-x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 , value = 1.26 )
-x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 ,   value = 6.88 )
+x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 , value =  None  )
+x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 ,   value = None  )
 st.write("_____") 
 
-y_1 = st.number_input('Portfolio_cash', step=0.01 , value = 1300.00 )
-y_2 = st.number_input('Portfolio_asset', step=0.01 , value = 3000.00 )
+y_1 = st.number_input('FFWM_asset', step=0.01 , value = None  )
+y_2 = st.number_input('NEGG_asset', step=0.01 , value = None  )
+st.write("_____") 
+j_1 = st.number_input('Portfolio_cash', step=0.01 , value = None  )
+st.write("_____") 
 z_1 = st.number_input('Adjust', step=0.01 , value = -1000.00 )
 st.write("_____") 
 
 q_1 =  NEGG( ref = x_1 )
 q_2 =  FFWM( ref = x_2 )
 
-k_1 =  y_1 + y_2
+k_1 =  (y_1 + y_2) + j_1
 k_2 = (q_1 + q_2) + z_1
 
-st.write(x_1 , x_2 ,  y_1 , y_2 , z_1 , q_1 , q_2 , k_1)
-st.write('ref:' , k_2) 
-st.write('cf:' ,  k_1-k_2 ) 
+st.write(x_1 , x_2 ,  y_1 , y_2 , j_1 ,z_1 , q_1 , q_2 , k_1)
+# st.write('ref:' , k_2) 
+# st.write('cf:' ,  k_1 - k_2 ) 
 
 st.write("_____") 
 
