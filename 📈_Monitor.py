@@ -85,7 +85,7 @@ df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
 np.random.seed(fx_js)
 df['action'] = np.random.randint(2, size = len(df))
 st.write( 'FFWM')
-st.write("f(x): {}".format(fx_js) ," , " , "Production: {}".format( round(Production('FFWM')), 3) )
+st.write("f(x): {}".format(fx_js) ," , " , "Production: {}".format(    np.around(Production('FFWM'), 2) ))
 st.table(df.tail(7))
 st.write("_____") 
 
