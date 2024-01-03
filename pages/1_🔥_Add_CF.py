@@ -139,9 +139,12 @@ if Check_ADD :
             st.write({'Cashflow': cf , 'Yield': cf / k_2 }) 
         except:pass
 
-st.write('https://thingspeak.com/channels/2329127')
 import streamlit.components.v1 as components
 st.write("_____") 
 components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
 st.write("_____") 
 components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+
+st.write("_____") 
+st.write('https://thingspeak.com/channels/2394198')
+
