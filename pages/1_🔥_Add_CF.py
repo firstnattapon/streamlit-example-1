@@ -5,66 +5,81 @@ import thingspeak
 
 st.set_page_config(page_title="Add_CF", page_icon="🔥")
 
-
 channel_id = 2329127
 write_api_key = 'V10DE0HKR4JKB014'
 client = thingspeak.Channel(channel_id, write_api_key)
 
-st.write("สมการ ","  =  -742+1500ln x "  , "fix 1500 : Initial Port" , "เริ่ม 6.88") 
-st.write("")
-x = st.number_input('ราคา')
-z = st.number_input('cash')
-q = st.number_input('asset')
-p = z+q
-y = -742+1500 * np.log(x)
+def NEGG(entry = 1.26):
+    try:
+        entry  = entry ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
+        if entry < 10000 :
+            samples = np.arange( 0  ,  np.around(entry, 2) * 3 + step  ,  step)
 
-st.write("Price", x ,"=" , y) 
-st.write( 'cf' ,"=", p - y) 
+            df = pd.DataFrame()
+            df['Asset_Price'] =   np.around(samples, 2)
+            df['Fixed_Asset_Value'] = Fixed_Asset_Value
+            df['Amount_Asset']  =   df['Fixed_Asset_Value']  / df['Asset_Price']
 
-# Check_NEW = st.checkbox('NEW_DATA ')
-# if Check_NEW :
-#     button_NEW = st.button("NEW_DATA")
-#     if button_NEW:
-#         try:
-#             np.save('my_array.npy', np.array([]))
-#             my_array_1 = np.load('my_array.npy')
-#             st.write(my_array_1) 
-#         except:pass
+            df_top = df[df.Asset_Price >= np.around(entry, 2) ]
+            df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) *  df_top['Asset_Price']
+            df_top.fillna(0, inplace=True)
+            np_Cash_Balan_top = df_top['Cash_Balan_top'].values
 
-# Check_LOAD = st.checkbox('LOAD_DATA ')
-# if Check_LOAD :
-#     button_LOAD = st.button("LOAD_DATA")
-#     if button_LOAD:
-#         try:
-#             my_array_2 = np.load('my_array.npy')
-#             st.write(my_array_2) 
-#         except:pass
-        
+            xx = np.zeros(len(np_Cash_Balan_top)) ; y_0 = Cash_Balan
+            for idx, v_0  in enumerate(np_Cash_Balan_top) :
+                z_0 = y_0 + v_0
+                y_0 = z_0
+                xx[idx] = y_0
+
+            df_top['Cash_Balan_top'] = xx
+            df_top = df_top.rename(columns={'Cash_Balan_top': 'Cash_Balan'})
+            df_top  = df_top.sort_values(by='Amount_Asset')
+            df_top  = df_top[:-1]
+
+            df_down = df[df.Asset_Price <= np.around(entry, 2) ]
+            df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) -  df_down['Amount_Asset'])     *  df_down['Asset_Price']
+            df_down.fillna(0, inplace=True)
+            df_down = df_down.sort_values(by='Asset_Price' , ascending=False)
+            np_Cash_Balan_down = df_down['Cash_Balan_down'].values
+
+            xxx= np.zeros(len(np_Cash_Balan_down)) ; y_1 = Cash_Balan
+            for idx, v_1  in enumerate(np_Cash_Balan_down) :
+                z_1 = y_1 + v_1
+                y_1 = z_1
+                xxx[idx] = y_1
+
+            df_down['Cash_Balan_down'] = xxx
+            df_down = df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'})
+            df = pd.concat([df_top, df_down], axis=0)
+            df['net_pv'] = df['Fixed_Asset_Value'] + df['Cash_Balan']
+            return   df 
+    except:pass
+
+# st.write("สมการ ","  =  -742+1500ln x "  , "fix 1500 : Initial Port" , "เริ่ม 6.88") 
+# st.write("")
+
+x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 )
+x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 )
+y_1 = st.number_input('portfolio_cash', step=0.01 )
+y_2 = st.number_input('portfolio_asset', step=0.01 )
+z_1 = st.number_input('Adjust', step=0.01)
+
+
+# st.write("Price", x ,"=" , y) 
+# st.write( 'cf' ,"=", p - y) 
+
+
 Check_ADD = st.checkbox('ADD_CF ')
 if Check_ADD :
     button_ADD = st.button("ADD_CF")
     if button_ADD:    
         try:
-            # my_array_a = np.load('my_array.npy')
-            # my_array_b = np.append(my_array_a, '({}):({:.2f}):({:.2f})'.format( datetime.datetime.now() , p - y , (p - y)/2150 ))
-            # np.save('my_array.npy', my_array_b)
             client.update(  {'field1': p - y , 'field2':(p - y)/2150 } )
             st.write({'Cashflow': p - y , 'Yield':(p - y)/2150 }) 
         except:pass
 
-# Check_DEL = st.checkbox('DEL_CF ')
-# if Check_DEL :
-#         button_DEL = st.button("DEL_CF")
-#         if button_DEL:
-#                 try:
-#                         last_data_point = client.get_latest_feed()
-#                         client.delete_feed(last_data_point['id'])
-#                         st.write(last_data_point['id'])     
-#                 except:pass   
-
 
 st.write('https://thingspeak.com/channels/2329127')
-
 import streamlit.components.v1 as components
 components.iframe('https://thingspeak.com/channels/2329127/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
 components.iframe('https://thingspeak.com/channels/2329127/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
