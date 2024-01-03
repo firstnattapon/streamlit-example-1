@@ -107,8 +107,8 @@ def FFWM(entry = 6.88 ,ref = 6.88  ):
 
 x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 , value = 1.26 )
 x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 ,   value = 6.88 )
-y_1 = st.number_input('Portfolio_cash', step=0.01 , value = 1300)
-y_2 = st.number_input('Portfolio_asset', step=0.01 , value = 3000 )
+y_1 = st.number_input('Portfolio_cash', step=0.01 , value = 1300.)
+y_2 = st.number_input('Portfolio_asset', step=0.01 , value = 3000. )
 z_1 = st.number_input('Adjust', step=0.01 , value = -3000.00 )
 
 q_1 =  NEGG( ref = x_1 )
