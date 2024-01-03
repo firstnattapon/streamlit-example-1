@@ -118,7 +118,7 @@ q_1 =  NEGG( ref = x_1 )
 q_2 =  FFWM( ref = x_2 )
 k_1 = (q_1 + q_2) + z_1
 
-st.write(x_1 , x_2 ,  y_1 , z_1 , q_1 , q_2 , k_1 ) 
+st.write(x_1 , x_2 ,  y_1 , y_2 , z_1 , q_1 , q_2 , k_1 ) 
 
 Check_ADD = st.checkbox('ADD_CF ')
 if Check_ADD :
