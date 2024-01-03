@@ -116,10 +116,13 @@ st.write("_____")
 
 q_1 =  NEGG( ref = x_1 )
 q_2 =  FFWM( ref = x_2 )
-k_1 = (q_1 + q_2) + z_1
+
+k_1 =  y_1 + y_2
+k_2 = (q_1 + q_2) + z_1
 
 st.write(x_1 , x_2 ,  y_1 , y_2 , z_1 , q_1 , q_2 , k_1)
-st.write('ref:' , k_1) 
+st.write('ref:' , k_2) 
+st.write('cf:' ,  k_1-k_2 ) 
 
 st.write("_____") 
 
