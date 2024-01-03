@@ -86,6 +86,7 @@ np.random.seed(fx_js)
 df['action'] = np.random.randint(2, size = len(df))
 st.write("f(x): {}".format(fx_js) ," , " , "Production: {}".format( round(Production('FFWM')), 3) )
 st.table(df.tail(7))
+st.write("_____") 
 
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
         # st.stop()
