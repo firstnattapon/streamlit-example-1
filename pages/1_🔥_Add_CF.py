@@ -57,13 +57,14 @@ def NEGG(entry = 1.26 , ref = 1.26):
     except:pass
 
 
-x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 , value=1.26 )
+x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01  )
 x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 )
 y_1 = st.number_input('portfolio_cash', step=0.01 )
 y_2 = st.number_input('portfolio_asset', step=0.01 )
 z_1 = st.number_input('Adjust', step=0.01)
 q_1 = NEGG(ref = x_1 )
 st.write("ราคา_NEGG_1.26", q_1 ) 
+st.write(q_1) 
 
 
 Check_ADD = st.checkbox('ADD_CF ')
