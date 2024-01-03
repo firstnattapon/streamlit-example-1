@@ -152,3 +152,4 @@ components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23f
 st.write("_____") 
 st.write('https://thingspeak.com/channels/2394198')
 
+st.stop()
