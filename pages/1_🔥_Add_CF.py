@@ -125,11 +125,12 @@ k_2 = (q_1 + q_2) + z_1
 # st.write(x_1 , x_2 ,  y_1 , y_2 , j_1 ,z_1 , q_1 , q_2 , k_1)
 ref = k_2
 cf = k_1 - k_2
-st.write('ref:' , ref) 
-st.write('cf:' , cf ) 
 
 if st.button("rerun"):
     st.rerun()
+st.write('ref:' , ref) 
+st.write('cf:' , cf ) 
+
     
 st.write("_____") 
 
