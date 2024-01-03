@@ -136,8 +136,8 @@ if Check_ADD :
     button_ADD = st.button("ADD_CF")
     if button_ADD:    
         try:
-            client.update(  {'field1': cf , 'field2': cf / k_2 } , 'field3': j_1  )
-            st.write({'Cashflow': cf , 'Yield': cf / k_2 }) 
+            client.update(  {'field1': cf , 'field2': cf / k_2 , 'field3': j_1  }  )
+            st.write({'Cashflow': cf , 'Yield': cf / k_2 ,  'ฺBuffer': j_1  }) 
         except:pass
 
 import streamlit.components.v1 as components
