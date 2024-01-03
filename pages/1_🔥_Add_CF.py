@@ -114,6 +114,7 @@ y_1 = st.number_input('FFWM_asset', step=0.01 , value = 0.00  )
 y_2 = st.number_input('NEGG_asset', step=0.01 , value = 0.00  )
 j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
 st.write("_____") 
+
 q_1 =  NEGG( ref = x_1 )
 q_2 =  FFWM( ref = x_2 )
 
@@ -128,8 +129,6 @@ if st.button("rerun"):
     st.rerun()
 st.write('ref:' , ref) 
 st.write('cf:' , cf ) 
-
-    
 st.write("_____") 
 
 Check_ADD = st.checkbox('ADD_CF ')
@@ -149,5 +148,4 @@ components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23f
 
 st.write("_____") 
 st.write('https://thingspeak.com/channels/2394198')
-
 st.stop()
