@@ -84,11 +84,12 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
     np.random.seed(fx_js)
     df['action'] = np.random.randint(2, size = len(df))
-    return df.tail(7)
+    return df.tail(7) , fx_js
 
-st.write( 'FFWM', field = 2)
+df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
+st.write( 'FFWM')
 st.write("f(x): {}".format(fx_js) ," , " , "Production: {}".format(    np.around(Production('FFWM'), 2) ))
-st.table( Monitor(Ticker = 'FFWM'))
+st.table(df_7)
 st.write("_____") 
 
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
