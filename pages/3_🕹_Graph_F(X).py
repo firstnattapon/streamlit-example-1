@@ -196,6 +196,12 @@ if FFWM_Graph_M :
 st.write("_____") 
 
 
+NEGG_Graph = st.checkbox('NEGG_Graph_F(X)')
+if NEGG_Graph :
+    re = st.button("Rerun_Graph")
+    if re :
+        delta_y('NEGG')
+
 
 NEGG_Graph_M = st.checkbox('NEGG_Graph_F(X)_M')
 if NEGG_Graph_M :
