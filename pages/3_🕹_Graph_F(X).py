@@ -157,19 +157,12 @@ if Graph :
                         
             chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
             st.line_chart(chart_data)
-            st.stop()
 
-Graph_M = st.checkbox('Graph_F(X)_M')
-if Graph_M :
-    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=36  ,  key=1 )
-    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=68   , key=2 )
-    all_id_m = [] ; all_m = []
-    number = [number_1 , number_2 ]
+
+
+def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
     container_1 = st.container(border=True)
-    # re_M = st.button("Rerun_Graph_M")
-    # if re_M :
     for i in range(1):
-        Ticker = 'FFWM'
         pred  = delta2(Ticker=Ticker)
         siz = len(pred)
         prd_x =  pred.net_pv.values
@@ -190,6 +183,19 @@ if Graph_M :
         chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
         st.line_chart(chart_data)
         st.stop()
+
+
+FFWM_Graph_M = st.checkbox('FFWM_Graph_F(X)_M')
+if FFWM_Graph_M :
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=36  ,  key=1 )
+    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=68   , key=2 )
+    all_id_m = [] ; all_m = []
+    number = [number_1 , number_2 ]
+    delta_x( Ticker = 'FFWM'  , number = number)
+
+
+
+
 
 st.write("_____") 
 
