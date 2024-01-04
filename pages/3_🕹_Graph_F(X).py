@@ -177,6 +177,7 @@ def delta_y (Ticker = 'FFWM' ):
                     
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
         st.line_chart(chart_data)
+        st.stop()
 
 
 FFWM_Graph = st.checkbox('FFWM_Graph_F(X)')
@@ -205,14 +206,10 @@ if NEGG_Graph :
 
 NEGG_Graph_M = st.checkbox('NEGG_Graph_F(X)_M')
 if NEGG_Graph_M :
-    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=36  ,  key=1 )
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=553   ,  key=1 )
     number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=522   , key=2 )
     all_id_m = [] ; all_m = []
     number = [number_1 , number_2 ]
     delta_x( Ticker = 'NEGG'  , number = number)
 
 
-
-
-
-        
