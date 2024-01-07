@@ -17,8 +17,8 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
 client_2 = thingspeak.Channel(2394198 , 'OVZNYQBL57GJW5JF' , fmt='json')
 fx_2 = client_2.get_field_last(field='{}'.format(1))
-# fx_js_2 = int(json.loads(fx_2)["field{}".format(1)])
-st.write(json.loads(fx_2)["field1"])
+fx_js_2 = json.loads(fx_2)["field1"]
+st.write(fx_js_2)
 
 def Production(Ticker = "FFWM" ):
     try:
