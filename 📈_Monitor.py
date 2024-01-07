@@ -11,14 +11,25 @@ st.set_page_config( page_title="Monitor", page_icon="📈")
 if st.button("rerun"):
     st.rerun()
 
-channel_id = 2385118
-write_api_key = 'IPSG3MMMBJEB9DY8'
-client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
-
-client_2 = thingspeak.Channel(2394198 , 'OVZNYQBL57GJW5JF' , fmt='json')
-fx_2 = client_2.get_field_last(field='{}'.format(1))
-fx_js_2 = ( int(eval(json.loads(fx_2)["field{}".format(1)])) ) -  393
-st.write(fx_js_2)
+def average_cf (Ticker = 'FFWM' , field = 1 ):
+    tickerData = yf.Ticker( Ticker)
+    tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
+    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+    filter_date = '2023-01-01 12:00:00+07:00'
+    tickerData = tickerData[tickerData.index >= filter_date]
+    tickerData = len(tickerData)
+    
+    channel_id = 2385118
+    write_api_key = 'IPSG3MMMBJEB9DY8'
+    client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
+    
+    client_2 = thingspeak.Channel(2394198 , 'OVZNYQBL57GJW5JF' , fmt='json')
+    fx_2 = client_2.get_field_last(field='{}'.format(field))
+    fx_js_2 = ( int(eval(json.loads(fx_2)["field{}".format(field)])) ) -  393
+    return tickerData / fx_js_2
+    
+st.write( 'average_cf_day:' ,  average_cf() )
+    
 
 def Production(Ticker = "FFWM" ):
     try:
