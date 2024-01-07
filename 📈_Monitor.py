@@ -26,7 +26,7 @@ def average_cf (Ticker = 'FFWM' , field = 1 ):
     client_2 = thingspeak.Channel(2394198 , 'OVZNYQBL57GJW5JF' , fmt='json')
     fx_2 = client_2.get_field_last(field='{}'.format(field))
     fx_js_2 = ( int(eval(json.loads(fx_2)["field{}".format(field)])) ) -  393
-    return int((tickerData / fx_js_2))
+    return tickerData / fx_js_2
 
 cf_day = average_cf()
 st.write( 'average_cf_day:' ,  cf_day , 'average_cf_mo:' , cf_day*30  )
