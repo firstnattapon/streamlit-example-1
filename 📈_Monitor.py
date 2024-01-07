@@ -27,7 +27,8 @@ def average_cf (Ticker = 'FFWM' , field = 1 ):
     fx_2 = client_2.get_field_last(field='{}'.format(field))
     fx_js_2 = ( int(eval(json.loads(fx_2)["field{}".format(field)])) ) -  393
     return tickerData / fx_js_2
-
+    
+st.write('____')
 cf_day = average_cf()
 st.write( 'average_cf_day:' ,  round(cf_day , 2 ) , 'average_cf_mo:' , round(cf_day*30 , 2)  )
 st.write('____')
