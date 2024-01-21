@@ -204,7 +204,7 @@ def delta_y (Ticker = 'FFWM' ):
                 max = int(pred_z[-1])
                 all.append(pred_z)
                 all_id.append(vi)
-                container_1.write("max , {}".format(max))
+                container.write("max , {}".format(max))
 
 
         
