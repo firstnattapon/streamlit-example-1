@@ -120,7 +120,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value
             tickerData['net_pv'] =   tickerData['pv'] - tickerData['refer_pv']  
             # final = tickerData[['delta' , 'Close' , 'pred' , 're' , 'Cash_Balan' , 'refer_model' , 'Amount_Asset' , 'pv' , 'refer_pv' , 'net_pv']]
-            final = tickerData[['net_pv' , 'Close']]
+            final = tickerData[['net_pv']]
             # final_1 = tickerData[['delta' , 'Close' , 'Production_Costs' ,'P/E' , 'y%' ]]
             return  final
     except:pass
@@ -175,40 +175,6 @@ def delta_y (Ticker = 'FFWM' ):
                 all_id.append(i)
                 container.write("{} , {}".format(i,y))
 
-            
-            for i in range(1):
-                T  = delta2(Ticker=Ticker)
-                T = T.Close.values
-                up_dn = []
-                for idX , v in enumerate(T):
-                    try :
-                        if  T[idX+1] > v :
-                            up_dn.append(1)
-                        elif T[idX+1] <  v :
-                            up_dn.append(0)
-                        elif  T[idX+1] ==  v:
-                            up_dn.append(up_dn[-1])
-                    except :
-                        up_dn.append(up_dn[-1])
-                final_x = 0
-                xl = []
-                for   vv in  up_dn:
-                    if  vv  != final_x :
-                        xl.append(1)
-                        final_x = vv
-                    else:
-                        xl.append(0)
-                        
-                pred_z  = delta2(Ticker=Ticker , pred = xl )
-                pred_z =  pred.Close.values
-                max = int(pred_z[-1])
-                all.append(pred_z)
-                all_id.append(vi)
-                container.write("max , {}".format(max))
-
-
-        
-        
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
         st.line_chart(chart_data)
 
