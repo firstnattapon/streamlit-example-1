@@ -202,8 +202,8 @@ def delta_y (Ticker = 'FFWM' ):
                 pred_z  = delta2(Ticker=Ticker , pred = xl )
                 pred_z =  pred.Close.values
                 max = int(pred_z[-1])
-                all_m.append(pred_z)
-                all_id_m.append(vi)
+                all.append(pred_z)
+                all_id.append(vi)
                 container_1.write("max , {}".format(max))
 
 
