@@ -163,7 +163,7 @@ def delta_y (Ticker = 'FFWM' ):
         container.write("x , {}".format(z))
         # print( 'x' ,  z )
         
-        for i in range(2000):
+        for vi in range(2000):
             np.random.seed(i)
             pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
             prd_y = pred.net_pv.values
@@ -174,7 +174,41 @@ def delta_y (Ticker = 'FFWM' ):
                 all.append(prd_y)
                 all_id.append(i)
                 container.write("{} , {}".format(i,y))
-                    
+
+            
+            for i in range(1):
+                T  = delta2(Ticker=Ticker)
+                T = T.Close.values
+                up_dn = []
+                for idX , v in enumerate(T):
+                    try :
+                        if  T[idX+1] > v :
+                            up_dn.append(1)
+                        elif T[idX+1] <  v :
+                            up_dn.append(0)
+                        elif  T[idX+1] ==  v:
+                            up_dn.append(up_dn[-1])
+                    except :
+                        up_dn.append(up_dn[-1])
+                final_x = 0
+                xl = []
+                for   vv in  up_dn:
+                    if  vv  != final_x :
+                        xl.append(1)
+                        final_x = vv
+                    else:
+                        xl.append(0)
+                        
+                pred_z  = delta2(Ticker=Ticker , pred = xl )
+                pred_z =  pred.Close.values
+                max = int(pred_z[-1])
+                all_m.append(pred_z)
+                all_id_m.append(vi)
+                container_1.write("max , {}".format(max))
+
+
+        
+        
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
         st.line_chart(chart_data)
 
