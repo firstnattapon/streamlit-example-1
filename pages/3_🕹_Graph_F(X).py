@@ -163,7 +163,7 @@ def delta_y (Ticker = 'FFWM' ):
         container.write("x , {}".format(z))
         # print( 'x' ,  z )
         
-        for vi in range(2000):
+        for i in range(2000):
             np.random.seed(i)
             pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
             prd_y = pred.net_pv.values
