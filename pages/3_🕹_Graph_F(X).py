@@ -104,8 +104,6 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             # final_1 = tickerData[['delta' , 'Close' , 'Production_Costs' ,'P/E' , 'y%' ]]
             return  final
     except:pass
-
-
 def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
     container_1 = st.container(border=True)
     for i in range(1):
@@ -141,7 +139,7 @@ def delta_y (Ticker = 'FFWM' ):
         all_id.append(i)
         container.write("x , {}".format(z))
         # print( 'x' ,  z )
-
+        
         for i in range(2000):
             np.random.seed(i)
             pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
@@ -153,10 +151,9 @@ def delta_y (Ticker = 'FFWM' ):
                 all.append(prd_y)
                 all_id.append(i)
                 container.write("{} , {}".format(i,y))
-
+                    
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
         st.line_chart(chart_data)
-
 FFWM_Graph = st.checkbox('FFWM_Graph_F(X)')
 if FFWM_Graph :
     re = st.button("Rerun_Graph")
@@ -175,6 +172,7 @@ if NEGG_Graph :
     re = st.button("Rerun_Graph")
     if re :
         delta_y('NEGG')
+
 NEGG_Graph_M = st.checkbox('NEGG_Graph_F(X)_M')
 if NEGG_Graph_M :
     number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=130     ,  key=1 )
@@ -182,4 +180,5 @@ if NEGG_Graph_M :
     all_id_m = [] ; all_m = []
     number = [number_1 , number_2 ]
     delta_x( Ticker = 'NEGG'  , number = number)
+
 st.stop()
