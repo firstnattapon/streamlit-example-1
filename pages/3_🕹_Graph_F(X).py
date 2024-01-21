@@ -120,7 +120,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value
             tickerData['net_pv'] =   tickerData['pv'] - tickerData['refer_pv']  
             # final = tickerData[['delta' , 'Close' , 'pred' , 're' , 'Cash_Balan' , 'refer_model' , 'Amount_Asset' , 'pv' , 'refer_pv' , 'net_pv']]
-            final = tickerData[['net_pv']]
+            final = tickerData[['net_pv' , 'Close']]
             # final_1 = tickerData[['delta' , 'Close' , 'Production_Costs' ,'P/E' , 'y%' ]]
             return  final
     except:pass
