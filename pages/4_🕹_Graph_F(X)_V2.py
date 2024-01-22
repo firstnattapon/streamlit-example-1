@@ -146,7 +146,7 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             container_1.write("max , {}".format(j))     
         
         chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
-        chart_data['Mean'] =  chart_data.min.values + ((chart_data.max.values - chart_data.min.values) / 2 )
+        chart_data['Mean'] =  chart_data[['min']] + ((chart_data[['max']] - chart_data[['min']]) / 2 )
 
         st.line_chart(chart_data)
         st.stop()
