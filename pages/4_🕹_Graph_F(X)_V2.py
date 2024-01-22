@@ -144,7 +144,7 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             j = int(delta_q[-1])
             all_m.append(delta_q)
             all_id_m.append('max')
-            container.write("max , {}".format(j))     
+            container_1.write("max , {}".format(j))     
         
         chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
         st.line_chart(chart_data)
