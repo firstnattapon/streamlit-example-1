@@ -183,7 +183,6 @@ if FFWM_Graph :
     re = st.button("Rerun_Graph")
     if re :
         delta_y('FFWM')
-
 FFWM_Graph_M = st.checkbox('FFWM_Graph_F(X)_M')
 if FFWM_Graph_M :
     number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=36  ,  key=1 )
@@ -192,7 +191,18 @@ if FFWM_Graph_M :
     number = [number_1 , number_2 ]
     delta_x( Ticker = 'FFWM'  , number = number)
 st.write("_____") 
+NEGG_Graph = st.checkbox('NEGG_Graph_F(X)')
+if NEGG_Graph :
+    re = st.button("Rerun_Graph")
+    if re :
+        delta_y('NEGG')
 
+NEGG_Graph_M = st.checkbox('NEGG_Graph_F(X)_M')
+if NEGG_Graph_M :
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=130     ,  key=1 )
+    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=553    , key=2 )
+    all_id_m = [] ; all_m = []
+    number = [number_1 , number_2 ]
+    delta_x( Ticker = 'NEGG'  , number = number)
 
-
-
+st.stop()
