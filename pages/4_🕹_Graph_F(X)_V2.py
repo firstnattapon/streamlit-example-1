@@ -119,7 +119,7 @@ def delta_z (Ticker = 'FFWM') :
     #             xl.append(0)
                 
     #     delta_z_re = delta2(Ticker = Ticker  , pred=xl)
-        return  T
+    return  T
 
 def delta_y (Ticker = 'FFWM' ):
     container = st.container(border=True)
