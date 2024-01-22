@@ -118,6 +118,39 @@ def delta_z (Ticker = 'FFWM' , T = []) :
         delta_z_re = delta2(Ticker =  Ticker  , pred = xl)
     return  delta_z_re.net_pv.values
 
+def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
+    container_1 = st.container(border=True)
+    for i in range(1):
+        pred  = delta2(Ticker=Ticker)
+        siz = len(pred)
+        prd_x =  pred.net_pv.values
+        z = int(prd_x[-1])
+        all_m.append(prd_x)
+        all_id_m.append(i)
+        container_1.write("x , {}".format(z))
+    
+        for i in number:
+            np.random.seed(i)
+            pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
+            prd_y = pred.net_pv.values
+            y = int(prd_y[-1])
+            all_m.append(prd_y)
+            all_id_m.append(i)
+            container_1.write("{} , {} ".format(i , y ))
+
+
+        for i in range(1):
+            delta_q = delta_z( Ticker , pred.Close.values )
+            j = int(delta_q[-1])
+            all_m.append(delta_q)
+            all_id_m.append('max')
+            container.write("max , {}".format(j))     
+        
+        chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
+        st.line_chart(chart_data)
+        st.stop()
+
+
 def delta_y (Ticker = 'FFWM' ):
     container = st.container(border=True)
     all = []
@@ -142,12 +175,12 @@ def delta_y (Ticker = 'FFWM' ):
                 all_id.append(i)
                 container.write("{} , {}".format(i,y))
 
-        for i in range(1):
-            delta_q = delta_z( Ticker , pred.Close.values )
-            j = int(delta_q[-1])
-            all.append(delta_q)
-            all_id.append('max')
-            container.write("max , {}".format(j))
+        # for i in range(1):
+        #     delta_q = delta_z( Ticker , pred.Close.values )
+        #     j = int(delta_q[-1])
+        #     all.append(delta_q)
+        #     all_id.append('max')
+        #     container.write("max , {}".format(j))
 
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
         st.write(chart_data) 
@@ -158,6 +191,14 @@ if FFWM_Graph :
     re = st.button("Rerun_Graph")
     if re :
         delta_y('FFWM')
+
+if FFWM_Graph_M :
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=36  ,  key=1 )
+    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=68   , key=2 )
+    all_id_m = [] ; all_m = []
+    number = [number_1 , number_2 ]
+    delta_x( Ticker = 'FFWM'  , number = number)
+st.write("_____") 
 
 
 
