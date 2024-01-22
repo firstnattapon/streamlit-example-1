@@ -117,6 +117,7 @@ def delta_z (Ticker = 'FFWM') :
                 final_x = vv
             else:
                 xl.append(0)
+                
         delta_z_re = delta2(Ticker = Ticker  , pred=xl)
         return  delta_z_re
 
@@ -146,11 +147,12 @@ def delta_y (Ticker = 'FFWM' ):
 
         for i in range(1):
             delta_q = delta_z( Ticker)
-            delta_q = delta_q.net_pv.values
-            j = int(delta_q[-1])
-            all.append(delta_q)
-            all_id.append('+1')
-            container.write("max , {}".format(j))
+            st.write(delta_q)
+            # delta_q = delta_q.net_pv.values
+            # j = int(delta_q[-1])
+            # all.append(delta_q)
+            # all_id.append('+1')
+            # container.write("max , {}".format(j))
 
         
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
