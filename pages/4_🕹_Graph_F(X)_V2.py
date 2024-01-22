@@ -96,27 +96,6 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
     except:pass
 
 def delta_z (Ticker = 'FFWM' , T = []) :
-    
-    # up_dn = []
-    # for idX , v in enumerate(T)  :
-    #     try :
-    #         if  T[idX+1] > v :
-    #             up_dn.append(1)
-    #         elif T[idX+1] <  v :
-    #             up_dn.append(0)
-    #         elif  T[idX+1] ==  v:
-    #             up_dn.append(up_dn[-1])
-    #     except :
-    #         up_dn.append(up_dn[-1])
-    #     final_x = 0
-    #     xl = []
-    #     for  vv in  up_dn:
-    #         if  vv  != final_x :
-    #             xl.append(1)
-    #             final_x = vv
-    #         else:
-    #             xl.append(0)
-
     up_dn = np.array([])
     for idX , v in enumerate(T)  :
         try :
@@ -137,7 +116,6 @@ def delta_z (Ticker = 'FFWM' , T = []) :
                 final_x = vv
             else:
                 xl = np.append( xl , 0)
-
         
         delta_z_re = delta2(Ticker =  Ticker  , pred = xl)
     return  delta_z_re.net_pv.values
