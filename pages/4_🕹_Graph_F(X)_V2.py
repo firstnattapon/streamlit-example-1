@@ -94,3 +94,5 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             final = tickerData[['net_pv' , 'Close']]
             return  final
     except:pass
+
+FFWM_Graph = st.checkbox('FFWM_Graph_F(X)')
