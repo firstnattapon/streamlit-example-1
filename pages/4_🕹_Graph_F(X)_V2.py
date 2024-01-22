@@ -95,8 +95,30 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
 
-
-
+def delta_z (Ticker = 'FFWM' , Close = Close) :
+    T = Close
+    up_dn = []
+    for idX , v in enumerate(T)  :
+        try :
+            if  T[idX+1] > v :
+                up_dn.append(1)
+            elif T[idX+1] <  v :
+                up_dn.append(0)
+            elif  T[idX+1] ==  v:
+                up_dn.append(up_dn[-1])
+        except :
+            up_dn.append(up_dn[-1])
+        final_x = 0
+        xl = []
+        for   vv in  up_dn:
+            if  vv  != final_x :
+                xl.append(1)
+                final_x = vv
+            else:
+                xl.append(0)
+        delta_z_re = delta2(Ticker= Ticker  pred=xl)
+        delta_z_re = delta_z_re.net_pv.values
+        return  delta_z_re
 
 def delta_y (Ticker = 'FFWM' ):
     container = st.container(border=True)
@@ -108,7 +130,7 @@ def delta_y (Ticker = 'FFWM' ):
         prd_x =  pred.net_pv.values
         z = int(prd_x[-1])
         all.append(prd_x)
-        all_id.append(-1)
+        all_id.append('-1')
         container.write("x , {}".format(z))
         
         for i in range(10):
@@ -117,19 +139,53 @@ def delta_y (Ticker = 'FFWM' ):
             prd_y = pred.net_pv.values
             y = int(prd_y[-1])
             if  y > z :
-                # print( i , y )
                 z = y
                 all.append(prd_y)
                 all_id.append(i)
                 container.write("{} , {}".format(i,y))
+
+            for i in range(1):
+                delta_q = delta_z( Ticker , pred.Close.values)
+                j = int(delta_q[-1])
+                all.append(delta_q)
+                all_id.append('+1')
+                container.write("max , {}".format(j))
+
 
         
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
         st.write(chart_data) 
         st.line_chart(chart_data)
 
+
 FFWM_Graph = st.checkbox('FFWM_Graph_F(X)')
 if FFWM_Graph :
     re = st.button("Rerun_Graph")
     if re :
         delta_y('FFWM')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
