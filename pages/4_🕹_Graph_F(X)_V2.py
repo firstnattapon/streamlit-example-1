@@ -149,10 +149,10 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
         Mean_min = (chart_data[['min']].values)
         Mean_max = (chart_data[['max']].values)
         Mean_a = Mean_min + (( Mean_max - Mean_min) / 2 )
-        Mean_b = Mean_a * 0.8
+        Mean_b = Mean_a * 0.9
 
         chart_data['mean'] = Mean_a
-        chart_data['mean_0.8'] = Mean_b
+        chart_data['mean_0.9'] = Mean_b
 
         st.line_chart(chart_data)
         st.stop()
