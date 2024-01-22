@@ -123,11 +123,10 @@ def delta_y (Ticker = 'FFWM' ):
                 all_id.append(i)
                 container.write("{} , {}".format(i,y))
 
-
         
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
         st.write(chart_data) 
-        # st.line_chart(chart_data)
+        st.line_chart(chart_data)
 
 
 
