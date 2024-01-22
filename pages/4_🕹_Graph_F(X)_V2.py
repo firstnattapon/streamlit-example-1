@@ -96,3 +96,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
     except:pass
 
 FFWM_Graph = st.checkbox('FFWM_Graph_F(X)')
+if FFWM_Graph :
+    re = st.button("Rerun_Graph")
+    if re :
+        delta_y('FFWM')
