@@ -116,7 +116,7 @@ def delta_z (Ticker = 'FFWM' , Close = Close) :
                 final_x = vv
             else:
                 xl.append(0)
-        delta_z_re = delta2(Ticker= Ticker  pred=xl)
+        delta_z_re = delta2(Ticker= Ticker  , pred=xl)
         delta_z_re = delta_z_re.net_pv.values
         return  delta_z_re
 
