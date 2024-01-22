@@ -115,9 +115,8 @@ def delta_z (Ticker = 'FFWM' , T = []) :
                 final_x = vv
             else:
                 xl.append(0)
-        delta_z_re = delta2(Ticker =  Ticker  , pred=xl)
-        # delta_z_re = delta_z_re.net_pv.values
-    return  delta_z_re
+        delta_z_re = delta2(Ticker =  Ticker  , pred = xl)
+    return  delta_z_re.net_pv.values
 
 def delta_y (Ticker = 'FFWM' ):
     container = st.container(border=True)
@@ -144,7 +143,7 @@ def delta_y (Ticker = 'FFWM' ):
                 container.write("{} , {}".format(i,y))
 
         for i in range(1):
-            delta_q = delta_z( Ticker ,  pred.Close.values )
+            delta_q = delta_z( Ticker , pred.Close.values )
             st.write(delta_q)
             # delta_q = delta_q.net_pv.values
             # j = int(delta_q[-1])
