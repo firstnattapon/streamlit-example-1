@@ -95,6 +95,37 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
 
+def delta_y (Ticker = 'FFWM' ):
+    container = st.container(border=True)
+    all = []
+    all_id = []
+    for i in range(1):
+        pred  = delta2(Ticker=Ticker)
+        siz = len(pred)
+        prd_x =  pred.net_pv.values
+        z = int(prd_x[-1])
+        all.append(prd_x)
+        all_id.append(i)
+        container.write("x , {}".format(z))
+        # print( 'x' ,  z )
+        
+        for i in range(2000):
+            np.random.seed(i)
+            pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
+            prd_y = pred.net_pv.values
+            y = int(prd_y[-1])
+            if  y > z :
+                # print( i , y )
+                z = y
+                all.append(prd_y)
+                all_id.append(i)
+                container.write("{} , {}".format(i,y))
+                    
+        chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
+        st.line_chart(chart_data)
+
+
+
 FFWM_Graph = st.checkbox('FFWM_Graph_F(X)')
 if FFWM_Graph :
     re = st.button("Rerun_Graph")
