@@ -109,7 +109,7 @@ def delta_z (Ticker = 'FFWM' , T = []) :
             up_dn.append(up_dn[-1])
         final_x = 0
         xl = []
-        for   vv in  up_dn:
+        for  vv in  up_dn:
             if  vv  != final_x :
                 xl.append(1)
                 final_x = vv
@@ -128,8 +128,8 @@ def delta_y (Ticker = 'FFWM' ):
         prd_x =  pred.net_pv.values
         z = int(prd_x[-1])
         all.append(prd_x)
-        all_id.append('-1')
-        container.write("x , {}".format(z))
+        all_id.append('min')
+        container.write("min , {}".format(z))
         
         for i in range(10):
             np.random.seed(i)
@@ -146,14 +146,12 @@ def delta_y (Ticker = 'FFWM' ):
             delta_q = delta_z( Ticker , pred.Close.values )
             j = int(delta_q[-1])
             all.append(delta_q)
-            all_id.append('+1')
+            all_id.append('max')
             container.write("max , {}".format(j))
 
-        
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
         st.write(chart_data) 
         st.line_chart(chart_data)
-
 
 FFWM_Graph = st.checkbox('FFWM_Graph_F(X)')
 if FFWM_Graph :
