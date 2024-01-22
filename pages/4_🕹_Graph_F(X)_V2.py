@@ -9,9 +9,6 @@ st.set_page_config(page_title="Graph_F(X)", page_icon="🕹")
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
-        # tickerData = tickerData.history(period= '30m' ,  start='2000-01-01', end='2025-01-01')[-limit:].reset_index()[['Close']]
-        # tickerData = tickerData.history(period= 'max' )[-limit:][['Close']]
-        # tickerData = tickerData.history(period= '30m' ,  start='2000-01-01', end='2025-01-01')[['Close']]
         tickerData = tickerData.history(period= 'max' )[['Close']]
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
         filter_date = filter_date
@@ -23,7 +20,6 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             df['Asset_Price'] =   np.around(samples, 2)
             df['Fixed_Asset_Value'] = Fixed_Asset_Value
             df['Amount_Asset']  =   df['Fixed_Asset_Value']  / df['Asset_Price']
-            # df_top = df[int(len(samples)/2):]
             df_top = df[df.Asset_Price >= np.around(entry, 2) ]
             df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) *  df_top['Asset_Price']
             df_top.fillna(0, inplace=True)
@@ -37,7 +33,6 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             df_top = df_top.rename(columns={'Cash_Balan_top': 'Cash_Balan'})
             df_top  = df_top.sort_values(by='Amount_Asset')
             df_top  = df_top[:-1]
-            # df_down =  df[:int(len(samples)/2+1)]
             df_down = df[df.Asset_Price <= np.around(entry, 2) ]
             df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) -  df_down['Amount_Asset'])     *  df_down['Asset_Price']
             df_down.fillna(0, inplace=True)
@@ -52,7 +47,6 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             df_down = df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'})
             df = pd.concat([df_top, df_down], axis=0)
             Production_Costs = (df['Cash_Balan'].values[-1]) -  Cash_Balan
-            # df =  df[df['Cash_Balan'] > 0 ]
             tickerData['Close'] = np.around(tickerData['Close'].values , 2)
             tickerData['pred'] = pred
             tickerData['Fixed_Asset_Value'] = Fixed_Asset_Value
@@ -94,14 +88,9 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
                     refer_model[idx] = np.nan
             tickerData['Production_Costs'] = abs(Production_Costs)
             tickerData['refer_model'] = refer_model
-            # tickerData['delta'] = tickerData['Cash_Balan'] - tickerData['refer_model']
-            # tickerData['P/E'] =  1 /  (tickerData['delta'] / tickerData['Production_Costs'] )
-            # tickerData['y%']  =  (tickerData['delta'] / tickerData['Production_Costs'] ) * 100
             tickerData['pv'] =  tickerData['Cash_Balan'] + ( tickerData['Amount_Asset'] * tickerData['Close']  )
             tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value
             tickerData['net_pv'] =   tickerData['pv'] - tickerData['refer_pv']  
-            # final = tickerData[['delta' , 'Close' , 'pred' , 're' , 'Cash_Balan' , 'refer_model' , 'Amount_Asset' , 'pv' , 'refer_pv' , 'net_pv']]
-            final = tickerData[['net_pv']]
-            # final_1 = tickerData[['delta' , 'Close' , 'Production_Costs' ,'P/E' , 'y%' ]]
+            final = tickerData[['net_pv' , 'Close']]
             return  final
     except:pass
