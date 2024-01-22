@@ -127,7 +127,7 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
         z = int(prd_x[-1])
         all_m.append(prd_x)
         all_id_m.append(i)
-        container_1.write("x , {}".format(z))
+        container_1.write("min , {}".format(z))
     
         for i in number:
             np.random.seed(i)
@@ -137,8 +137,7 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             all_m.append(prd_y)
             all_id_m.append(i)
             container_1.write("{} , {} ".format(i , y ))
-
-
+            
         for i in range(1):
             delta_q = delta_z( Ticker , pred.Close.values )
             j = int(delta_q[-1])
@@ -164,7 +163,7 @@ def delta_y (Ticker = 'FFWM' ):
         all_id.append('min')
         container.write("min , {}".format(z))
         
-        for i in range(10):
+        for i in range(2000):
             np.random.seed(i)
             pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
             prd_y = pred.net_pv.values
@@ -174,13 +173,6 @@ def delta_y (Ticker = 'FFWM' ):
                 all.append(prd_y)
                 all_id.append(i)
                 container.write("{} , {}".format(i,y))
-
-        # for i in range(1):
-        #     delta_q = delta_z( Ticker , pred.Close.values )
-        #     j = int(delta_q[-1])
-        #     all.append(delta_q)
-        #     all_id.append('max')
-        #     container.write("max , {}".format(j))
 
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
         st.write(chart_data) 
@@ -192,7 +184,6 @@ if FFWM_Graph :
     if re :
         delta_y('FFWM')
 
-
 FFWM_Graph_M = st.checkbox('FFWM_Graph_F(X)_M')
 if FFWM_Graph_M :
     number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=36  ,  key=1 )
@@ -201,28 +192,6 @@ if FFWM_Graph_M :
     number = [number_1 , number_2 ]
     delta_x( Ticker = 'FFWM'  , number = number)
 st.write("_____") 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
