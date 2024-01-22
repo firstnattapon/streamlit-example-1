@@ -97,7 +97,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
 
 def delta_z (Ticker = 'FFWM') :
     T = delta2(Ticker= Ticker)
-    T = delta2.Close.values
+    T = T.Close.values
     up_dn = []
     for idX , v in enumerate(T)  :
         try :
