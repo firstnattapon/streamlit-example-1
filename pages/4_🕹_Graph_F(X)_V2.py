@@ -126,7 +126,7 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
         prd_x =  pred.net_pv.values
         z = int(prd_x[-1])
         all_m.append(prd_x)
-        all_id_m.append(i)
+        all_id_m.append('min')
         container_1.write("min , {}".format(z))
     
         for i in number:
@@ -146,6 +146,8 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             container_1.write("max , {}".format(j))     
         
         chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
+        chart_data['Mean'] =  chart_data.min.values + ((chart_data.max.values - chart_data.min.values) / 2 )
+
         st.line_chart(chart_data)
         st.stop()
 
