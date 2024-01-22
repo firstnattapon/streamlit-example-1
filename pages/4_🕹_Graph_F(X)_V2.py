@@ -145,7 +145,7 @@ def delta_y (Ticker = 'FFWM' ):
                 container.write("{} , {}".format(i,y))
 
             for i in range(1):
-                delta_q = delta_z( Ticker)
+                delta_q = delta2( Ticker)
                 delta_q = delta_q.net_pv.values
                 j = int(delta_q[-1])
                 all.append(delta_q)
