@@ -95,8 +95,9 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
 
-def delta_z (Ticker = 'FFWM' , Close = [] ) :
-    T = Close
+def delta_z (Ticker = 'FFWM') :
+    T = delta2(Ticker= Ticker)
+    T = delta2.Close.values
     up_dn = []
     for idX , v in enumerate(T)  :
         try :
@@ -116,8 +117,7 @@ def delta_z (Ticker = 'FFWM' , Close = [] ) :
                 final_x = vv
             else:
                 xl.append(0)
-        delta_z_re = delta2(Ticker= Ticker  , pred=xl)
-        delta_z_re = delta_z_re.net_pv.values
+        delta_z_re = delta2(Ticker = Ticker  , pred=xl)
         return  delta_z_re
 
 def delta_y (Ticker = 'FFWM' ):
@@ -145,12 +145,12 @@ def delta_y (Ticker = 'FFWM' ):
                 container.write("{} , {}".format(i,y))
 
             for i in range(1):
-                delta_q = delta_z( Ticker , pred.Close.values)
+                delta_q = delta_z( Ticker)
+                delta_q = delta_q.net_pv.values
                 j = int(delta_q[-1])
                 all.append(delta_q)
                 all_id.append('+1')
                 container.write("max , {}".format(j))
-
 
         
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
