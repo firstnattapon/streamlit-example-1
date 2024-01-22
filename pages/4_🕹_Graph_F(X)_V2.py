@@ -124,6 +124,7 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
     container_1 = st.container(border=True)
     for i in range(1):
         pred  = delta2(Ticker=Ticker)
+        pred_c  = pred.Close.values
         siz = len(pred)
         prd_x =  pred.net_pv.values
         z = int(prd_x[-1])
@@ -141,7 +142,7 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             container_1.write("{} , {} ".format(i , y ))
             
         for i in range(1):
-            delta_q = delta_z( Ticker , pred.Close.values )
+            delta_q = delta_z( Ticker , pred_c )
             j = int(delta_q[-1])
             all_m.append(delta_q)
             all_id_m.append('max')
