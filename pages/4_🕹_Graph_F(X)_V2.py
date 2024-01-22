@@ -128,8 +128,6 @@ def delta_y (Ticker = 'FFWM' ):
         st.write(chart_data) 
         st.line_chart(chart_data)
 
-
-
 FFWM_Graph = st.checkbox('FFWM_Graph_F(X)')
 if FFWM_Graph :
     re = st.button("Rerun_Graph")
