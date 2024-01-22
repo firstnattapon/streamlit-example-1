@@ -96,6 +96,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
     except:pass
 
 def delta_z (Ticker = 'FFWM' , T = []) :
+    T = T
     up_dn = np.array([])
     for idX , v in enumerate(T)  :
         try :
@@ -124,7 +125,6 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
     container_1 = st.container(border=True)
     for i in range(1):
         pred  = delta2(Ticker=Ticker)
-        pred_c  = pred.Close.values
         siz = len(pred)
         prd_x =  pred.net_pv.values
         z = int(prd_x[-1])
@@ -142,7 +142,7 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             container_1.write("{} , {} ".format(i , y ))
             
         for i in range(1):
-            delta_q = delta_z( Ticker , pred_c )
+            delta_q = delta_z( Ticker , pred.Close.values )
             j = int(delta_q[-1])
             all_m.append(delta_q)
             all_id_m.append('max')
