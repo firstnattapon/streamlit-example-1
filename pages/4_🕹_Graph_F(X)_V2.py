@@ -108,7 +108,7 @@ def delta_y (Ticker = 'FFWM' ):
         prd_x =  pred.net_pv.values
         z = int(prd_x[-1])
         all.append(prd_x)
-        all_id.append(i)
+        all_id.append('x')
         container.write("x , {}".format(z))
         
         for i in range(10):
