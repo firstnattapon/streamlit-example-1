@@ -144,13 +144,13 @@ def delta_y (Ticker = 'FFWM' ):
                 all_id.append(i)
                 container.write("{} , {}".format(i,y))
 
-            for i in range(1):
-                delta_q = delta2( Ticker)
-                delta_q = delta_q.net_pv.values
-                j = int(delta_q[-1])
-                all.append(delta_q)
-                all_id.append('+1')
-                container.write("max , {}".format(j))
+        for i in range(1):
+            delta_q = delta_z( Ticker)
+            delta_q = delta_q.net_pv.values
+            j = int(delta_q[-1])
+            all.append(delta_q)
+            all_id.append('+1')
+            container.write("max , {}".format(j))
 
         
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
