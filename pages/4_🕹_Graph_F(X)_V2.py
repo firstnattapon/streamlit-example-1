@@ -95,7 +95,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
 
-def delta_z (Ticker = 'FFWM' , T = []) :
+def delta_z (Ticker = 'FFWM' , T = np.nan ) :
     up_dn = np.array([])
     for idX , v in enumerate(T)  :
         try :
@@ -145,6 +145,8 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             j = int(delta_q[-1])
             all_m.append(delta_q)
             all_id_m.append('max')
+            container_1.write("max , {}".format(j))
+            
             Mean_min = prd_x
             Mean_max = delta_q 
             Mean_a = Mean_min + (( Mean_max - Mean_min) / 2 )
@@ -153,7 +155,6 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             Mean_b = Mean_a * 0.9
             all_m.append(Mean_b)
             all_id_m.append('mean_0.9')            
-            container_1.write("max , {}".format(j))
 
         chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
         # Mean_min = (chart_data[['min']].values)
@@ -162,7 +163,6 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
         # Mean_b = Mean_a * 0.9
         # chart_data['mean'] = Mean_a
         # chart_data['mean_0.9'] = Mean_b
-
         st.line_chart(chart_data)
         st.stop()
 
