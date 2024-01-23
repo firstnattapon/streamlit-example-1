@@ -122,7 +122,7 @@ def delta_z (Ticker = 'FFWM' , T = np.nan ) :
         delta_z_re = delta2(Ticker =  Ticker  , pred = xl)
     return  delta_z_re.net_pv.values
 
-@st.cache_data
+# @st.cache_data
 def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
     container_1 = st.container(border=True)
     for i in range(1):
