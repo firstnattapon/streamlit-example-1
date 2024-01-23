@@ -140,21 +140,28 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             all_id_m.append(i)
             container_1.write("{} , {} ".format(i , y ))
             
-        for i in range(1):
-            delta_q = delta_z( Ticker , pred.Close.values )
-            j = int(delta_q[-1])
-            all_m.append(delta_q)
-            all_id_m.append('max')
-            container_1.write("max , {}".format(j))     
+            for i in range(1):
+                delta_q = delta_z( Ticker , pred.Close.values )
+                j = int(delta_q[-1])
+                all_m.append(delta_q)
+                all_id_m.append('max')
+                container_1.write("max , {}".format(j))
+                Mean_min = (chart_data[['min']].values)
+                Mean_max = (chart_data[['max']].values)
+                Mean_a = Mean_min + (( Mean_max - Mean_min) / 2 )
+                all_m.append(Mean_a)
+                all_id_m.append('mean')
+                Mean_b = Mean_a * 0.9
+                all_m.append(Mean_b)
+                all_id_m.append('0.9')              
         
         chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
-        Mean_min = (chart_data[['min']].values)
-        Mean_max = (chart_data[['max']].values)
-        Mean_a = Mean_min + (( Mean_max - Mean_min) / 2 )
-        Mean_b = Mean_a * 0.9
-
-        chart_data['mean'] = Mean_a
-        chart_data['mean_0.9'] = Mean_b
+        # Mean_min = (chart_data[['min']].values)
+        # Mean_max = (chart_data[['max']].values)
+        # Mean_a = Mean_min + (( Mean_max - Mean_min) / 2 )
+        # Mean_b = Mean_a * 0.9
+        # chart_data['mean'] = Mean_a
+        # chart_data['mean_0.9'] = Mean_b
 
         st.line_chart(chart_data)
         st.stop()
