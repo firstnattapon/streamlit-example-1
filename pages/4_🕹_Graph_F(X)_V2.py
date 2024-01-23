@@ -6,6 +6,7 @@ import thingspeak
 import json
 st.set_page_config(page_title="Graph_F(X)", page_icon="🕹")
 
+@st.cache_data
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
@@ -94,7 +95,8 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             final = tickerData[['net_pv' , 'Close']]
             return  final
     except:pass
-
+        
+@st.cache_data
 def delta_z (Ticker = 'FFWM' , T = np.nan ) :
     up_dn = np.array([])
     for idX , v in enumerate(T)  :
@@ -120,6 +122,7 @@ def delta_z (Ticker = 'FFWM' , T = np.nan ) :
         delta_z_re = delta2(Ticker =  Ticker  , pred = xl)
     return  delta_z_re.net_pv.values
 
+@st.cache_data
 def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
     container_1 = st.container(border=True)
     for i in range(1):
@@ -165,8 +168,8 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
         # chart_data['mean_0.9'] = Mean_b
         st.line_chart(chart_data)
         st.stop()
-
-
+        
+@st.cache_data
 def delta_y (Ticker = 'FFWM' ):
     container = st.container(border=True)
     all = []
