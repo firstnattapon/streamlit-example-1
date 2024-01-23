@@ -160,12 +160,6 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
             all_id_m.append('mean_0.9')            
 
         chart_data = pd.DataFrame(np.array(all_m).T , columns= np.array(all_id_m))
-        # Mean_min = (chart_data[['min']].values)
-        # Mean_max = (chart_data[['max']].values)
-        # Mean_a = Mean_min + (( Mean_max - Mean_min) / 2 )
-        # Mean_b = Mean_a * 0.9
-        # chart_data['mean'] = Mean_a
-        # chart_data['mean_0.9'] = Mean_b
         st.line_chart(chart_data)
         st.stop()
         
@@ -195,7 +189,6 @@ def delta_y (Ticker = 'FFWM' ):
                 container.write("{} , {}".format(i,y))
 
         chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
-        st.write(chart_data) 
         st.line_chart(chart_data)
 
 FFWM_Graph = st.checkbox('FFWM_Graph_F(X)')
