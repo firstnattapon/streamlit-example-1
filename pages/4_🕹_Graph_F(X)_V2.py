@@ -6,7 +6,7 @@ import thingspeak
 import json
 st.set_page_config(page_title="Graph_F(X)", page_icon="🕹")
 
-@st.cache_data
+# @st.cache_data
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
@@ -169,7 +169,7 @@ def delta_x (Ticker = 'FFWM' , number = [36 , 68]):
         st.line_chart(chart_data)
         st.stop()
         
-@st.cache_data
+# @st.cache_data
 def delta_y (Ticker = 'FFWM' ):
     container = st.container(border=True)
     all = []
