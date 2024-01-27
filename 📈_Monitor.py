@@ -30,7 +30,7 @@ def average_cf (Ticker = 'FFWM' , field = 1 ):
     
 st.write('____')
 cf_day = average_cf()
-st.write( 'average_cf_day:' ,  round(cf_day , 2 ) , 'average_cf_mo:' , round(cf_day*30 , 2)  )
+st.write( 'average_cf_day:' ,  round(cf_day , 2 ), 'USD', 'average_cf_mo:' , round(cf_day*30 , 2) ,'USD'  )
 st.write('____')
 
 def Production(Ticker = "FFWM" ):
