@@ -156,4 +156,4 @@ all_Production  =  [ delta_5( Ticker  , x )   for x in  all.Close.values]
 all_fx = all_Production / prd_y 
 # all_id = ['FFWM']
 # chart_data = pd.DataFrame( all_Production  , columns= np.array(all_id))
-st.line_chart(all_fx)
+st.line_chart(prd_y)
