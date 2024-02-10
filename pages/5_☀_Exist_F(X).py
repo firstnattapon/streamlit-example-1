@@ -161,5 +161,5 @@ def exist (Ticker = "FFWM" , seed = 36 ):
 Ticker_1 , all_fx_1  =  exist(Ticker = "FFWM" , seed = 36 )
 Ticker_2 , all_fx_2  =  exist(Ticker = 'negg' ,  seed = 553 )
 
-line =  [all_fx_1 , all_fx_2]
+line =   np.array[all_fx_1 , all_fx_2].T
 st.line_chart(line)
