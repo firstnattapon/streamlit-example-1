@@ -145,7 +145,7 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
             return   abs(Production_Costs)
     except:pass
 
-all = delta2(Ticker = "FFWM"
+all = delta2(Ticker = "FFWM" )
 all = all.Close.Value
 
 all_id = ['a']
