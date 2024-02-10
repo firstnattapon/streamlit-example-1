@@ -125,12 +125,14 @@ k_2 = (q_1 + q_2) + z_1
 ref = k_2
 cf = k_1 - k_2
 
-if st.button("rerun"):
-    st.rerun()
+
 st.write('ref:' , ref) 
 st.write('cf:' , cf ) 
 st.write("_____") 
 
+if st.button("rerun"):
+    st.rerun()
+    
 Check_ADD = st.checkbox('ADD_CF ')
 if Check_ADD :
     button_ADD = st.button("ADD_CF")
