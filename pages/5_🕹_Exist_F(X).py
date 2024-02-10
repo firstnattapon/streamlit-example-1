@@ -4,4 +4,4 @@ import yfinance as yf
 import streamlit as st
 import thingspeak
 import json
-st.set_page_config(page_title="Graph_F(X)", page_icon="🕹")
+st.set_page_config(page_title="Exist_F(X)", page_icon="🕹")
