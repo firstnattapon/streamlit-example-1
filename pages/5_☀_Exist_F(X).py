@@ -145,8 +145,6 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
             return   abs(Production_Costs)
     except:pass
 
-
-
 Ticker = "FFWM"
 seed = 36
 all = delta2(Ticker = Ticker)
