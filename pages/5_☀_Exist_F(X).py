@@ -148,8 +148,10 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
 
 all = delta2(Ticker = "FFWM")
 all_x = all.Close.values
-all_final  =  [ delta_5( "FFWM"  , x )   for x in  all_x]
+all_Production  =  [ delta_5( "FFWM"  , x )   for x in  all_x]
+all_fx = 0
+
 all_id = ['FFWM']
 
-chart_data = pd.DataFrame( all_final  , columns= np.array(all_id))
+chart_data = pd.DataFrame( all_Production  , columns= np.array(all_id))
 st.line_chart(chart_data)
