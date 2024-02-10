@@ -158,3 +158,4 @@ def exist (Ticker = "FFWM" , seed = 36 ):
     st.line_chart(chart_data)
 
 exist()
+exist(Ticker = 'negg' ,  seed = 553 )
