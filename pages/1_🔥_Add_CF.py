@@ -128,10 +128,9 @@ cf = k_1 - k_2
 
 st.write('ref:' , ref) 
 st.write('cf:' , cf ) 
-st.write("_____") 
-
 if st.button("rerun"):
     st.rerun()
+st.write("_____") 
     
 Check_ADD = st.checkbox('ADD_CF ')
 if Check_ADD :
