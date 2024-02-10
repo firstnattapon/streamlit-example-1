@@ -162,4 +162,5 @@ Ticker_1 , all_fx_1  =  exist(Ticker = "FFWM" , seed = 36 )
 Ticker_2 , all_fx_2  =  exist(Ticker = 'negg' ,  seed = 553 )
 
 line =   np.array([all_fx_1 , all_fx_2]).T
-st.line_chart(line)
+columns =  np.array([Ticker_1 , Ticker_2])
+st.line_chart(pd.DataFrame( line  ,  columns= columns ))
