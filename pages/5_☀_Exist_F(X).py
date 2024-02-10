@@ -146,6 +146,7 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
     except:pass
 
 all = delta2(Ticker = "FFWM" )
+st.write(all) 
 # all = all.Close.Value
 
 # all_id = ['a']
