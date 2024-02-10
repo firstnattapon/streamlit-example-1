@@ -156,11 +156,14 @@ def exist (Ticker = "FFWM" , seed = 36 ):
     # all_id = [Ticker]
     # chart_data = pd.DataFrame( all_fx*100  , columns= np.array(all_id))
     # st.line_chart(chart_data)
-    return  Ticker , all_fx 
+    return  Ticker , all_fx , all_Production
 
-Ticker_1 , all_fx_1  =  exist(Ticker = "FFWM" , seed = 36 )
-Ticker_2 , all_fx_2  =  exist(Ticker = 'negg' ,  seed = 553 )
+Ticker_1 , all_fx_1  , all_Pro_1 =  exist(Ticker = "FFWM" , seed = 36 )
+Ticker_2 , all_fx_2  , all_Pro_2 =  exist(Ticker = 'negg' ,  seed = 553 )
 
 line =   np.array([all_fx_1 , all_fx_2]).T
 columns =  np.array([Ticker_1 , Ticker_2])
+pro =  np.array([all_Pro_1 , all_Pro_1])
+
 st.line_chart(pd.DataFrame( line*100  ,  columns= columns ))
+st.line_chart(pd.DataFrame(pro  ,  columns= columns ))
