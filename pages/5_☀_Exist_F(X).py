@@ -146,8 +146,7 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
     except:pass
 
 all = delta2(Ticker = "FFWM")
-all = all.Close.values
-all_id = ['a']
+all_id = ['FFWM']
 
-chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
+chart_data = pd.DataFrame(all.Close.values  , columns= np.array(all_id))
 st.line_chart(all)
