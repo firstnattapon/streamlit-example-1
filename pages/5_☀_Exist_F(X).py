@@ -148,6 +148,6 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
 all = delta2(Ticker = "FFWM" )
 all = all.Close.Value
 
-all_id = ['a']
-chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
-st.line_chart(chart_data)
+# all_id = ['a']
+# chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
+# st.line_chart(chart_data)
