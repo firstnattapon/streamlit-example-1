@@ -145,15 +145,16 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
             return   abs(Production_Costs)
     except:pass
 
-Ticker = "FFWM"
-seed = 36
-all = delta2(Ticker = Ticker)
-siz = len(all)
-np.random.seed(seed)
-pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
-prd_y = pred.net_pv.values
-all_Production  =  [ delta_5( Ticker  , x )   for x in  all.Close.values]
-all_fx =    prd_y  / all_Production
-all_id = ['FFWM']
-chart_data = pd.DataFrame( all_fx*100  , columns= np.array(all_id))
-st.line_chart(chart_data)
+def exist (Ticker = "FFWM" , seed = 36 ):
+    all = delta2(Ticker = Ticker)
+    siz = len(all)
+    np.random.seed(seed)
+    pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
+    prd_y = pred.net_pv.values
+    all_Production  =  [ delta_5( Ticker  , x )   for x in  all.Close.values]
+    all_fx =    prd_y  / all_Production
+    all_id = [Ticker]
+    chart_data = pd.DataFrame( all_fx*100  , columns= np.array(all_id))
+    st.line_chart(chart_data)
+
+exist()
