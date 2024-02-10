@@ -149,4 +149,4 @@ all = delta2(Ticker = "FFWM")
 all_id = ['FFWM']
 
 chart_data = pd.DataFrame(all.Close.values  , columns= np.array(all_id))
-st.line_chart(all)
+st.line_chart(chart_data)
