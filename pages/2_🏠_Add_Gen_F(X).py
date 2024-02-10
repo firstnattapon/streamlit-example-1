@@ -157,7 +157,7 @@ if FFWM_Check_Gen :
         Gen_fx (Ticker = 'FFWM' , field = 2 )
 
 
-FFWM_Check_Gen_M = st.checkbox('FFWM_Check_Gen_M')
+FFWM_Check_Gen_M = st.checkbox('FFWM_Add_Gen_M')
 if FFWM_Check_Gen_M :    
     input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
     re_ = st.button("Rerun_Gen_M")
@@ -172,7 +172,7 @@ if NEGG_Check_Gen :
     if re :
         Gen_fx (Ticker = 'NEGG' , field = 3 )
 
-NEGG_Check_Gen_M = st.checkbox('NEGG_Check_Gen_M')
+NEGG_Check_Gen_M = st.checkbox('NEGG_Add_Gen_M')
 if NEGG_Check_Gen_M :    
     input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
     re_ = st.button("Rerun_Gen_M")
