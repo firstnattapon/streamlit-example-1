@@ -158,8 +158,8 @@ def exist (Ticker = "FFWM" , seed = 36 ):
     # st.line_chart(chart_data)
     return  Ticker , all_fx 
 
-Ticker_1 , all_fx_1  = exist((Ticker = "FFWM" , seed = 36 )
-Ticker_2 , all_fx_2  = exist(Ticker = 'negg' ,  seed = 553 )
+Ticker_1 , all_fx_1  =  exist(Ticker = "FFWM" , seed = 36 )
+Ticker_2 , all_fx_2  =  exist(Ticker = 'negg' ,  seed = 553 )
 
 line =  [all_fx_1 , all_fx_2]
 st.line_chart(line)
