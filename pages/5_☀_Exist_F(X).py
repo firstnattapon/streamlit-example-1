@@ -153,9 +153,13 @@ def exist (Ticker = "FFWM" , seed = 36 ):
     prd_y = pred.net_pv.values
     all_Production  =  [ delta_5( Ticker  , x )   for x in  all.Close.values]
     all_fx =    prd_y  / all_Production
-    all_id = [Ticker]
-    chart_data = pd.DataFrame( all_fx*100  , columns= np.array(all_id))
-    st.line_chart(chart_data)
+    # all_id = [Ticker]
+    # chart_data = pd.DataFrame( all_fx*100  , columns= np.array(all_id))
+    # st.line_chart(chart_data)
+    return  Ticker , all_fx 
 
-exist()
-exist(Ticker = 'negg' ,  seed = 553 )
+Ticker_1 , all_fx_1  = exist((Ticker = "FFWM" , seed = 36 )
+Ticker_2 , all_fx_2  = exist(Ticker = 'negg' ,  seed = 553 )
+
+line =  [all_fx_1 , all_fx_2]
+st.line_chart(line)
