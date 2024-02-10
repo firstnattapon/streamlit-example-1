@@ -145,8 +145,11 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
             return   abs(Production_Costs)
     except:pass
 
+
 all = delta2(Ticker = "FFWM")
+all_x = all.Close.values
+all_final  =  [ delta_5( "FFWM"  , x )   for x in  all_x]
 all_id = ['FFWM']
 
-chart_data = pd.DataFrame( all.Close.values  , columns= np.array(all_id))
+chart_data = pd.DataFrame( all_final  , columns= np.array(all_id))
 st.line_chart(chart_data)
