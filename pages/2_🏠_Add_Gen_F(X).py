@@ -150,7 +150,7 @@ def Gen_fx (Ticker =  'FFWM' ,  field = 2 ):
     client.update(  {'field{}'.format(field) : fx[-1] } )
 
 
-FFWM_Check_Gen = st.checkbox('FFWM_Check_Gen')
+FFWM_Check_Gen = st.checkbox('FFWM_Add_Gen')
 if FFWM_Check_Gen :
     re = st.button("Rerun_Gen")
     if re :
@@ -166,7 +166,7 @@ if FFWM_Check_Gen_M :
         st.write(input)        
 st.write("_____") 
 
-NEGG_Check_Gen = st.checkbox('NEGG_Check_Gen')
+NEGG_Check_Gen = st.checkbox('NEGG_Add_Gen')
 if NEGG_Check_Gen :
     re = st.button("Rerun_Gen")
     if re :
