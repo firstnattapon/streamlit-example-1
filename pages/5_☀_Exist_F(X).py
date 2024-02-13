@@ -171,7 +171,7 @@ max_dd['NEGG'] =   [ i - np.max(max_dd.NEGG.values)  for i in max_dd.NEGG.values
 
 st.write('Production vs Delta')
 st.line_chart(pd.DataFrame( line*100  ,  columns= columns ))
-st.write('Production vs Buffer')
+st.write('Production')
 st.line_chart(pd.DataFrame( pro  ,  columns= columns ))
-st.write('Production Drawdown')
+st.write('Buffer')
 st.line_chart(max_dd)
