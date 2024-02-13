@@ -165,4 +165,6 @@ pro =   np.array([all_Pro_1 , all_Pro_2]).T
 
 st.write('Production vs Delta')
 st.line_chart(pd.DataFrame( line*100  ,  columns= columns ))
+st.write('Production vs Buffer')
 st.line_chart(pd.DataFrame( pro  ,  columns= columns ))
+st.write('Production Drawdown')
