@@ -164,10 +164,10 @@ Ticker_2 , all_fx_2  , all_Pro_2 =  exist(Ticker = "NEGG" ,  seed = 553 )
 line =   np.array([all_fx_1 , all_fx_2]).T
 columns =  np.array([Ticker_1 , Ticker_2])
 pro =   np.array([all_Pro_1 , all_Pro_2]).T
-max_dd = pd.DataFrame( pro  ,  columns= columns )
 
-max_dd['FFWM'] =   [ i - np.max(max_dd.FFWM.values)    for i in max_dd.FFWM.values]
-max_dd['NEGG'] =   [ i - np.max(max_dd.NEGG.values)    for i in max_dd.NEGG.values]
+max_dd = pd.DataFrame( pro  ,  columns= columns )
+max_dd['FFWM'] =   [ i - np.max(max_dd.FFWM.values)  for i in max_dd.FFWM.values]
+max_dd['NEGG'] =   [ i - np.max(max_dd.NEGG.values)  for i in max_dd.NEGG.values]
 
 st.write('Production vs Delta')
 st.line_chart(pd.DataFrame( line*100  ,  columns= columns ))
