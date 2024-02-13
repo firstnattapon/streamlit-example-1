@@ -6,6 +6,7 @@ import thingspeak
 import json
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀")
 
+@st.cache_data
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
