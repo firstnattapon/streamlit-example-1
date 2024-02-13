@@ -173,7 +173,7 @@ line_3 =    np.array([line_1 , line_2]).T
 st.write('Production vs Delta')
 st.line_chart(pd.DataFrame( line*100  ,  columns= columns ))
 st.write('Buffer vs Delta')
-st.line_chart(pd.DataFrame( line_3  ,  columns= columns ))
+st.line_chart(pd.DataFrame( line_3*100 ,  columns= columns ))
 st.write('Production')
 st.line_chart(pd.DataFrame( pro  ,  columns= columns ))
 st.write('Buffer')
