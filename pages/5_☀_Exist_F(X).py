@@ -153,7 +153,7 @@ def exist (Ticker = '' , seed = 36 ):
     pred  = delta2(Ticker= Ticker , pred= np.random.randint(2, size= siz))
     prd_y = pred.net_pv.values
     all_Production  =  [ delta_5( Ticker  , x )   for x in  all.Close.values]
-    all_fx =    prd_y  / all_Production
+    all_fx =    prd_y  / (all_Production + 1500 )
     return  Ticker , all_fx , all_Production , prd_y
 
 Ticker_1 , all_fx_1  , all_Pro_1  , prd_1  =  exist(Ticker = "FFWM" , seed = 36 )
