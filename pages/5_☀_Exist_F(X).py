@@ -167,8 +167,8 @@ max_dd = pd.DataFrame( pro  ,  columns= columns )
 max_dd['FFWM'] =   [ (i - np.max(max_dd.FFWM.values))    for i in max_dd.FFWM.values]
 max_dd['NEGG'] =   [ (i - np.max(max_dd.NEGG.values))    for i in max_dd.NEGG.values]
 
-line_1  =     prd_1  / abs( np.min(max_dd.FFWM.values)) 
-line_2   =    prd_2   /abs( np.min(max_dd.NEGG.values)) 
+line_1  =     prd_1  /  ( abs( np.min(max_dd.FFWM.values)) + 1500 )
+line_2   =    prd_2   /  (abs( np.min(max_dd.NEGG.values)) + 1500 )
 line_3 =    np.array([line_1 , line_2]).T
 
 st.write('Production vs Delta')
