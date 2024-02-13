@@ -145,6 +145,7 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
             return   abs(Production_Costs)
     except:pass
 
+@st.cache_data
 def exist (Ticker = '' , seed = 36 ):
     all = delta2(Ticker = Ticker)
     siz = len(all)
