@@ -167,7 +167,7 @@ max_dd['FFWM'] =   [ (i - np.max(max_dd.FFWM.values))    for i in max_dd.FFWM.va
 max_dd['NEGG'] =   [ (i - np.max(max_dd.NEGG.values))    for i in max_dd.NEGG.values]
 
 # line_1  =    abs(np.max(max_dd.FFWM.values))   
-line_2   =    abs( np.min(max_dd.NEGG.values) )
+line_2   =    abs( np.min(max_dd.NEGG.values)) / max_dd.NEGG.values
 # line_3 =   np.array([line_1 , line_2]).T
 st.write(line_2)
 
