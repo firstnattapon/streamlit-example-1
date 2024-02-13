@@ -165,5 +165,6 @@ line =   np.array([all_fx_1 , all_fx_2]).T
 columns =  np.array([Ticker_1 , Ticker_2])
 pro =   np.array([all_Pro_1 , all_Pro_2]).T
 
+st.write('Production vs Delta')
 st.line_chart(pd.DataFrame( line*100  ,  columns= columns ))
 st.line_chart(pd.DataFrame( pro  ,  columns= columns ))
