@@ -169,7 +169,7 @@ max_dd['NEGG'] =   [ (i - np.max(max_dd.NEGG.values))    for i in max_dd.NEGG.va
 # line_1  =    abs(np.max(max_dd.FFWM.values))   
 line_2  =    np.min(max_dd.NEGG.values)
 # line_3 =   np.array([line_1 , line_2]).T
-st.write(line_2)
+st.write(np.min(max_dd.NEGG.values))
 
 st.write('Production vs Delta')
 st.line_chart(pd.DataFrame( line*100  ,  columns= columns ))
