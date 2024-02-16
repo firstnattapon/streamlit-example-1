@@ -117,25 +117,25 @@ def Un_15 (Ticker = '' , seed = 36 ):
     a_1['cf'] = a_1.sum(axis=1 ,    numeric_only=True )
     # a_x = pd.concat([a_0 , a_1], axis = 1)
 
+    a_3 = pd.DataFrame()
     net_dd_1 = []
     net_1 = 0
     for i in   a_0.FFWM_re.values :
         net_1 = net_1+i
         net_dd_1.append(net_1)
-    a_0['FFWM'] =    net_dd_1
+    a_3['FFWM_Buffer'] =    net_dd_1
     
     net_dd_2 = []
     net_2 = 0
     for i in   a_0.NEGG_re.values :
         net_2 = net_2+i
         net_dd_2.append(net_2)
-    a_0['NEGG'] =    net_dd_2
+    a_3['NEGG_Buffer'] =  net_dd_2
 
-    return  a_1 , a_0
+    return  a_1 , a_0 , a_3
 
-
-
-Delta , Buffer  =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM' :36 , 'NEGG' :553 } )
+Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM' :36 , 'NEGG' :553 } )
 
 st.line_chart(Delta)
+st.line_chart(Sum_Buffer)
 st.line_chart(Buffer)
