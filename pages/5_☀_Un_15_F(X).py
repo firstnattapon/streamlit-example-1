@@ -136,6 +136,11 @@ def Un_15 (Ticker = '' , seed = 36 ):
 
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM' :36 , 'NEGG' :553 } )
 
+# Buffer = st.checkbox('Buffer' , value=1 )
+# if Buffer :
+
+st.write('Buffer vs Delta %')
+st.line_chart( np.max(Sum_Buffer.Sum_Buffer.values) / Delta.Sum_Delta.values)
 
 st.line_chart(Delta)
 st.line_chart(Sum_Buffer)
