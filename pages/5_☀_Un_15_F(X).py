@@ -114,8 +114,7 @@ def Un_15 (Ticker = '' , seed = 36 ):
       net_dd.append(net)
     
     a_0['Sum_Buffer'] =    net_dd
-    a_1['cf'] = a_1.sum(axis=1 ,    numeric_only=True )
-    # a_x = pd.concat([a_0 , a_1], axis = 1)
+    a_1['Sum_Delta'] =     a_1.sum(axis=1 ,    numeric_only=True )
 
     a_3 = pd.DataFrame()
     net_dd_1 = []
@@ -135,6 +134,7 @@ def Un_15 (Ticker = '' , seed = 36 ):
     return  a_1 , a_0 , a_3
 
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM' :36 , 'NEGG' :553 } )
+
 
 st.line_chart(Delta)
 st.line_chart(Sum_Buffer)
