@@ -140,7 +140,7 @@ Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM'
 # if Buffer :
 
 st.write('Buffer vs Delta %')
-st.line_chart( (Delta.Sum_Delta.values / np.max(Sum_Buffer.Sum_Buffer.values) ) *100  )
+st.line_chart( (Delta.Sum_Delta.values / abs( np.min(Sum_Buffer.Sum_Buffer.values)  ) ) *100  )
 st.line_chart(Delta)
 st.line_chart(Sum_Buffer)
 st.line_chart(Buffer)
