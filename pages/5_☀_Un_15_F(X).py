@@ -136,11 +136,15 @@ def Un_15 (Ticker = '' , seed = 36 ):
 
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM' :36 , 'NEGG' :553 } )
 
-# Buffer = st.checkbox('Buffer' , value=1 )
-# if Buffer :
+checkbox1 = st.checkbox('Buffer vs Delta %' , value=1 )
+if checkbox1 :
+    st.write('Buffer vs Delta %')
+    st.line_chart( (Delta.Sum_Delta.values / abs( np.min(Sum_Buffer.Sum_Buffer.values)  ) ) *100  )
 
-st.write('Buffer vs Delta %')
-st.line_chart( (Delta.Sum_Delta.values / abs( np.min(Sum_Buffer.Sum_Buffer.values)  ) ) *100  )
-st.line_chart(Delta)
-st.line_chart(Sum_Buffer)
-st.line_chart(Buffer)
+checkbox2 = st.checkbox('Delta $' , value=1 )
+if checkbox2 :
+    st.write('Delta $')
+    st.line_chart(Delta)
+    
+# st.line_chart(Sum_Buffer)
+# st.line_chart(Buffer)
