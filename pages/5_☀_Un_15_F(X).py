@@ -136,6 +136,6 @@ def Un_15 (Ticker = '' , seed = 36 ):
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM' :36 , 'NEGG' :553 } )
 
 
-st.line_chart(Delta)
+st.line_chart(Delta.reset_index())
 st.line_chart(Sum_Buffer)
 st.line_chart(Buffer)
