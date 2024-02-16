@@ -145,6 +145,9 @@ checkbox2 = st.checkbox('Delta $' , value=1 )
 if checkbox2 :
     st.write('Delta $')
     st.line_chart(Delta)
-    
-# st.line_chart(Sum_Buffer)
-# st.line_chart(Buffer)
+
+
+checkbox3 = st.checkbox('Buffer $' , value=1 )
+if checkbox2 :
+    st.line_chart(Sum_Buffer)
+    st.line_chart(Buffer)
