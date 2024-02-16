@@ -113,7 +113,7 @@ def Un_15 (Ticker = '' , seed = 36 ):
       net = net+i
       net_dd.append(net)
     
-    a_0['a'] =    net_dd
+    a_0['Sum_Buffer'] =    net_dd
     a_1['cf'] = a_1.sum(axis=1 ,    numeric_only=True )
     # a_x = pd.concat([a_0 , a_1], axis = 1)
 
