@@ -138,7 +138,6 @@ Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM'
 
 checkbox2 = st.checkbox('Delta $' , value=1 )
 if checkbox2 :
-    st.write('Delta $')
     st.line_chart(Delta)
 
 checkbox3 = st.checkbox('Buffer $' , value=1 )
@@ -148,6 +147,5 @@ if checkbox3 :
 
 checkbox1 = st.checkbox('Buffer vs Delta %' , value=0 )
 if checkbox1 :
-    st.write('Buffer vs Delta %')
     st.line_chart( (Delta.Sum_Delta.values / abs( np.min(Sum_Buffer.Sum_Buffer.values)  ) ) *100  )
 
