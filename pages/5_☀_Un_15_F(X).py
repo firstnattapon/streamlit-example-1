@@ -97,26 +97,43 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
     except:pass
 
 def Un_15 (Ticker = '' , seed = 36 ):
-  a_0 = pd.DataFrame()
-  a_1 = pd.DataFrame()
-  
-  for  x in Ticker :
+    a_0 = pd.DataFrame()
+    a_1 = pd.DataFrame()
+    
+    for  x in Ticker :
       np.random.seed( seed[x])
       siz = len(delta2(Ticker = x))
       a_2 = delta2( x  , pred= np.random.randint(2, size=  siz )  )[['re' , 'net_pv'] ]
       a_0 = pd.concat([a_0 , a_2[['re']].rename( columns={"re": "{}_re".format(x) })   ], axis = 1)
       a_1 = pd.concat([a_1 , a_2[['net_pv']].rename(columns={"net_pv": "{}_net_pv".format(x) }) ], axis = 1)
-  
-  net_dd = []
-  net = 0
-  for i in  a_0.sum(axis=1 ,    numeric_only=True).values  :
+    
+    net_dd = []
+    net = 0
+    for i in  a_0.sum(axis=1 ,    numeric_only=True).values  :
       net = net+i
       net_dd.append(net)
-  
-  a_0['maxcash_dd'] =    net_dd
-  a_1['cf'] = a_1.sum(axis=1 ,    numeric_only=True )
-  # a_x = pd.concat([a_0 , a_1], axis = 1)
-  return  a_1 , a_0
+    
+    a_0['maxcash_dd'] =    net_dd
+    a_1['cf'] = a_1.sum(axis=1 ,    numeric_only=True )
+    # a_x = pd.concat([a_0 , a_1], axis = 1)
+
+    net_dd_1 = []
+    net_1 = 0
+    for i in   a_0.FFWM_re.values :
+        net_1 = net_1+i
+        net_dd_1.append(net_1)
+    a_0['FFWM'] =    net_dd_1
+    
+    net_dd_2 = []
+    net_2 = 0
+    for i in   a_0.NEGG_re.values :
+        net_2 = net_2+i
+        net_dd_2.append(net_2)
+    a_0['NEGG'] =    net_dd_2
+
+    return  a_1 , a_0
+
+
 
 Delta , Buffer  =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM' :36 , 'NEGG' :553 } )
 
