@@ -131,9 +131,6 @@ def Un_15 (Ticker = '' , seed = 36 ):
         net_dd_2.append(net_2)
     a_3['NEGG_Buffer'] =  net_dd_2
     
-    a_1 =  a_1.reset_index()
-    a_0 =  a_0.reset_index()
-    # a_3 =  a_3.reset_index()
     return  a_1 , a_0 , a_3
 
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM' :36 , 'NEGG' :553 } )
