@@ -8,5 +8,5 @@ import yfinance as yf
 st.set_page_config(page_title="0", page_icon="🔥")
 
 
-map_url = "https://www.mindmeister.com/app/map/3066443605?t=dxos6u4HQQ&m=outline"
-st.iframe(map_url)
+
+st.iframe(map_url, width=700, height=400)
