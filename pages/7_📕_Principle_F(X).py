@@ -10,4 +10,7 @@ def iframe ():
 
 iframe()
 st.write('____')
-st.write('https://www.mindmeister.com/app/map/3066443605?m=outline&t=XZPVgoJ9jm')
+
+checkbox1 = st.checkbox(' mindmeister' , value=0 )
+if checkbox1 :
+  st.write('https://www.mindmeister.com/app/map/3066443605?m=outline&t=XZPVgoJ9jm')
