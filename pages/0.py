@@ -8,5 +8,7 @@ import yfinance as yf
 st.set_page_config(page_title="0", page_icon="🔥")
 
 
-
-st.iframe(map_url, width=700, height=400)
+st.write(
+        f'<iframe src="https://www.mindmeister.com/app/map/3066443605?m=outline"></iframe>',
+        unsafe_allow_html=True,
+    )
