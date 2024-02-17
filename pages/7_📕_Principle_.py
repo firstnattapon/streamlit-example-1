@@ -1,8 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
-
-st.set_page_config(layout="wide")
 st.set_page_config(page_title="Principle", page_icon="📕")
+st.set_page_config(layout="wide")
 
 @st.cache_data
 def iframe ():
