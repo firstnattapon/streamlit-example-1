@@ -9,7 +9,7 @@ import yfinance as yf
 import streamlit.components.v1 as components
 
 # embed streamlit docs in a streamlit app
-components.iframe("https://www.baidu.com")
+components.iframe("http://www.soccersuck.com/boards#5")
 
 st.set_page_config(page_title="0", page_icon="🔥")
 
