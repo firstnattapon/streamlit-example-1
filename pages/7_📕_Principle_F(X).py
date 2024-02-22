@@ -13,4 +13,4 @@ st.write('____')
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
-  st.write('https://www.mindmeister.com/app/map/3171571992?m=outline&t=XZPVgoJ9jm')
+  st.write('https://www.mindmeister.com/app/map/3171571992?m=outline')
