@@ -5,7 +5,7 @@ st.set_page_config(page_title="Principle_F(X)", page_icon="📕" , layout="wide"
 
 @st.cache_data
 def iframe ():
-  src="https://www.mindmeister.com/app/map/3171598576?fullscreen=1&v=embedded&m=outline" 
+  src="https://www.mindmeister.com/app/map/3178532454?fullscreen=1&v=embedded&m=outline" 
   st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
 
 iframe()
@@ -13,4 +13,4 @@ st.write('____')
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
-  st.write('https://www.mindmeister.com/app/map/3171598576?m=outline')
+  st.write('https://www.mindmeister.com/app/map/3178532454?m=outline')
