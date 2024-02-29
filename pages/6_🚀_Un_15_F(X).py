@@ -145,13 +145,13 @@ if checkbox3 :
     st.line_chart(Sum_Buffer)
     st.line_chart(Buffer)
 
-checkbox1 = st.checkbox(' Sum_Delta / Max.Sum_Buffer %' , value=0 )
+checkbox1 = st.checkbox('Delta / Max.Sum_Buffer %' , value=0 )
 if checkbox1 :
     Delta_2 = Delta
     Delta_2['FFWM'] =  (Delta.FFWM_net_pv.values  /  abs(np.min(Buffer.FFWM_Buffer.values))) *100
     Delta_2['NEGG'] =  (Delta.NEGG_net_pv.values  /  abs(np.min(Buffer.NEGG_Buffer.values))) *100
-    Delta_2['Sum_Delta / Max.Sum_Buffer %'] = (Delta.Sum_Delta.values / abs( np.min(Sum_Buffer.Sum_Buffer.values))) *100
-    Delta_2 = Delta_2[['FFWM' , 'NEGG' , 'Sum_Delta / Max.Sum_Buffer %'  ]]
+    Delta_2['Sum_Delta /Max.Sum_Buffer'] = (Delta.Sum_Delta.values / abs( np.min(Sum_Buffer.Sum_Buffer.values))) *100
+    Delta_2 = Delta_2[['Sum_Delta /Max.Sum_Buffer' , 'FFWM' , 'NEGG'  ]]
     st.line_chart(Delta_2)
 
 
