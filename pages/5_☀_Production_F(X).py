@@ -171,15 +171,6 @@ line_1  =     prd_1  /  ( abs( np.min(max_dd.FFWM.values)) + 1500 )
 line_2   =    prd_2   /  (abs( np.min(max_dd.NEGG.values)) + 1500 )
 line_3 =    np.array([line_1 , line_2]).T
 
-# if st.button("Clear All"):
-#     st.cache_data.clear()
-
-# Buffer = st.checkbox('Buffer' , value=1 )
-# if Buffer :
-#     st.write('Buffer vs Delta %')
-#     st.line_chart(pd.DataFrame( line_3*100 ,  columns= columns ))
-#     st.write('Buffer $')
-#     st.line_chart(max_dd)
 
 Production = st.checkbox('Production' , value=1)
 if Production :
