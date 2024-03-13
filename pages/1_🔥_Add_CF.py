@@ -120,6 +120,7 @@ q_2 =  FFWM( ref = x_2 )
 
 k_1 =  (y_1 + y_2) + j_1
 k_2 = (q_1 + q_2) + z_1
+k_3 =  4300 + z_1
 
 # st.write(x_1 , x_2 ,  y_1 , y_2 , j_1 ,z_1 , q_1 , q_2 , k_1)
 ref = k_2
@@ -137,8 +138,8 @@ if Check_ADD :
     button_ADD = st.button("ADD_CF")
     if button_ADD:    
         try:
-            client.update(  {'field1': cf , 'field2': cf / k_2 , 'field3': j_1  }  )
-            st.write({'Cashflow': cf , 'Pure_Alpha': cf / k_2 ,  'ฺBuffer': j_1  }) 
+            client.update(  {'field1': cf , 'field2': cf / k_3 , 'field3': j_1  }  )
+            st.write({'Cashflow': cf , 'Pure_Alpha': cf / k_3 ,  'ฺBuffer': j_1  }) 
         except:pass
 
 import streamlit.components.v1 as components
@@ -149,7 +150,7 @@ st.write("_____")
 st.write("Pure_Alpha")
 components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
 st.write("_____") 
-st.write("'ฺBuffer") 
+st.write("ฺBuffer")
 components.iframe('https://thingspeak.com/channels/2394198/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
 st.write("_____")
 st.write('https://thingspeak.com/channels/2394198')
