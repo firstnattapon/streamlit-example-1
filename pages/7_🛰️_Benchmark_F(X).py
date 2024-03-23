@@ -97,7 +97,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
 
 
 
-line_1     =  delta2(Ticker = "^SPX").net_pv.values
+line_1     =  delta2(Ticker = "FFWM").net_pv.values
 # Ticker_1   =  delta2(Ticker = "FFWM")
 
 st.line_chart(line_1)
