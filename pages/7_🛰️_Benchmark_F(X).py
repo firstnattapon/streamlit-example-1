@@ -137,6 +137,6 @@ Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['SPY' , 'GLD'] )
 Delta_2 = Delta
 Delta_2['SPY'] =  (Delta.SPY_net_pv.values  /  abs(np.min(Buffer.SPY_Buffer.values)) ) *100
 Delta_2['GLD'] =  (Delta.GLD_net_pv.values  /  abs(np.min(Buffer.GLD_Buffer.values)) ) *100
-Delta_2 = Delta_2[[ 'SPY' , 'GLD']]
+Delta_2 = Delta_2[[ 'SPY' , 'QQQM']]
 st.line_chart(Delta_2)
 
