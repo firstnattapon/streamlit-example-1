@@ -100,10 +100,10 @@ def Un_15 (Ticker = '' ):
     a_0 = pd.DataFrame()
     a_1 = pd.DataFrame()
     
-    for idx , x in enumerate(Ticker) :
+    for  x in (Ticker) :
       a_2 = delta2( x  , pred= 1  )[['re' , 'net_pv'] ]
-      a_0 = pd.concat([a_0 , a_2[['re']].rename( columns={"re": "{}_re".format(idx) })   ], axis = 1)
-      a_1 = pd.concat([a_1 , a_2[['net_pv']].rename(columns={"net_pv": "{}_net_pv".format(idx) }) ], axis = 1)
+      a_0 = pd.concat([a_0 , a_2[['re']].rename( columns={"re": "{}_re".format(x) })   ], axis = 1)
+      a_1 = pd.concat([a_1 , a_2[['net_pv']].rename(columns={"net_pv": "{}_net_pv".format(x) }) ], axis = 1)
     
     net_dd = []
     net = 0
@@ -117,17 +117,17 @@ def Un_15 (Ticker = '' ):
     a_3 = pd.DataFrame()
     net_dd_1 = []
     net_1 = 0
-    for i in   a_0.0_re.values :
+    for i in   a_0.SPY_re.values :
         net_1 = net_1+i
         net_dd_1.append(net_1)
-    a_3['0_Buffer'] =    net_dd_1
+    a_3['SPY_Buffer'] =    net_dd_1
     
     net_dd_2 = []
     net_2 = 0
-    for i in   a_0.1_re.values :
+    for i in   a_0.QQQM_re.values :
         net_2 = net_2+i
         net_dd_2.append(net_2)
-    a_3['1_Buffer'] =  net_dd_2
+    a_3['QQQM_Buffer'] =  net_dd_2
     
     return  a_1 , a_0 , a_3
 
@@ -136,8 +136,8 @@ Ticker_s = ['SPY' , 'QQQM']
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = Ticker_s )
 
 Delta_2 = Delta
-Delta_2[Ticker_s[0]] =  (Delta.0_net_pv.values  /  abs(np.min(Buffer.0_Buffer.values)) ) *100
-Delta_2[Ticker_s[1]] =  (Delta.1_net_pv.values  /  abs(np.min(Buffer.1_Buffer.values)) ) *100
+Delta_2[Ticker_s[0]] =  (Delta.SPY_net_pv.values  /  abs(np.min(Buffer.SPY_Buffer.values)) ) *100
+Delta_2[Ticker_s[1]] =  (Delta.QQQM_net_pv.values  /  abs(np.min(Buffer.QQQM_Buffer.values)) ) *100
 Delta_2 = Delta_2[[ 'SPY' , 'QQQM']]
 st.line_chart(Delta_2)
 
