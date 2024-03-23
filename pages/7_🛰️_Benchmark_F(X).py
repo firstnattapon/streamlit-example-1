@@ -132,7 +132,7 @@ def Un_15 (Ticker = '' ):
     return  a_1 , a_0 , a_3
 
 
-Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['SPY' , 'GLD'] )
+Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['SPY' , 'QQQM'] )
 
 Delta_2 = Delta
 Delta_2['SPY'] =  (Delta.SPY_net_pv.values  /  abs(np.min(Buffer.SPY_Buffer.values)) ) *100
