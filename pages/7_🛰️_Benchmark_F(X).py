@@ -136,8 +136,7 @@ Ticker_s = ['SPY' , 'QQQM']
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = Ticker_s )
 
 Delta_2 = Delta
-Delta_2[Ticker_s[0]] =  (Delta.SPY_net_pv.values  /  abs(np.min(Buffer.SPY_Buffer.values)) ) *100
-Delta_2[Ticker_s[1]] =  (Delta.QQQM_net_pv.values  /  abs(np.min(Buffer.QQQM_Buffer.values)) ) *100
-Delta_2 = Delta_2[[ 'SPY' , 'QQQM']]
+Delta_2['S&P_500_ETF'] =  (Delta.SPY_net_pv.values  /  abs(np.min(Buffer.SPY_Buffer.values)) ) *100
+Delta_2['NASDAQ_100_ETF'] =  (Delta.QQQM_net_pv.values  /  abs(np.min(Buffer.QQQM_Buffer.values)) ) *100
+Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF']]
 st.line_chart(Delta_2)
-
