@@ -124,10 +124,10 @@ def Un_15 (Ticker = '' ):
     
     net_dd_2 = []
     net_2 = 0
-    for i in   a_0.GLD_re.values :
+    for i in   a_0.QQQM_re.values :
         net_2 = net_2+i
         net_dd_2.append(net_2)
-    a_3['GLD_Buffer'] =  net_dd_2
+    a_3['QQQM_Buffer'] =  net_dd_2
     
     return  a_1 , a_0 , a_3
 
@@ -136,7 +136,7 @@ Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['SPY' , 'GLD'] )
 
 Delta_2 = Delta
 Delta_2['SPY'] =  (Delta.SPY_net_pv.values  /  abs(np.min(Buffer.SPY_Buffer.values)) ) *100
-Delta_2['GLD'] =  (Delta.GLD_net_pv.values  /  abs(np.min(Buffer.GLD_Buffer.values)) ) *100
+Delta_2['GLD'] =  (Delta.QQQM_net_pv.values  /  abs(np.min(Buffer.QQQM_Buffer.values)) ) *100
 Delta_2 = Delta_2[[ 'SPY' , 'QQQM']]
 st.line_chart(Delta_2)
 
