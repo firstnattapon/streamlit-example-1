@@ -176,6 +176,4 @@ try:
         filter_date = '2022-12-21 12:00:00+07:00'
         tickerData = tickerData[tickerData.index >= filter_date]
         st.line_chart(tickerData)
-
-        st.write(Buffer)
 except:pass
