@@ -138,6 +138,6 @@ checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
 if checkbox1 :
     Delta_2 = Delta
     Delta_2['S&P_500_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[0])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) *100
-    Delta_2['NASDAQ_100_ETF'] =  (Delta.QQQM_net_pv.values  /  abs(np.min(Buffer.QQQM_Buffer.values)) ) *100
+    Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) *100
     Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF']]
     st.line_chart(Delta_2)
