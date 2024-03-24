@@ -169,8 +169,8 @@ try:
         Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) *100
         Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
         st.line_chart(Delta_2)
+        st.scatter_chart(Sum_Buffer['{}_re'.format(title)] ,  )
         st.line_chart(Delta['{}_net_pv'.format(title)])
-
 
         tickerData = yf.Ticker(title)
         tickerData = tickerData.history(period= 'max' )[['Close']]
@@ -180,22 +180,22 @@ try:
         filter_date_2 = '2022-12-21 12:00:00+07:00'
         tickerData_2 = tickerData[tickerData.index >= filter_date_2]
         st.line_chart(tickerData_2.values)
-        st.scatter_chart(Sum_Buffer['{}_re'.format(title)] ,  )
         st.line_chart(tickerData_1.values)
-
 
 
 except:pass
 
 
-# tickerData = yf.Ticker(title)
-# tickerData = tickerData.history(period= 'max' )[['Close']]
-# tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-# filter_date_1 = '2020-12-21 12:00:00+07:00'
-# tickerData_1 = tickerData[tickerData.index >= filter_date_1]
-# filter_date_2 = '2022-12-21 12:00:00+07:00'
-# tickerData_2 = tickerData[tickerData.index >= filter_date_2]
-# st.line_chart(tickerData_2.values)
-# st.line_chart(tickerData_1.values)
 
-st.write('https://www.mindmeister.com/app/map/3178532454?m=outline')
+st.write(""" 
+{ การเกิด Cycle_Market ของระบบ }
+Step1 . ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ  Delta/Zone สูง  /  Vo ปกติหรือต่ำลง
+( สะสมดูดของ , แจกจ่ายทุ่มของ ) เกิด Cycle  >  {Timing Realize}
+
+Step2 .ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ Delta/Zone ต่ำ  /  Vo สูง
+เจ็บปวด , คาดหวัง , เริ่มต้นวัฏจักร Cycle > {ตลาดไม่มีประสิทธิภาพ No_Realize}
+
+Step3 .ถ้า Intrinsic_Value_Cf  {เท่ากับ}  Benchmark_Cf และ Delta/Zone สูง /  Vo ปกติหรือต่ำลง
+ไม่มี Premium กับ Discount ไม่มีช่องว่างให้เล่นสินทรัพย์สะท้อนมูลค่าที่แท้จริง > {Realize}
+"""
+)
