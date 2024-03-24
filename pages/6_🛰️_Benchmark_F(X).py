@@ -154,9 +154,9 @@ ans = ['RIVN',
  'ETNB',
  'SMMT']
 
-Yahoo = st.select_slider('Ticker_Yahoo', options=ans)
+number = st.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0 , max_value=len(ans+1) ) 
+title = st.text_input('Ticker_Yahoo', ans[number])
 
-title = st.text_input('Ticker_Yahoo', Yahoo)
 try:
     Ticker_s = ['SPY' , 'QQQM' , title ]
     Delta , Sum_Buffer , Buffer =  Un_15(Ticker = Ticker_s )
