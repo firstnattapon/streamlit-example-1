@@ -137,7 +137,31 @@ def Un_15 (Ticker = '' ):
     a_3['{}_Buffer'.format(Ticker[2])] =  net_dd_3
     return  a_1 , a_0 , a_3
 
-title = st.text_input('Ticker_Yahoo', 'NEGG')
+ans = ['RIVN',
+ 'BIDU',
+ 'XPEV',
+ 'GME',
+ 'FSLR',
+ 'EVO',
+ 'YETI',
+ 'ALGM',
+ 'FLNC',
+ 'SPCE',
+ 'ENVX',
+ 'COHU',
+ 'ASTS',
+ 'CMPS',
+ 'PHAR',
+ 'INNV',
+ 'PHAT',
+ 'PLRX',
+ 'MRSN',
+ 'ETNB',
+ 'SMMT']
+
+Yahoo = st.select_slider('Ticker_Yahoo', options=ans)
+
+title = st.text_input('Ticker_Yahoo', Yahoo)
 try:
     Ticker_s = ['SPY' , 'QQQM' , title ]
     Delta , Sum_Buffer , Buffer =  Un_15(Ticker = Ticker_s )
