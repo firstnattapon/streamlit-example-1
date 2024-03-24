@@ -118,14 +118,13 @@ def Un_15 (Ticker = '' ):
     net_dd_1 = []
     net_1 = 0
     for i in   a_0['{}_re'.format(Ticker[0])].values :
-    # for i in   a_0.SPY_re.values :
         net_1 = net_1+i
         net_dd_1.append(net_1)
     a_3['SPY_Buffer'] =    net_dd_1
     
     net_dd_2 = []
     net_2 = 0
-    for i in   a_0.QQQM_re.values :
+    for i in   a_0['{}_re'.format(Ticker[1])].values :
         net_2 = net_2+i
         net_dd_2.append(net_2)
     a_3['QQQM_Buffer'] =  net_dd_2
@@ -133,7 +132,6 @@ def Un_15 (Ticker = '' ):
     return  a_1 , a_0 , a_3
 
 Ticker_s = ['SPY' , 'QQQM']
-
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = Ticker_s )
 
 checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
