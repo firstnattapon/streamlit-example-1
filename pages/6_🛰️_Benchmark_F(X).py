@@ -188,8 +188,8 @@ except:pass
 
 
 st.write(""" 
-{ การเกิด Cycle_Market ของระบบ }
-Step1 . ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ  Delta/Zone สูง  /  Vo ปกติหรือต่ำลง\
+{ การเกิด Cycle_Market ของระบบ }\
+Step1 . ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ  Delta/Zone สูง  /  Vo ปกติหรือต่ำลง
 ( สะสมดูดของ , แจกจ่ายทุ่มของ ) เกิด Cycle  >  {Timing Realize}
 
 Step2 .ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ Delta/Zone ต่ำ  /  Vo สูง
