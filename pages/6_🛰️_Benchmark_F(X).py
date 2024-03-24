@@ -117,7 +117,8 @@ def Un_15 (Ticker = '' ):
     a_3 = pd.DataFrame()
     net_dd_1 = []
     net_1 = 0
-    for i in   a_0.SPY_re.values :
+    for i in   a_0['{}_re'.format(Ticker[0])].values :
+    # for i in   a_0.SPY_re.values :
         net_1 = net_1+i
         net_dd_1.append(net_1)
     a_3['SPY_Buffer'] =    net_dd_1
