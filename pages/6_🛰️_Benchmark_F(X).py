@@ -121,13 +121,13 @@ def Un_15 (Ticker = '' ):
         net_1 = net_1+i
         net_dd_1.append(net_1)
     a_3['{}_Buffer'.format(Ticker[0])] =    net_dd_1
-    
+
     net_dd_2 = []
     net_2 = 0
     for i in   a_0['{}_re'.format(Ticker[1])].values :
         net_2 = net_2+i
         net_dd_2.append(net_2)
-    a_3['QQQM_Buffer'] =  net_dd_2
+    a_3['{}_Buffer'.format(Ticker[1])] =  net_dd_2
     
     return  a_1 , a_0 , a_3
 
