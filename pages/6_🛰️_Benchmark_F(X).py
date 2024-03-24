@@ -179,5 +179,6 @@ filter_date_1 = '2020-12-21 12:00:00+07:00'
 tickerData_1 = tickerData[tickerData.index >= filter_date_1]
 filter_date_2 = '2022-12-21 12:00:00+07:00'
 tickerData_2 = tickerData[tickerData.index >= filter_date_2]
-st.line_chart(tickerData_1)
 st.line_chart(tickerData_2.values)
+st.line_chart(tickerData_1.values)
+
