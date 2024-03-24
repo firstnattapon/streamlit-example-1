@@ -137,9 +137,8 @@ def Un_15 (Ticker = '' ):
     a_3['{}_Buffer'.format(Ticker[2])] =  net_dd_3
     return  a_1 , a_0 , a_3
 
-
+title = st.text_input('Ticker_Yahoo', 'NEGG')
 try:
-    title = st.text_input('Ticker_Yahoo', 'NEGG')
     Ticker_s = ['SPY' , 'QQQM' , title ]
     Delta , Sum_Buffer , Buffer =  Un_15(Ticker = Ticker_s )
     
