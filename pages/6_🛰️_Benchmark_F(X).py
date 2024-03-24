@@ -167,9 +167,15 @@ try:
         Delta_2['S&P_500_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[0])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) *100
         Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) *100
         Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) *100
-    
         Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
         st.line_chart(Delta_2)
+
+        tickerData = yf.Ticker(Ticker_s[3])
+        tickerData = tickerData.history(period= 'max' )[['Close']]
+        tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+        filter_date = '2022-12-21 12:00:00+07:00'
+        tickerData = tickerData[tickerData.index >= filter_date]
+        st.line_chart(tickerData)
 
         st.write(Buffer)
 except:pass
