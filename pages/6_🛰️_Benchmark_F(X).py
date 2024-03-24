@@ -120,7 +120,7 @@ def Un_15 (Ticker = '' ):
     for i in   a_0['{}_re'.format(Ticker[0])].values :
         net_1 = net_1+i
         net_dd_1.append(net_1)
-    a_3['SPY_Buffer'] =    net_dd_1
+    a_3['{}_Buffer'.format(Ticker[0])] =    net_dd_1
     
     net_dd_2 = []
     net_2 = 0
