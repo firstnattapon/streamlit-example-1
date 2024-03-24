@@ -170,4 +170,6 @@ try:
     
         Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
         st.line_chart(Delta_2)
+
+        st.write(Delta)
 except:pass
