@@ -154,7 +154,7 @@ ans = ['RIVN',
  'ETNB',
  'SMMT']
 
-number = st.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0 , max_value=len(ans+1) ) 
+number = st.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
 title = st.text_input('Ticker_Yahoo', ans[number])
 
 try:
