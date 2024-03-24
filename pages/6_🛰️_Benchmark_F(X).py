@@ -115,23 +115,29 @@ def Un_15 (Ticker = '' ):
     a_1['Sum_Delta'] =     a_1.sum(axis=1 ,    numeric_only=True )
 
     a_3 = pd.DataFrame()
-    net_dd_1 = []
+    net_dd_1 = [] #1
     net_1 = 0
     for i in   a_0['{}_re'.format(Ticker[0])].values :
         net_1 = net_1+i
         net_dd_1.append(net_1)
     a_3['{}_Buffer'.format(Ticker[0])] =    net_dd_1
 
-    net_dd_2 = []
+    net_dd_2 = [] #2
     net_2 = 0
     for i in   a_0['{}_re'.format(Ticker[1])].values :
         net_2 = net_2+i
         net_dd_2.append(net_2)
     a_3['{}_Buffer'.format(Ticker[1])] =  net_dd_2
-    
+
+    net_dd_3 = [] #3
+    net_3 = 0
+    for i in   a_0['{}_re'.format(Ticker[2])].values :
+        net_3 = net_3+i
+        net_dd_3.append(net_3)
+    a_3['{}_Buffer'.format(Ticker[2])] =  net_dd_3
     return  a_1 , a_0 , a_3
 
-Ticker_s = ['SPY' , 'QQQM']
+Ticker_s = ['SPY' , 'QQQM' , 'NEGG' ]
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = Ticker_s )
 
 checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
@@ -139,5 +145,7 @@ if checkbox1 :
     Delta_2 = Delta
     Delta_2['S&P_500_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[0])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) *100
     Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) *100
-    Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF']]
+    Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) *100
+
+    Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
     st.line_chart(Delta_2)
