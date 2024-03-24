@@ -169,6 +169,7 @@ try:
         Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) *100
         Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
         st.line_chart(Delta_2)
+        st.line_chart(Delta)
         st.scatter_chart(Sum_Buffer['{}_re'.format(title)] ,  )
 
 except:pass
