@@ -185,7 +185,7 @@ if checkbox1 :
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
     tickerData_2['Diff'] = diff_fx
 
-    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram" , color_continuous_scale = px.colors.sequential.deep  , text_auto=True )
+    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram" , color_continuous_scale = px.colors.sequential.delta  , text_auto=True )
     named_colorscales = px.colors.named_colorscales()
     st.write(named_colorscales)
     
