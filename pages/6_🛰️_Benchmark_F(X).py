@@ -183,8 +183,8 @@ try:
         tickerData_2 = tickerData[tickerData.index >= filter_date_2]
 
         st.line_chart(Delta_2)
-        # diff['c'] = tickerData_2
-        st.write(tickerData_2)
+        diff['c'] = tickerData_2.Close.values
+        st.write(diff)
         st.scatter_chart(diff , x='c', size='diff')
         
         # st.scatter_chart( diff     )
