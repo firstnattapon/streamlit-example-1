@@ -135,7 +135,12 @@ def Un_15 (Ticker = '' ):
         net_3 = net_3+i
         net_dd_3.append(net_3)
     a_3['{}_Buffer'.format(Ticker[2])] =  net_dd_3
-    return  a_1 , a_0 , a_3
+
+    #diff
+    di = a_2
+    di['diff'] = di.net_pv.diff().fillna(0.0)
+ 
+    return  a_1 , a_0 , a_3 , di['diff']
 
 ans = ['RIVN',
  'GME',
@@ -159,7 +164,7 @@ title = st.text_input('Ticker_Yahoo', ans[number])
 
 try:
     Ticker_s = ['SPY' , 'QQQM' , title ]
-    Delta , Sum_Buffer , Buffer =  Un_15(Ticker = Ticker_s )
+    Delta , Sum_Buffer , Buffer , diff =  Un_15(Ticker = Ticker_s )
     
     checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
     if checkbox1 :
@@ -168,20 +173,6 @@ try:
         Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) *100
         Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) *100
         Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
-        
-        st.line_chart(Delta_2)
-        # st.scatter_chart(Sum_Buffer['{}_re'.format(title)] ,  )
-        st.line_chart(Delta['{}_net_pv'.format(title)])
-
-
-        df = pd.DataFrame([[5.1, 3.5, 0], [4.9, 3.0, 0], [7.0, 3.2, 1],
-                           [6.4, 3.2, 1], [5.9, 3.0, 2]],
-                          columns=['length', 'width', 'species'])
-        ax1 = df.plot.scatter(x='length',
-                              y='width',
-                              c='DarkBlue')
-                
-        st.pyplot(ax1)
 
         tickerData = yf.Ticker(title)
         tickerData = tickerData.history(period= 'max' )[['Close']]
@@ -190,6 +181,11 @@ try:
         tickerData_1 = tickerData[tickerData.index >= filter_date_1]
         filter_date_2 = '2022-12-21 12:00:00+07:00'
         tickerData_2 = tickerData[tickerData.index >= filter_date_2]
+
+        st.write(tickerData_2)
+        st.line_chart(Delta_2)
+        # st.scatter_chart(tickerData_2.values ,  )
+        st.line_chart(Delta['{}_net_pv'.format(title)])
         st.line_chart(tickerData_2.values)
         st.line_chart(tickerData_1.values)
 
