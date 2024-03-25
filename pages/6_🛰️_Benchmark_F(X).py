@@ -183,8 +183,8 @@ if checkbox1 :
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
 
     st.line_chart(Delta_2)
-    tickerData_2['diff'] = diff
-    st.write(tickerData_2)
+    # tickerData_2['diff'] = diff
+    st.write(diff)
     # st.scatter_chart(diff , x='c', size='diff')
     
     # st.scatter_chart( diff     )
