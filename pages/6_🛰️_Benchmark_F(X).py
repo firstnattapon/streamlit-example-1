@@ -186,7 +186,15 @@ try:
         st.line_chart(Delta_2)
 
         diff['c'] = tickerData_2.values
-        st.scatter_chart( diff     )
+
+        st.scatter_chart(
+            diff,
+            x=diff.index,
+            y='c',
+            size='diff',
+        )
+        
+        # st.scatter_chart( diff     )
         st.line_chart(Delta['{}_net_pv'.format(title)])
         st.line_chart(tickerData_2.values)
         st.line_chart(tickerData_1.values)
