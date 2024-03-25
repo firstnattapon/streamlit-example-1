@@ -185,7 +185,7 @@ if checkbox1 :
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
     tickerData_2['Diff'] = diff_fx
 
-    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram" , color_continuous_scale = px.colors.sequential.blackbody  , text_auto=True )
+    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram" , color_continuous_scale = px.colors.sequential.Plasma  , text_auto=True )
     st.plotly_chart(fig, use_container_width=True)
     st.line_chart(Delta['{}_net_pv'.format(title)])
     # st.scatter_chart( tickerData_2  , size= 'Diff' )
