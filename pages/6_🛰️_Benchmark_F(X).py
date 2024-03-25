@@ -185,13 +185,14 @@ if checkbox1 :
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
 
     st.line_chart(Delta['{}_net_pv'.format(title)])
+    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram" , text_auto=True)
+    st.plotly_chart(fig, use_container_width=True)
+    
     tickerData_2['Diff'] = diff_fx
     st.scatter_chart( tickerData_2  , size= 'Diff' )
     st.line_chart(tickerData_1.values)
     st.line_chart(Delta_2)
 
-    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram" , text_auto=True)
-    st.plotly_chart(fig, use_container_width=True)
 
 
 # except:pass
