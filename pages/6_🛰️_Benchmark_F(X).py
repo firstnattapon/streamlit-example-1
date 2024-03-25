@@ -190,7 +190,7 @@ if checkbox1 :
     st.line_chart(tickerData_1.values)
     st.line_chart(Delta_2)
 
-    fig = px.density_heatmap(tickerData_2, x="Diff", y="Close", marginal_x="histogram", marginal_y="histogram")
+    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram")
     st.plotly_chart(fig, use_container_width=True)
 
 
