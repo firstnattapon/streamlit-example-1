@@ -182,9 +182,9 @@ try:
         filter_date_2 = '2022-12-21 12:00:00+07:00'
         tickerData_2 = tickerData[tickerData.index >= filter_date_2]
 
-        st.write(diff)
+        # st.write(diff)
         st.line_chart(Delta_2)
-        # st.scatter_chart(tickerData_2.values , size= diff  )
+        st.scatter_chart(tickerData_2.values , size= diff.values  )
         st.line_chart(Delta['{}_net_pv'.format(title)])
         st.line_chart(tickerData_2.values)
         st.line_chart(tickerData_1.values)
