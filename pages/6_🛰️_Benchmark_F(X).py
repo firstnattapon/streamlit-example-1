@@ -192,7 +192,7 @@ if checkbox1 :
     # st.scatter_chart( tickerData_2  , size= 'Diff' )
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
-
+    st.line_chart(Buffer)
 
 
 
