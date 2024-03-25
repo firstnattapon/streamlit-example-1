@@ -163,34 +163,34 @@ number = st.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  )
 title = st.text_input('Ticker_Yahoo', ans[number])
 
 # try:
-    Ticker_s = ['SPY' , 'QQQM' , title ]
-    Delta , Sum_Buffer , Buffer , diff =  Un_15(Ticker = Ticker_s )
+Ticker_s = ['SPY' , 'QQQM' , title ]
+Delta , Sum_Buffer , Buffer , diff =  Un_15(Ticker = Ticker_s )
+
+checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
+if checkbox1 :
+    Delta_2 = Delta
+    Delta_2['S&P_500_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[0])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) *100
+    Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) *100
+    Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) *100
+    Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
+
+    tickerData = yf.Ticker(title)
+    tickerData = tickerData.history(period= 'max' )[['Close']]
+    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+    filter_date_1 = '2020-12-21 12:00:00+07:00'
+    tickerData_1 = tickerData[tickerData.index >= filter_date_1]
+    filter_date_2 = '2022-12-21 12:00:00+07:00'
+    tickerData_2 = tickerData[tickerData.index >= filter_date_2]
+
+    st.line_chart(Delta_2)
+    tickerData_2['diff'] = diff
+    st.write(tickerData_2)
+    # st.scatter_chart(diff , x='c', size='diff')
     
-    checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
-    if checkbox1 :
-        Delta_2 = Delta
-        Delta_2['S&P_500_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[0])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) *100
-        Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) *100
-        Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) *100
-        Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
-
-        tickerData = yf.Ticker(title)
-        tickerData = tickerData.history(period= 'max' )[['Close']]
-        tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-        filter_date_1 = '2020-12-21 12:00:00+07:00'
-        tickerData_1 = tickerData[tickerData.index >= filter_date_1]
-        filter_date_2 = '2022-12-21 12:00:00+07:00'
-        tickerData_2 = tickerData[tickerData.index >= filter_date_2]
-
-        st.line_chart(Delta_2)
-        tickerData_2['diff'] = diff
-        st.write(tickerData_2)
-        # st.scatter_chart(diff , x='c', size='diff')
-        
-        # st.scatter_chart( diff     )
-        st.line_chart(Delta['{}_net_pv'.format(title)])
-        st.line_chart(tickerData_2.values)
-        st.line_chart(tickerData_1.values)
+    # st.scatter_chart( diff     )
+    st.line_chart(Delta['{}_net_pv'.format(title)])
+    st.line_chart(tickerData_2.values)
+    st.line_chart(tickerData_1.values)
 
 
 # except:pass
