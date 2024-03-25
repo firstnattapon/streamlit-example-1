@@ -173,7 +173,15 @@ try:
         # st.scatter_chart(Sum_Buffer['{}_re'.format(title)] ,  )
         st.line_chart(Delta['{}_net_pv'.format(title)])
 
-        st.pyplot(Sum_Buffer.plot.scatter())
+
+        df = pd.DataFrame([[5.1, 3.5, 0], [4.9, 3.0, 0], [7.0, 3.2, 1],
+                           [6.4, 3.2, 1], [5.9, 3.0, 2]],
+                          columns=['length', 'width', 'species'])
+        ax1 = df.plot.scatter(x='length',
+                              y='width',
+                              c='DarkBlue')
+                
+        st.pyplot(ax1)
 
         tickerData = yf.Ticker(title)
         tickerData = tickerData.history(period= 'max' )[['Close']]
