@@ -182,12 +182,11 @@ if checkbox1 :
     filter_date_2 = '2022-12-21 12:00:00+07:00'
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
 
-    st.line_chart(Delta_2)
     st.line_chart(Delta['{}_net_pv'.format(title)])
-    
     tickerData_2['Diff'] = diff_fx
     st.scatter_chart( tickerData_2  , size= 'Diff' )
     st.line_chart(tickerData_1.values)
+    st.line_chart(Delta_2)
 
 # except:pass
 
