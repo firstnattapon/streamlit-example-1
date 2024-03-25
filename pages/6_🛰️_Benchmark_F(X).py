@@ -164,7 +164,7 @@ title = st.text_input('Ticker_Yahoo', ans[number])
 
 # try:
 Ticker_s = ['SPY' , 'QQQM' , title ]
-Delta , Sum_Buffer , Buffer , diff =  Un_15(Ticker = Ticker_s )
+Delta , Sum_Buffer , Buffer , diff_fx =  Un_15(Ticker = Ticker_s )
 
 checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
 if checkbox1 :
@@ -183,9 +183,9 @@ if checkbox1 :
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
 
     st.line_chart(Delta_2)
-    # tickerData_2['diff'] = diff
-    st.write(diff)
-    # st.scatter_chart(diff , x='c', size='diff')
+    tickerData_2['diff'] = diff_fx
+    st.write(tickerData_2)
+    # st.scatter_chart(diff , x='c', size='diff_fx')
     
     # st.scatter_chart( diff     )
     st.line_chart(Delta['{}_net_pv'.format(title)])
