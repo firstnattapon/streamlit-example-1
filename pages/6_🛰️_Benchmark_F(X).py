@@ -138,8 +138,8 @@ def Un_15 (Ticker = '' ):
 
     #diff
     di = a_2
-    di['diff'] = di.net_pv.diff().fillna(0.0).values
- 
+    di['diff'] = di.net_pv.diff().fillna(0.0)
+    di = di.diff
     return  a_1 , a_0 , a_3 , di
 
 ans = ['RIVN',
