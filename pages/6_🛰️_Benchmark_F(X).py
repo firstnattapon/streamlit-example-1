@@ -183,6 +183,7 @@ if checkbox1 :
     
     st.write(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)))
     st.write(abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[2])].values)))
+    st.write(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[2])].values))                )
 
     tickerData = yf.Ticker(title)
     tickerData = tickerData.history(period= 'max' )[['Close']]
