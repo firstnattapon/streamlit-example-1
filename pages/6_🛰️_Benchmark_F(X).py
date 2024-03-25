@@ -168,9 +168,13 @@ try:
         Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) *100
         Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) *100
         Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
+        
         st.line_chart(Delta_2)
         # st.scatter_chart(Sum_Buffer['{}_re'.format(title)] ,  )
         st.line_chart(Delta['{}_net_pv'.format(title)])
+
+        ax2 = Sum_Buffer.plot.scatter()
+        st.pyplot(ax2)
 
         tickerData = yf.Ticker(title)
         tickerData = tickerData.history(period= 'max' )[['Close']]
