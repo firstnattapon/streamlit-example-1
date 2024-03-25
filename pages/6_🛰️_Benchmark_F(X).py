@@ -189,7 +189,6 @@ try:
 
         st.scatter_chart(
             diff,
-            x=diff.index,
             y='c',
             size='diff',
         )
