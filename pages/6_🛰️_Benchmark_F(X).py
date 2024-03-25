@@ -162,7 +162,7 @@ ans = ['RIVN',
 number = st.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
 title = st.text_input('Ticker_Yahoo', ans[number])
 
-try:
+# try:
     Ticker_s = ['SPY' , 'QQQM' , title ]
     Delta , Sum_Buffer , Buffer , diff =  Un_15(Ticker = Ticker_s )
     
@@ -193,7 +193,7 @@ try:
         st.line_chart(tickerData_1.values)
 
 
-except:pass
+# except:pass
 
 
 
