@@ -3,4 +3,4 @@ pandas
 streamlit
 yfinance
 thingspeak
-
+plotly
