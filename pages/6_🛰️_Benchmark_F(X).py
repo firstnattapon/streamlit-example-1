@@ -140,7 +140,7 @@ def Un_15 (Ticker = '' ):
     di = a_2
     di['diff'] = di.net_pv.diff().fillna(0.0)
  
-    return  a_1 , a_0 , a_3 , di['diff']
+    return  a_1 , a_0 , a_3 , di.diff..values
 
 ans = ['RIVN',
  'GME',
@@ -183,7 +183,7 @@ try:
         tickerData_2 = tickerData[tickerData.index >= filter_date_2]
 
         st.line_chart(Delta_2)
-        tickerData_2['diff'] = diff['diff'].values
+        tickerData_2['diff'] = diff
         st.write(tickerData_2)
         # st.scatter_chart(diff , x='c', size='diff')
         
