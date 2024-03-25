@@ -185,7 +185,7 @@ if checkbox1 :
     st.line_chart(Delta_2)
     tickerData_2['diff_fx'] = diff_fx
     st.write(tickerData_2)
-    st.scatter_chart(tickerData_2 , x='Close', size='diff_fx')
+    st.scatter_chart(tickerData_2 , y='Close', size='diff_fx')
     
     # st.scatter_chart( diff     )
     st.line_chart(Delta['{}_net_pv'.format(title)])
