@@ -184,7 +184,7 @@ try:
 
         # st.write(diff)
         st.line_chart(Delta_2)
-        st.scatter_chart(tickerData_2  , size= diff.values  )
+        st.scatter_chart( diff     )
         st.line_chart(Delta['{}_net_pv'.format(title)])
         st.line_chart(tickerData_2.values)
         st.line_chart(tickerData_1.values)
