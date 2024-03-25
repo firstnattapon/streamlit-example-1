@@ -183,11 +183,12 @@ if checkbox1 :
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
 
     st.line_chart(Delta_2)
+    st.line_chart(Delta['{}_net_pv'.format(title)])
+    
     tickerData_2['diff_fx'] = diff_fx
     st.scatter_chart(tickerData_2 , y='Close', size='diff_fx')
     
-    st.line_chart(Delta['{}_net_pv'.format(title)])
-    st.line_chart(tickerData_2.values)
+    st.line_chart(tickerData_2)
     st.line_chart(tickerData_1.values)
 
 
