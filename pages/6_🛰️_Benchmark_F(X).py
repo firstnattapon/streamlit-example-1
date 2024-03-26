@@ -209,7 +209,7 @@ if checkbox1 :
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
     tickerData_2['Diff'] = diff_fx
 
-    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
+    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",  marginal_x="histogram"  ,marginal_y="histogram"  , text_auto=True )
 
     st.plotly_chart(fig, use_container_width=True)
     st.write(tickerData_2.Close.values[-1])
