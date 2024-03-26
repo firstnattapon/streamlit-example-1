@@ -210,6 +210,11 @@ if checkbox1 :
     tickerData_2['Diff'] = diff_fx
 
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
+    fig.add_shape(type="line", x0= 0 , 
+                        y0 = 1,
+                        x1 = df.date.max(),
+                        y1 = row[1]['levels'], fillcolor = 'yellow')
+    
     st.plotly_chart(fig, use_container_width=True)
     st.line_chart(Delta['{}_net_pv'.format(title)])
     st.line_chart(Delta_2)
