@@ -138,6 +138,13 @@ def Un_15 (Ticker = '' ):
         net_dd_3.append(net_3)
     a_3['{}_Buffer'.format(Ticker[2])] =  net_dd_3
 
+    net_dd_4 = [] #4
+    net_4 = 0
+    for i in   a_0['{}_re'.format(Ticker[3])].values :
+        net_4 = net_4+i
+        net_dd_4.append(net_4)
+    a_3['{}_Buffer'.format(Ticker[3])] =  net_dd_4
+    
     #diff
     di = a_2
     di['dif'] = di.net_pv.diff().fillna(0.0)
@@ -184,7 +191,7 @@ number = st.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  )
 title = st.text_input('Ticker_Yahoo', ans[number])
 
 # try:
-Ticker_s = ['SPY' , 'QQQM' , title ]
+Ticker_s = ['SPY' , 'QQQM' , 'GLD' , title ]
 Delta , Sum_Buffer , Buffer , diff_fx =  Un_15(Ticker = Ticker_s )
 
 checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
@@ -193,12 +200,14 @@ if checkbox1 :
     # Delta_2['S&P_500_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[0])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) *100
     # Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) *100
     # Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values  /  abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) *100
-    # Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
+    # Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' ,  '{}'.format(Ticker_s[2]) ]]
 
     Delta_2['S&P_500_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[0])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) ) *100
     Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) ) *100
-    Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) ) *100
-    Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , '{}'.format(Ticker_s[2]) ]]
+    Delta_2['Gold_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) ) *100
+
+    Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[3])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) ) ) *100
+    Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , 'Gold_ETF' , '{}'.format(Ticker_s[3]) ]]
 
     tickerData = yf.Ticker(title)
     tickerData = tickerData.history(period= 'max' )[['Close']]
