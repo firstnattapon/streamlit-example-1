@@ -204,9 +204,9 @@ if checkbox1 :
 
     Delta_2['S&P_500_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[0])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) ) *100
     Delta_2['NASDAQ_100_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[1])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[1])].values)) ) ) *100
-    Delta_2['Gold_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[2])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) ) *100
-
-    Delta_2['{}'.format(Ticker_s[2])] =  (Delta['{}_net_pv'.format(Ticker_s[3])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) ) ) *100
+    Delta_2['Gold_ETF'] = (Delta['{}_net_pv'.format(Ticker_s[2])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) ) ) *100
+    Delta_2['{}'.format(Ticker_s[3])] =  (Delta['{}_net_pv'.format(Ticker_s[3])].values /(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) ) ) *100
+    
     Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , 'Gold_ETF' , '{}'.format(Ticker_s[3]) ]]
 
     tickerData = yf.Ticker(title)
