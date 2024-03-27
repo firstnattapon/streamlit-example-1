@@ -216,13 +216,8 @@ if checkbox1 :
 
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
     
-    lines = px.scatter(x=[0.5, 1.25, None, 1.65, 1.65],
-                       y=[-0.67, -0.67, None, -1,1],
-                       mode='lines',
-                       line_color='black', line_width=2.5)
-    fig = px.figure(data=[fig, lines])
-    
-    
+    fig.add_shape(type='line')
+
     st.plotly_chart(fig, use_container_width=True)
     st.write('Close' ,tickerData_2.Close.values[-1])
 
