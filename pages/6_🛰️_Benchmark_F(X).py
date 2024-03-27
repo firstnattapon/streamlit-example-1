@@ -221,17 +221,17 @@ if checkbox1 :
     y = np.linspace(-1, 1, N)
     z = np.random.rand(50, N)
     
-    heatmap = go.Heatmap(x=x, y=y, z=z, colorscale='Greens', colorbar_thickness=20)
-    lines = go.Scatter(x=[0.5, 1.25, None, 1.65, 1.65],
+    heatmap = px.Heatmap(x=x, y=y, z=z, colorscale='Greens', colorbar_thickness=20)
+    lines = px.Scatter(x=[0.5, 1.25, None, 1.65, 1.65],
                        y=[-0.67, -0.67, None, -1,1],
                        mode='lines',
                        line_color='black', line_width=2.5)
-    layout = go.Layout(width=600, height=600, 
+    layout = px.Layout(width=600, height=600, 
                        xaxis_range=[0,2], yaxis_range=[-1,1])
-    fig = go.Figure(data=[heatmap, lines], layout=layout)
+    fig = px.Figure(data=[heatmap, lines], layout=layout)
     
     
-    # st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
     st.write('Close' ,tickerData_2.Close.values[-1])
 
     st.line_chart(Delta['{}_net_pv'.format(title)] )
