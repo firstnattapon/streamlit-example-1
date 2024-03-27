@@ -225,7 +225,7 @@ if checkbox1 :
 
     st.line_chart(Delta_2)
     # st.write('Delta_Adj.Risk' ,  Delta2[{}.format(title)].values[-1] )
-    st.write( Delta_2['{}'.format(Ticker_s[3])])
+    st.write( Delta_2['{}'.format(Ticker_s[3])].values[-1] )
 
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
