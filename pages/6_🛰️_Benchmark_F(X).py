@@ -229,6 +229,7 @@ if checkbox1 :
 
     st.line_chart(Delta_2)
     st.write('Delta_Adj.Risk' ,  Delta2['{}_net_pv'.format(title)].values[-1] )
+    st.write('Delta_Adj.Risk' ,  Delta_2 )
 
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
