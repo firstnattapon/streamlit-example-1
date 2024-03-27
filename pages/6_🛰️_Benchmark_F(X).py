@@ -204,10 +204,10 @@ if checkbox1 :
     # Delta_2['Gold_ETF'] =  (((abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) + 1500) / (Delta['{}_net_pv'.format(Ticker_s[2])].values) )
     # Delta_2['{}'.format(Ticker_s[3])] = (((abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[0])].values)) ) + 1500) / (Delta['{}_net_pv'.format(Ticker_s[3])].values) )
 
-    Delta_2['S&P_500_ETF'] =  (Delta['{}_net_pv'.format(Ticker_s[0])].values)
-    Delta_2['NASDAQ_100_ETF'] = (Delta['{}_net_pv'.format(Ticker_s[1])].values)
-    Delta_2['Gold_ETF'] =   (Delta['{}_net_pv'.format(Ticker_s[2])].values)
-    Delta_2['{}'.format(Ticker_s[3])] =  (Delta['{}_net_pv'.format(Ticker_s[3])].values)
+    Delta_2['S&P_500_ETF'] =  1500  /(Delta['{}_net_pv'.format(Ticker_s[0])].values)
+    Delta_2['NASDAQ_100_ETF'] = 1500 /(Delta['{}_net_pv'.format(Ticker_s[1])].values)
+    Delta_2['Gold_ETF'] = 1500  /(Delta['{}_net_pv'.format(Ticker_s[2])].values)
+    Delta_2['{}'.format(Ticker_s[3])] = 1500/(Delta['{}_net_pv'.format(Ticker_s[3])].values)
     
 
     
@@ -226,8 +226,6 @@ if checkbox1 :
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red'))
     st.plotly_chart(fig, use_container_width=True)
     
-    # st.write('Close' ,tickerData_2.Close.values[-1])
-
     st.line_chart(Delta['{}_net_pv'.format(title)] )
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
     survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )
@@ -235,13 +233,14 @@ if checkbox1 :
 
     st.line_chart(Delta_2)
     Adj_Risk = Delta_2['{}'.format(Ticker_s[3])].values[-1]
-    
     st.write('Delta_Adj.Risk' ,  Adj_Risk , 100 / Adj_Risk )
-
+    
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
+    
     st.line_chart(Buffer)
     st.write( 'survival' , survival)
+    
 # except:pass
 
 
