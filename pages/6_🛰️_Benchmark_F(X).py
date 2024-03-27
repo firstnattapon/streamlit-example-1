@@ -202,7 +202,6 @@ if checkbox1 :
     Delta_2['NASDAQ_100_ETF'] = Delta_2['{}_net_pv'.format(Ticker_s[1])].values/(1500+(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values))+abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[1])].values))))*100
     Delta_2['Gold_ETF'] = Delta_2['{}_net_pv'.format(Ticker_s[2])].values/(1500+(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values))+abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[2])].values))))*100
     Delta_2['{}'.format(Ticker_s[3])]=Delta_2['{}_net_pv'.format(Ticker_s[3])].values/(1500+(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values))+abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values))))*100
-
     Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , 'Gold_ETF' , '{}'.format(Ticker_s[3]) ]]
     
     tickerData = yf.Ticker(title)
@@ -215,14 +214,16 @@ if checkbox1 :
     tickerData_2['Diff'] = diff_fx
 
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
-    survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )   
+    survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )  
+    st.write('____')
     st.write('Data' , add_risk , 1500 / add_risk , (1500+survival) / add_risk )
-    
+    st.write('____')
+
+checkbox2 = st.checkbox('Data' , value=0 )
+if checkbox2 :
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red'))
     st.plotly_chart(fig, use_container_width=True)
-
-
 
     st.line_chart(Delta['{}_net_pv'.format(title)] )
     st.line_chart(Delta_2)
