@@ -220,7 +220,7 @@ if checkbox1 :
 
     number = st.number_input('nbinsy', value=50 , step =1 , min_value=1  ) 
     color = st.text_input('color', 'viridis')
-    st.write(px.colors.sequential.Viridis)
+    st.write(px.colors.sequential())
     
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True , nbinsy=number , color_continuous_scale = color )
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red')  )
