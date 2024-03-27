@@ -223,7 +223,7 @@ if checkbox1 :
     survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )   
     
     st.line_chart(Delta['{}_net_pv'.format(title)] )
-    st.write('Delta_Add.Risk' , add_risk , 1500 / add_risk , (1500+survival) / add_risk,'({})'.format(survival) )
+    st.write('Delta_Add.Risk' , add_risk , 1500 / add_risk , (1500+survival) / add_risk )
 
     st.line_chart(Delta_2)
     
