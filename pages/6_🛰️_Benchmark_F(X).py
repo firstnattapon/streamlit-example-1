@@ -214,8 +214,14 @@ if checkbox1 :
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
     tickerData_2['Diff'] = diff_fx
 
-    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
+    # fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
 
+    N = 25
+    x = np.linspace(0, 2, N)
+    y = np.linspace(-1, 1, N)
+    z = np.random.rand(50, N)
+    
+    heatmap = go.Heatmap(x=x, y=y, z=z, colorscale='Greens', colorbar_thickness=20)
     lines = go.Scatter(x=[0.5, 1.25, None, 1.65, 1.65],
                        y=[-0.67, -0.67, None, -1,1],
                        mode='lines',
@@ -225,7 +231,7 @@ if checkbox1 :
     fig = go.Figure(data=[heatmap, lines], layout=layout)
     
     
-    st.plotly_chart(fig, use_container_width=True)
+    # st.plotly_chart(fig, use_container_width=True)
     st.write('Close' ,tickerData_2.Close.values[-1])
 
     st.line_chart(Delta['{}_net_pv'.format(title)] )
