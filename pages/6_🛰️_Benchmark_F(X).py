@@ -198,7 +198,7 @@ checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
 if checkbox1 :
     Delta_2 = Delta
 
-    add_risk_0 =   Delta['{}_net_pv'.format(title)].values 
+    add_risk_0 =   Delta['{}_net_pv'.format(Ticker_s[3])].values 
     survival_0 =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )
     
     Delta_2['S&P_500_ETF'] =  0
