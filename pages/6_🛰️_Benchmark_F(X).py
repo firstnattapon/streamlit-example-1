@@ -201,7 +201,7 @@ if checkbox1 :
     Delta_2['S&P_500_ETF'] = Delta_2.add_risk.values   / Delta_2['{}_net_pv'.format(Ticker_s[0])].values 
     Delta_2['NASDAQ_100_ETF'] = Delta_2.add_risk.values / Delta_2['{}_net_pv'.format(Ticker_s[1])].values 
     Delta_2['Gold_ETF'] = Delta_2.add_risk.values  / Delta_2['{}_net_pv'.format(Ticker_s[2])].values 
-    Delta_2['{}'.format(Ticker_s[3])] = /  Delta_2['{}_net_pv'.format(Ticker_s[3])].values 
+    Delta_2['{}'.format(Ticker_s[3])] = Delta_2.add_risk.values /  Delta_2['{}_net_pv'.format(Ticker_s[3])].values 
     Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , 'Gold_ETF' , '{}'.format(Ticker_s[3]) ]]
     
     tickerData = yf.Ticker(title)
