@@ -232,6 +232,7 @@ if checkbox1 :
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
     st.line_chart(Buffer)
+    st.write((abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) ) )
 # except:pass
 
 
