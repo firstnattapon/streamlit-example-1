@@ -215,11 +215,10 @@ if checkbox1 :
     tickerData_2['Diff'] = diff_fx
 
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
-    
-    fig.add_shape(type='line')
-
+    fig.add_shape(type='line', x0=0, y0=0, x1=0, y1=16, line=dict(color='Red'))
     st.plotly_chart(fig, use_container_width=True)
-    st.write('Close' ,tickerData_2.Close.values[-1])
+    
+    # st.write('Close' ,tickerData_2.Close.values[-1])
 
     st.line_chart(Delta['{}_net_pv'.format(title)] )
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
