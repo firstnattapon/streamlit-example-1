@@ -221,7 +221,7 @@ if checkbox1 :
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
 
     st.plotly_chart(fig, use_container_width=True)
-    st.write(tickerData_2.Close.values[-1])
+    st.write('Close' ,tickerData_2.Close.values[-1])
 
     st.line_chart(Delta['{}_net_pv'.format(title)])
     st.line_chart(Delta_2)
@@ -229,8 +229,6 @@ if checkbox1 :
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
     st.line_chart(Buffer)
-
-
 
 # except:pass
 
