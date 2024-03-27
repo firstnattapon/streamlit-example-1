@@ -223,8 +223,9 @@ if checkbox1 :
     st.plotly_chart(fig, use_container_width=True)
     st.write('Close' ,tickerData_2.Close.values[-1])
 
-    st.line_chart(Delta['{}_net_pv'.format(title)])
-    st.write('Data_Add.Risk' , Delta['{}_net_pv'.format(title)].values[-1])
+    st.line_chart(Delta['{}_net_pv'.format(title)] )
+    add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
+    st.write('Data_Add.Risk' , add_risk , 1500 / add_risk )
 
     st.line_chart(Delta_2)
     # st.scatter_chart( tickerData_2  , size= 'Diff' )
