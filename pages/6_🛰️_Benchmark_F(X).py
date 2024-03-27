@@ -214,10 +214,9 @@ if checkbox1 :
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
     tickerData_2['Diff'] = diff_fx
 
-
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
     survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )   
-    st.write('Delta_Add.Risk' , add_risk , 1500 / add_risk , (1500+survival) / add_risk )
+    st.write('Data' , add_risk , 1500 / add_risk , (1500+survival) / add_risk )
     
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red'))
