@@ -197,10 +197,6 @@ Delta , Sum_Buffer , Buffer , diff_fx =  Un_15(Ticker = Ticker_s )
 checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
 if checkbox1 :
     Delta_2 = Delta
-    # Delta_2['S&P_500_ETF'] = Delta_2.add_risk.values   /            Delta_2['{}_net_pv'.format(Ticker_s[0])].values 
-    # Delta_2['NASDAQ_100_ETF'] = Delta_2.add_risk.values /           Delta_2['{}_net_pv'.format(Ticker_s[1])].values 
-    # Delta_2['Gold_ETF'] = Delta_2.add_risk.values  /                Delta_2['{}_net_pv'.format(Ticker_s[2])].values 
-    # Delta_2['{}'.format(Ticker_s[3])] =  Delta_2.add_risk.values /  Delta_2['{}_net_pv'.format(Ticker_s[3])].values 
 
     Delta_2['S&P_500_ETF'] = Delta_2['{}_net_pv'.format(Ticker_s[0])].values/(1500+(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values))+abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[0])].values))))*100
     Delta_2['NASDAQ_100_ETF'] = Delta_2['{}_net_pv'.format(Ticker_s[1])].values/(1500+(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values))+abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[1])].values))))*100
