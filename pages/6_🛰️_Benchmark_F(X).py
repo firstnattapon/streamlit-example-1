@@ -237,18 +237,20 @@ if checkbox2 :
 # except:pass
 
 
-st.write(""" 
-{ การเกิด Cycle_Market ของระบบ }
-
-Step1 . ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ  Delta/Zone สูง &  Vo ปกติหรือต่ำลง
-
-_____( สะสมดูดของ , แจกจ่ายทุ่มของ ) เกิด Cycle  >  {Timing Realize}
-
-Step2 .ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ Delta/Zone ต่ำ  &   Vo สูง
-
-_____เจ็บปวด , คาดหวัง , เริ่มต้นวัฏจักร Cycle > {ตลาดไม่มีประสิทธิภาพ No_Realize}
-
-Step3 .ถ้า Intrinsic_Value_Cf  {เท่ากับ}  Benchmark_Cf และ Delta/Zone สูง  &  Vo ปกติหรือต่ำลง
-
-_____ไม่มี Premium กับ Discount ไม่มีช่องว่างให้เล่นสินทรัพย์สะท้อนมูลค่าที่แท้จริง > {Realize}
-""")
+checkbox3 = st.checkbox('Cycle_Market' , value=0 )
+if checkbox3 :
+    st.write(""" 
+    { การเกิด Cycle_Market ของระบบ }
+    
+    Step1 . ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ  Delta/Zone สูง &  Vo ปกติหรือต่ำลง
+    
+    _____( สะสมดูดของ , แจกจ่ายทุ่มของ ) เกิด Cycle  >  {Timing Realize}
+    
+    Step2 .ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ Delta/Zone ต่ำ  &   Vo สูง
+    
+    _____เจ็บปวด , คาดหวัง , เริ่มต้นวัฏจักร Cycle > {ตลาดไม่มีประสิทธิภาพ No_Realize}
+    
+    Step3 .ถ้า Intrinsic_Value_Cf  {เท่ากับ}  Benchmark_Cf และ Delta/Zone สูง  &  Vo ปกติหรือต่ำลง
+    
+    _____ไม่มี Premium กับ Discount ไม่มีช่องว่างให้เล่นสินทรัพย์สะท้อนมูลค่าที่แท้จริง > {Realize}
+    """)
