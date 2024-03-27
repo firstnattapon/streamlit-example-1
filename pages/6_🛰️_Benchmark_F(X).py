@@ -225,10 +225,11 @@ if checkbox1 :
 
     st.line_chart(Delta['{}_net_pv'.format(title)] )
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
-    st.write('Data_Add.Risk' , add_risk , 1500 / add_risk )
+    st.write('Delta_Add.Risk' , add_risk , 1500 / add_risk )
 
     st.line_chart(Delta_2)
-    # st.scatter_chart( tickerData_2  , size= 'Diff' )
+    st.write('Delta_Adj.Risk' ,  Delta2['{}_net_pv'.format(title)].values[-1] )
+
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
     st.line_chart(Buffer)
