@@ -198,7 +198,6 @@ checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
 if checkbox1 :
     Delta_2 = Delta
 
-    
     Delta_2['S&P_500_ETF'] =  Delta_2['{}_net_pv'.format(Ticker_s[3])].values 
     Delta_2['NASDAQ_100_ETF'] = Delta_2['{}_net_pv'.format(Ticker_s[3])].values 
     Delta_2['Gold_ETF'] =  Delta_2['{}_net_pv'.format(Ticker_s[3])].values 
@@ -225,7 +224,7 @@ if checkbox1 :
 
     st.line_chart(Delta_2)
     Adj_Risk = Delta_2['{}'.format(Ticker_s[3])].values[-1]
-    st.write('Delta_Adj.Risk' ,  Adj_Risk , 100 / Adj_Risk )
+    # st.write('Delta_Adj.Risk' ,  Adj_Risk , 100 / Adj_Risk )
     
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
