@@ -222,7 +222,8 @@ if checkbox1 :
 
     st.line_chart(Delta['{}_net_pv'.format(title)] )
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
-    st.write('Delta_Add.Risk' , add_risk , 1500 / add_risk )
+    bf = (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values))) 
+    st.write('Delta_Add.Risk' , add_risk , 1500 / add_risk ,    1500+bf  / add_risk  )
 
     st.line_chart(Delta_2)
     Adj_Risk = Delta_2['{}'.format(Ticker_s[3])].values[-1]
@@ -232,7 +233,6 @@ if checkbox1 :
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
     st.line_chart(Buffer)
-
 # except:pass
 
 
