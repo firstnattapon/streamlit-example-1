@@ -224,8 +224,6 @@ if checkbox1 :
     st.write('Delta_Add.Risk' , add_risk , 1500 / add_risk , (1500+survival) / add_risk )
 
     st.line_chart(Delta_2)
-    Adj_Risk = Delta_2['{}'.format(Ticker_s[3])].values[-1]
-    # st.write('Delta_Adj.Risk' ,  Adj_Risk , 100 / Adj_Risk )
     
     st.line_chart(tickerData_2.Close.values)
     st.line_chart(tickerData_1.values)
