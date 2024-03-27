@@ -224,6 +224,8 @@ if checkbox1 :
     st.write('Close' ,tickerData_2.Close.values[-1])
 
     st.line_chart(Delta['{}_net_pv'.format(title)])
+    st.write('Data_Add.Risk' , Delta['{}_net_pv'.format(title)].values[-1])
+
     st.line_chart(Delta_2)
     # st.scatter_chart( tickerData_2  , size= 'Diff' )
     st.line_chart(tickerData_2.Close.values)
