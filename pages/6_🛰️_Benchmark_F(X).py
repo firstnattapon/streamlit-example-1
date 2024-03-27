@@ -226,9 +226,7 @@ if checkbox1 :
                        y=[-0.67, -0.67, None, -1,1],
                        mode='lines',
                        line_color='black', line_width=2.5)
-    layout = px.Layout(width=600, height=600, 
-                       xaxis_range=[0,2], yaxis_range=[-1,1])
-    fig = px.Figure(data=[heatmap, lines], layout=layout)
+    fig = px.Figure(data=[heatmap, lines])
     
     
     st.plotly_chart(fig, use_container_width=True)
