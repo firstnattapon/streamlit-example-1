@@ -215,11 +215,6 @@ if checkbox1 :
     tickerData_2['Diff'] = diff_fx
 
     # fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True )
-
-    N = 25
-    x = np.linspace(0, 2, N)
-    y = np.linspace(-1, 1, N)
-    z = np.random.rand(50, N)
     
     heatmap = px.Heatmap(x=x, y=y, z=z, colorscale='Greens', colorbar_thickness=20)
     lines = px.Scatter(x=[0.5, 1.25, None, 1.65, 1.65],
