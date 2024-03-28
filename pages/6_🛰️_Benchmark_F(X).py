@@ -151,7 +151,7 @@ def Un_15 (Ticker = '' ):
     di = di.dif.values
     return  a_1 , a_0 , a_3 , di
 
-ans =['PLUG',
+ans = ['PLUG',
  'NVCR',
  'TRUP',
  'NKLA',
