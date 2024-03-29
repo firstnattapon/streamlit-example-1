@@ -201,15 +201,17 @@ if checkbox1 :
     st.write('____')
     st.write('Data' , add_risk , 1500 / add_risk ,  (1500+survival) / add_risk  , '< Premium & Discount'  )
 
+    col3, col4  = st.columns(2)
+    col5, col6  = st.columns(2)
     # number = st.number_input('nbinsy', value=50 , step =1 , min_value=1  ) 
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True , nbinsy=40 , color_continuous_scale = px.colors.sequential.Turbo )
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red')  )
-
-    col3, col4  = st.columns(2)
     fig_2 = px.line(tickerData_2 , y='Close' )
-    
+    fig_3 = px.line( Delta['{}_net_pv'.format(title)] , y='{}_net_pv'.format(title))
+
     col3.plotly_chart(fig_2, use_container_width=True)
     col4.plotly_chart(fig, use_container_width=True)
+    col5.plotly_chart(fig_3, use_container_width=True)
     
     st.write('Accumulation & Distribution' ,'vs' , 'Emotional_Marketing' )
     st.write('____')
