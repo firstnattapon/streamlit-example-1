@@ -207,7 +207,7 @@ if checkbox1 :
 
     col1, col2  = st.columns(2)
     col1.write('0')
-    col2.st.plotly_chart(fig, use_container_width=True)
+    col2.plotly_chart(fig, use_container_width=True)
     
     st.write('Accumulation & Distribution' ,'vs' , 'Emotional_Marketing' )
     st.write('____')
