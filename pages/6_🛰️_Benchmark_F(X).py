@@ -169,8 +169,11 @@ ans = ['PLUG',
  'MRSN',
  'SMMT']
 
-number = st.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
-title = st.text_input('Ticker_Yahoo', ans[number])
+col1, col2  = st.columns(2)
+col3, col4  = st.columns(2)
+
+col2.number = st.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
+col1.title = st.text_input('Ticker_Yahoo', ans[number])
 
 # try:
 Ticker_s = ['SPY' , 'QQQM' , 'GLD' , title ]
