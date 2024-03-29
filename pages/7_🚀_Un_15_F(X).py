@@ -149,8 +149,7 @@ if checkbox1 :
     Delta_2 = Delta
     Delta_2['FFWM'] =  (Delta.FFWM_net_pv.values  /  (abs(np.max(Buffer.FFWM_Buffer.values)) +  abs(np.min(Buffer.FFWM_Buffer.values)))+1500  ) *100
 
-    
-    Delta_2['NEGG'] =  (Delta.NEGG_net_pv.values  /   (abs(np.max(Buffer.NEGG_net_pv_Buffer.values)) +  abs(np.min(Buffer.NEGG_net_pv_Buffer.values)))+1500  ) *100
+    Delta_2['NEGG'] =  (Delta.NEGG_net_pv.values  /   (abs(np.max(Buffer.NEGG_Buffer.values)) +  abs(np.min(Buffer.NEGG_Buffer.values)))+1500  ) *100
     Delta_2['Sum.Delta/Max.Sum.Buffer'] = (Delta.Sum_Delta.values / abs( np.min(Sum_Buffer.Sum_Buffer.values)) ) *100
     Delta_2 = Delta_2[['Sum.Delta/Max.Sum.Buffer' , 'FFWM' , 'NEGG'  ]]
     st.line_chart(Delta_2)
