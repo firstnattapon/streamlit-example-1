@@ -207,7 +207,8 @@ if checkbox1 :
 
     col3, col4  = st.columns(2)
     chart = tickerData_2.Close.values
-    fig_2.plotly.express(x=chart)
+    fig_2.line(chart)
+    
     col3.plotly_chart(fig_2, use_container_width=True)
     col4.plotly_chart(fig, use_container_width=True)
     
