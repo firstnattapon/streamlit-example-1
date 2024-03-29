@@ -206,7 +206,9 @@ if checkbox1 :
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red')  )
 
     col1, col2  = st.columns(2)
+    col1.write('0')
     col2.st.plotly_chart(fig, use_container_width=True)
+    
     st.write('Accumulation & Distribution' ,'vs' , 'Emotional_Marketing' )
     st.write('____')
 
