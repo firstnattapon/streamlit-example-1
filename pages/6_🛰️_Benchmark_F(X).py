@@ -236,10 +236,12 @@ if checkbox1 :
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red')  )
     fig_2 = px.line(tickerData_2 , y='Close' )
     fig_3 = px.line( Delta['{}_net_pv'.format(title)] , y='{}_net_pv'.format(title))
-
+    fig_4 = px.line( tickerData_1 , y='Close' )
     col3.plotly_chart( fig_2  , use_container_width=True)
     col4.plotly_chart(fig, use_container_width=True)
     col5.plotly_chart(fig_3, use_container_width=True)
+    col5.plotly_chart(fig_4, use_container_width=True)
+
     
     st.write('Accumulation & Distribution' ,'vs' , 'Emotional_Marketing' )
     st.write('____')
