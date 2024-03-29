@@ -242,7 +242,7 @@ if checkbox1 :
     col3.plotly_chart( fig_2  , use_container_width=True)
     col4.plotly_chart(fig, use_container_width=True)
 
-    a = st.expander("See explanation"):
+    a = st.expander("See explanation")
     a.plotly_chart(fig_3, use_container_width=True)
     col6.plotly_chart(fig_4, use_container_width=True)
 
