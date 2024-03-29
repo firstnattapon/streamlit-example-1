@@ -237,10 +237,14 @@ if checkbox1 :
     fig_2 = px.line(tickerData_2 , y='Close' )
     fig_3 = px.line( Delta['{}_net_pv'.format(title)] , y='{}_net_pv'.format(title))
     fig_4 = px.line( tickerData_1 , y='Close' )
+
+
     col3.plotly_chart( fig_2  , use_container_width=True)
     col4.plotly_chart(fig, use_container_width=True)
-    col5.plotly_chart(fig_3, use_container_width=True)
-    col6.plotly_chart(fig_4, use_container_width=True)
+
+    with st.expander("See explanation"):
+        col5.plotly_chart(fig_3, use_container_width=True)
+        col6.plotly_chart(fig_4, use_container_width=True)
 
     st.write('Accumulation & Distribution' ,'vs' , 'Emotional_Marketing' )
     st.write('____')
