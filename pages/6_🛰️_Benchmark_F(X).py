@@ -169,7 +169,6 @@ ans = ['PLUG',
  'MRSN',
  'SMMT']
 
-col1, col2  = st.columns(2)
 
 number = st.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
 title = st.text_input('Ticker_Yahoo', ans[number])
@@ -205,6 +204,8 @@ if checkbox1 :
     # number = st.number_input('nbinsy', value=50 , step =1 , min_value=1  ) 
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True , nbinsy=40 , color_continuous_scale = px.colors.sequential.Turbo )
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red')  )
+
+    col1, col2  = st.columns(2)
     col2.st.plotly_chart(fig, use_container_width=True)
     st.write('Accumulation & Distribution' ,'vs' , 'Emotional_Marketing' )
     st.write('____')
