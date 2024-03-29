@@ -154,7 +154,7 @@ if checkbox1 :
     # Delta_2['Sum.Delta/Max.Sum.Buffer'] = (Delta.Sum_Delta.values / abs( np.min(Sum_Buffer.Sum_Buffer.values)) ) *100
 
     st.write( abs( np.min(Sum_Buffer.Sum_Buffer.values))+ abs( np.max(Sum_Buffer.Sum_Buffer.values))+1500 )
-    st.write(Delta.Sum_Delta.values)
+    st.write((Delta.Sum_Delta.values) / abs( np.min(Sum_Buffer.Sum_Buffer.values))+ abs( np.max(Sum_Buffer.Sum_Buffer.values))+1500 )
     
     Delta_2 = Delta_2[['Sum.Delta/Max.Sum.Buffer' , 'FFWM' , 'NEGG'  ]]
     st.line_chart(Delta_2)
