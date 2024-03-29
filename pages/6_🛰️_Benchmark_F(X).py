@@ -206,7 +206,7 @@ if checkbox1 :
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red')  )
 
     col3, col4  = st.columns(2)
-    fig_2 = px.line(tickerData_2 ,   size= 'Diff')
+    fig_2 = px.line(tickerData_2 )
     
     col3.plotly_chart(fig_2, use_container_width=True)
     col4.plotly_chart(fig, use_container_width=True)
