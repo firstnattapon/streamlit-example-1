@@ -227,7 +227,7 @@ if checkbox1 :
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
     survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )  
     st.write('____')
-    st.write('Data' , add_risk , 1500 / add_risk ,  (1500+survival) / add_risk  , '< Premium & Discount'  )
+    st.write('Data' , add_risk , 1500 / add_risk ,  (1500+survival) / add_risk  , '< Premium & Discount , P/E'  )
 
     col3, col4  = st.columns(2)
     col5, col6  = st.columns(2)
@@ -242,7 +242,6 @@ if checkbox1 :
     col5.plotly_chart(fig_3, use_container_width=True)
     col6.plotly_chart(fig_4, use_container_width=True)
 
-    
     st.write('Accumulation & Distribution' ,'vs' , 'Emotional_Marketing' )
     st.write('____')
 
