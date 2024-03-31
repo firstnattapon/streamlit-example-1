@@ -4,3 +4,4 @@ streamlit
 yfinance
 thingspeak
 plotly
+stocksymbol
