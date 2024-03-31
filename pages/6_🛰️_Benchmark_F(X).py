@@ -238,7 +238,7 @@ if checkbox1 :
     fig_2 = px.line(tickerData_2 , y='Close' )
     fig_3 = px.line( Delta['{}_net_pv'.format(title)] , y='{}_net_pv'.format(title))
     fig_4 = px.line( tickerData_1.reset_index(drop=True)  , y='Close' )
-    fig_4.add_shape(type='line', x0=  , line=dict(color='Red')  )
+    # fig_4.add_shape(type='line', x0=  , line=dict(color='Red')  )
 
     col3.plotly_chart( fig_2  , use_container_width=True)
     col4.plotly_chart(fig, use_container_width=True)
