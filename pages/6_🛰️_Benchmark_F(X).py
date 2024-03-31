@@ -169,7 +169,8 @@ def Un_15 (Ticker = '' ):
 #  'MRSN',
 #  'SMMT']
 
-checkbox0 = st.checkbox('Get_symbol' , value=0 ):
+checkbox0 = st.checkbox('Get_symbol' , value=0 )
+if checkbox0 :
     Get = st.button("Get_symbol")
     if Get :
         from stocksymbol import StockSymbol
