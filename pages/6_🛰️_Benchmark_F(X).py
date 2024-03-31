@@ -227,8 +227,8 @@ if checkbox1 :
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
     survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )  
     st.write('____')
-    st.write('Data' , add_risk , 1500 / add_risk , '(', (1500+survival) / add_risk  , ') Premium & Discount , P/E' , 'S&P500 Average annualised return P/E 7'  )
-
+    st.write('Data' , add_risk , 1500 / add_risk , '(', (1500+survival) / add_risk  , ') Premium & Discount , P/E' )
+    st.write('S&P500 Average annualised return P/E 7')
     col3, col4  = st.columns(2)
     col5, col6  = st.columns(2)
     # number = st.number_input('nbinsy', value=50 , step =1 , min_value=1  ) 
