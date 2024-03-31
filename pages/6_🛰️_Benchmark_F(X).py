@@ -6,7 +6,6 @@ import thingspeak
 import json
 import plotly.express as px
 
-
 st.set_page_config(page_title="Benchmark_F(X)", page_icon="🛰️"  , layout="wide")
 
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
@@ -113,7 +112,7 @@ def Un_15 (Ticker = '' ):
     for i in  a_0.sum(axis=1 ,    numeric_only=True).values  :
       net = net+i
       net_dd.append(net)
-    
+
     a_0['Sum_Buffer'] =    net_dd
     a_1['Sum_Delta'] =     a_1.sum(axis=1 ,    numeric_only=True )
 
@@ -240,7 +239,7 @@ if checkbox1 :
     fig_2 = px.line(tickerData_2  , y='Close' )
     fig_3 = px.line( Delta['{}_net_pv'.format(title)] , y='{}_net_pv'.format(title))
     fig_4 = px.line( tickerData_1  , y='Close' )
-    # fig_4.add_shape(type='line', x0=  , line=dict(color='Red')  )
+    fig_4.add_shape(type='line', x0=0 ,y0=0 ,y1= max(tickerData_1.Close)  , line=dict(color='Red')  )
 
     col3.plotly_chart( fig_2  , use_container_width=True)
     col4.plotly_chart(fig, use_container_width=True)
