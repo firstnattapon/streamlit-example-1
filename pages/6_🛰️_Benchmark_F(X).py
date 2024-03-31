@@ -155,6 +155,7 @@ def Un_15 (Ticker = '' ):
 
 
 checkbox0 = st.checkbox('Get_symbol' , value=0 )
+
 if checkbox0 :
     Get = st.button("Get_symbol")
     if Get :
@@ -162,24 +163,24 @@ if checkbox0 :
         api_key = '33b4eada-d5d1-4c74-8ba3-f9f4b6bbb744'
         ss = StockSymbol(api_key)
         ans = np.array (  ss.get_symbol_list(market="US" ,symbols_only=1) )
-
-ans = ['PLUG',
- 'NVCR',
- 'TRUP',
- 'NKLA',
- 'SPCE',
- 'ENVX',
- 'RXRX',
- 'EXAI',
- 'ASTS',
- 'ALXO',
- 'AKRO',
- 'NNOX',
- 'PHAR',
- 'LXRX',
- 'PHAT',
- 'MRSN',
- 'SMMT']
+else :
+    ans = ['PLUG',
+     'NVCR',
+     'TRUP',
+     'NKLA',
+     'SPCE',
+     'ENVX',
+     'RXRX',
+     'EXAI',
+     'ASTS',
+     'ALXO',
+     'AKRO',
+     'NNOX',
+     'PHAR',
+     'LXRX',
+     'PHAT',
+     'MRSN',
+     'SMMT']
 
 col1, col2  = st.columns(2)
 number = col2.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
