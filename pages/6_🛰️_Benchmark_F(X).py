@@ -153,6 +153,16 @@ def Un_15 (Ticker = '' ):
     di = di.dif.values
     return  a_1 , a_0 , a_3 , di
 
+
+checkbox0 = st.checkbox('Get_symbol' , value=0 )
+if checkbox0 :
+    Get = st.button("Get_symbol")
+    if Get :
+        from stocksymbol import StockSymbol
+        api_key = '33b4eada-d5d1-4c74-8ba3-f9f4b6bbb744'
+        ss = StockSymbol(api_key)
+        ans = np.array (  ss.get_symbol_list(market="US" ,symbols_only=1) )
+
 ans = ['PLUG',
  'NVCR',
  'TRUP',
