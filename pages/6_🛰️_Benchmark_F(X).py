@@ -223,7 +223,9 @@ if checkbox1 :
     filter_date_2 = '2022-12-21 12:00:00+07:00'
     tickerData_2 = tickerData[tickerData.index >= filter_date_2]
     tickerData_2['Diff'] = diff_fx
-
+    tickerData_1 = tickerData_1.reset_index(drop=True)
+    tickerData_2 = tickerData_2.reset_index(drop=True)
+    
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
     survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )  
     st.write('____')
@@ -235,9 +237,9 @@ if checkbox1 :
     # number = st.number_input('nbinsy', value=50 , step =1 , min_value=1  ) 
     fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True , nbinsy=40 , color_continuous_scale = px.colors.sequential.Turbo )
     fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red')  )
-    fig_2 = px.line(tickerData_2 , y='Close' )
+    fig_2 = px.line(tickerData_2  , y='Close' )
     fig_3 = px.line( Delta['{}_net_pv'.format(title)] , y='{}_net_pv'.format(title))
-    fig_4 = px.line( tickerData_1.reset_index(drop=True)  , y='Close' )
+    fig_4 = px.line( tickerData_1  , y='Close' )
     # fig_4.add_shape(type='line', x0=  , line=dict(color='Red')  )
 
     col3.plotly_chart( fig_2  , use_container_width=True)
