@@ -228,7 +228,7 @@ if checkbox1 :
     survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )  
     st.write('____')
     st.write('Data' , add_risk , 1500 / add_risk , '(', (1500+survival) / add_risk  , ') Premium & Discount , P/E'  )
-    st.write('S&P500 P/E' , 7)
+    st.write('S&P500 P/E' ,'7')
     
     col3, col4  = st.columns(2)
     col5, col6  = st.columns(2)
