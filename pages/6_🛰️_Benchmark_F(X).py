@@ -5,7 +5,6 @@ import streamlit as st
 import thingspeak
 import json
 import plotly.express as px
-from stocksymbol import StockSymbol
 
 st.set_page_config(page_title="Benchmark_F(X)", page_icon="🛰️"  , layout="wide")
 
@@ -153,15 +152,6 @@ def Un_15 (Ticker = '' ):
     di['dif'] = di.net_pv.diff().fillna(0.0)
     di = di.dif.values
     return  a_1 , a_0 , a_3 , di
-
-
-# checkbox0 = st.checkbox('Get_symbol' , value=0 )
-# if checkbox0 :
-#     Get = st.button("Get_symbol")
-#     if Get :
-# api_key = '33b4eada-d5d1-4c74-8ba3-f9f4b6bbb744'
-# ss = StockSymbol(api_key)
-# ans = np.array (  ss.get_symbol_list(market="US" ,symbols_only=1) )
 
 ans = ['PLUG',
  'NVCR',
