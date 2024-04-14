@@ -8,7 +8,7 @@ import plotly.express as px
 
 st.set_page_config(page_title="Benchmark_F(X)", page_icon="🛰️"  , layout="wide")
 
-@st.cache_data
+# @st.cache_data
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
@@ -153,11 +153,7 @@ def Un_15 (Ticker = '' ):
     di = di.dif.values
     return  a_1 , a_0 , a_3 , di
 
-ans = ['PLUG',
- 'NVCR',
- 'TRUP',
- 'NKLA',
- 'NEGG',
+ans = ['RIVN',
  'SPCE',
  'ENVX',
  'RXRX',
@@ -165,11 +161,8 @@ ans = ['PLUG',
  'DM',
  'ASTS',
  'ACB',
- 'ATAI',
  'OUST',
  'ALXO',
- 'SGHT',
- 'AKRO',
  'HUMA',
  'NNOX',
  'PHAR',
@@ -266,117 +259,5 @@ if checkbox3 :
     """)
 
 
-checkbox4 = st.checkbox('UN_15' , value=0 )
-if checkbox4 :
-    
-    st.write(""" 
-    ['FFWM', 'NEGG']
-    Max_CF: 1686.6236641145852
-    Maxcash_DD : -2178.2062353044616
-    
-    ['FFWM', 'NEGG', 'PLUG']
-    Max_CF: 2558.276413075868
-    Maxcash_DD : -3410.1719330157753
-    
-    ['FFWM', 'NEGG', 'NVCR']
-    Max_CF: 2643.85775622674
-    Maxcash_DD : -4089.414633663848
-    
-    ['FFWM', 'NEGG', 'TRUP']
-    Max_CF: 2406.6710077403095
-    Maxcash_DD : -3179.378906109898
-    
-    ['FFWM', 'NEGG', 'NKLA']
-    Max_CF: 3196.045264280099
-    Maxcash_DD : -3567.2581993968834
-    
-    ['FFWM', 'NEGG', 'NEGG']
-    Max_CF: 2709.4905476846225
-    Maxcash_DD : -3172.853711577524
-    
-    ['FFWM', 'NEGG', 'SPCE']
-    Max_CF: 2495.076408295912
-    Maxcash_DD : -3019.624471772884
-    
-    ['FFWM', 'NEGG', 'ENVX']
-    Max_CF: 2443.0682781894084
-    Maxcash_DD : -1938.0480652993322
-    
-    ['FFWM', 'NEGG', 'RXRX']
-    Max_CF: 2720.919558743978
-    Maxcash_DD : -2346.3415718750375
-    
-    ['FFWM', 'NEGG', 'EXAI']
-    Max_CF: 2596.611306522248
-    Maxcash_DD : -1244.2775666310024
-    
-    ['FFWM', 'NEGG', 'DM']
-    Max_CF: 2483.4901695519493
-    Maxcash_DD : -2483.8607569949886
-    
-    ['FFWM', 'NEGG', 'ASTS']
-    Max_CF: 2532.7351552779132
-    Maxcash_DD : -2119.2284957728925
-    
-    ['FFWM', 'NEGG', 'ACB']
-    Max_CF: 2608.693640682127
-    Maxcash_DD : -2733.640850236902
-    
-    ['FFWM', 'NEGG', 'ATAI']
-    Max_CF: 2451.902753235357
-    Maxcash_DD : -3286.4489153936897
-    
-    ['FFWM', 'NEGG', 'OUST']
-    Max_CF: 2770.9254072124936
-    Maxcash_DD : -2825.7092963273376
-    
-    ['FFWM', 'NEGG', 'ALXO']
-    Max_CF: 2566.72174901471
-    Maxcash_DD : -2557.845551521098
-    
-    ['FFWM', 'NEGG', 'SGHT']
-    Max_CF: 3332.564858725933
-    Maxcash_DD : -4108.703566613675
-    
-    ['FFWM', 'NEGG', 'AKRO']
-    Max_CF: 2568.262027810828
-    Maxcash_DD : -3439.899684118376
-    
-    ['FFWM', 'NEGG', 'HUMA']
-    Max_CF: 2386.4682888838943
-    Maxcash_DD : -1843.940457152019
-    
-    ['FFWM', 'NEGG', 'NNOX']
-    Max_CF: 2839.1613834730224
-    Maxcash_DD : -2308.07722646932
-    
-    ['FFWM', 'NEGG', 'PHAR']
-    Max_CF: 2223.5697407459024
-    Maxcash_DD : -1833.1538764080512
-    
-    ['FFWM', 'NEGG', 'LXRX']
-    Max_CF: 2484.2502700576574
-    Maxcash_DD : -2485.6154539248655
-    
-    ['FFWM', 'NEGG', 'PHAT']
-    Max_CF: 2461.305942672319
-    Maxcash_DD : -2048.74455864833
-    
-    ['FFWM', 'NEGG', 'MRSN']
-    Max_CF: 3795.8042474590757
-    Maxcash_DD : -2863.816763736737
-    
-    ['FFWM', 'NEGG', 'ETNB']
-    Max_CF: 2306.684766350963
-    Maxcash_DD : -2467.4814353019965
-    
-    ['FFWM', 'NEGG', 'SMMT']
-    Max_CF: 2863.848716345415
-    Maxcash_DD : -2699.7260625103436
-    
-    ['FFWM', 'NEGG', 'CVRX']
-    Max_CF: 2666.619467068955
-    Maxcash_DD : -1645.9600346646484
-    """)
 
 
