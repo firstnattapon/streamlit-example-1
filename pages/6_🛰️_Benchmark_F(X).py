@@ -216,7 +216,7 @@ if checkbox1 :
     col5.plotly_chart(fig_3, use_container_width=True)
     col6.plotly_chart(fig_4, use_container_width=True)
 
-    st.write('Accumulation กะเก็บพลังงาน & Distribution ปล่อยพลังงาน' ,'-vs-' , 'Emotional_Marketing' )
+    st.write('Accumulation กะเก็บพลังงาน & Distribution ปล่อยพลังงาน' ,'-vs-' , 'Emotional_Marketing ตอนนี้เราอยู่ตรงไหนของวัฏจักร' )
     st.write('____')
 
 checkbox2 = st.checkbox('Data' , value=0 )
