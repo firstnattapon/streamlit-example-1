@@ -153,16 +153,23 @@ def Un_15 (Ticker = '' ):
     di = di.dif.values
     return  a_1 , a_0 , a_3 , di
 
-ans = ['ENVX',
+ans = ['SPCE',
+ 'ENVX',
  'RXRX',
  'EXAI',
+ 'DM',
  'ASTS',
+ 'ACB',
  'ORGO',
+ 'OUST',
+ 'ALXO',
  'NNOX',
  'PHAR',
  'LXRX',
  'PHAT',
+ 'MRSN',
  'ETNB',
+ 'SMMT',
  'CVRX']
 
 
