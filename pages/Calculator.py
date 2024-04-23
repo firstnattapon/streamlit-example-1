@@ -31,9 +31,9 @@ x_3 = st.number_input('NEGG_ASSET', step=0.001 , value=0.01 )
 x_4 = st.number_input('FFWM_ASSET', step=0.001  , value=0.01  )
 st.write("_____") 
 
-# col1, col2  = st.columns(2)
+col1, col2  = st.columns(2)
 
-st.write("Limut_order_Sell_NEGG") 
+col1.write("Limut_order_Sell_NEGG") 
 s8 , s9 , s10 =  sell(x_3 , Diff= x_2)
 st.write('P' , s8 ,'A', s9 , 'C' ,s10 )
 
