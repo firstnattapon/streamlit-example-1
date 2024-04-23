@@ -28,7 +28,7 @@ x_4 = st.number_input('FFWM_ASSET', step=0.01 ,   )
 st.write("Limut_order_Sell_NEGG") 
 
 
-a = 0.736
+a = 0.735
 
 st.write(round(a, 2))
 
