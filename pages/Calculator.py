@@ -9,8 +9,6 @@ import yfinance as yf
 
 st.set_page_config(page_title="Calculator", page_icon="🔥")
 
-st.write("_____") 
-
 def sell (x_3 , fix_c=1500 , Diff=60):
   s1 =  (1500-Diff) /x_3
   s2 =  round(s1, 2)
@@ -55,4 +53,6 @@ st.write('P' , b8 ,'A', b9 , 'C' ,b10 )
 st.write("Limut Order_Buy_FFWM") 
 b11 , b12 , b13 =  buy(x_4 , Diff= x_2)
 st.write('P' , b11 ,'A', b12 , 'C' ,b13 )
+
+st.write("_____") 
 
