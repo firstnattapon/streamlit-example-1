@@ -5,9 +5,7 @@ import thingspeak
 import pandas as pd
 import yfinance as yf
 
-
-
-st.set_page_config(page_title="Calculator", page_icon="🔥")
+st.set_page_config(page_title="Calculator", page_icon="⌨️")
 
 def sell (x_3 , fix_c=1500 , Diff=60):
   s1 =  (1500-Diff) /x_3
@@ -32,10 +30,9 @@ def buy (x_3 , fix_c=1500 , Diff=60):
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 
-x_3 = st.number_input('NEGG_ASSET', step=0.001 , value=0.01 )
-x_4 = st.number_input('FFWM_ASSET', step=0.001  , value=0.01  )
+x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value=np.nan )
+x_4 = st.number_input('FFWM_ASSET', step=0.001  , value=np.nan  )
 st.write("_____") 
-
 
 st.write("Limut Order_Buy_NEGG") 
 s8 , s9 , s10 =  sell(x_3 , Diff= x_2)
@@ -53,6 +50,4 @@ st.write( 'A', b9  , 'P' , b8 ,'C' ,b10 )
 st.write("Limut Order_sell_FFWM") 
 b11 , b12 , b13 =  buy(x_4 , Diff= x_2)
 st.write( 'A', b12 , 'P' , b11  , 'C' ,b13 )
-
 st.write("_____") 
-
