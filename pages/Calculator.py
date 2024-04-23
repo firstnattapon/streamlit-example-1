@@ -14,4 +14,5 @@ x_3 = st.number_input('NEGG_ASSET', step=0.01 ,   )
 x_4 = st.number_input('FFWM_ASSET', step=0.01 ,   )
 
 st.write(yf.Ticker('FFWM').fast_info['lastPrice']) 
+st.write("_____") 
 
