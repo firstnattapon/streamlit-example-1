@@ -11,15 +11,10 @@ import yfinance as yf
 
 st.set_page_config(page_title="Calculator", page_icon="🔥")
 
-x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 , value =  yf.Ticker('NEGG').fast_info['lastPrice']   )
-x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 ,   value = yf.Ticker('FFWM').fast_info['lastPrice']   )
 st.write("_____") 
 
-st.write(yf.Ticker('FFWM').fast_info['lastPrice']) 
-st.write("_____") 
-
-def sell (x_3 , fix_c=1500):
-  s1 =  1440/x_3
+def sell (x_3 , fix_c=1500 , Diff=60):
+  s1 =  (1500-Diff) /x_3
   s2 =  round(s1, 2)
   s3 =  s2*x_3
   s4 =  abs(s3 - fix_c)
@@ -29,11 +24,11 @@ def sell (x_3 , fix_c=1500):
   return s2 , s5 , round(s7, 2)
   
   
-
-x_3 = st.number_input('NEGG_ASSET', step=0.01 ,   )
-x_4 = st.number_input('FFWM_ASSET', step=0.01 ,   )
+x_2 = st.number_input('Diff', step=1 , value=40  )
+x_3 = st.number_input('NEGG_ASSET', step=0.01 , value=1  )
+x_4 = st.number_input('FFWM_ASSET', step=0.01 , value=1   )
 st.write("Limut_order_Sell_NEGG") 
-s8 , s9 , s10 =  sell(x_3)
+s8 , s9 , s10 =  sell(x_3 , Diff= x_2)
 
 st.write('P' , s8 ,'A', s9 , 'C' ,s10 )
 
