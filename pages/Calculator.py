@@ -41,7 +41,7 @@ col3, col4  = st.columns(2)
 col3.write("Limut_order_Sell_FFWM") 
 s11 , s12 , s13 =  sell(x_4 , Diff= x_2)
 col4.write('P' , s11 ,'A', s12 , 'C' ,s13 )
-st.write("_____") 
+# st.write("_____") 
 
   
 st.write("""เป้าหมาย / asset
