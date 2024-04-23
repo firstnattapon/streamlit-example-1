@@ -39,7 +39,7 @@ st.write("_____")
 
 st.write("Limut Order_Buy_NEGG") 
 s8 , s9 , s10 =  sell(x_3 , Diff= x_2)
-st.write('A', 'P' , s8 , s9 , 'C' ,s10 )
+st.write('A',  s9  ,  'P' , s8 , 'C' ,s10 )
 
 st.write("Limut Order_Buy_FFWM") 
 s11 , s12 , s13 =  sell(x_4 , Diff= x_2)
