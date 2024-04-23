@@ -7,8 +7,6 @@ import yfinance as yf
 
 
 
-
-
 st.set_page_config(page_title="Calculator", page_icon="🔥")
 
 st.write("_____") 
@@ -32,12 +30,11 @@ x_4 = st.number_input('FFWM_ASSET', step=0.001  , value=0.01  )
 st.write("_____") 
 
 
-st.write("Limut_order_Sell_NEGG") 
+st.write("Limut Order_Sell_NEGG") 
 s8 , s9 , s10 =  sell(x_3 , Diff= x_2)
-st.write('NEGG>             ' ,'P' , s8 ,'A', s9 , 'C' ,s10 )
+st.write('P' , s8 ,'A', s9 , 'C' ,s10 )
 
-
-st.write("Limut_order_Sell_FFWM") 
+st.write("Limut Order_Sell_FFWM") 
 s11 , s12 , s13 =  sell(x_4 , Diff= x_2)
 st.write('P' , s11 ,'A', s12 , 'C' ,s13 )
 st.write("_____") 
