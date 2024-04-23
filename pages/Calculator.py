@@ -48,11 +48,11 @@ st.write("_____")
 
 st.write("Limut Order_sell_NEGG") 
 b8 , b9 , b10 =  buy(x_3 , Diff= x_2)
-st.write('P' , b8 ,'A', b9 , 'C' ,b10 )
+st.write( 'A', b9  , 'P' , b8 ,'C' ,b10 )
 
 st.write("Limut Order_sell_FFWM") 
 b11 , b12 , b13 =  buy(x_4 , Diff= x_2)
-st.write('P' , b11 ,'A', b12 , 'C' ,b13 )
+st.write( 'A', b12 , 'P' , b11  , 'C' ,b13 )
 
 st.write("_____") 
 
