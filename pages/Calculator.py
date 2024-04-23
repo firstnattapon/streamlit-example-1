@@ -28,7 +28,7 @@ def buy (x_3 , fix_c=1500 , Diff=60):
   b4 =  abs(b3 - fix_c)
   b5 =  round( b4 / b2 )  
   b6 =  b5*b2
-  b7 =  (x_3 * b2) + b6
+  b7 =  (x_3 * b2) - b6
   return b2 , b5 , round(b7, 2)
   
 x_2 = st.number_input('Diff', step=1 , value= 60  )
