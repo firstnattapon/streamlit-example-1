@@ -52,10 +52,7 @@ st.write("Limut Order_Buy_NEGG")
 b8 , b9 , b10 =  buy(x_3 , Diff= x_2)
 st.write('P' , b8 ,'A', b9 , 'C' ,b10 )
 
+st.write("Limut Order_Buy_FFWM") 
+b11 , b12 , b13 =  buy(x_4 , Diff= x_2)
+st.write('P' , b11 ,'A', b12 , 'C' ,b13 )
 
-st.write("""เป้าหมาย / asset
-ปัดลงหาราคา 
-ได้ราคาคูณของ
-เอาไปลบ fix c หาส่วนต่าง
-เอา ส่วนต่างไปหารราคา ปัดลง ได้ของ * ราคา 
-ตรวจสอบ ของ * ราคาที่หาได้  + ของ * ราคาที่หาได้    น้อยกว่า fix c""") 
