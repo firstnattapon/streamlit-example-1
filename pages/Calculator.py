@@ -12,3 +12,6 @@ x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 ,   value = yf.Ticker(
 st.write("_____") 
 x_3 = st.number_input('NEGG_ASSET', step=0.01 ,   )
 x_4 = st.number_input('FFWM_ASSET', step=0.01 ,   )
+
+st.write(yf.Ticker('FFWM').fast_info['lastPrice']) 
+
