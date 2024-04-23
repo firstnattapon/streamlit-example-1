@@ -18,19 +18,24 @@ st.write("_____")
 st.write(yf.Ticker('FFWM').fast_info['lastPrice']) 
 st.write("_____") 
 
-def sell (x_3):
-  s1 = 1440/x_3
-  s2 = 0
+def sell (x_3 , fix_c=1500):
+  s1 =  1440/x_3
+  s2 =  round(s1, 2)
+  s3 =  s2*x_3
+  s4 =  abs(s3 - fix_c)
+  s5 =  int( s4 / s2 )  
+  s6 =  s5*s2
+  s7 =  (x_3 * s2) + s6
+  return s2 , s5 , s7
+  
   
 
 x_3 = st.number_input('NEGG_ASSET', step=0.01 ,   )
 x_4 = st.number_input('FFWM_ASSET', step=0.01 ,   )
 st.write("Limut_order_Sell_NEGG") 
+s8 , s9 , s10 =  sell(x_3)
 
-
-a = 0.735
-
-st.write(round(a, 2))
+st.write(s8 , s9 , s10 )
 
   
 st.write("""เป้าหมาย / asset
