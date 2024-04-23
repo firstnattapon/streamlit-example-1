@@ -18,7 +18,7 @@ def sell (x_3 , fix_c=1500 , Diff=60):
   s2 =  round(s1, 2)
   s3 =  s2*x_3
   s4 =  abs(s3 - fix_c)
-  s5 =  int( s4 / s2 )  
+  s5 =  round( s4 / s2 )  
   s6 =  s5*s2
   s7 =  (x_3 * s2) + s6
   return s2 , s5 , round(s7, 2)
