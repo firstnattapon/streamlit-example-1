@@ -27,8 +27,8 @@ def sell (x_3 , fix_c=1500 , Diff=60):
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 
-x_3 = st.number_input('NEGG_ASSET', step=0.01 , value=0.01 )
-x_4 = st.number_input('FFWM_ASSET', step=0.01  , value=0.01  )
+x_3 = st.number_input('NEGG_ASSET', step=0.001 , value=0.01 )
+x_4 = st.number_input('FFWM_ASSET', step=0.001  , value=0.01  )
 st.write("_____") 
 
 st.write("Limut_order_Sell_NEGG") 
