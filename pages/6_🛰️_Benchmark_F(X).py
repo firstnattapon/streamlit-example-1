@@ -172,7 +172,6 @@ ans = ['SPCE',
  'SMMT',
  'CVRX']
 
-
 col1, col2  = st.columns(2)
 number = col2.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
 title = col1.text_input('Ticker_Yahoo', ans[number])
@@ -205,7 +204,7 @@ if checkbox1 :
     add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
     survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )  
     st.write('____')
-    st.write('Data' , add_risk , 1500 / add_risk , '(', (1500+survival) / add_risk  , ') Premium & Discount , P/E'  )
+    st.write('Data' , add_risk , 1500 / add_risk , 'add_risk> ', '(', (1500+survival) / add_risk  , ') Premium & Discount , P/E'  )
     st.write('AVG. S&P500 P/E' ,'=  7')
     
     col3, col4  = st.columns(2)
