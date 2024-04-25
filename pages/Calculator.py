@@ -40,15 +40,15 @@ try:
   b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
 
   st.write("Limut_Order_NEGG") 
-  st.write( 'sell' , ' ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
+  st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
-  st.write( 'buy' , ' ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
+  st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
   st.write("_____") 
   
   st.write("Limut Order_FFWM") 
-  st.write( 'A', b12 , 'P' , b11  , 'C' ,b13,'' ,'' , 'sell' )
+  st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
   st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
-  st.write( 'A', s12 , 'P' , s11  , 'C' ,s13  ,'' ,'' , 'buy' )
+  st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
   st.write("_____") 
 
 except:pass
