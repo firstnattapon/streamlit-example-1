@@ -10,7 +10,7 @@ st.set_page_config(page_title="Calculator", page_icon="⌨️")
 def sell (asset = 0 , fix_c=1500 , Diff=60):
   s1 =  (1500-Diff) /asset
   s2 =  round(s1, 2)
-  s3 =  s2*x_3
+  s3 =  s2*asset
   s4 =  abs(s3 - fix_c)
   s5 =  round( s4 / s2 )  
   s6 =  s5*s2
@@ -20,7 +20,7 @@ def sell (asset = 0 , fix_c=1500 , Diff=60):
 def buy (asset = 0 , fix_c=1500 , Diff=60):
   b1 =  (1500+Diff) /asset
   b2 =  round(b1, 2)
-  b3 =  b2*x_3
+  b3 =  b2*asset
   b4 =  abs(b3 - fix_c)
   b5 =  round( b4 / b2 )  
   b6 =  b5*b2
