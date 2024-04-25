@@ -40,9 +40,9 @@ try:
   b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
 
   st.write("Limut_Order_NEGG") 
-  st.write( 'A', b9  , 'P' , b8 ,'C' ,b10 ,'' ,'' , 'sell' )
+  st.write( 'sell' , ' ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
-  st.write('A',  s9  ,  'P' , s8 , 'C' ,s10 ,'' ,'' , 'buy' )
+  st.write( 'buy' , ' ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
   st.write("_____") 
   
   st.write("Limut Order_FFWM") 
