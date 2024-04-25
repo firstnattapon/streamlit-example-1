@@ -46,9 +46,9 @@ try:
   st.write("_____") 
   
   st.write("Limut Order_FFWM") 
-  st.write( 'A', b12 , 'P' , b11  , 'C' ,b13 )
+  st.write( 'A', b12 , 'P' , b11  , 'C' ,b13,'' ,'' , 'sell' )
   st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
-  st.write( 'A', s12 , 'P' , s11  , 'C' ,s13 )
+  st.write( 'A', s12 , 'P' , s11  , 'C' ,s13  ,'' ,'' , 'buy' )
   st.write("_____") 
 
 except:pass
