@@ -30,12 +30,14 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 col1, col2  = st.columns(2)
-x_3 = col1.number_input('NEGG_ASSET', step=0.001 ,  value=1875.28 )
-step = col2.number_input('NEGG_step', step=1 ,  value= 1 )
+
+step_v = [1875.28]
+step = col1.number_input('NEGG_step', step=1 ,  value= 0 )
+x_3 = col2.number_input('NEGG_ASSET', step=0.001 ,  value= step_v[step] )
 
 col3, col4  = st.columns(2)
-x_4 = col3.number_input('FFWM_ASSET', step=0.001  , value=218.66  )
-step = col4.number_input('FFWM_step', step=1 ,  value= 1 )
+x_4 = col4.number_input('FFWM_ASSET', step=0.001  , value=218.66  )
+step = col3.number_input('FFWM_step', step=1 ,  value= 1 )
 st.write("_____") 
 
 try:
