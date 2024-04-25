@@ -114,6 +114,8 @@ y_1 = st.number_input('FFWM_asset', step=0.01 , value = 0.00  )
 y_1 = y_1*x_2
 st.write(y_1) 
 y_2 = st.number_input('NEGG_asset', step=0.01 , value = 0.00  ) 
+y_2 = y_2*x_1
+st.write(y_2) 
 j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
 st.write("_____") 
 
