@@ -30,7 +30,6 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= 1875.28 )
-
 x_4 = st.number_input('FFWM_ASSET', step=0.001  , value=218.66  )
 st.write("_____") 
 
@@ -41,9 +40,9 @@ try:
   b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
 
   st.write("Limut_Order_NEGG") 
-  st.write( 'A', b9  , 'P' , b8 ,'C' ,b10 )
+  st.write( 'A', b9  , 'P' , b8 ,'C' ,b10 ,'' ,'' , 'sell' )
   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
-  st.write('A',  s9  ,  'P' , s8 , 'C' ,s10 )
+  st.write('A',  s9  ,  'P' , s8 , 'C' ,s10 ,'' ,'' , 'buy' )
   st.write("_____") 
   
   st.write("Limut Order_FFWM") 
