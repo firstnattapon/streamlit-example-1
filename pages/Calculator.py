@@ -29,8 +29,9 @@ def buy (x_3 , fix_c=1500 , Diff=60):
   
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
+col1, col2  = st.columns(2)
 
-x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value=np.nan )
+x_3 = col1.number_input('NEGG_ASSET', step=0.001 ,  value=np.nan )
 x_4 = st.number_input('FFWM_ASSET', step=0.001  , value=np.nan  )
 st.write("_____") 
 
