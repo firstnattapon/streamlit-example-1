@@ -32,6 +32,8 @@ st.write("_____")
 col1, col2  = st.columns(2)
 
 x_3 = col1.number_input('NEGG_ASSET', step=0.001 ,  value=np.nan )
+step = col2.number_input('NEGG_step', step=1 ,  value= 1 )
+
 x_4 = st.number_input('FFWM_ASSET', step=0.001  , value=np.nan  )
 st.write("_____") 
 
