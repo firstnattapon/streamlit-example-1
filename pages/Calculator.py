@@ -7,6 +7,10 @@ import yfinance as yf
 
 st.set_page_config(page_title="Calculator", page_icon="⌨️")
 
+channel_id = 2528199
+write_api_key = '2E65V8XEIPH9B2VV'
+client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
+
 def sell (asset = 0 , fix_c=1500 , Diff=60):
   s1 =  (1500-Diff) /asset
   s2 =  round(s1, 2)
@@ -29,8 +33,16 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
   
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
-x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= 1875.28 )
-x_4 = st.number_input('FFWM_ASSET', step=0.001  , value=218.66  )
+
+
+NEGG_ASSET_LAST = client.get_field_last(field='NEGG_ASSET')
+NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['NEGG_ASSET'])
+                      
+FFWM_ASSET_LAST = client.get_field_last(field='FFWM_ASSET')
+FFWM_ASSET_LAST = int(eval(json.loads(FFWM_ASSET_LAST)['FFWM_ASSET'])
+
+x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
+x_4 = st.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
 st.write("_____") 
 
 try:
@@ -38,9 +50,14 @@ try:
   s11 , s12 , s13 =  sell(asset = x_4 , Diff= x_2)
   b8 , b9 , b10 =  buy(asset = x_3 , Diff= x_2)
   b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
-
+  
   st.write("Limut_Order_NEGG") 
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
+  sell_negg = st.checkbox('sell_negg')
+  if sell_negg :
+    client.update(  {'NEGG_ASSET': x_3 - b9  }  )
+    
+    
   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
   st.write("_____") 
@@ -50,5 +67,7 @@ try:
   st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
   st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
   st.write("_____") 
+
+  # client.update(  {'FFWM_ASSET': cf , 'NEGG_ASSET': cf / k_3   }  )
 
 except:pass
