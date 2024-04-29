@@ -107,8 +107,8 @@ try:
   
   st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
   
-  st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
   col10, col11 , col12  = st.columns(3)
+  st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
   buy_ffwm = col12.checkbox('buy_match_ffwm')
   if buy_ffwm :
     GO_ffwm_Buy = col12.button("GO!")
