@@ -36,10 +36,10 @@ st.write("_____")
 
 
 NEGG_ASSET_LAST = client.get_field_last(field='NEGG_ASSET')
-NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['NEGG_ASSET'])
+NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['NEGG_ASSET']))
                       
 FFWM_ASSET_LAST = client.get_field_last(field='FFWM_ASSET')
-FFWM_ASSET_LAST = int(eval(json.loads(FFWM_ASSET_LAST)['FFWM_ASSET'])
+FFWM_ASSET_LAST = int(eval(json.loads(FFWM_ASSET_LAST)['FFWM_ASSET']))
 
 x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = st.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
