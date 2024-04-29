@@ -37,7 +37,7 @@ st.write("_____")
 
 col13, col14 , col15  = st.columns(3)
 
-Start = col15.checkbox('start')
+Start = col13.checkbox('start')
 if Start :
   thingspeak_1 = col13.checkbox('@_FFWM_ASSET')
   if thingspeak_1 :
@@ -47,13 +47,13 @@ if Start :
       client.update(  {'field1': add_1 } )
       col13.write(add_1) 
       
-  thingspeak_2 = col14.checkbox('@_NEGG_ASSET')
+  thingspeak_2 = col13.checkbox('@_NEGG_ASSET')
   if thingspeak_2 :
-    add_2 = col14.number_input('@_NEGG_ASSET', step=0.001 ,  value=0.)
-    _NEGG_ASSET = col14.button("GO!")
+    add_2 = col13.number_input('@_NEGG_ASSET', step=0.001 ,  value=0.)
+    _NEGG_ASSET = col13.button("GO!")
     if _NEGG_ASSET :
       client.update(  {'field2': add_2 }  )
-      col14.write(add_2) 
+      col13.write(add_2) 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
@@ -61,8 +61,8 @@ FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
 NEGG_ASSET_LAST = client.get_field_last(field='field2')
 NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
 
-x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
-x_4 = st.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
+x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
+x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
 st.write("_____") 
 
 try:
