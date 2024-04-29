@@ -71,23 +71,25 @@ try:
   
   st.write("Limut_Order_NEGG") 
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
-  sell_negg = st.checkbox('sell_negg')
+
+  col1, col2 , col3  = st.columns(3)
+  sell_negg = col3.checkbox('sell_negg')
   if sell_negg :
-    GO_NEGG_SELL = st.button("GO!")
+    GO_NEGG_SELL = col3.button("GO!")
     if GO_NEGG_SELL :
       client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
-      st.write(NEGG_ASSET_LAST - b9) 
+      col3.write(NEGG_ASSET_LAST - b9) 
     
   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
 
-  col1, col2  = st.columns(2)
-  col1.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-  buy_negg = col2.checkbox('buy_negg')
+  col4, col5 , col6  = st.columns(3)
+  st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
+  buy_negg = col6.checkbox('buy_negg')
   if buy_negg :
-    GO_NEGG_Buy = col2.button("GO!")
+    GO_NEGG_Buy = col6.button("GO!")
     if GO_NEGG_Buy :
       client.update(  {'field2': NEGG_ASSET_LAST + s9  } )
-      col2.write(NEGG_ASSET_LAST + s9) 
+      col6.write(NEGG_ASSET_LAST + s9) 
 
   st.write("_____") 
 
