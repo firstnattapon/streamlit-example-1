@@ -33,7 +33,7 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
   return b2 , b5 , round(b7, 2)
 
 
-col16 ,col13, col14 , col15  = st.columns(4)
+col13, col16 , col14 , col15  = st.columns(4)
 
 x_2 = col16.number_input('Diff', step=1 , value= 60  )
 
