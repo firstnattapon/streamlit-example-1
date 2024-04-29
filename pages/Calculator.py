@@ -78,10 +78,10 @@ try:
   b8 , b9 , b10 =  buy(asset = x_3 , Diff= x_2)
   b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
   
-  st.write("Limut_Order_NEGG") 
-  st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
+  tab2.write("Limut_Order_NEGG") 
+  tab2.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
   
-  col1, col2 , col3  = st.columns(3)
+  col1, col2 , col3  = tab2.columns(3)
   sell_negg = col3.checkbox('sell_match_negg')
   if sell_negg :
     GO_NEGG_SELL = col3.button("GO!")
@@ -91,7 +91,7 @@ try:
     
   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
   
-  col4, col5 , col6  = st.columns(3)
+  col4, col5 , col6  = tab2.columns(3)
   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
   buy_negg = col6.checkbox('buy_match_negg')
   if buy_negg :
@@ -105,7 +105,7 @@ try:
   
   st.write("Limut Order_FFWM") 
   st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
-  col7, col8 , col9  = st.columns(3)
+  col7, col8 , col9  = tab2.columns(3)
   sell_ffwm = col9.checkbox('sell_match_ffwn')
   if sell_ffwm :
     GO_ffwm_sell = col9.button("GO!")
@@ -115,7 +115,7 @@ try:
   
   st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
   
-  col10, col11 , col12  = st.columns(3)
+  col10, col11 , col12  = tab2.columns(3)
   st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
   buy_ffwm = col12.checkbox('buy_match_ffwm')
   if buy_ffwm :
