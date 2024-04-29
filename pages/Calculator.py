@@ -52,12 +52,12 @@ if thingspeak_2 :
 st.write("_____") 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
-FFWM_ASSET_LAST = int(eval(json.loads(FFWM_ASSET_LAST)['FFWM_ASSET']))
+FFWM_ASSET_LAST = int(eval(json.loads(FFWM_ASSET_LAST)['field1']))
 st.write(FFWM_ASSET_LAST) 
 
 
 NEGG_ASSET_LAST = client.get_field_last(field='field2')
-NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['NEGG_ASSET']))
+NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['field2']))
 st.write(NEGG_ASSET_LAST) 
 
 
