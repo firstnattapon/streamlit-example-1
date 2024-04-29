@@ -31,11 +31,14 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
   b6 =  b5*b2
   b7 =  (asset * b2) - b6
   return b2 , b5 , round(b7, 2)
-  
+
+tab1, tab2 = st.tabs(["📈 Chart", "🗃 Data"])
+
+
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 
-col13, col14 , col15  = st.columns(3)
+col13, col14 , col15  = tab1.columns(3)
 
 Start = col13.checkbox('start')
 if Start :
@@ -64,6 +67,9 @@ NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
 x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
 st.write("_____") 
+
+
+
 
 try:
   
