@@ -35,21 +35,23 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 
-thingspeak_1 = st.checkbox('@_FFWM_ASSET')
-if thingspeak_1 :
-  add_1 = st.number_input('@_FFWM_ASSET', step=0.001 ,  value=0.)
-  _FFWM_ASSET = st.button("GO!")
-  if _FFWM_ASSET :
-    client.update(  {'field1': add_1 } )
-    st.write(add_1) 
-    
-thingspeak_2 = st.checkbox('@_NEGG_ASSET')
-if thingspeak_2 :
-  add_2 = st.number_input('@_NEGG_ASSET', step=0.001 ,  value=0.)
-  _NEGG_ASSET = st.button("GO!")
-  if _NEGG_ASSET :
-    client.update(  {'field2': add_2 }  )
-    st.write(add_2) 
+start = st.checkbox('start')
+if start :
+  thingspeak_1 = st.checkbox('@_FFWM_ASSET')
+  if thingspeak_1 :
+    add_1 = st.number_input('@_FFWM_ASSET', step=0.001 ,  value=0.)
+    _FFWM_ASSET = st.button("GO!")
+    if _FFWM_ASSET :
+      client.update(  {'field1': add_1 } )
+      st.write(add_1) 
+      
+  thingspeak_2 = st.checkbox('@_NEGG_ASSET')
+  if thingspeak_2 :
+    add_2 = st.number_input('@_NEGG_ASSET', step=0.001 ,  value=0.)
+    _NEGG_ASSET = st.button("GO!")
+    if _NEGG_ASSET :
+      client.update(  {'field2': add_2 }  )
+      st.write(add_2) 
 st.write("_____") 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
