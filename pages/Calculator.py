@@ -32,10 +32,10 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
   b7 =  (asset * b2) - b6
   return b2 , b5 , round(b7, 2)
 
-x_2 = st.number_input('Diff', step=1 , value= 60  )
-st.write("_____") 
 
-col13, col14 , col15  = st.columns(3)
+col16 ,col13, col14 , col15  = st.columns(4)
+
+x_2 = col16.number_input('Diff', step=1 , value= 60  )
 
 Start = col13.checkbox('start')
 if Start :
