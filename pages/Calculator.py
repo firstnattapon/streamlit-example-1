@@ -73,7 +73,7 @@ try:
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
 
   col1, col2 , col3  = st.columns(3)
-  sell_negg = col3.checkbox('Sell_match')
+  sell_negg = col3.checkbox('sell_match')
   if sell_negg :
     GO_NEGG_SELL = col3.button("GO!")
     if GO_NEGG_SELL :
@@ -84,7 +84,7 @@ try:
 
   col4, col5 , col6  = st.columns(3)
   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-  buy_negg = col6.checkbox('Buy_match')
+  buy_negg = col6.checkbox('buy_match')
   if buy_negg :
     GO_NEGG_Buy = col6.button("GO!")
     if GO_NEGG_Buy :
@@ -96,10 +96,21 @@ try:
   
   st.write("Limut Order_FFWM") 
   st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
-  st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
-  st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
-  st.write("_____") 
+  col7, col8 , col9  = st.columns(3)
+  sell_ffwm = col9.checkbox('sell_match')
+  if sell_ffwm :
+    client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
+    col9.write(FFWM_ASSET_LAST - b12) 
 
-  # client.update(  {'FFWM_ASSET': cf , 'NEGG_ASSET': cf / k_3   }  )
+  st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
+  
+  st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
+  col10, col11 , col12  = st.columns(3)
+  buy_ffwm = col12.checkbox('buy_match')
+  if buy_ffwm :
+    client.update(  {'field1': FFWM_ASSET_LAST + s12  } )
+    col12.write(FFWM_ASSET_LAST + s12) 
+
+  st.write("_____") 
 
 except:pass
