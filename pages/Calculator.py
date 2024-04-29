@@ -4,6 +4,7 @@ import datetime
 import thingspeak
 import pandas as pd
 import yfinance as yf
+import json
 
 st.set_page_config(page_title="Calculator", page_icon="⌨️")
 
