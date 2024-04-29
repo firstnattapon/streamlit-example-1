@@ -74,23 +74,23 @@ st.write("Limut_Order_NEGG")
 st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
 
 col1, col2 , col3  = st.columns(3)
-sell_negg = col2.checkbox('sell_match_negg')
+sell_negg = col3.checkbox('sell_match_negg')
 if sell_negg :
-  GO_NEGG_SELL = col2.button("GO!")
+  GO_NEGG_SELL = col3.button("GO!")
   if GO_NEGG_SELL :
     client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
-    col2.write(NEGG_ASSET_LAST - b9) 
+    col3.write(NEGG_ASSET_LAST - b9) 
   
 st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
 
 col4, col5 , col6  = st.columns(3)
 st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-buy_negg = col5.checkbox('buy_match_negg')
+buy_negg = col6.checkbox('buy_match_negg')
 if buy_negg :
-  GO_NEGG_Buy = col5.button("GO!")
+  GO_NEGG_Buy = col6.button("GO!")
   if GO_NEGG_Buy :
     client.update(  {'field2': NEGG_ASSET_LAST + s9  } )
-    col5.write(NEGG_ASSET_LAST + s9) 
+    col6.write(NEGG_ASSET_LAST + s9) 
 
 st.write("_____") 
 
@@ -98,24 +98,23 @@ st.write("_____")
 st.write("Limut Order_FFWM") 
 st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
 col7, col8 , col9  = st.columns(3)
-sell_ffwm = col8.checkbox('sell_match_ffwn')
+sell_ffwm = col9.checkbox('sell_match_ffwn')
 if sell_ffwm :
-  GO_ffwm_sell = col8.button("GO!")
+  GO_ffwm_sell = col9.button("GO!")
   if GO_ffwm_sell :
     client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
-    col8.write(FFWM_ASSET_LAST - b12) 
+    col9.write(FFWM_ASSET_LAST - b12) 
 
 st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
 
 st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
 col10, col11 , col12  = st.columns(3)
-buy_ffwm = col11.checkbox('buy_match_ffwm')
-
+buy_ffwm = col12.checkbox('buy_match_ffwm')
 if buy_ffwm :
-  GO_ffwm_Buy = col11.button("GO!")
+  GO_ffwm_Buy = col12.button("GO!")
   if GO_ffwm_Buy :
     client.update(  {'field1': FFWM_ASSET_LAST + s12  } )
-    col11.write(FFWM_ASSET_LAST + s12) 
+    col12.write(FFWM_ASSET_LAST + s12) 
 
 st.write("_____") 
 
