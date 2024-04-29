@@ -79,9 +79,9 @@ try:
       st.write(NEGG_ASSET_LAST - b9) 
     
   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
-  st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
 
   col1, col2  = st.columns(2)
+  col1.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
   buy_negg = col2.checkbox('buy_negg')
   if buy_negg :
     GO_NEGG_Buy = col2.button("GO!")
