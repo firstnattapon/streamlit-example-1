@@ -34,40 +34,51 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 
+thingspeak_1 = st.checkbox('@_FFWM_ASSET')
+if thingspeak_1 :
+  add_1 = st.number_input('@_FFWM_ASSET', step=0.001 ,  value=0.)
+  client.update(  {'FFWM_ASSET': add_1 }  )
 
-NEGG_ASSET_LAST = client.get_field_last(field='NEGG_ASSET')
-NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['NEGG_ASSET']))
+thingspeak_2 = st.checkbox('@_NEGG_ASSET')
+if thingspeak_2 :
+  add_2 = st.number_input('@_NEGG_ASSET', step=0.001 ,  value=0.)
+  client.update(  {'NEGG_ASSET': add_2 }  )
+
+
+
+# NEGG_ASSET_LAST = client.get_field_last(field='NEGG_ASSET')
+# NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['NEGG_ASSET']))
                       
-FFWM_ASSET_LAST = client.get_field_last(field='FFWM_ASSET')
-FFWM_ASSET_LAST = int(eval(json.loads(FFWM_ASSET_LAST)['FFWM_ASSET']))
+# FFWM_ASSET_LAST = client.get_field_last(field='FFWM_ASSET')
+# FFWM_ASSET_LAST = int(eval(json.loads(FFWM_ASSET_LAST)['FFWM_ASSET']))
 
-x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
-x_4 = st.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
-st.write("_____") 
+# x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
+# x_4 = st.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
+# st.write("_____") 
 
-try:
-  s8 , s9 , s10 =  sell( asset = x_3 , Diff= x_2)
-  s11 , s12 , s13 =  sell(asset = x_4 , Diff= x_2)
-  b8 , b9 , b10 =  buy(asset = x_3 , Diff= x_2)
-  b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
+# try:
+#   s8 , s9 , s10 =  sell( asset = x_3 , Diff= x_2)
+#   s11 , s12 , s13 =  sell(asset = x_4 , Diff= x_2)
+#   b8 , b9 , b10 =  buy(asset = x_3 , Diff= x_2)
+#   b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
   
-  st.write("Limut_Order_NEGG") 
-  st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
-  sell_negg = st.checkbox('sell_negg')
-  if sell_negg :
-    client.update(  {'NEGG_ASSET': x_3 - b9  }  )
+#   st.write("Limut_Order_NEGG") 
+#   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
+#   sell_negg = st.checkbox('sell_negg')
+#   if sell_negg :
+#     client.update(  {'NEGG_ASSET': x_3 - b9  }  )
     
     
-  st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
-  st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-  st.write("_____") 
+#   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
+#   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
+#   st.write("_____") 
   
-  st.write("Limut Order_FFWM") 
-  st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
-  st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
-  st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
-  st.write("_____") 
+#   st.write("Limut Order_FFWM") 
+#   st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
+#   st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
+#   st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
+#   st.write("_____") 
 
-  # client.update(  {'FFWM_ASSET': cf , 'NEGG_ASSET': cf / k_3   }  )
+#   # client.update(  {'FFWM_ASSET': cf , 'NEGG_ASSET': cf / k_3   }  )
 
-except:pass
+# except:pass
