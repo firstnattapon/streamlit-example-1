@@ -80,14 +80,17 @@ try:
     
   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-  buy_negg = st.checkbox('buy_negg')
+
+  col1, col2  = st.columns(2)
+  buy_negg = col2.checkbox('buy_negg')
   if buy_negg :
-    GO_NEGG_Buy = st.button("GO!")
+    GO_NEGG_Buy = col2.button("GO!")
     if GO_NEGG_Buy :
       client.update(  {'field2': NEGG_ASSET_LAST + s9  } )
-      st.write(NEGG_ASSET_LAST + s9) 
+      col2.write(NEGG_ASSET_LAST + s9) 
 
   st.write("_____") 
+
   
   st.write("Limut Order_FFWM") 
   st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
