@@ -52,7 +52,8 @@ if thingspeak_2 :
 st.write("_____") 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
-FFWM_ASSET_LAST = int(eval(json.loads(FFWM_ASSET_LAST)['field1']))
+
+FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST))
 st.write(FFWM_ASSET_LAST) 
 
 
