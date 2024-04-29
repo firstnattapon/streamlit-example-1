@@ -39,7 +39,8 @@ if thingspeak_1 :
   add_1 = st.number_input('@_FFWM_ASSET', step=0.001 ,  value=0.)
   _FFWM_ASSET = st.button("GO!")
   if _FFWM_ASSET :
-    client.update(  {'field1': add_1 }  )
+    client.update(  {'field1': add_1 } )
+    st.write(add_1) 
 
 thingspeak_2 = st.checkbox('@_NEGG_ASSET')
 if thingspeak_2 :
@@ -47,8 +48,7 @@ if thingspeak_2 :
   _NEGG_ASSET = st.button("GO!")
   if _NEGG_ASSET :
     client.update(  {'field2': add_2 }  )
-
-
+    st.write(add_2) 
 
 # NEGG_ASSET_LAST = client.get_field_last(field='NEGG_ASSET')
 # NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['NEGG_ASSET']))
