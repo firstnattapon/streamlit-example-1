@@ -35,8 +35,8 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 
-start = st.checkbox('start')
-if start :
+Start = st.checkbox('start')
+if Start :
   thingspeak_1 = st.checkbox('@_FFWM_ASSET')
   if thingspeak_1 :
     add_1 = st.number_input('@_FFWM_ASSET', step=0.001 ,  value=0.)
@@ -52,14 +52,12 @@ if start :
     if _NEGG_ASSET :
       client.update(  {'field2': add_2 }  )
       st.write(add_2) 
-st.write("_____") 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
 
 NEGG_ASSET_LAST = client.get_field_last(field='field2')
 NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
-
 
 x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = st.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
