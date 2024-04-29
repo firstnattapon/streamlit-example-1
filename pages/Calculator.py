@@ -37,12 +37,16 @@ st.write("_____")
 thingspeak_1 = st.checkbox('@_FFWM_ASSET')
 if thingspeak_1 :
   add_1 = st.number_input('@_FFWM_ASSET', step=0.001 ,  value=0.)
-  client.update(  {'FFWM_ASSET': add_1 }  )
+  _FFWM_ASSET = st.button("@_FFWM_ASSET")
+  if _FFWM_ASSET :
+    client.update(  {'FFWM_ASSET': add_1 }  )
 
 thingspeak_2 = st.checkbox('@_NEGG_ASSET')
 if thingspeak_2 :
   add_2 = st.number_input('@_NEGG_ASSET', step=0.001 ,  value=0.)
-  client.update(  {'NEGG_ASSET': add_2 }  )
+  _NEGG_ASSET = st.button("@_NEGG_ASSET")
+  if _NEGG_ASSET :
+    client.update(  {'NEGG_ASSET': add_2 }  )
 
 
 
