@@ -38,7 +38,7 @@ tab1, tab2 = st.tabs(["📈 Chart", "🗃 Data"])
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 
-col13, col14 , col15  = tab1.columns(3)
+col13, col14 , col15  = st.columns(3)
 
 Start = col13.checkbox('start')
 if Start :
