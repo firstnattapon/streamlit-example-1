@@ -56,9 +56,9 @@ FFWM_ASSET_LAST = client.get_field_last(field='field1')
 st.write(FFWM_ASSET_LAST) 
 
 
-NEGG_ASSET_LAST = client.get_field_last(field='field2')
-NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['field2']))
-st.write(NEGG_ASSET_LAST) 
+# NEGG_ASSET_LAST = client.get_field_last(field='field2')
+# NEGG_ASSET_LAST = int(eval(json.loads(NEGG_ASSET_LAST)['field2']))
+# st.write(NEGG_ASSET_LAST) 
 
 
 # x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
