@@ -73,7 +73,7 @@ try:
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
 
   col1, col2 , col3  = st.columns(3)
-  sell_negg = col3.checkbox('sell_negg')
+  sell_negg = col3.checkbox('Sell_match')
   if sell_negg :
     GO_NEGG_SELL = col3.button("GO!")
     if GO_NEGG_SELL :
@@ -84,7 +84,7 @@ try:
 
   col4, col5 , col6  = st.columns(3)
   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-  buy_negg = col6.checkbox('buy_negg')
+  buy_negg = col6.checkbox('Buy_match')
   if buy_negg :
     GO_NEGG_Buy = col6.button("GO!")
     if GO_NEGG_Buy :
