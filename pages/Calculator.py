@@ -71,7 +71,7 @@ try:
   
   st.write("Limut_Order_NEGG") 
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
-  sell_negg = st.checkbox('- negg')
+  sell_negg = st.checkbox('sell_negg')
   if sell_negg :
     GO_NEGG_SELL = st.button("GO!")
     if GO_NEGG_SELL :
@@ -80,7 +80,7 @@ try:
     
   st.write(yf.Ticker('NEGG').fast_info['lastPrice'])
   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-  buy_negg = st.checkbox('+ negg')
+  buy_negg = st.checkbox('buy_negg')
   if buy_negg :
     GO_NEGG_Buy = st.button("GO!")
     if GO_NEGG_Buy :
