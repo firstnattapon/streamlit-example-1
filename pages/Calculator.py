@@ -35,23 +35,25 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
 x_2 = st.number_input('Diff', step=1 , value= 60  )
 st.write("_____") 
 
-Start = st.checkbox('start')
+col13, col14 , col15  = st.columns(3)
+
+Start = col15.checkbox('start')
 if Start :
-  thingspeak_1 = st.checkbox('@_FFWM_ASSET')
+  thingspeak_1 = col13.checkbox('@_FFWM_ASSET')
   if thingspeak_1 :
-    add_1 = st.number_input('@_FFWM_ASSET', step=0.001 ,  value=0.)
-    _FFWM_ASSET = st.button("GO!")
+    add_1 = col13.number_input('@_FFWM_ASSET', step=0.001 ,  value=0.)
+    _FFWM_ASSET = col13.button("GO!")
     if _FFWM_ASSET :
       client.update(  {'field1': add_1 } )
-      st.write(add_1) 
+      col13.write(add_1) 
       
-  thingspeak_2 = st.checkbox('@_NEGG_ASSET')
+  thingspeak_2 = col14.checkbox('@_NEGG_ASSET')
   if thingspeak_2 :
-    add_2 = st.number_input('@_NEGG_ASSET', step=0.001 ,  value=0.)
-    _NEGG_ASSET = st.button("GO!")
+    add_2 = col14.number_input('@_NEGG_ASSET', step=0.001 ,  value=0.)
+    _NEGG_ASSET = col14.button("GO!")
     if _NEGG_ASSET :
       client.update(  {'field2': add_2 }  )
-      st.write(add_2) 
+      col14.write(add_2) 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
