@@ -61,9 +61,9 @@ NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
 st.write(NEGG_ASSET_LAST) 
 
 
-# x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
-# x_4 = st.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
-# st.write("_____") 
+x_3 = st.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
+x_4 = st.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
+st.write("_____") 
 
 # try:
 #   s8 , s9 , s10 =  sell( asset = x_3 , Diff= x_2)
