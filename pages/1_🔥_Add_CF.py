@@ -4,12 +4,23 @@ import datetime
 import thingspeak
 import pandas as pd
 import yfinance as yf
+import json
 
 st.set_page_config(page_title="Add_CF", page_icon="🔥")
 
 channel_id = 2394198
 write_api_key = 'OVZNYQBL57GJW5JF'
 client = thingspeak.Channel(channel_id, write_api_key)
+
+channel_id_2 = 2528199
+write_api_key_2 = '2E65V8XEIPH9B2VV'
+client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json')
+
+FFWM_ASSET_LAST = client_2.get_field_last(field='field1')
+FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
+
+NEGG_ASSET_LAST = client_2.get_field_last(field='field2')
+NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
 
 def NEGG(entry = 1.26 ,ref = 1.26  ):
     try:
@@ -110,10 +121,10 @@ x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01 ,   value = yf.Ticker(
 st.write("_____") 
 z_1 = st.number_input('Adjust', step=0.01 , value = -500.00  ) 
 st.write("_____") 
-y_1 = st.number_input('FFWM_asset', step=0.01 , value = 0.00  ) 
+y_1 = st.number_input('FFWM_asset', step=0.01 , value = FFWM_ASSET_LAST ) 
 y_1 = y_1*x_2
 st.write(y_1) 
-y_2 = st.number_input('NEGG_asset', step=0.01 , value = 0.00  ) 
+y_2 = st.number_input('NEGG_asset', step=0.01 , value = NEGG_ASSET_LAST  ) 
 y_2 = y_2*x_1
 st.write(y_2) 
 j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
