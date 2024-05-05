@@ -222,7 +222,7 @@ if checkbox1 :
     Net_CurrentAssets =   data['CurrentAssets'][0] - (data['CurrentLiabilities'][0]  +  data['LongTermDebt'][0])
     Net_CurrentAssets_2 = data['CurrentAssets'][0] / Net_CurrentAssets
     
-    st.write('AVG. S&P500 P/E' ,'=  7' ,   'finance> ',Net_CurrentAssets_2 )
+    st.write('AVG. S&P500 P/E' , 7 ,  'finance> ', Net_CurrentAssets_2 )
     
     col3, col4  = st.columns(2)
     col5, col6  = st.columns(2)
