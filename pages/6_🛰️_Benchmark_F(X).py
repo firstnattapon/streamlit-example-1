@@ -219,11 +219,10 @@ if checkbox1 :
 
     yahoo   =  yf.Ticker(title)
     data 	=  yahoo.get_balance_sheet().T
-    Net_CurrentAssets =  data['CurrentAssets'][0] - (data['CurrentLiabilities'][0]  +  data['LongTermDebt'][0])
+    Net_CurrentAssets =   data['CurrentAssets'][0] - (data['CurrentLiabilities'][0]  +  data['LongTermDebt'][0])
     Net_CurrentAssets_2 = data['CurrentAssets'][0] / Net_CurrentAssets
-    st.write(Net_CurrentAssets_2)
     
-    st.write('AVG. S&P500 P/E' ,'=  7')
+    st.write('AVG. S&P500 P/E' ,'=  7' ,   'finance> ',Net_CurrentAssets_2 )
     
     col3, col4  = st.columns(2)
     col5, col6  = st.columns(2)
