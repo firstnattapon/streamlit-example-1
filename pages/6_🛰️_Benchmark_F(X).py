@@ -153,7 +153,9 @@ def Un_15 (Ticker = '' ):
     di = di.dif.values
     return  a_1 , a_0 , a_3 , di
 
-ans = ['SPCE',
+ans = ['RIVN',
+ 'GME',
+ 'FLNC',
  'ENVX',
  'RXRX',
  'EXAI',
@@ -161,16 +163,16 @@ ans = ['SPCE',
  'ASTS',
  'ACB',
  'ORGO',
+ 'JMIA',
  'OUST',
+ 'CTV',
  'ALXO',
- 'NNOX',
  'PHAR',
  'LXRX',
  'PHAT',
  'MRSN',
  'ETNB',
- 'SMMT',
- 'CVRX']
+ 'SMMT']
 
 col1, col2  = st.columns(2)
 number = col2.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
