@@ -216,6 +216,13 @@ if checkbox1 :
     survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )  
     st.write('____')
     st.write('Data' , add_risk , 1500 / add_risk , 'add_risk> ', '(', (1500+survival) / add_risk  , ') Premium & Discount , P/E'  )
+
+    yahoo   =  yf.Ticker(title)
+    data 	=  yahoo.get_balance_sheet().T
+    Net_CurrentAssets =  data['CurrentAssets'][0] - (data['CurrentLiabilities'][0]  +  data['LongTermDebt'][0])
+    Net_CurrentAssets_2 = data['CurrentAssets'][0] / Net_CurrentAssets
+    st.write(Net_CurrentAssets_2)
+    
     st.write('AVG. S&P500 P/E' ,'=  7')
     
     col3, col4  = st.columns(2)
