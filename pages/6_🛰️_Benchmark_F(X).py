@@ -173,7 +173,7 @@ ans = ['RIVN',
  'MRSN',
  'ETNB',
  'SMMT']
-
+ 
 col1, col2  = st.columns(2)
 number = col2.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
 title = col1.text_input('Ticker_Yahoo', ans[number])
