@@ -96,7 +96,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
         
-@st.cache_data
+# @st.cache_data
 def delta_z (Ticker = 'FFWM' , T = np.nan ) :
     up_dn = np.array([])
     for idX , v in enumerate(T)  :
