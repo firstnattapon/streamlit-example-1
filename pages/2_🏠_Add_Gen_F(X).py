@@ -179,3 +179,19 @@ if NEGG_Check_Gen_M :
     if re_ :
         client.update(  {'field3': input } )
         st.write(input)    
+st.write("_____") 
+
+RIVN_Check_Gen = st.checkbox('RIVN_Add_Gen')
+if RIVN_Check_Gen :
+    re = st.button("Rerun_Gen")
+    if re :
+        Gen_fx (Ticker = 'RIVN' , field = 4)
+
+RIVN_Check_Gen_M = st.checkbox('RIVN_Add_Gen_M')
+if RIVN_Check_Gen_M :    
+    input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
+    re_ = st.button("Rerun_Gen_M")
+    if re_ :
+        client.update(  {'field4': input } )
+        st.write(input)    
+st.write("_____") 
