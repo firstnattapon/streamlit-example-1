@@ -92,7 +92,7 @@ try:
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
   
   col1, col2 , col3  = st.columns(3)
-  sell_negg = col3.checkbox('sell_match_negg')
+  sell_negg = col3.checkbox('sell_match_NEGG')
   if sell_negg :
     GO_NEGG_SELL = col3.button("GO!")
     if GO_NEGG_SELL :
@@ -103,7 +103,7 @@ try:
   
   col4, col5 , col6  = st.columns(3)
   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-  buy_negg = col6.checkbox('buy_match_negg')
+  buy_negg = col6.checkbox('buy_match_NEGG')
   if buy_negg :
     GO_NEGG_Buy = col6.button("GO!")
     if GO_NEGG_Buy :
@@ -116,7 +116,7 @@ try:
   st.write("Limut Order_FFWM") 
   st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
   col7, col8 , col9  = st.columns(3)
-  sell_ffwm = col9.checkbox('sell_match_ffwn')
+  sell_ffwm = col9.checkbox('sell_match_FFWM')
   if sell_ffwm :
     GO_ffwm_sell = col9.button("GO!")
     if GO_ffwm_sell :
