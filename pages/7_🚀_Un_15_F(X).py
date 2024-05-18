@@ -130,10 +130,17 @@ def Un_15 (Ticker = '' , seed = 36 ):
         net_2 = net_2+i
         net_dd_2.append(net_2)
     a_3['NEGG_Buffer'] =  net_dd_2
-    
+
+    net_dd_3 = []
+    net_3 = 0
+    for i in   a_0.RIVN_re.values :
+        net_3 = net_3+i
+        net_dd_3.append(net_3)
+    a_3['NEGG_Buffer'] =  net_dd_3
+
     return  a_1 , a_0 , a_3
 
-Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'] ,seed = { 'FFWM' :36 , 'NEGG' :553 } )
+Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG' ,'RIVN'] ,seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':144} )
 
 checkbox2 = st.checkbox('Delta $' , value=1 )
 if checkbox2 :
@@ -149,7 +156,8 @@ if checkbox1 :
     Delta_2 = Delta
     Delta_2['FFWM'] =  (Delta.FFWM_net_pv.values) / (float(1500 + (abs( np.min(Buffer.FFWM_Buffer.values))+ abs( np.max(Buffer.FFWM_Buffer.values))))) *100
     Delta_2['NEGG'] =  (Delta.NEGG_net_pv.values)  / (float(1500 + (abs( np.min(Buffer.NEGG_Buffer.values))+ abs( np.max(Buffer.NEGG_Buffer.values))))) *100
+    Delta_2['RIVN'] =  (Delta.RIVN_net_pv.values)  / (float(1500 + (abs( np.min(Buffer.RIVN_Buffer.values))+ abs( np.max(Buffer.RIVN_Buffer.values))))) *100
     Delta_2['Sum.Delta/Max.Sum.Buffer'] = (Delta.Sum_Delta.values) / (float(1500 + (abs( np.min(Sum_Buffer.Sum_Buffer.values))+ abs( np.max(Sum_Buffer.Sum_Buffer.values))))) *100
-    Delta_2 = Delta_2[['Sum.Delta/Max.Sum.Buffer' , 'FFWM' , 'NEGG'  ]]
+    Delta_2 = Delta_2[['Sum.Delta/Max.Sum.Buffer' , 'FFWM' , 'NEGG' ,'RIVN' ]]
     st.line_chart(Delta_2)
 
