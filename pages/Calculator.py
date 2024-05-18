@@ -138,7 +138,7 @@ try:
   
 #
   st.write("Limut Order_RIVN") 
-  st.write( 'sell' , '   ' , 'A', u2 , 'P' , u1  , 'C' , u3  )
+  st.write( 'sell' , '   ' , 'A', u5 , 'P' , u4  , 'C' , u6  )
   col77, col88 , col99  = st.columns(3)
   sell_RIVN = col99.checkbox('sell_match_RIVN')
   if sell_RIVN :
@@ -150,7 +150,7 @@ try:
   st.write(yf.Ticker('RIVN').fast_info['lastPrice'])
   
   col100 , col111 , col122  = st.columns(3)
-  st.write(  'buy' , '   ', 'A', u5 , 'P' , u4  , 'C'  , u6  )
+  st.write(  'buy' , '   ', 'A', u2 , 'P' , u1  , 'C'  , u3  )
   buy_RIVN = col122.checkbox('buy_match_RIVN')
   if buy_RIVN :
     GO_RIVN_Buy = col122.button("GO!")
