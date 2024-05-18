@@ -140,7 +140,8 @@ def Un_15 (Ticker = '' , seed = 36 ):
 
     return  a_1 , a_0 , a_3
 
-Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG' ,'RIVN'] ,seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':144} )
+# Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG' ,'RIVN'] ,seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':144} )
+Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG'  ] ,seed = { 'FFWM' :36 , 'NEGG' :553  } )
 
 checkbox2 = st.checkbox('Delta $' , value=1 )
 if checkbox2 :
