@@ -149,7 +149,7 @@ if checkbox2 :
 checkbox3 = st.checkbox('Buffer $' , value=1 )
 if checkbox3 :
     st.line_chart(Sum_Buffer)
-    st.write( Sum_Buffer['Sum_Buffer'].values )
+    st.write (  abs( np.min(Buffer.Sum_Buffer.values))  )
     st.line_chart(Buffer)
 
 checkbox1 = st.checkbox('Delta / Survival ' , value=1 )
