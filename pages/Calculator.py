@@ -139,15 +139,15 @@ try:
 #
   st.write("RIVN Order_FFWM") 
   st.write( 'sell' , '   ' , 'A', u2 , 'P' , u1  , 'C' , u3  )
-  col7, col8 , col9  = st.columns(3)
-  sell_ffwm = col9.checkbox('sell_match_ffwn')
-  if sell_ffwm :
-    GO_ffwm_sell = col9.button("GO!")
-    if GO_ffwm_sell :
-      client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
-      col9.write(FFWM_ASSET_LAST - b12) 
+  col77, col88 , col99  = st.columns(3)
+  sell_RIVN = col99.checkbox('sell_match_RIVN')
+  if sell_RIVN :
+    GO_RIVN_sell = col99.button("GO!")
+    if GO_RIVN_sell :
+      client.update(  {'field3': RIVN_ASSET_LAST - u5  } )
+      col99.write(RIVN_ASSET_LAST - u5) 
   
-  st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
+  st.write(yf.Ticker('RIVN').fast_info['lastPrice'])
   
   col10, col11 , col12  = st.columns(3)
   st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
