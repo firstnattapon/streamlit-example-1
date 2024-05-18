@@ -24,8 +24,8 @@ NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
 
 # RIVN_ASSET_LAST = client_2.get_field_last(field='field3')
 # RIVN_ASSET_LAST = eval(json.loads(RIVN_ASSET_LAST)['field3'])
-RIVN_ASSET_LAST = 0
-RIVN_ASSET_LAST = 0
+RIVN_ASSET_LAST = 0.
+RIVN_ASSET_LAST = 0.
 
 def NEGG(entry = 1.26 , ref = 1.26  ):
     try:
