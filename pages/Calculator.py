@@ -60,7 +60,7 @@ if Start :
     add_3 = col13.number_input('@_RIVN_ASSET', step=0.001 ,  value=0.)
     _RIVN_ASSET = col13.button("GO!")
     if _RIVN_ASSET :
-      client.update(  {'field2': add_3 }  )
+      client.update(  {'field3': add_3 }  )
       col13.write(add_3) 
 
 
