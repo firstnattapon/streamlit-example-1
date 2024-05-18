@@ -33,7 +33,7 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
   return b2 , b5 , round(b7, 2)
 
 
-col13, col16 , col14 , col15  = st.columns(4)
+col13, col16 , col14 , col15 , col17   = st.columns(5)
 
 x_2 = col16.number_input('Diff', step=1 , value= 60  )
 
@@ -54,6 +54,16 @@ if Start :
     if _NEGG_ASSET :
       client.update(  {'field2': add_2 }  )
       col13.write(add_2) 
+      
+  thingspeak_3 = col13.checkbox('@_RIVN_ASSET')
+  if thingspeak_3 :
+    add_3 = col13.number_input('@_RIVN_ASSET', step=0.001 ,  value=0.)
+    _RIVN_ASSET = col13.button("GO!")
+    if _RIVN_ASSET :
+      client.update(  {'field2': add_3 }  )
+      col13.write(add_3) 
+
+
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
@@ -61,8 +71,13 @@ FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
 NEGG_ASSET_LAST = client.get_field_last(field='field2')
 NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
 
+RIVN_ASSET_LAST = client.get_field_last(field='field3')
+RIVN_ASSET_LAST = eval(json.loads(RIVN_ASSET_LAST)['field3'])
+
 x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
+x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST  )
+
 st.write("_____") 
 
 try:
@@ -70,6 +85,8 @@ try:
   s11 , s12 , s13 =  sell(asset = x_4 , Diff= x_2)
   b8 , b9 , b10 =  buy(asset = x_3 , Diff= x_2)
   b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
+  u1 , u2 , u3 = sell( asset = x_5 , Diff= x_2)
+  u4 , u5 , u6 = buy( asset = x_5 , Diff= x_2)
   
   st.write("Limut_Order_NEGG") 
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
@@ -97,6 +114,30 @@ try:
   
   
   st.write("Limut Order_FFWM") 
+  st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
+  col7, col8 , col9  = st.columns(3)
+  sell_ffwm = col9.checkbox('sell_match_ffwn')
+  if sell_ffwm :
+    GO_ffwm_sell = col9.button("GO!")
+    if GO_ffwm_sell :
+      client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
+      col9.write(FFWM_ASSET_LAST - b12) 
+  
+  st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
+  
+  col10, col11 , col12  = st.columns(3)
+  st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
+  buy_ffwm = col12.checkbox('buy_match_ffwm')
+  if buy_ffwm :
+    GO_ffwm_Buy = col12.button("GO!")
+    if GO_ffwm_Buy :
+      client.update(  {'field1': FFWM_ASSET_LAST + s12  } )
+      col12.write(FFWM_ASSET_LAST + s12) 
+  
+  st.write("_____") 
+  
+#
+  st.write("RIVN Order_FFWM") 
   st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
   col7, col8 , col9  = st.columns(3)
   sell_ffwm = col9.checkbox('sell_match_ffwn')
