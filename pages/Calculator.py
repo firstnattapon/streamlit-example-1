@@ -150,7 +150,7 @@ try:
   st.write(yf.Ticker('RIVN').fast_info['lastPrice'])
   
   col100 , col111 , col122  = st.columns(3)
-  st.write(  'buy' , '   ', 'A', u5 , 'P' , u1  , 'C'  , u3  )
+  st.write(  'buy' , '   ', 'A', u5 , 'P' , u4  , 'C'  , u6  )
   buy_RIVN = col122.checkbox('buy_match_RIVN')
   if buy_RIVN :
     GO_RIVN_Buy = col122.button("GO!")
