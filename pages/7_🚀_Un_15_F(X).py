@@ -136,7 +136,7 @@ def Un_15 (Ticker = '' , seed = 36 ):
     for i in   a_0.RIVN_re.values :
         net_3 = net_3+i
         net_dd_3.append(net_3)
-    a_3['NEGG_Buffer'] =  net_dd_3
+    a_3['RIVN_Buffer'] =  net_dd_3
 
     return  a_1 , a_0 , a_3
 
