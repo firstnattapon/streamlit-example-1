@@ -138,7 +138,7 @@ try:
   
 #
   st.write("RIVN Order_FFWM") 
-  st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
+  st.write( 'sell' , '   ' , 'A', u2 , 'P' , u1  , 'C' , u3  )
   col7, col8 , col9  = st.columns(3)
   sell_ffwm = col9.checkbox('sell_match_ffwn')
   if sell_ffwm :
