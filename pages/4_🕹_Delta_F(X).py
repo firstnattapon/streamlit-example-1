@@ -228,7 +228,7 @@ if RIVN_Graph :
 
 RIVN_Graph_M = st.checkbox('RIVN_Graph_F(X)_M')
 if RIVN_Graph_M :
-    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=99     ,  key=1 )
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=134 ,  key=1 )
     number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=144    , key=2 )
     all_id_m = [] ; all_m = []
     number = [number_1 , number_2 ]
