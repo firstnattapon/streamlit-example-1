@@ -185,7 +185,7 @@ y_2 = st.number_input('NEGG_asset', step=0.01 , value = NEGG_ASSET_LAST  )
 y_2 = y_2*x_1
 st.write(y_2) 
 
-y_3 = st.number_input('RIVN_asset', step=0.01 , value = RIVN_ASSET_LAST  ) 
+y_3 = st.number_input('RIVN_asset', step=0.01 , value = 148  ) 
 y_3 = y_3*x_3
 st.write(y_3) 
 
