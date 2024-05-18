@@ -127,7 +127,7 @@ try:
   
   col10, col11 , col12  = st.columns(3)
   st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
-  buy_ffwm = col12.checkbox('buy_match_ffwm')
+  buy_ffwm = col12.checkbox('buy_match_FFWM')
   if buy_ffwm :
     GO_ffwm_Buy = col12.button("GO!")
     if GO_ffwm_Buy :
