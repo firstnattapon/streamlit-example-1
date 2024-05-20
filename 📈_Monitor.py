@@ -115,6 +115,13 @@ st.write("f(x): {}".format(fx_js_1) ," , " , "Production: {}".format(    np.arou
 st.table(df_7_1)
 st.write("_____") 
 
+df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
+st.write( 'RIVN')
+st.write("f(x): {}".format(fx_js_2) ," , " , "Production: {}".format(    np.around(Production('RIVN'), 2) ))
+st.table(df_7_2)
+st.write("_____") 
+
+
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
 st.write("***RE > 60 USD")
 st.stop()
