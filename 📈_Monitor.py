@@ -126,7 +126,6 @@
 # st.write("***RE > 60 USD")
 # st.stop()
 
-
 import streamlit as st
 import numpy as np
 import datetime
