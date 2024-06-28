@@ -33,6 +33,10 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
   return b2 , b5 , round(b7, 2)
 
 
+###
+channel_id_2 = 2385118
+write_api_key_2 = 'IPSG3MMMBJEB9DY8'
+client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json')
 def Monitor (Ticker = 'FFWM' , field = 2 ):
     tickerData = yf.Ticker( Ticker)
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
@@ -40,7 +44,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     filter_date = '2022-12-21 12:00:00+07:00'
     tickerData = tickerData[tickerData.index >= filter_date]
     
-    fx = client.get_field_last(field='{}'.format(field))
+    fx = client_2.get_field_last(field='{}'.format(field))
     fx_js = int(json.loads(fx)["field{}".format(field)])
     np.random.seed(fx_js)
     data = np.random.randint(2, size = len(tickerData))
@@ -54,7 +58,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     np.random.seed(fx_js)
     df['action'] = np.random.randint(2, size = len(df))
     return df.tail(7) , fx_js
-
+###
 
 
 col13, col16 , col14 , col15 , col17   = st.columns(5)
@@ -86,7 +90,6 @@ if Start :
     if _RIVN_ASSET :
       client.update(  {'field3': add_3 }  )
       col13.write(add_3) 
-
 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
