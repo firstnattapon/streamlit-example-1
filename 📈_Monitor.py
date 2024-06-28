@@ -62,7 +62,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
 df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
 df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
 df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
-st.write(df_7.action.values[1]) 
+st.write(df_7_1.action.values[1]) 
 
 ###
 
@@ -120,28 +120,30 @@ try:
   b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
   u1 , u2 , u3 = sell( asset = x_5 , Diff= x_2)
   u4 , u5 , u6 = buy( asset = x_5 , Diff= x_2)
+
+  st.checkbox('NEGG',value= df_7_1.action.values[1] ):
   
-  st.write("Limut_Order_NEGG") 
-  st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
-  
-  col1, col2 , col3  = st.columns(3)
-  sell_negg = col3.checkbox('sell_match_NEGG')
-  if sell_negg :
-    GO_NEGG_SELL = col3.button("GO!")
-    if GO_NEGG_SELL :
-      client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
-      col3.write(NEGG_ASSET_LAST - b9) 
+    st.write("Limut_Order_NEGG") 
+    st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
     
-  st.write(yf.Ticker('NEGG').fast_info['lastPrice'] ,  yf.Ticker('NEGG').fast_info['lastPrice'] * x_3  )
-  
-  col4, col5 , col6  = st.columns(3)
-  st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-  buy_negg = col6.checkbox('buy_match_NEGG')
-  if buy_negg :
-    GO_NEGG_Buy = col6.button("GO!")
-    if GO_NEGG_Buy :
-      client.update(  {'field2': NEGG_ASSET_LAST + s9  } )
-      col6.write(NEGG_ASSET_LAST + s9) 
+    col1, col2 , col3  = st.columns(3)
+    sell_negg = col3.checkbox('sell_match_NEGG')
+    if sell_negg :
+      GO_NEGG_SELL = col3.button("GO!")
+      if GO_NEGG_SELL :
+        client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
+        col3.write(NEGG_ASSET_LAST - b9) 
+      
+    st.write(yf.Ticker('NEGG').fast_info['lastPrice'] ,  yf.Ticker('NEGG').fast_info['lastPrice'] * x_3  )
+    
+    col4, col5 , col6  = st.columns(3)
+    st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
+    buy_negg = col6.checkbox('buy_match_NEGG')
+    if buy_negg :
+      GO_NEGG_Buy = col6.button("GO!")
+      if GO_NEGG_Buy :
+        client.update(  {'field2': NEGG_ASSET_LAST + s9  } )
+        col6.write(NEGG_ASSET_LAST + s9) 
   
   st.write("_____") 
   
