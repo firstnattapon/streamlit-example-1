@@ -83,7 +83,8 @@ st.write("_____")
 ol13, ol16 , ol14 , ol15 , ol17   = st.columns(5)
 
 if ol17.button("rerun"):
-    ol17.rerun()
+    st.rerun()
+  
 st.write("_____") 
 
 
