@@ -33,6 +33,30 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
   return b2 , b5 , round(b7, 2)
 
 
+def Monitor (Ticker = 'FFWM' , field = 2 ):
+    tickerData = yf.Ticker( Ticker)
+    tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
+    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+    filter_date = '2022-12-21 12:00:00+07:00'
+    tickerData = tickerData[tickerData.index >= filter_date]
+    
+    fx = client.get_field_last(field='{}'.format(field))
+    fx_js = int(json.loads(fx)["field{}".format(field)])
+    np.random.seed(fx_js)
+    data = np.random.randint(2, size = len(tickerData))
+    tickerData['action'] = data
+    tickerData['index'] = [ i+1 for i in range(len(tickerData))]
+    
+    tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
+    tickerData_1['action'] =  [ i for i in range(5)]
+    tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
+    df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
+    np.random.seed(fx_js)
+    df['action'] = np.random.randint(2, size = len(df))
+    return df.tail(7) , fx_js
+
+
+
 col13, col16 , col14 , col15 , col17   = st.columns(5)
 
 x_2 = col16.number_input('Diff', step=1 , value= 60  )
