@@ -121,8 +121,8 @@ try:
   u1 , u2 , u3 = sell( asset = x_5 , Diff= x_2)
   u4 , u5 , u6 = buy( asset = x_5 , Diff= x_2)
 
-  st.checkbox('NEGG',value= df_7_1.action.values[1] ):
-  
+  NEGG = st.checkbox('NEGG',value= df_7_1.action.values[1] )
+  if NEGG :
     st.write("Limut_Order_NEGG") 
     st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
     
