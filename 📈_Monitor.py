@@ -8,10 +8,6 @@ import json
 
 st.set_page_config(page_title="Monitor", page_icon="📈")
 
-if st.button("rerun"):
-    st.rerun()
-
-
 channel_id = 2528199
 write_api_key = '2E65V8XEIPH9B2VV'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
@@ -83,6 +79,11 @@ x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
 x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST  )
 
 st.write("_____") 
+
+if st.button("rerun"):
+    st.rerun()
+
+
 
 try:
   s8 , s9 , s10 =  sell( asset = x_3 , Diff= x_2)
