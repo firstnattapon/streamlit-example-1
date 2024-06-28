@@ -58,6 +58,12 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     np.random.seed(fx_js)
     df['action'] = np.random.randint(2, size = len(df))
     return df.tail(7) , fx_js
+
+df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
+df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
+df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
+st.write(df_7) 
+
 ###
 
 
