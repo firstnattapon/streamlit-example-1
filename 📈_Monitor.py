@@ -80,14 +80,6 @@ x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST  )
 
 st.write("_____") 
 
-ol13, ol16 , ol14 , ol15 , ol17   = st.columns(5)
-
-if ol17.button("rerun"):
-    st.rerun()
-  
-st.write("_____") 
-
-
 try:
   s8 , s9 , s10 =  sell( asset = x_3 , Diff= x_2)
   s11 , s12 , s13 =  sell(asset = x_4 , Diff= x_2)
