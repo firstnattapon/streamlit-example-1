@@ -123,7 +123,7 @@ try:
       client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
       col9.write(FFWM_ASSET_LAST - b12) 
   
-  st.write(yf.Ticker('FFWM').fast_info['lastPrice'])
+  st.write(yf.Ticker('FFWM').fast_info['lastPrice'] , (yf.Ticker('FFWM').fast_info['lastPrice'] * x_4 )
   
   col10, col11 , col12  = st.columns(3)
   st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
@@ -147,7 +147,7 @@ try:
       client.update(  {'field3': RIVN_ASSET_LAST - u5  } )
       col99.write(RIVN_ASSET_LAST - u5) 
   
-  st.write(yf.Ticker('RIVN').fast_info['lastPrice'])
+  st.write(yf.Ticker('RIVN').fast_info['lastPrice'] , yf.Ticker('RIVN').fast_info['lastPrice'] * x_5  )
   
   col100 , col111 , col122  = st.columns(3)
   st.write(  'buy' , '   ', 'A', u2 , 'P' , u1  , 'C'  , u3  )
