@@ -80,8 +80,10 @@ x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST  )
 
 st.write("_____") 
 
-if st.button("rerun"):
-    st.rerun()
+ol13, ol16 , ol14 , ol15 , ol17   = st.columns(5)
+
+if ol17.button("rerun"):
+    ol17.rerun()
 st.write("_____") 
 
 
