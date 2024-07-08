@@ -164,6 +164,7 @@ ans = ['CFLT',
  'PHAT',
  'NCMI',
  'CVRX']
+
  
 col1, col2  = st.columns(2)
 number = col2.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
