@@ -154,16 +154,18 @@ def Un_15 (Ticker = '' ):
     return  a_1 , a_0 , a_3 , di
 
 ans = ['CFLT',
+ 'GME',
  'FLNC',
  'APLS',
- 'ENVX',
  'EXAI',
+ 'ORGO',
+ 'MGTX',
  'PHAR',
  'INNV',
- 'NYXH',
+ 'LXRX',
  'PHAT',
- 'NCMI',
- 'CVRX']
+ 'IMMP',
+ 'ETNB']
 
  
 col1, col2  = st.columns(2)
