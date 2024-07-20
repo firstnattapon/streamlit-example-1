@@ -62,7 +62,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
 df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
 df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
 df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
-# df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
+df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 
 ###
 
@@ -96,13 +96,13 @@ if Start :
       client.update(  {'field3': add_3 }  )
       col13.write(add_3) 
 
-  # thingspeak_4 = col13.checkbox('@_APLS_ASSET')
-  # if thingspeak_4 :
-  #   add_4 = col13.number_input('@_APLS_ASSET', step=0.001 ,  value=0.)
-  #   _APLS_ASSET = col13.button("GO!")
-  #   if _APLS_ASSET :
-  #     client.update(  {'field4': add_4 }  )
-  #     col13.write(add_4) 
+  thingspeak_4 = col13.checkbox('@_APLS_ASSET')
+  if thingspeak_4 :
+    add_4 = col13.number_input('@_APLS_ASSET', step=0.001 ,  value=0.)
+    _APLS_ASSET = col13.button("GO!")
+    if _APLS_ASSET :
+      client.update(  {'field4': add_4 }  )
+      col13.write(add_4) 
 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
@@ -114,13 +114,13 @@ NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
 RIVN_ASSET_LAST = client.get_field_last(field='field3')
 RIVN_ASSET_LAST = eval(json.loads(RIVN_ASSET_LAST)['field3'])
 
-# APLS_ASSET_LAST = client.get_field_last(field='field4')
-# APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
+APLS_ASSET_LAST = client.get_field_last(field='field4')
+APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
 
 x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
 x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST  )
-# x_6 = col18.number_input('APLS_ASSET', step=0.001  , value= APLS_ASSET_LAST  )
+x_6 = col18.number_input('APLS_ASSET', step=0.001  , value= APLS_ASSET_LAST  )
 
 st.write("_____") 
 
@@ -131,7 +131,10 @@ try:
   b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
   u1 , u2 , u3 = sell( asset = x_5 , Diff= x_2)
   u4 , u5 , u6 = buy( asset = x_5 , Diff= x_2)
+  p1 , p2 , p3 = sell( asset = x_6 , Diff= x_2)
+  p4 , p5 , p6 = buy( asset = x_6 , Diff= x_2)
 
+  
   Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value= df_7_1.action.values[1] )
   if Limut_Order_NEGG :
     st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
@@ -206,6 +209,33 @@ try:
         col122.write(RIVN_ASSET_LAST + u2) 
   
   st.write("_____") 
+
+#  
+  Limut_Order_APLS = st.checkbox('Limut_Order_APLS',value= df_7_3.action.values[1] )
+  if Limut_Order_APLS :    
+    st.write( 'sell' , '   ' , 'A', p5 , 'P' , p4  , 'C' , p6  )
+    
+    col7777, col8888 , col9999  = st.columns(3)
+    sell_APLS = col9999.checkbox('sell_match_APLS')
+    if sell_APLS :
+      GO_APLS_sell = col9999.button("GO!")
+      if GO_APLS_sell :
+        client.update(  {'field3': APLS_ASSET_LAST - u5  } )
+        col999.write(APLS_ASSET_LAST - p5) 
+    
+    st.write(yf.Ticker('APLS').fast_info['lastPrice'] , yf.Ticker('APLS').fast_info['lastPrice'] * x_6  )
+    
+    col1000 , col1111 , col1222  = st.columns(3)
+    st.write(  'buy' , '   ', 'A', p2 , 'P' , p1  , 'C'  , p3  )
+    buy_APLS = col1222.checkbox('buy_match_APLS')
+    if buy_APLS :
+      GO_APLS_Buy = col1222.button("GO!")
+      if GO_APLS_Buy :
+        client.update(  {'field3': APLS_ASSET_LAST + p2  } )
+        col122.write(APLS_ASSET_LAST + p2) 
+  
+  st.write("_____") 
+
 
 except:pass
 
