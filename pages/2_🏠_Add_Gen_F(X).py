@@ -195,3 +195,19 @@ if RIVN_Check_Gen_M :
         client.update(  {'field4': input } )
         st.write(input)    
 st.write("_____") 
+
+
+APLS_Check_Gen = st.checkbox('APLS_Add_Gen')
+if APLS_Check_Gen :
+    re = st.button("Rerun_Gen")
+    if re :
+        Gen_fx (Ticker = 'APLS' , field = 5)
+
+APLS_Check_Gen_M = st.checkbox('APLS_Add_Gen_M')
+if APLS_Check_Gen_M :    
+    input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
+    re_ = st.button("Rerun_Gen_M")
+    if re_ :
+        client.update(  {'field5': input } )
+        st.write(input)    
+st.write("_____") 
