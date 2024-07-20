@@ -225,7 +225,7 @@ x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker
 x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
 st.write("_____") 
 
-z_1 = st.number_input('Adjust', step=0.01 , value = -650.0) 
+z_1 = st.number_input('Adjust', step=0.01 , value = -1300.0) 
 st.write("_____") 
 
 y_1 = st.number_input('FFWM_asset', step=0.01 , value = FFWM_ASSET_LAST ) 
@@ -239,6 +239,10 @@ st.write(y_2)
 y_3 = st.number_input('RIVN_asset', step=0.01 , value = RIVN_ASSET_LAST  ) 
 y_3 = y_3*x_3
 st.write(y_3)
+
+y_4 = st.number_input('APLS_asset', step=0.01 , value = APLS_ASSET_LAST ) 
+y_4 = y_4*x_4
+st.write(y_4) 
 
 j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
 st.write("_____") 
