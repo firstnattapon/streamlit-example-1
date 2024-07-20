@@ -223,7 +223,7 @@ x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker
 x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
 st.write("_____") 
 
-z_1 = st.number_input('Adjust', step=0.01 , value = -2800) # ของเก่า 650 + apls 1500+650
+z_1 = st.number_input('Adjust', step=0.01 , value = -650)  
 st.write("_____") 
 
 y_1 = st.number_input('FFWM_asset', step=0.01 , value = FFWM_ASSET_LAST ) 
