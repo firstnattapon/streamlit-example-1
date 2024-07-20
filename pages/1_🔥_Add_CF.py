@@ -225,7 +225,7 @@ x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker
 
 st.write("_____") 
 
-z_1 = st.number_input('Adjust', step=0.01 , value = -650) 
+z_1 = st.number_input('Adjust', step=0.01 , value = 650) 
 st.write("_____") 
 
 y_1 = st.number_input('FFWM_asset', step=0.01 , value = FFWM_ASSET_LAST ) 
@@ -245,8 +245,8 @@ st.write(y_3)
 # st.write(y_4) 
 
 
-# j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
-# st.write("_____") 
+j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
+st.write("_____") 
 
 q_1 =  NEGG( ref = x_1 )
 q_2 =  FFWM( ref = x_2 )
