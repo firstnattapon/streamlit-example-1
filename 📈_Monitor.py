@@ -62,11 +62,12 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
 df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
 df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
 df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
+df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 
 ###
 
 
-col13, col16 , col14 , col15 , col17   = st.columns(5)
+col13, col16 , col14 , col15 , col17 , col18   = st.columns(6)
 
 x_2 = col16.number_input('Diff', step=1 , value= 60  )
 
@@ -96,6 +97,14 @@ if Start :
       client.update(  {'field3': add_3 }  )
       col13.write(add_3) 
 
+  thingspeak_4 = col13.checkbox('@_APLS_ASSET')
+  if thingspeak_4 :
+    add_4 = col13.number_input('@_APLS_ASSET', step=0.001 ,  value=0.)
+    _APLS_ASSET = col13.button("GO!")
+    if _APLS_ASSET :
+      client.update(  {'field4': add_4 }  )
+      col13.write(add_4) 
+
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
@@ -106,9 +115,13 @@ NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
 RIVN_ASSET_LAST = client.get_field_last(field='field3')
 RIVN_ASSET_LAST = eval(json.loads(RIVN_ASSET_LAST)['field3'])
 
+APLS_ASSET_LAST = client.get_field_last(field='field4')
+APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
+
 x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
 x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST  )
+x_6 = col18.number_input('APLS_ASSET', step=0.001  , value= APLS_ASSET_LAST  )
 
 st.write("_____") 
 
