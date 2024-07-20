@@ -250,10 +250,11 @@ st.write("_____")
 q_1 =  NEGG( ref = x_1 )
 q_2 =  FFWM( ref = x_2 )
 q_3 =  RIVN( ref = x_3 )
+q_4 =  APLS( ref = x_4 )
 
-k_1 =  (y_1 + y_2 + y_3) + j_1
-k_2 =  (q_1 + q_2 + q_3 ) + z_1
-k_3 =  6450 + z_1
+k_1 =  (y_1 + y_2 + y_3 + y_4) + j_1
+k_2 =  (q_1 + q_2 + q_3 + q_4) + z_1
+k_3 =  8600 + z_1
 
 ref = k_2
 cf = k_1 - k_2
