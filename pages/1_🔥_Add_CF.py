@@ -25,6 +25,9 @@ NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
 RIVN_ASSET_LAST = client_2.get_field_last(field='field3')
 RIVN_ASSET_LAST = eval(json.loads(RIVN_ASSET_LAST)['field3'])
 
+APLS_ASSET_LAST = client_2.get_field_last(field='field4')
+APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
+
 def NEGG(entry = 1.26 , ref = 1.26  ):
     try:
         entry  = entry ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
