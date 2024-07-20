@@ -248,44 +248,44 @@ st.write(y_3)
 # j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
 # st.write("_____") 
 
-# q_1 =  NEGG( ref = x_1 )
-# q_2 =  FFWM( ref = x_2 )
-# q_3 =  RIVN( ref = x_3 )
+q_1 =  NEGG( ref = x_1 )
+q_2 =  FFWM( ref = x_2 )
+q_3 =  RIVN( ref = x_3 )
 # q_4 =  APLS( ref = x_4 )
 
-# k_1 =  (y_1 + y_2 + y_3 + y_4) + j_1
-# k_2 =  (q_1 + q_2 + q_3 + q_4 ) + z_1
-# k_3 =  8600 + z_1
+k_1 =  (y_1 + y_2 + y_3 ) + j_1
+k_2 =  (q_1 + q_2 + q_3  ) + z_1
+k_3 =  6450 + z_1
 
-# ref = k_2
-# cf = k_1 - k_2
+ref = k_2
+cf = k_1 - k_2
 
-# st.write('ref:' , ref) 
-# st.write('cf:' , cf ) 
+st.write('ref:' , ref) 
+st.write('cf:' , cf ) 
 
-# if st.button("rerun"):
-#     st.rerun()
-# st.write("_____") 
+if st.button("rerun"):
+    st.rerun()
+st.write("_____") 
     
-# Check_ADD = st.checkbox('ADD_CF ')
-# if Check_ADD :
-#     button_ADD = st.button("ADD_CF")
-#     if button_ADD:    
-#         try:
-#             client.update(  {'field1': cf , 'field2': cf / k_3 , 'field3': j_1  }  )
-#             st.write({'Cashflow': cf , 'Pure_Alpha': cf / k_3 ,  'ฺBuffer': j_1  }) 
-#         except:pass
+Check_ADD = st.checkbox('ADD_CF ')
+if Check_ADD :
+    button_ADD = st.button("ADD_CF")
+    if button_ADD:    
+        try:
+            client.update(  {'field1': cf , 'field2': cf / k_3 , 'field3': j_1  }  )
+            st.write({'Cashflow': cf , 'Pure_Alpha': cf / k_3 ,  'ฺBuffer': j_1  }) 
+        except:pass
 
-# import streamlit.components.v1 as components
-# st.write("_____")
-# st.write("Cashflow") 
-# components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-# st.write("_____")
-# st.write("Pure_Alpha")
-# components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-# st.write("_____") 
-# st.write("ฺBuffer")
-# components.iframe('https://thingspeak.com/channels/2394198/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-# st.write("_____")
+import streamlit.components.v1 as components
+st.write("_____")
+st.write("Cashflow") 
+components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+st.write("_____")
+st.write("Pure_Alpha")
+components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+st.write("_____") 
+st.write("ฺBuffer")
+components.iframe('https://thingspeak.com/channels/2394198/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+st.write("_____")
 # st.write('https://thingspeak.com/channels/2394198')
 # st.stop()
