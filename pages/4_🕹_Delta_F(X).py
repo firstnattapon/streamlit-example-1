@@ -244,7 +244,7 @@ if APLS_Graph :
 APLS_Graph_M = st.checkbox('APLS_Graph_F(X)_M')
 if APLS_Graph_M :
     number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=168  ,  key=1 )
-    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=144    , key=2 )
+    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=23    , key=2 )
     all_id_m = [] ; all_m = []
     number = [number_1 , number_2 ]
     delta_x( Ticker = 'APLS'  , number = number)
