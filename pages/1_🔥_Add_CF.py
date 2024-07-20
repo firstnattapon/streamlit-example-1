@@ -122,7 +122,7 @@ def FFWM(entry = 6.88 , ref = 6.88  ):
             return    df[-1]
     except:pass
 
-def RIVN(entry = 10.13 , ref = 10.13  ):
+def RIVN(entry = 10.13 , ref = 10.13):
     try:
         entry  = entry ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
         if entry < 10000 :
@@ -168,7 +168,6 @@ def RIVN(entry = 10.13 , ref = 10.13  ):
             df =  df [df['Asset_Price'] == np.around(ref, 2) ]['net_pv'].values
             return    df[-1]
     except:pass
-
 
 def APLS(entry = 39.61 , ref = 39.61  ):
     try:
@@ -218,14 +217,13 @@ def APLS(entry = 39.61 , ref = 39.61  ):
     except:pass
 
 
-
 x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
 x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker('FFWM').fast_info['lastPrice']   ) 
 x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
 x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
 st.write("_____") 
 
-z_1 = st.number_input('Adjust', step=0.01 , value = -1300.0) 
+z_1 = st.number_input('Adjust', step=0.01 , value = -2800) # ของเก่า 650 + apls 1500+650
 st.write("_____") 
 
 y_1 = st.number_input('FFWM_asset', step=0.01 , value = FFWM_ASSET_LAST ) 
