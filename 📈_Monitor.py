@@ -66,7 +66,6 @@ df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
 
 ###
 
-
 col13, col16 , col14 , col15 , col17 , col18   = st.columns(6)
 
 x_2 = col16.number_input('Diff', step=1 , value= 60  )
