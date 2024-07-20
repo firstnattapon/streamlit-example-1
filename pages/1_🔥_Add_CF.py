@@ -245,8 +245,8 @@ y_4 = y_4*x_4
 st.write(y_4) 
 
 
-j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
-st.write("_____") 
+# j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
+# st.write("_____") 
 
 # q_1 =  NEGG( ref = x_1 )
 # q_2 =  FFWM( ref = x_2 )
