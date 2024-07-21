@@ -6,7 +6,7 @@ import thingspeak
 import json
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀")
 
-# @st.cache_data
+@st.cache_data
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
@@ -96,7 +96,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
 
-# @st.cache_data
+@st.cache_data
 def delta_5(Ticker = "FFWM" , entry= 1.00):
     try:
         tickerData =  yf.Ticker(Ticker)
@@ -145,7 +145,7 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
             return   abs(Production_Costs)
     except:pass
 
-# @st.cache_data
+@st.cache_data
 def exist (Ticker = '' , seed = 36 ):
     all = delta2(Ticker = Ticker)
     siz = len(all)
