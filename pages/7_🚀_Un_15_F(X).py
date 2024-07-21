@@ -152,7 +152,6 @@ def Un_15 (Ticker = '' , seed = 36 ):
 Ticker_input  = st.text_input("Ticker", ['FFWM'])
 list_from_string = eval(Ticker_input)
 
-
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = list_from_string , seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':1075 ,'APLS':168 })
 # Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG' ,'RIVN','APLS'] , seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':1075 ,'APLS':168 })
 
@@ -168,12 +167,24 @@ if checkbox3 :
 checkbox1 = st.checkbox('Delta / Survival ' , value=1 )
 if checkbox1 :
     Delta_2 = Delta
-    Delta_2['FFWM'] =  (Delta.FFWM_net_pv.values) / (float(1500 + (abs( np.min(Buffer.FFWM_Buffer.values))+ abs( np.max(Buffer.FFWM_Buffer.values))))) *100
-    Delta_2['NEGG'] =  (Delta.NEGG_net_pv.values)  / (float(1500 + (abs( np.min(Buffer.NEGG_Buffer.values))+ abs( np.max(Buffer.NEGG_Buffer.values))))) *100
-    Delta_2['RIVN'] =  (Delta.RIVN_net_pv.values)  / (float(1500 + (abs( np.min(Buffer.RIVN_Buffer.values))+ abs( np.max(Buffer.RIVN_Buffer.values))))) *100
-    Delta_2['APLS'] =  (Delta.APLS_net_pv.values)  / (float(1500 + (abs( np.min(Buffer.APLS_Buffer.values))+ abs( np.max(Buffer.APLS_Buffer.values))))) *100
+    try:
+        Delta_2['FFWM'] =  (Delta.FFWM_net_pv.values) / (float(1500 + (abs( np.min(Buffer.FFWM_Buffer.values))+ abs( np.max(Buffer.FFWM_Buffer.values))))) *100
+    except:pass
+    try:
+        Delta_2['NEGG'] =  (Delta.NEGG_net_pv.values)  / (float(1500 + (abs( np.min(Buffer.NEGG_Buffer.values))+ abs( np.max(Buffer.NEGG_Buffer.values))))) *100
+    except:pass
+    try:
+        Delta_2['RIVN'] =  (Delta.RIVN_net_pv.values)  / (float(1500 + (abs( np.min(Buffer.RIVN_Buffer.values))+ abs( np.max(Buffer.RIVN_Buffer.values))))) *100
+    except:pass
+    try:
+        Delta_2['APLS'] =  (Delta.APLS_net_pv.values)  / (float(1500 + (abs( np.min(Buffer.APLS_Buffer.values))+ abs( np.max(Buffer.APLS_Buffer.values))))) *100
+    except:pass
 
     Delta_2['Sum.Delta/Max.Sum.Buffer'] = (Delta.Sum_Delta.values) / (float(1500 + (abs( np.min(Sum_Buffer.Sum_Buffer.values))+ abs( np.max(Sum_Buffer.Sum_Buffer.values))))) *100
-    Delta_2 = Delta_2[['Sum.Delta/Max.Sum.Buffer' , 'FFWM' , 'NEGG' ,'RIVN','APLS' ]]
+
+    Ticker_input_2  = st.text_input("Delta_2", ['Sum.Delta/Max.Sum.Buffer','FFWM'])
+    list_from_string_2 = eval(Ticker_input_2)
+
+    Delta_2 = Delta_2[list_from_string_2]
     st.line_chart(Delta_2)
 
