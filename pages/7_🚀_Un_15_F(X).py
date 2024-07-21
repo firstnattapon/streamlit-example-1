@@ -149,11 +149,9 @@ def Un_15 (Ticker = '' , seed = 36 ):
     return  a_1 , a_0 , a_3
 
 
-Ticker_input  = st.text_input("Ticker", ['FFWM'])
+Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS'])
 list_from_string = eval(Ticker_input)
-
 Delta , Sum_Buffer , Buffer =  Un_15(Ticker = list_from_string , seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':1075 ,'APLS':168 })
-# Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG' ,'RIVN','APLS'] , seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':1075 ,'APLS':168 })
 
 checkbox2 = st.checkbox('Delta $' , value=1 )
 if checkbox2 :
@@ -182,9 +180,9 @@ if checkbox1 :
 
     Delta_2['Sum.Delta/Max.Sum.Buffer'] = (Delta.Sum_Delta.values) / (float(1500 + (abs( np.min(Sum_Buffer.Sum_Buffer.values))+ abs( np.max(Sum_Buffer.Sum_Buffer.values))))) *100
 
-    Ticker_input_2  = st.text_input("Delta_2", ['Sum.Delta/Max.Sum.Buffer','FFWM'])
+    Ticker_input_2  = st.text_input("Delta_2", ['Sum.Delta/Max.Sum.Buffer','FFWM','NEGG','RIVN','APLS'])
     list_from_string_2 = eval(Ticker_input_2)
-
+    
     Delta_2 = Delta_2[list_from_string_2]
     st.line_chart(Delta_2)
 
