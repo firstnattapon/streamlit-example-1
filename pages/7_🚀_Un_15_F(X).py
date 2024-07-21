@@ -138,13 +138,14 @@ def Un_15 (Ticker = '' , seed = 36 ):
         net_dd_3.append(net_3)
     a_3['RIVN_Buffer'] =  net_dd_3
 
-    net_dd_4 = []
-    net_4 = 0
-    for i in   a_0.APLS_re.values :
-        net_4 = net_4+i
-        net_dd_4.append(net_4)
-    a_3['APLS_Buffer'] =  net_dd_4
-    
+    try:
+        net_dd_4 = []
+        net_4 = 0
+        for i in   a_0.APLS_re.values :
+            net_4 = net_4+i
+            net_dd_4.append(net_4)
+        a_3['APLS_Buffer'] =  net_dd_4
+    except:pass
 
     return  a_1 , a_0 , a_3
 
