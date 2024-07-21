@@ -138,19 +138,21 @@ def Un_15 (Ticker = '' , seed = 36 ):
         net_dd_3.append(net_3)
     a_3['RIVN_Buffer'] =  net_dd_3
 
-    try:
-        net_dd_4 = []
-        net_4 = 0
-        for i in   a_0.APLS_re.values :
-            net_4 = net_4+i
-            net_dd_4.append(net_4)
-        a_3['APLS_Buffer'] =  net_dd_4
-    except:pass
+    net_dd_4 = []
+    net_4 = 0
+    for i in   a_0.APLS_re.values :
+        net_4 = net_4+i
+        net_dd_4.append(net_4)
+    a_3['APLS_Buffer'] =  net_dd_4
 
     return  a_1 , a_0 , a_3
 
+
+title = st.text_input("Ticker",  )
+ticker_list = eval(ticker_text)
+
 # Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG' ,'RIVN','APLS'] ,seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':1075 ,'APLS':168 })
-Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ['FFWM' , 'NEGG' ,'RIVN' ] ,seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':1075  })
+Delta , Sum_Buffer , Buffer =  Un_15(Ticker = ticker_list  ,seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':1075 ,'APLS':168 })
 
 checkbox2 = st.checkbox('Delta $' , value=1 )
 if checkbox2 :
