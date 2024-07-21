@@ -6,7 +6,7 @@ import thingspeak
 import json
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀")
 
-@st.cache_data
+# @st.cache_data
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
@@ -96,7 +96,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:0
             return  final
     except:pass
 
-@st.cache_data
+# @st.cache_data
 def delta_5(Ticker = "FFWM" , entry= 1.00):
     try:
         tickerData =  yf.Ticker(Ticker)
@@ -145,7 +145,7 @@ def delta_5(Ticker = "FFWM" , entry= 1.00):
             return   abs(Production_Costs)
     except:pass
 
-@st.cache_data
+# @st.cache_data
 def exist (Ticker = '' , seed = 36 ):
     all = delta2(Ticker = Ticker)
     siz = len(all)
@@ -158,18 +158,22 @@ def exist (Ticker = '' , seed = 36 ):
 
 Ticker_1 , all_fx_1  , all_Pro_1  , prd_1  =  exist(Ticker = "FFWM" , seed = 36 )
 Ticker_2 , all_fx_2  , all_Pro_2  , prd_2 =  exist(Ticker = "NEGG" ,  seed = 553 )
+Ticker_2 , all_fx_3  , all_Pro_3  , prd_3 =  exist(Ticker = "RIVN" ,  seed = 1075 )
 
-line =   np.array([all_fx_1 , all_fx_2]).T
-columns =  np.array([Ticker_1 , Ticker_2])
-pro =   np.array([all_Pro_1 , all_Pro_2]).T
+line =   np.array([all_fx_1 , all_fx_2 ,  all_fx_3 ]).T
+columns =  np.array([Ticker_1 , Ticker_2 , Ticker_3 ])
+pro =   np.array([all_Pro_1 , all_Pro_2 , all_Pro_3  ]).T
 
 max_dd = pd.DataFrame( pro  ,  columns= columns )
 max_dd['FFWM'] =   [ (i - np.max(max_dd.FFWM.values))    for i in max_dd.FFWM.values]
 max_dd['NEGG'] =   [ (i - np.max(max_dd.NEGG.values))    for i in max_dd.NEGG.values]
+max_dd['RIVN'] =   [ (i - np.max(max_dd.RIVN.values))    for i in max_dd.RIVN.values]
 
 line_1  =     prd_1  /  ( abs( np.min(max_dd.FFWM.values)) + 1500 )
 line_2   =    prd_2   /  (abs( np.min(max_dd.NEGG.values)) + 1500 )
-line_3 =    np.array([line_1 , line_2]).T
+line_3   =    prd_2   /  (abs( np.min(max_dd.RIVN.values)) + 1500 )
+
+line_0 =    np.array([line_1 , line_2 , line_3 ]).T
 
 
 Production = st.checkbox('Production' , value=1)
