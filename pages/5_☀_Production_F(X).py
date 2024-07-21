@@ -158,7 +158,7 @@ def exist (Ticker = '' , seed = 36 ):
 
 Ticker_1 , all_fx_1  , all_Pro_1  , prd_1  =  exist(Ticker = "FFWM" , seed = 36 )
 Ticker_2 , all_fx_2  , all_Pro_2  , prd_2 =  exist(Ticker = "NEGG" ,  seed = 553 )
-Ticker_2 , all_fx_3  , all_Pro_3  , prd_3 =  exist(Ticker = "RIVN" ,  seed = 1075 )
+Ticker_3 , all_fx_3  , all_Pro_3  , prd_3 =  exist(Ticker = "RIVN" ,  seed = 1075 )
 
 line =   np.array([all_fx_1 , all_fx_2 ,  all_fx_3 ]).T
 columns =  np.array([Ticker_1 , Ticker_2 , Ticker_3 ])
