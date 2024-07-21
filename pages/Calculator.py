@@ -123,7 +123,7 @@ st.write("_____")
 
 df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 st.write( 'APLS')
-st.write("f(x): {}".format(fx_js_2) ," , " , "Production: {}".format(    np.around(Production('APLS'), 2) ))
+st.write("f(x): {}".format(fx_js_3) ," , " , "Production: {}".format(    np.around(Production('APLS'), 2) ))
 st.table(df_7_3)
 st.write("_____") 
 
