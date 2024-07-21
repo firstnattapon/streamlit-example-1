@@ -149,9 +149,9 @@ def Un_15 (Ticker = '' , seed = 36 ):
     return  a_1 , a_0 , a_3
 
 
-Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS', 'DOGE-USD' ])
+Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS'])
 list_from_string = eval(Ticker_input)
-Delta , Sum_Buffer , Buffer =  Un_15(Ticker = list_from_string , seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':1075 ,'APLS':168 ,'DOGE-USD':0 })
+Delta , Sum_Buffer , Buffer =  Un_15(Ticker = list_from_string , seed = { 'FFWM' :36 , 'NEGG' :553 ,'RIVN':1075 ,'APLS':168 })
 
 checkbox2 = st.checkbox('Delta $' , value=1 )
 if checkbox2 :
