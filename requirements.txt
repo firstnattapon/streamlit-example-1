@@ -5,4 +5,4 @@ yfinance
 thingspeak
 plotly
 stocksymbol
-python-telegram-bot
+telebot
