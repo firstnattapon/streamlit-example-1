@@ -1,4 +1,5 @@
 import telebot
+import streamlit as st
 
 TOKEN = '7248188209:AAFhpA9doHJpESvb2BLkIz6sHTmUeUjOG6E'
 chat_id = 7355273754
@@ -10,3 +11,6 @@ def send_message(chat_id, text):
 
 text = 'This is a test message from Python.'
 send_message(chat_id, text)
+
+
+st.write("channel_id = 2528199") 
