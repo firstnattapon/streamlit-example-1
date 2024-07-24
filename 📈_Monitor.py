@@ -220,7 +220,7 @@ try:
     if sell_APLS :
       GO_APLS_sell = col9999.button("GO!")
       if GO_APLS_sell :
-        client.update(  {'field3': APLS_ASSET_LAST - u5  } )
+        client.update(  {'field4': APLS_ASSET_LAST - u5  } )
         col999.write(APLS_ASSET_LAST - p5) 
     
     st.write(yf.Ticker('APLS').fast_info['lastPrice'] , yf.Ticker('APLS').fast_info['lastPrice'] * x_6  )
@@ -231,7 +231,7 @@ try:
     if buy_APLS :
       GO_APLS_Buy = col1222.button("GO!")
       if GO_APLS_Buy :
-        client.update(  {'field3': APLS_ASSET_LAST + p2  } )
+        client.update(  {'field4': APLS_ASSET_LAST + p2  } )
         col122.write(APLS_ASSET_LAST + p2) 
   
   st.write("_____") 
