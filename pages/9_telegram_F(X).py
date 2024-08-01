@@ -5,7 +5,6 @@ import thingspeak
 import json
 import yfinance as yf
 
-
 while True: 
   TOKEN = '7248188209:AAFhpA9doHJpESvb2BLkIz6sHTmUeUjOG6E'
   chat_id = 7355273754
