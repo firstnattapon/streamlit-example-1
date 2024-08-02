@@ -70,8 +70,8 @@ while True:
         diff = yf.Ticker(Ticker[idx]).fast_info['lastPrice'] * v
         if diff < 1440 or diff > 1560 :
             if Dict_fx[Ticker[idx]] == 1:
-            text_add = '{} - {}'.format( Ticker[idx] , diff) 
-            text.append(text_add)
+                text_add = '{} - {}'.format( Ticker[idx] , diff) 
+                text.append(text_add)
     for i in text:
         send_message(chat_id, i)
         time.sleep(300)
