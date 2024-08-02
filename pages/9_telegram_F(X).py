@@ -59,6 +59,8 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
 # Dict_fx = {'FFWM': FFWM_fx.action.values[1], 'NEGG': NEGG_fx.action.values[1] , 'RIVN': RIVN_fx.action.values[1] , 'APLS': APLS_fx.action.values[1]}
 
 fx = client_2.get_field_last(field='{}'.format(2))
+fx =  json.loads(fx)
+
 # fx_js = int(json.loads(fx)["field{}".format(fx)])
 # fx_js = fx["field{}".format(fx)] 
 st.write(type(fx)) 
