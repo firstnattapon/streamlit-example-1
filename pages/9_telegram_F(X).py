@@ -41,9 +41,9 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     fx = client_2.get_field_last(field='{}'.format(field))
     fx =  json.loads(fx)
     fx =  fx["field{}".format(field)] 
-    fx_js = int(fx)
+    # fx_js = int(fx)
     
-    np.random.seed(fx_js)
+    np.random.seed(int(fx))
     data = np.random.randint(2, size = len(tickerData))
     tickerData['action'] = data
     tickerData['index'] = [ i+1 for i in range(len(tickerData))]
