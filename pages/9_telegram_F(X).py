@@ -61,7 +61,7 @@ client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json')
 
 fx = client_2.get_field_last(field='{}'.format(2))
 # fx_js = int(json.loads(fx)["field{}".format(fx)])
-fx_js = (fx)["field{}".format(fx)] 
+fx_js = fx["field{}".format(fx)] 
 st.write(fx_js) 
 
   # def send_message(chat_id, text):
