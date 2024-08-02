@@ -52,24 +52,16 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     df['action'] = np.random.randint(2, size = len(df))
     return df.tail(7) , fx_js
 
-df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
-df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
-df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
-df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
-st.write(df_7) 
-
-
-
 # FFWM_fx , _  = Monitor(Ticker = 'FFWM', field = 2)
 # NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
 # RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
 # APLS_fx , _  = Monitor(Ticker = 'APLS', field = 5)
 # Dict_fx = {'FFWM': FFWM_fx.action.values[1], 'NEGG': NEGG_fx.action.values[1] , 'RIVN': RIVN_fx.action.values[1] , 'APLS': APLS_fx.action.values[1]}
 
-# fx = client_2.get_field_last(field='{}'.format(2))
-# # fx_js = int(json.loads(fx)["field{}".format(fx)])
+fx = client_2.get_field_last(field='{}'.format(2))
+# fx_js = int(json.loads(fx)["field{}".format(fx)])
 # fx_js = fx["field{}".format(fx)] 
-# st.write(fx['field2']) 
+st.write(type(fx)) 
 
   # def send_message(chat_id, text):
   #     bot.send_message(chat_id, text)
