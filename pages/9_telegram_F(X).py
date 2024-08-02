@@ -61,7 +61,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
 fx = client_2.get_field_last(field='{}'.format(2))
 fx =  json.loads(fx)
 fx =  fx["field{}".format(2)] 
-
+fx = int(fx)
 # fx_js = int(json.loads(fx)["field{}".format(fx)])
 # fx_js = fx["field{}".format(fx)] 
 st.write(type(fx)) 
