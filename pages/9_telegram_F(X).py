@@ -43,7 +43,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     fx =  fx["field{}".format(field)] 
     fx_js = int(fx)
     
-    # np.random.seed(int(fx))
+    np.random.seed(fx_js)
     # data = np.random.randint(2, size = len(tickerData))
     # tickerData['action'] = data
     # tickerData['index'] = [ i+1 for i in range(len(tickerData))]
