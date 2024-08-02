@@ -57,7 +57,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     return fx_js
 
 FFWM_fx  = Monitor(Ticker = 'FFWM', field = 2)
-
+st.write(FFWM_fx)
 # FFWM_fx , _  = Monitor(Ticker = 'FFWM', field = 2)
 # NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
 # RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
