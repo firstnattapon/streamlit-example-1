@@ -52,10 +52,10 @@ while True:
     df['action'] = np.random.randint(2, size = len(df))
     return df.tail(7) , fx_js
 
-  FFWM_fx , _  = Monitor(Ticker = 'FFWM', field = 2)
-  NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
-  RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
-  APLS_fx , _  = Monitor(Ticker = 'APLS', field = 5)
+  FFWM_fx , _a  = Monitor(Ticker = 'FFWM', field = 2)
+  NEGG_fx , _b  = Monitor(Ticker = 'NEGG', field = 3)
+  RIVN_fx , _c  = Monitor(Ticker = 'RIVN', field = 4)
+  APLS_fx , _d  = Monitor(Ticker = 'APLS', field = 5)
   Dict_fx = {'FFWM': FFWM_fx.action.values[1], 'NEGG': NEGG_fx.action.values[1] , 'RIVN': RIVN_fx.action.values[1] , 'APLS': APLS_fx.action.values[1]}
   
   def send_message(chat_id, text):
