@@ -64,7 +64,7 @@ fx =  fx["field{}".format(2)]
 fx = int(fx)
 # fx_js = int(json.loads(fx)["field{}".format(fx)])
 # fx_js = fx["field{}".format(fx)] 
-st.write(type(fx)) 
+st.write(fx) 
 
   # def send_message(chat_id, text):
   #     bot.send_message(chat_id, text)
