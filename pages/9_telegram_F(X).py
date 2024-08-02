@@ -31,35 +31,38 @@ channel_id_2 = 2385118
 write_api_key_2 = 'IPSG3MMMBJEB9DY8'
 client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json')
 
-def Monitor (Ticker = 'FFWM' , field = 2 ):
-  tickerData = yf.Ticker( Ticker)
-  tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
-  tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-  filter_date = '2022-12-21 12:00:00+07:00'
-  tickerData = tickerData[tickerData.index >= filter_date]
+# def Monitor (Ticker = 'FFWM' , field = 2 ):
+#   tickerData = yf.Ticker( Ticker)
+#   tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
+#   tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+#   filter_date = '2022-12-21 12:00:00+07:00'
+#   tickerData = tickerData[tickerData.index >= filter_date]
   
-  fx = client_2.get_field_last(field='{}'.format(field))
-  fx_js = int(json.loads(fx)["field{}".format(field)])
-  np.random.seed(fx_js)
-  data = np.random.randint(2, size = len(tickerData))
-  tickerData['action'] = data
-  tickerData['index'] = [ i+1 for i in range(len(tickerData))]
+#   fx = client_2.get_field_last(field='{}'.format(field))
+#   fx_js = int(json.loads(fx)["field{}".format(field)])
+#   np.random.seed(fx_js)
+#   data = np.random.randint(2, size = len(tickerData))
+#   tickerData['action'] = data
+#   tickerData['index'] = [ i+1 for i in range(len(tickerData))]
   
-  tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
-  tickerData_1['action'] =  [ i for i in range(5)]
-  tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
-  df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
-  np.random.seed(fx_js)
-  df['action'] = np.random.randint(2, size = len(df))
-  return df.tail(7) , fx_js
+#   tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
+#   tickerData_1['action'] =  [ i for i in range(5)]
+#   tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
+#   df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
+#   np.random.seed(fx_js)
+#   df['action'] = np.random.randint(2, size = len(df))
+#   return df.tail(7) , fx_js
 
-FFWM_fx , _  = Monitor(Ticker = 'FFWM', field = 2)
-NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
-RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
-APLS_fx , _  = Monitor(Ticker = 'APLS', field = 5)
-Dict_fx = {'FFWM': FFWM_fx.action.values[1], 'NEGG': NEGG_fx.action.values[1] , 'RIVN': RIVN_fx.action.values[1] , 'APLS': APLS_fx.action.values[1]}
+# FFWM_fx , _  = Monitor(Ticker = 'FFWM', field = 2)
+# NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
+# RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
+# APLS_fx , _  = Monitor(Ticker = 'APLS', field = 5)
+# Dict_fx = {'FFWM': FFWM_fx.action.values[1], 'NEGG': NEGG_fx.action.values[1] , 'RIVN': RIVN_fx.action.values[1] , 'APLS': APLS_fx.action.values[1]}
 
-st.write(FFWM_fx) 
+fx = client_2.get_field_last(field='{}'.format(2))
+fx_js = int(json.loads(fx)["field{}".format(fx)])
+st.write(fx_js) 
+
   # def send_message(chat_id, text):
   #     bot.send_message(chat_id, text)
   
