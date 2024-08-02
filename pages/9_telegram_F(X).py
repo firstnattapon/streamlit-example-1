@@ -29,6 +29,7 @@ while True:
     channel_id_2 = 2385118
     write_api_key_2 = 'IPSG3MMMBJEB9DY8'
     client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json')
+    
     def Monitor (Ticker = 'FFWM' , field = 2 ):
         tickerData = yf.Ticker( Ticker)
         tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
@@ -41,20 +42,22 @@ while True:
         fx =  fx["field{}".format(field)] 
         fx_js = int(fx)
         
-        np.random.seed(fx_js)
-        data = np.random.randint(2, size = len(tickerData))
-        tickerData['action'] = data
-        tickerData['index'] = [ i+1 for i in range(len(tickerData))]
+        # np.random.seed(fx_js)
+        # data = np.random.randint(2, size = len(tickerData))
+        # tickerData['action'] = data
+        # tickerData['index'] = [ i+1 for i in range(len(tickerData))]
         
-        tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
-        tickerData_1['action'] =  [ i for i in range(5)]
-        tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
-        df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
-        np.random.seed(fx_js)
-        df['action'] = np.random.randint(2, size = len(df))
+        # tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
+        # tickerData_1['action'] =  [ i for i in range(5)]
+        # tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
+        # df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
+        # np.random.seed(fx_js)
+        # df['action'] = np.random.randint(2, size = len(df))
         return df.tail(7) , fx_js
-    
-    FFWM_fx , _  = Monitor(Ticker = 'FFWM', field = 2)
+
+        return   fx_js
+
+    FFWM_fx    = Monitor(Ticker = 'FFWM', field = 2)
     
     # NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
     # RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
