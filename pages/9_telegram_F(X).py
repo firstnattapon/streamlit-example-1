@@ -41,25 +41,27 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     fx = client_2.get_field_last(field='{}'.format(field))
     fx =  json.loads(fx)
     fx =  fx["field{}".format(field)] 
-    # fx_js = int(fx)
+    # # fx_js = int(fx)
     
-    np.random.seed(int(fx))
-    data = np.random.randint(2, size = len(tickerData))
-    tickerData['action'] = data
-    tickerData['index'] = [ i+1 for i in range(len(tickerData))]
+    # np.random.seed(int(fx))
+    # data = np.random.randint(2, size = len(tickerData))
+    # tickerData['action'] = data
+    # tickerData['index'] = [ i+1 for i in range(len(tickerData))]
     
-    tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
-    tickerData_1['action'] =  [ i for i in range(5)]
-    tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
-    df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
-    np.random.seed(fx_js)
-    df['action'] = np.random.randint(2, size = len(df))
-    return df.tail(7) , fx_js
+    # tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
+    # tickerData_1['action'] =  [ i for i in range(5)]
+    # tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
+    # df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
+    # np.random.seed(fx_js)
+    # df['action'] = np.random.randint(2, size = len(df))
+    return fx
 
-FFWM_fx , _  = Monitor(Ticker = 'FFWM', field = 2)
-NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
-RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
-APLS_fx , _  = Monitor(Ticker = 'APLS', field = 5)
+FFWM_fx  = Monitor(Ticker = 'FFWM', field = 2)
+
+# FFWM_fx , _  = Monitor(Ticker = 'FFWM', field = 2)
+# NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
+# RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
+# APLS_fx , _  = Monitor(Ticker = 'APLS', field = 5)
 
 Dict_fx = {'FFWM': FFWM_fx.action.values[1], 'NEGG': NEGG_fx.action.values[1] , 'RIVN': RIVN_fx.action.values[1] , 'APLS': APLS_fx.action.values[1]}
 
