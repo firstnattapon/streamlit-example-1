@@ -55,23 +55,25 @@ while True:
         return df.tail(7) , fx_js
     
     FFWM_fx , _  = Monitor(Ticker = 'FFWM', field = 2)
-    NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
-    RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
-    APLS_fx , _  = Monitor(Ticker = 'APLS', field = 5)
-    Dict_fx = {'FFWM': FFWM_fx.action.values[1], 'NEGG': NEGG_fx.action.values[1] , 'RIVN': RIVN_fx.action.values[1] , 'APLS': APLS_fx.action.values[1]}
-
-    def send_message(chat_id, text):
-      bot.send_message(chat_id, text)
     
-    Ticker = ['FFWM' , 'NEGG' , 'RIVN' , 'APLS']
-    Ticker_data = [FFWM_ASSET_LAST , NEGG_ASSET_LAST , RIVN_ASSET_LAST , APLS_ASSET_LAST]
-    text = ['....']
-    for idx , v in enumerate(Ticker_data):
-        diff = yf.Ticker(Ticker[idx]).fast_info['lastPrice'] * v
-        if diff < 1440 or diff > 1560 :
-            if Dict_fx[Ticker[idx]] == 1:
-                text_add = '{} - {}'.format( Ticker[idx] , diff) 
-                text.append(text_add)
-    for i in text:
-        send_message(chat_id, i)
-        time.sleep(300)
+    # NEGG_fx , _  = Monitor(Ticker = 'NEGG', field = 3)
+    # RIVN_fx , _  = Monitor(Ticker = 'RIVN', field = 4)
+    # APLS_fx , _  = Monitor(Ticker = 'APLS', field = 5)
+    
+    # Dict_fx = {'FFWM': FFWM_fx.action.values[1], 'NEGG': NEGG_fx.action.values[1] , 'RIVN': RIVN_fx.action.values[1] , 'APLS': APLS_fx.action.values[1]}
+
+    # def send_message(chat_id, text):
+    #   bot.send_message(chat_id, text)
+    
+    # Ticker = ['FFWM' , 'NEGG' , 'RIVN' , 'APLS']
+    # Ticker_data = [FFWM_ASSET_LAST , NEGG_ASSET_LAST , RIVN_ASSET_LAST , APLS_ASSET_LAST]
+    # text = ['....']
+    # for idx , v in enumerate(Ticker_data):
+    #     diff = yf.Ticker(Ticker[idx]).fast_info['lastPrice'] * v
+    #     if diff < 1440 or diff > 1560 :
+    #         if Dict_fx[Ticker[idx]] == 1:
+    #             text_add = '{} - {}'.format( Ticker[idx] , diff) 
+    #             text.append(text_add)
+    # for i in text:
+    #     send_message(chat_id, i)
+    #     time.sleep(300)
