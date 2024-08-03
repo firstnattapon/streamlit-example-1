@@ -210,7 +210,7 @@ if checkbox1 :
     yahoo   =  yf.Ticker(title)
     data 	=  yahoo.get_balance_sheet().T
     Net_CurrentAssets =   data['CurrentAssets'][0] - (data['CurrentLiabilities'][0]  +  data['LongTermDebt'][0])
-    Net_CurrentAssets_2 = data['CurrentAssets'][0] / Net_CurrentAssets
+    Net_CurrentAssets_2 = (Net_CurrentAssetsdata / ['CurrentAssets'][0]) * 100
     
     st.write('AVG. S&P500 P/E' , 7 ,  'finance> ', Net_CurrentAssets_2 )
     
