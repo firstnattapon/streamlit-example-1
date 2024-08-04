@@ -26,10 +26,4 @@ def un_16 (df_pc_pe =['FFWM' , 'NEGG' , 'RIVN' ,'APLS' ]):
   a_1['cf'] = a_1.sum(axis=1 ,    numeric_only=True )
   a_x = pd.concat([a_0 , a_1], axis = 1)
 
-  print ( df_pc_pe)
-  print ( 'Max_CF:'  ,   np.max(a_x['cf']) )
-  print ( 'Maxcash_DD :'  ,   np.min(a_x['maxcash_dd']) )
-  # print ( 'Max_CF  / Maxcash_DD:'  , np.max(a_x['cf']) /  abs( np.min(a_x['maxcash_dd']))   ,'%' )
-  # print ( 'Max_CF  / Max_Production_Costs:'  , np.max(a_x['cf']) / Max_Production   ,'%' )
-  print ( '') 
   return  a_x
