@@ -200,7 +200,7 @@ for i in range(len(max_dd)):
     try:
         roll = max_dd[:i]
         roll_min = np.min(roll)
-        roll_max = np.max(roll)
+        roll_max = 0
         data_roll =  roll_min - roll_max  
         roll_over.append(data_roll)
     except:pass
