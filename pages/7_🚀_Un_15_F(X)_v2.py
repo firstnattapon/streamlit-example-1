@@ -226,6 +226,6 @@ col1.write(  df_all.Sum_Delta.values[-1]   )
 col1.write(  df_all.Max_Sum_Buffer.values[-1]   )
 col2.plotly_chart(px.line(df_all_2))
 col2.write(  df_all_2.True_Alpha.values[-1] )
-col3.line_chart(df_new)
+col3.plotly_chart(px.line(df_new))
 
  
