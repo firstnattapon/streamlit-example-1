@@ -227,10 +227,11 @@ df_all_2 = pd.DataFrame(  sum , columns = ['True_Alpha']  )
 col1, col2 = st.columns(2)
 
 col1.plotly_chart(px.line(df_all))
-col1.write(  df_all.Sum_Delta.values[-1]   )
-col1.write(  df_all.Max_Sum_Buffer.values[-1]   )
 col2.plotly_chart(px.line(df_all_2))
-col2.write(  df_all_2.True_Alpha.values[-1] )
-st.plotly_chart(px.line(df_new))
 
+st.write(  df_all.Sum_Delta.values[-1]   )
+st.write(  df_all.Max_Sum_Buffer.values[-1]   )
+st.write(  df_all_2.True_Alpha.values[-1] )
+
+st.plotly_chart(px.line(df_new))
  
