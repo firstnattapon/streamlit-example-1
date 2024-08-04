@@ -216,6 +216,6 @@ st.line_chart(cf)
 
 
 
-df_all = pd.DataFrame(list(zip(cf, sum)))
+df_all = pd.DataFrame(list(zip(cf, sum , roll_over )))
 st.write(df_all)
 st.line_chart(df_all)
