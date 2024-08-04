@@ -210,8 +210,7 @@ min_sum =  abs(np.min(roll_over))
 sum =    (df_new.cf.values   / min_sum ) * 100
 cf =  df_new.cf.values
 
-# df_all = pd.DataFrame({'maxcash_dd': roll_over,'cf': cf , 'Delta': sum ,  } ,index=['Max.Sum.Buffer', 'Sum.Delta' , 'Delta/Buffer'])
-df_all = pd.DataFrame({'maxcash_dd': roll_over,  'Delta': sum ,  } ,index=['Max.Sum.Buffer',   'Delta/Buffer'])
+df_all = pd.DataFrame({ 'cf': cf , 'Delta': sum ,  } ,index=[ 'Sum.Delta' , 'Delta/Buffer'])
 
 # st.line_chart(df_all)
 
