@@ -204,16 +204,15 @@ for i in range(len(max_dd)):
         data_roll =  roll_min - roll_max  
         roll_over.append(data_roll)
     except:pass
-st.line_chart(roll_over)
+# st.line_chart(roll_over)
 
 min_sum =  abs(np.min(roll_over))
 sum =    (df_new.cf.values   / min_sum ) * 100
-st.line_chart(sum)
+# st.line_chart(sum)
 
 cf =  df_new.cf.values
-st.line_chart(cf)
+# st.line_chart(cf)
 
-
-df_all = pd.DataFrame(list(zip(cf, sum , roll_over )) , columns =['Sum.Delta', 'P/E' , 'Max.Sum.Buffer'] )
+df_all = pd.DataFrame(list(zip(cf, sum , roll_over )) , columns =['Sum.Delta', 'True_Alpha' , 'Max.Sum.Buffer'] )
 st.write(df_all)
 st.line_chart(df_all)
