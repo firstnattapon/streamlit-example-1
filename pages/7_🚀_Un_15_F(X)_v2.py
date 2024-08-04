@@ -208,6 +208,8 @@ st.line_chart(roll_over)
 
 min_sum =  abs(np.min(roll_over))
 sum =    (df_new.cf.values   / min_sum ) * 100
+cf =  df_new.cf.values
+
 st.line_chart(sum)
 
 
