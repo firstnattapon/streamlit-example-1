@@ -4,6 +4,9 @@ import yfinance as yf
 import streamlit as st
 import thingspeak
 import json
+import plotly.express as px
+
+
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀")
 
 def delta_1(Ticker = "FFWM" ):
@@ -219,5 +222,7 @@ df_all_2 = pd.DataFrame(  sum , columns = ['True_Alpha']  )
 col1, col2  = st.columns(2)
 
 col1.line_chart(df_all)
-col2.line_chart(df_all_2)
+col2..plotly_chart(px.line(df_all_2))
 st.line_chart(df_new)
+
+ 
