@@ -206,10 +206,10 @@ for i in range(len(max_dd)):
     except:pass
 st.line_chart(roll_over)
 
-min_sum =  abs(np.min(roll_over))
-sum =    (df_new.cf.values   / min_sum ) * 100
-cf =  df_new.cf.values
-st.line_chart(cf)
+# min_sum =  abs(np.min(roll_over))
+# sum =    (df_new.cf.values   / min_sum ) * 100
+# cf =  df_new.cf.values
+# st.line_chart(cf)
 
 
 # df_all = pd.DataFrame({ 'cf': cf , 'Delta': sum ,  } ,index=[ 'Sum.Delta' , 'Delta/Buffer'])
