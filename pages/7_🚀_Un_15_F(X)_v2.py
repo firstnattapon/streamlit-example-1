@@ -192,7 +192,6 @@ list_from_string = eval(Ticker_input)
 data = un_16(list_from_string)
 drop_df =  [ '{}_re'.format(i) for i in list_from_string ]
 df_new = data.drop( drop_df , axis=1)
-st.line_chart(df_new)
 
 roll_over = []
 max_dd = df_new.maxcash_dd.values
@@ -219,3 +218,4 @@ col1, col2  = st.columns(2)
 
 col1.line_chart(df_all)
 col2.line_chart(df_all_2)
+st.line_chart(df_new)
