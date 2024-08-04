@@ -201,7 +201,7 @@ for i in range(len(max_dd)):
         roll = max_dd[:i]
         roll_min = np.min(roll)
         roll_max = np.max(roll)
-        data_roll = roll_max - roll_min
+        data_roll =  roll_min - roll_max  
         roll_over.append(data_roll)
     except:pass
 st.line_chart(roll_over)
