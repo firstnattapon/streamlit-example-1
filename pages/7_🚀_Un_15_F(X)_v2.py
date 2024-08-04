@@ -213,7 +213,7 @@ cf =  df_new.cf.values
 # st.line_chart(cf)
 
 df_all = pd.DataFrame(list(zip(cf,   roll_over )) , columns =['Sum.Delta',   'Max.Sum.Buffer'] )
-df_all_2 = pd.DataFrame(  sum , columns = ['True_Alpha']  )
+df_all_2 = pd.DataFrame(  sum , columns = ['Alpha']  )
 col1, col2  = st.columns(2)
 
 col1.line_chart(df_all)
