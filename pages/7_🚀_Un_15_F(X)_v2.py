@@ -9,8 +9,6 @@ st.set_page_config(page_title="Exist_F(X)", page_icon="☀")
 def delta_1(Ticker = "FFWM" ):
     try:
         tickerData = yf.Ticker(Ticker)
-        # tickerData = tickerData.history(period= '30m' ,  start='2000-01-01', end='2025-01-01')[-2000:].reset_index()[['Close']]
-        # entry  = tickerData.Close.values[-1]
         entry  = tickerData.fast_info['lastPrice']  ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
         # แก้ตรงentry -1
         if entry < 10000 :
@@ -191,5 +189,9 @@ def un_16 (df_pc_pe =[]):
   
 Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS'])
 list_from_string = eval(Ticker_input)
-data = un_16(list_from_string)
+data = un_16(list_from_string[)
 st.line_chart(data)
+st.write(data)
+
+
+
