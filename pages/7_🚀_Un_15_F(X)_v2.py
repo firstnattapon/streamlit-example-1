@@ -193,8 +193,8 @@ def un_16 (df_pc_pe =[]):
 Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS'])
 list_from_string = eval(Ticker_input)
 data = un_16(list_from_string)
+re_roll = 0
 for i in list_from_string :
-    re_roll = 0
     data['{}_re'.format(i)] = [re_roll + i for i in data['{}_re'.format(i)]]
 
 df_new = data
