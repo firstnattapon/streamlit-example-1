@@ -210,7 +210,7 @@ st.line_chart(roll_over)
 # sum =    (df_new.cf.values   / min_sum ) * 100
 # cf =  df_new.cf.values
 # st.line_chart(cf)
-
+ 
 
 # df_all = pd.DataFrame({ 'cf': cf , 'Delta': sum ,  } ,index=[ 'Sum.Delta' , 'Delta/Buffer'])
 
