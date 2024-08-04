@@ -207,7 +207,7 @@ for i in range(len(max_dd)):
 st.line_chart(roll_over)
 
 min_sum =  abs(np.min(roll_over))
-sum =    df_new.cf.values   / min_sum  
+sum =    (df_new.cf.values   / min_sum ) * 100
 st.line_chart(sum)
 
 
