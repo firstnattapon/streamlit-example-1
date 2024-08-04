@@ -229,8 +229,7 @@ col1, col2 = st.columns(2)
 col1.plotly_chart(px.line(df_all))
 col2.plotly_chart(px.line(df_all_2))
 
-st.write(  df_all.Sum_Delta.values[-1]   )
-st.write(  df_all.Max_Sum_Buffer.values[-1]   )
+st.write(  df_all.Sum_Delta.values[-1]  , df_all.Max_Sum_Buffer.values[-1]   )
 st.write(  df_all_2.True_Alpha.values[-1] )
 
 st.plotly_chart(px.line(df_new))
