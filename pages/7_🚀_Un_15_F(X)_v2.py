@@ -219,7 +219,7 @@ cf =  df_new.cf.values
 df_all =   pd.DataFrame(list(zip(cf,   roll_over )) , columns =['Sum_Delta',   'Max_Sum_Buffer'] )
 df_all_2 = pd.DataFrame(  sum , columns = ['True_Alpha']  )
 
-col1, col2 , col3  = st.columns(3)
+col1, col2 = st.columns(2)
 
 col1.plotly_chart(px.line(df_all))
 col1.write(  df_all.Sum_Delta.values[-1]   )
