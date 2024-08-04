@@ -193,8 +193,9 @@ def un_16 (df_pc_pe =[]):
 Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS'])
 list_from_string = eval(Ticker_input)
 data = un_16(list_from_string)
-drop_df =  [ '{}_re'.format(i) for i in list_from_string ]
-df_new = data.drop( drop_df , axis=1)
+# drop_df =  [ '{}_re'.format(i) for i in list_from_string ]
+# df_new = data.drop( drop_df , axis=1)
+df_new = data
 
 roll_over = []
 max_dd = df_new.maxcash_dd.values
