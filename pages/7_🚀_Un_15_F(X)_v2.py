@@ -212,7 +212,9 @@ st.line_chart(sum)
 
 cf =  df_new.cf.values
 st.line_chart(cf)
- 
+
+
+
 
 # df_all = pd.DataFrame({ 'cf': cf , 'Delta': sum ,  } ,index=[ 'Sum.Delta' , 'Delta/Buffer'])
 # st.line_chart(df_all)
