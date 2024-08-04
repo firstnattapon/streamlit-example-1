@@ -194,11 +194,15 @@ drop_df =  [ '{}_re'.format(i) for i in list_from_string ]
 df_new = data.drop( drop_df , axis=1)
 st.line_chart(df_new)
 
-roll_over = [0]
+roll_over = []
 max_dd = df_new.maxcash_dd.values
-# for i in range(len(max_dd)):
-#     roll = max_dd
-st.line_chart(max_dd[:10])
+for i in range(len(max_dd)):
+    roll = max_dd[:i]
+    roll_min = np.min(roll)
+    roll_max = np.max(roll)
+    data_roll = roll_max - roll_min
+    roll_over.append(data_roll)
+st.line_chart(roll_over)
 
 
 
