@@ -216,13 +216,13 @@ cf =  df_new.cf.values
 # st.line_chart(cf)
 
 
-df_all =   pd.DataFrame(list(zip(cf,   roll_over )) , columns =['Sum.Delta',   'Max_Sum_Buffer'] )
+df_all =   pd.DataFrame(list(zip(cf,   roll_over )) , columns =['Sum_Delta',   'Max_Sum_Buffer'] )
 df_all_2 = pd.DataFrame(  sum , columns = ['True_Alpha']  )
 
 col1, col2  = st.columns(2)
 
 col1.plotly_chart(px.line(df_all))
-col1.write(  df_all.Max_Sum_Buffer.values[-1]   )
+col1.write(  df_all.Sum_Delta.values[-1]   )
 col1.write(  df_all.Max_Sum_Buffer.values[-1]   )
 col2.plotly_chart(px.line(df_all_2))
 col2.write(  df_all_2.True_Alpha.values[-1] )
