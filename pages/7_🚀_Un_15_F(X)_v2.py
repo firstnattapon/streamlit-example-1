@@ -214,5 +214,4 @@ cf =  df_new.cf.values
 # st.line_chart(cf)
 
 df_all = pd.DataFrame(list(zip(cf, sum , roll_over )) , columns =['Sum.Delta', 'True_Alpha' , 'Max.Sum.Buffer'] )
-st.write(df_all)
 st.line_chart(df_all)
