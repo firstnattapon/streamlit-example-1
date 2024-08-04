@@ -204,12 +204,14 @@ for i in range(len(max_dd)):
         data_roll =  roll_min - roll_max  
         roll_over.append(data_roll)
     except:pass
-st.line_chart(roll_over)
+# st.line_chart(roll_over)
 
 min_sum =  abs(np.min(roll_over))
 sum =    (df_new.cf.values   / min_sum ) * 100
 cf =  df_new.cf.values
 
-st.line_chart(sum)
+df_all = pd.DataFrame({'maxcash_dd': roll_over,'cf': cf , 'Delta': sum ,  },index=['Max.Sum.Buffer', 'Sum.Delta' , 'Delta/Buffer'])
+
+# st.line_chart(df_all)
 
 
