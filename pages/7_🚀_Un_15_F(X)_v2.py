@@ -223,7 +223,7 @@ col1, col2  = st.columns(2)
 
 col1.plotly_chart(px.line(df_all))
 col2.plotly_chart(px.line(df_all_2))
-col2.write( 'True_Alpha=' , df_all_2.True_Alpha[-1])
+col2.write( 'True_Alpha=' , df_all_2.True_Alpha.values[-1])
 st.line_chart(df_new)
 
  
