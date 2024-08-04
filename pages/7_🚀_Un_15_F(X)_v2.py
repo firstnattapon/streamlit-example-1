@@ -222,7 +222,7 @@ df_all_2 = pd.DataFrame(  sum , columns = ['True_Alpha']  )
 col1, col2  = st.columns(2)
 
 col1.line_chart(df_all)
-col2..plotly_chart(px.line(df_all_2))
+col2.plotly_chart(px.line(df_all_2))
 st.line_chart(df_new)
 
  
