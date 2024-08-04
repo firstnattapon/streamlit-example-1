@@ -194,7 +194,7 @@ drop_df =  [ '{}_re'.format(i) for i in list_from_string ]
 df_new = data.drop( drop_df , axis=1)
 st.line_chart(df_new)
 
-roll_over = [0,0]
+roll_over = []
 max_dd = df_new.maxcash_dd.values
 for i in range(len(max_dd)):
     try:
@@ -210,7 +210,8 @@ min_sum =  abs(np.min(roll_over))
 sum =    (df_new.cf.values   / min_sum ) * 100
 cf =  df_new.cf.values
 
-df_all = pd.DataFrame({'maxcash_dd': roll_over,'cf': cf , 'Delta': sum ,  },index=['Max.Sum.Buffer', 'Sum.Delta' , 'Delta/Buffer'])
+# df_all = pd.DataFrame({'maxcash_dd': roll_over,'cf': cf , 'Delta': sum ,  } ,index=['Max.Sum.Buffer', 'Sum.Delta' , 'Delta/Buffer'])
+df_all = pd.DataFrame({'maxcash_dd': roll_over,  'Delta': sum ,  } ,index=['Max.Sum.Buffer',   'Delta/Buffer'])
 
 # st.line_chart(df_all)
 
