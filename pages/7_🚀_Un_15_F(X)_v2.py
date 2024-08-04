@@ -30,3 +30,4 @@ def un_16 (df_pc_pe =['FFWM' , 'NEGG' , 'RIVN' ,'APLS' ]):
   
 Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS'])
 list_from_string = eval(Ticker_input)
+st.line_chart(list_from_string)
