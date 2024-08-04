@@ -194,5 +194,8 @@ drop_df =  [ '{}_re'.format(i) for i in list_from_string ]
 df_new = data.drop( drop_df , axis=1)
 st.line_chart(df_new)
 
+max_dd = df_new.maxcash_dd.values
+st.line_chart(max_dd)
+
 
 
