@@ -27,3 +27,6 @@ def un_16 (df_pc_pe =['FFWM' , 'NEGG' , 'RIVN' ,'APLS' ]):
   a_x = pd.concat([a_0 , a_1], axis = 1)
 
   return  a_x
+  
+Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS'])
+list_from_string = eval(Ticker_input)
