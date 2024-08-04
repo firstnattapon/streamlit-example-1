@@ -222,15 +222,15 @@ cf =  df_new.cf.values
 
 
 df_all =   pd.DataFrame(list(zip(cf,   roll_over )) , columns =['Sum_Delta',   'Max_Sum_Buffer'] )
-df_all_2 = pd.DataFrame(  sum , columns = ['True_Alpha']  )
+df_all_2 = pd.DataFrame(  sum , columns = ['True_Alpha'] )
 
 st.write('____')
-st.write( '(' ,df_all.Sum_Delta.values[-1]  , df_all.Max_Sum_Buffer.values[-1] , ')' ,  df_all_2.True_Alpha.values[-1]   )
+st.write( '(' ,df_all.Sum_Delta.values[-1]  , df_all.Max_Sum_Buffer.values[-1] , ')' ,  df_all_2.True_Alpha.values[-1] )
 
 col1, col2 = st.columns(2)
 col1.plotly_chart(px.line(df_all))
 col2.plotly_chart(px.line(df_all_2))
-
+st.write('____')
 
 st.plotly_chart(px.line(df_new))
  
