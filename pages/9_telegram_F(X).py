@@ -74,8 +74,8 @@ while True:
             if Dict_fx[Ticker[idx]] == 1:
                 text_add = '{} - {}'.format( Ticker[idx] , diff) 
                 text.append(text_add)
-    for i in text:
-        try:
+    try:
+        for i in text:
             send_message(chat_id, i)
-        except:pass
-        time.sleep(300)
+    except:pass
+    time.sleep(300)
