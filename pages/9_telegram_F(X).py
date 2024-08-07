@@ -67,7 +67,7 @@ while True:
     
     Ticker = ['FFWM' , 'NEGG' , 'RIVN' , 'APLS']
     Ticker_data = [FFWM_ASSET_LAST , NEGG_ASSET_LAST , RIVN_ASSET_LAST , APLS_ASSET_LAST]
-    text = ['....']
+    text = []
     for idx , v in enumerate(Ticker_data):
         diff = yf.Ticker(Ticker[idx]).fast_info['lastPrice'] * v
         if diff < 1440 or diff > 1560 :
@@ -75,5 +75,7 @@ while True:
                 text_add = '{} - {}'.format( Ticker[idx] , diff) 
                 text.append(text_add)
     for i in text:
-        send_message(chat_id, i)
+        try:
+            send_message(chat_id, i)
+        except:pass
         time.sleep(300)
