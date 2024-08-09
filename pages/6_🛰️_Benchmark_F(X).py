@@ -5,7 +5,7 @@ import streamlit as st
 import thingspeak
 import json
 import plotly.express as px
-
+ 
 st.set_page_config(page_title="Benchmark_F(X)", page_icon="🛰️"  , layout="wide")
 
 # @st.cache_data
