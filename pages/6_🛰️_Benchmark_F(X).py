@@ -159,19 +159,16 @@ ans = ['LCID',
  'FLNC',
  'APLS',
  'RXRX',
- 'EXAI',
  'SHCR',
+ 'REPL',
+ 'ACB',
  'ORGO',
- 'PHAR',
+ 'OUST',
+ 'BARK',
  'PHAT',
- 'MRSN',
- 'IMMP',
- 'ETNB',
- 'NEGG',
- 'FFWM',
- 'RIVN',
- 'APLS',
-      ]
+ 'TSHA',
+ 'PSTX',
+ 'ETNB']
 
 col1, col2  = st.columns(2)
 number = col2.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
