@@ -57,15 +57,15 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
             return   df[['Asset_Price', 'Cash_Balan' , 'net_pv' ,'Fixed_Asset_Value']] ,  df_2[-1]
     except:pass
 
-x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
-x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker('FFWM').fast_info['lastPrice']   ) 
-x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
-x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
-st.write("_____") 
+tab1, tab2, tab3  , tab4  , tab5 = st.tabs([ 'DATA' ,"FFWM", "NEGG", "RIVN" , 'APLS'])
 
-tab1, tab2, tab3  , tab4 = st.tabs(["FFWM", "NEGG", "RIVN" , 'APLS' ])
-
-
+with tab1:
+    x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
+    x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker('FFWM').fast_info['lastPrice']   ) 
+    x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
+    x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
+    st.write("_____") 
+    
 df ,  df_2 = CF_Graph(entry = 6.88, ref = x_2)
 as_1 =  df.set_index('Asset_Price')
 as_1_py = px.line( as_1 )
