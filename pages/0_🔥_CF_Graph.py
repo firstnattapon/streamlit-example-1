@@ -54,8 +54,7 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
             df = pd.concat([df_top, df_down], axis=0)
             df['net_pv'] = df['Fixed_Asset_Value'] + df['Cash_Balan']
             df_2 =  df[df['Asset_Price'] == np.around(ref, 2) ]['net_pv'].values
-            df_2 =  df[-1]
-            return   df , df_2
+            return   df , df_2[-1]
             
     except:pass
 df , df_2 = CF_Graph(entry = 6.88, ref = 1.26)
