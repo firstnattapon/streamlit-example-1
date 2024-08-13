@@ -64,10 +64,11 @@ with tab1:
     x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker('FFWM').fast_info['lastPrice']   ) 
     x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
     x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
+    x_5 = st.number_input('Fixed_Asset_Value', step=0.01 ,   value = 1500. ) 
     st.write("_____") 
 
 with tab2:
-    df ,  df_2 = CF_Graph(entry = 6.88, ref = x_2)
+    df ,  df_2 = CF_Graph(entry = 6.88, ref = x_2 , Fixed_Asset_Value = x_5)
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
     as_1_py.add_vline(x= x_2  , line_width=1 , line_dash="dash")
@@ -76,7 +77,7 @@ with tab2:
     st.write( 'rf:' , df_2) 
 
 with tab3:
-    df ,  df_2 = CF_Graph(entry = 1.26 , ref = x_1)
+    df ,  df_2 = CF_Graph(entry = 1.26 , ref = x_1  , Fixed_Asset_Value = x_5)
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
     as_1_py.add_vline(x= x_1  , line_width=1 , line_dash="dash")
@@ -85,7 +86,7 @@ with tab3:
     st.write( 'rf:' , df_2) 
     
 with tab4:
-    df ,  df_2 = CF_Graph(entry = 10.07  , ref = x_3)
+    df ,  df_2 = CF_Graph(entry = 10.07  , ref = x_3  , Fixed_Asset_Value = x_5)
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
     as_1_py.add_vline(x= x_3  , line_width=1 , line_dash="dash")
@@ -94,7 +95,7 @@ with tab4:
     st.write( 'rf:' , df_2) 
 
 with tab5:
-    df ,  df_2 = CF_Graph(entry = 39.61  , ref = x_4)
+    df ,  df_2 = CF_Graph(entry = 39.61  , ref = x_4  , Fixed_Asset_Value = x_5)
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
     as_1_py.add_vline(x= x_4  , line_width=1 , line_dash="dash")
