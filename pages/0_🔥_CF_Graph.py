@@ -53,17 +53,16 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
             df_down = df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'})
             df = pd.concat([df_top, df_down], axis=0)
             df['net_pv'] = df['Fixed_Asset_Value'] + df['Cash_Balan']
-            # df =  df [df['Asset_Price'] == np.around(ref, 2) ]['net_pv'].values
-            # return    df[-1]
-            return    df
+            df_2 =  df[df['Asset_Price'] == np.around(ref, 2) ]['net_pv'].values
+            df_2 =  df[-1]
+            return    df , df_2
     except:pass
-
-as_1 = CF_Graph(entry = 6.88).set_index('Asset_Price')
+df , df_2 = CF_Graph(entry = 6.88)
+as_1 = df.set_index('Asset_Price')
 as_1_py = px.line( as_1 )
 as_1_py.add_vline(x= 2.5, line_width=1 , line_dash="dash")
-
 st.plotly_chart( as_1_py ) 
-# st.write(CF_Graph(entry = 6.88)) 
+st.write(df_2) 
 
 
 
