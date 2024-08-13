@@ -69,37 +69,39 @@ with tab1:
     st.write("_____") 
 
 with tab2:
-    df ,  df_2 = CF_Graph(entry = 6.88, ref = x_2 , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
+    df ,  df_FFWM = CF_Graph(entry = 6.88, ref = x_2 , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
     as_1_py.add_vline(x= x_2  , line_width=1 , line_dash="dash")
     as_1_py.add_vline(x= 6.88  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
-    st.write( 'rf:' , df_2) 
+    st.write( 'rf:' , df_FFWM) 
 
 with tab3:
-    df ,  df_2 = CF_Graph(entry = 1.26 , ref = x_1  , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
+    df ,  df_NEGG = CF_Graph(entry = 1.26 , ref = x_1  , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
     as_1_py.add_vline(x= x_1  , line_width=1 , line_dash="dash")
     as_1_py.add_vline(x= 1.26  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
-    st.write( 'rf:' , df_2) 
+    st.write( 'rf:' , df_NEGG) 
     
 with tab4:
-    df ,  df_2 = CF_Graph(entry = 10.07  , ref = x_3  , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
+    df ,  df_RIVN = CF_Graph(entry = 10.07  , ref = x_3  , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
     as_1_py.add_vline(x= x_3  , line_width=1 , line_dash="dash")
     as_1_py.add_vline(x= 10.07  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
-    st.write( 'rf:' , df_2) 
+    st.write( 'rf:' , df_RIVN) 
 
 with tab5:
-    df ,  df_2 = CF_Graph(entry = 39.61  , ref = x_4  , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
+    df ,  df_APLS = CF_Graph(entry = 39.61  , ref = x_4  , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
     as_1_py.add_vline(x= x_4  , line_width=1 , line_dash="dash")
     as_1_py.add_vline(x= 39.61  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
-    st.write( 'rf:' , df_2) 
+    st.write( 'rf:' , df_APLS) 
+
+st.write( 'sum_rf:' , df_FFWM+df_NEGG+df_RIVN+df_APLS) 
