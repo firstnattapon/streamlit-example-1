@@ -76,6 +76,7 @@ with tab2:
     as_1_py.add_vline(x= 6.88  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
     st.write( 'rf:' , df_FFWM) 
+    st.write("_____") 
 
 with tab3:
     df ,  df_NEGG = CF_Graph(entry = 1.26 , ref = x_1  , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
@@ -85,6 +86,7 @@ with tab3:
     as_1_py.add_vline(x= 1.26  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
     st.write( 'rf:' , df_NEGG) 
+    st.write("_____") 
     
 with tab4:
     df ,  df_RIVN = CF_Graph(entry = 10.07  , ref = x_3  , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
@@ -94,6 +96,7 @@ with tab4:
     as_1_py.add_vline(x= 10.07  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
     st.write( 'rf:' , df_RIVN) 
+    st.write("_____") 
 
 with tab5:
     df ,  df_APLS = CF_Graph(entry = 39.61  , ref = x_4  , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
@@ -102,7 +105,8 @@ with tab5:
     as_1_py.add_vline(x= x_4  , line_width=1 , line_dash="dash")
     as_1_py.add_vline(x= 39.61  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
-    st.write( 'rf:' , df_APLS) 
+    st.write( 'rf:' , df_APLS)
+    st.write("_____") 
 
 st.write( 'sum_rf:' , (df_FFWM+df_NEGG+df_RIVN+df_APLS) , 'asset' ,   x_5*4  , 'Cash' , x_6*4 , 'Lv_Cash' , -2000 )
 st.write( 'real_rf:' , (df_FFWM+df_NEGG+df_RIVN+df_APLS) - 2000)
