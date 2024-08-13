@@ -62,7 +62,7 @@ st.write(CF_Graph(entry = 3.0))
 as_1  = CF_Graph(entry = 3.0).net_pv.values
 as_2  = CF_Graph(entry = 5.0).net_pv.values
 
-as_3 = [as_1 , as_2]
+as_3 = [[as_1 , as_2]]
 
 
 st.plotly_chart( px.line( as_3 ))
