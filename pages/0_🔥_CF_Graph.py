@@ -59,5 +59,5 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
     except:pass
 
 
-st.write(CF_Graph()) 
+st.write(CF_Graph(entry = 3.0)) 
 
