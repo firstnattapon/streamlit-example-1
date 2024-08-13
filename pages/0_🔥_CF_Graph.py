@@ -59,13 +59,10 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
     except:pass
 
 as_1 = CF_Graph(entry = 6.88).set_index('Asset_Price')
-as_2 = CF_Graph(entry = 6.00).set_index('Asset_Price')
-
-# st.write(CF_Graph(entry = 6.88)) 
 as_1_py = px.line( as_1 )
-as_1_py = px.line( as_2 )
-as_1_py.add_vline(x=2.5, line_width=1 , line_dash="dash")
+as_1_py.add_vline(x= 2.5, line_width=1 , line_dash="dash")
 st.plotly_chart( as_1_py ) 
+# st.write(CF_Graph(entry = 6.88)) 
 
 
 
