@@ -57,13 +57,11 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
             return   df[['Asset_Price' , 'Cash_Balan' , 'net_pv']] ,  df_2[-1]
     except:pass
 
-
-df , df_2 = CF_Graph(entry = 6.88, ref = 5.85)
-as_1 = df.set_index('Asset_Price')
+df , df_2.set_index('Asset_Price') = CF_Graph(entry = 6.88, ref = 5.85)
 as_1_py = px.line( as_1 )
 as_1_py.add_vline(x= 2.5, line_width=1 , line_dash="dash")
 st.plotly_chart( as_1_py ) 
-st.write(df_2) 
+st.write( 'rf' , df_2) 
 
 
 
