@@ -62,5 +62,5 @@ as_1 =  df.set_index('Asset_Price')
 as_1_py = px.line( as_1 )
 as_1_py.add_vline(x= 2.5, line_width=1 , line_dash="dash")
 st.plotly_chart( as_1_py ) 
-st.write( 'rf' , df_2) 
+st.write( 'rf:' , df_2) 
 
