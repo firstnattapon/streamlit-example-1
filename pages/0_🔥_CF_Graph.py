@@ -62,7 +62,7 @@ st.write(CF_Graph(entry = 3.0))
 as_1  = CF_Graph(entry = 3.0).net_pv.values
 as_2  = CF_Graph(entry = 5.0).net_pv.values
 
-data = {'x': as_1, 'y1': as_2}   
+data = pd.DataFrame({'x': as_1, 'y1': as_2})
 df = pd.DataFrame(data)
 
 
