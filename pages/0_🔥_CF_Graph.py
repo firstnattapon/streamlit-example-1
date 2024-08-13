@@ -104,4 +104,4 @@ with tab5:
     st.plotly_chart( as_1_py ) 
     st.write( 'rf:' , df_APLS) 
 
-st.write( 'sum_rf:' , df_FFWM+df_NEGG+df_RIVN+df_APLS) 
+st.write( 'sum_rf:' , df_FFWM+df_NEGG+df_RIVN+df_APLS , 'asset' = 1500*4 , 'Cash' = 650*4  ) 
