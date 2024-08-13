@@ -93,7 +93,7 @@ with tab4:
     st.plotly_chart( as_1_py ) 
     st.write( 'rf:' , df_2) 
 
-with tab4:
+with tab5:
     df ,  df_2 = CF_Graph(entry = 39.61  , ref = x_4)
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
