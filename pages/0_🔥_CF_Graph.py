@@ -60,6 +60,8 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
 
 st.write(CF_Graph(entry = 3.0)) 
 as_1  = CF_Graph(entry = 3.0).net.values
+st.write(as_1) 
+
 st.plotly_chart( px.line( as_1 ))
 
 
