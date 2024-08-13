@@ -80,5 +80,24 @@ with tab3:
     as_1 =  df.set_index('Asset_Price')
     as_1_py = px.line( as_1 )
     as_1_py.add_vline(x= x_1  , line_width=1 , line_dash="dash")
+    as_1_py.add_vline(x= 1.26  , line_width=0.1 )
+    st.plotly_chart( as_1_py ) 
+    st.write( 'rf:' , df_2) 
+    
+with tab4:
+    df ,  df_2 = CF_Graph(entry = 10.07  , ref = x_3)
+    as_1 =  df.set_index('Asset_Price')
+    as_1_py = px.line( as_1 )
+    as_1_py.add_vline(x= x_3  , line_width=1 , line_dash="dash")
+    as_1_py.add_vline(x= 10.07  , line_width=0.1 )
+    st.plotly_chart( as_1_py ) 
+    st.write( 'rf:' , df_2) 
+
+with tab4:
+    df ,  df_2 = CF_Graph(entry = 39.61  , ref = x_4)
+    as_1 =  df.set_index('Asset_Price')
+    as_1_py = px.line( as_1 )
+    as_1_py.add_vline(x= x_4  , line_width=1 , line_dash="dash")
+    as_1_py.add_vline(x= 39.61  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
     st.write( 'rf:' , df_2) 
