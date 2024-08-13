@@ -65,10 +65,11 @@ with tab1:
     x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
     x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
     st.write("_____") 
-    
-df ,  df_2 = CF_Graph(entry = 6.88, ref = x_2)
-as_1 =  df.set_index('Asset_Price')
-as_1_py = px.line( as_1 )
-as_1_py.add_vline(x= x_2  , line_width=1 , line_dash="dash")
-st.plotly_chart( as_1_py ) 
-st.write( 'rf:' , df_2) 
+
+with tab2:
+    df ,  df_2 = CF_Graph(entry = 6.88, ref = x_2)
+    as_1 =  df.set_index('Asset_Price')
+    as_1_py = px.line( as_1 )
+    as_1_py.add_vline(x= x_2  , line_width=1 , line_dash="dash")
+    st.plotly_chart( as_1_py ) 
+    st.write( 'rf:' , df_2) 
