@@ -122,7 +122,7 @@ def FFWM(entry = 6.88 , ref = 6.88  ):
             return    df[-1]
     except:pass
 
-def RIVN(entry = 10.13 , ref = 10.13):
+def RIVN(entry = 10.07 , ref = 10.07):
     try:
         entry  = entry ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
         if entry < 10000 :
