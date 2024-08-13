@@ -59,11 +59,9 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
     except:pass
 
 st.write(CF_Graph(entry = 3.0)) 
-as_1  = CF_Graph(entry = 3.0).net_pv.values
-as_2  = CF_Graph(entry = 5.0).net_pv.values
 
 
-st.plotly_chart( px.line( as_1))
+st.plotly_chart( px.line( F_Graph(entry = 3.0)))
 
 
 
