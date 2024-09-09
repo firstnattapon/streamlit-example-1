@@ -234,7 +234,11 @@ try:
         client.update(  {'field4': APLS_ASSET_LAST + p2  } )
         col122.write(APLS_ASSET_LAST + p2) 
   
-  st.write("_____") 
+  st.write("_____")
+  
+  if st.button("Foo"):
+    st.session_state.value = "Foo"
+    st.rerun()
 
 
 except:pass
