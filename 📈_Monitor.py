@@ -236,8 +236,7 @@ try:
   
   st.write("_____")
   
-  if st.button("Foo"):
-    st.session_state.value = "Foo"
+  if st.button("RERUN"):
     st.rerun()
 
 
