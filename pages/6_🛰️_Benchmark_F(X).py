@@ -153,21 +153,33 @@ def Un_15 (Ticker = '' ):
     di = di.dif.values
     return  a_1 , a_0 , a_3 , di
 
-ans = ['LCID',
+ans = ['RIVN',
+ 'LCID',
  'CFLT',
  'GME',
+ 'HCM',
  'FLNC',
  'APLS',
  'RXRX',
+ 'EXAI',
+ 'FCEL',
  'SHCR',
  'REPL',
  'ACB',
  'ORGO',
+ 'DCGO',
+ 'GEVO',
+ 'CMPS',
  'OUST',
+ 'CTV',
+ 'SRRK',
  'BARK',
- 'PHAT',
+ 'PHAR',
+ 'TKNO',
+ 'MRSN',
  'TSHA',
  'PSTX',
+ 'IMMP',
  'ETNB']
 
 col1, col2  = st.columns(2)
