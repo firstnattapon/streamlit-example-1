@@ -232,7 +232,7 @@ try:
       GO_APLS_Buy = col1222.button("GO!")
       if GO_APLS_Buy :
         client.update(  {'field4': APLS_ASSET_LAST + p2  } )
-        col122.write(APLS_ASSET_LAST + p2) 
+        col1222.write(APLS_ASSET_LAST + p2) 
   
   st.write("_____")
   
