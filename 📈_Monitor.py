@@ -147,7 +147,8 @@ try:
         client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
         col3.write(NEGG_ASSET_LAST - b9) 
 
-    st.write(yf.Ticker('NEGG').fast_info['lastPrice'] ,  yf.Ticker('NEGG').fast_info['lastPrice'] * x_3 ,'(',  yf.Ticker('NEGG').fast_info['lastPrice'] * x_3 - 1500   ,')',  )
+    pv_negg =  yf.Ticker('NEGG').fast_info['lastPrice'] * x_3 
+    st.write(yf.Ticker('NEGG').fast_info['lastPrice'] , pv_negg  ,'(',  pv_negg - 1500 ,')',  )
     
     col4, col5 , col6  = st.columns(3)
     st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
@@ -171,8 +172,9 @@ try:
       if GO_ffwm_sell :
         client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
         col9.write(FFWM_ASSET_LAST - b12) 
-    
-    st.write(yf.Ticker('FFWM').fast_info['lastPrice'] ,   yf.Ticker('FFWM').fast_info['lastPrice'] * x_4)
+
+    pv_ffwm =    yf.Ticker('FFWM').fast_info['lastPrice'] * x_4
+    st.write(yf.Ticker('FFWM').fast_info['lastPrice'] , pv_ffwm ,'(',  pv_ffwm - 1500 ,')', )
     
     col10, col11 , col12  = st.columns(3)
     st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
@@ -196,8 +198,9 @@ try:
       if GO_RIVN_sell :
         client.update(  {'field3': RIVN_ASSET_LAST - u5  } )
         col99.write(RIVN_ASSET_LAST - u5) 
-    
-    st.write(yf.Ticker('RIVN').fast_info['lastPrice'] , yf.Ticker('RIVN').fast_info['lastPrice'] * x_5  )
+
+    pv_rivn =    yf.Ticker('RIVN').fast_info['lastPrice'] * x_5
+    st.write(yf.Ticker('RIVN').fast_info['lastPrice'] , pv_rivn ,'(',  pv_rivn - 1500 ,')', )
     
     col100 , col111 , col122  = st.columns(3)
     st.write(  'buy' , '   ', 'A', u2 , 'P' , u1  , 'C'  , u3  )
@@ -222,8 +225,9 @@ try:
       if GO_APLS_sell :
         client.update(  {'field4': APLS_ASSET_LAST - p5  } )
         col9999.write(APLS_ASSET_LAST - p5) 
-    
-    st.write(yf.Ticker('APLS').fast_info['lastPrice'] , yf.Ticker('APLS').fast_info['lastPrice'] * x_6  )
+
+    pv_apls =    yf.Ticker('APLS').fast_info['lastPrice'] * x_6
+    st.write(yf.Ticker('APLS').fast_info['lastPrice'] , pv_apls ,'(',  pv_apls - 1500 ,')', )
     
     col1000 , col1111 , col1222  = st.columns(3)
     st.write(  'buy' , '   ', 'A', p2 , 'P' , p1  , 'C'  , p3  )
