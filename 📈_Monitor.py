@@ -221,7 +221,7 @@ try:
       GO_APLS_sell = col9999.button("GO!")
       if GO_APLS_sell :
         client.update(  {'field4': APLS_ASSET_LAST - p5  } )
-        col999.write(APLS_ASSET_LAST - p5) 
+        col9999.write(APLS_ASSET_LAST - p5) 
     
     st.write(yf.Ticker('APLS').fast_info['lastPrice'] , yf.Ticker('APLS').fast_info['lastPrice'] * x_6  )
     
