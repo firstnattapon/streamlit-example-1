@@ -1,7 +1,7 @@
 numpy
 pandas
 streamlit
-yfinance
+yfinance==0.2.44
 thingspeak
 plotly
 stocksymbol
