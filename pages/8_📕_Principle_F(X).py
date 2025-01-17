@@ -5,12 +5,9 @@ st.set_page_config(page_title="Principle_F(X)", page_icon="📕" , layout="wide"
 
 @st.cache_data
 def iframe ():
-  # src="https://www.mindmeister.com/app/map/3178532454?fullscreen=1&v=embedded&m=outline" 
-  # st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
-
-  src="https://www.mindmeister.com/3178532454/principle-by-first" 
+  src="https://www.mindmeister.com/app/map/3178532454?fullscreen=1&v=embedded&m=outline" 
   st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
-
+  
 iframe()
 st.write('____')
 
