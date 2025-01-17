@@ -8,7 +8,7 @@ def iframe ():
   # src="https://www.mindmeister.com/app/map/3178532454?fullscreen=1&v=embedded&m=outline" 
   # st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
   
-  src="https://www.svgviewer.dev/s/w5RzcXp4" 
+  src="https://img.soccersuck.com/images/2025/01/17/02.png" 
   st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
 
 iframe()
