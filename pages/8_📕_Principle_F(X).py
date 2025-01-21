@@ -11,6 +11,8 @@ def iframe ():
   
   src = "https://claude.site/artifacts/f8e8bc35-1eed-4f5f-9545-2a8faf9a86dd"
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=1)
+  components.iframe("https://claude.site/artifacts/f8e8bc35-1eed-4f5f-9545-2a8faf9a86dd", height=500)
+
 iframe()
 
 st.link_button("Principle", "https://claude.site/artifacts/f8e8bc35-1eed-4f5f-9545-2a8faf9a86dd")
