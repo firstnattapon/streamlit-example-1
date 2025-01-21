@@ -7,14 +7,14 @@ st.set_page_config(page_title="Principle_F(X)", page_icon="📕" , layout="wide"
 def iframe ():
   # src="https://www.mindmeister.com/app/map/3178532454?fullscreen=1&v=embedded&m=outline" 
   # st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
-  
-  tab1  = st.tabs([ 'DATA'])
 
-  with tab1:
-    src="https://img.soccersuck.com/images/2025/01/21/Untitled-diagram-2025-01-21-05484687b4cd362b7500dc.png" 
-    st.components.v1.iframe(src, width=1500 , height=1000, scrolling=1)
-    
-    iframe()
+  src="https://img.soccersuck.com/images/2025/01/21/Untitled-diagram-2025-01-21-05484687b4cd362b7500dc.png" 
+  st.components.v1.iframe(src, width=1500 , height=1000, scrolling=1)
+
+tab1  = st.tabs([ 'DATA'])
+with tab1:
+  iframe()
+  
 st.write('____')
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
