@@ -21,8 +21,8 @@ A --> B
 B --> C
 C --> A
 """
-stmd.st_mermaid(code)
 
+st_mermaid(stmd.st_mermaid(code) , height="500px")
 st.write('____')
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
