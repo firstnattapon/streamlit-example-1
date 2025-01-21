@@ -9,7 +9,7 @@ def iframe ():
   # st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
   
   src="https://img.soccersuck.com/images/2025/01/21/Untitled-diagram-2025-01-21-054846.png" 
-  st.components.v1.iframe(src, width=1200 , height=800, scrolling=1)
+  st.components.v1.iframe(src, width=1500 , height=500, scrolling=1)
 
 iframe()
 st.write('____')
