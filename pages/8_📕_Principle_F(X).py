@@ -18,7 +18,7 @@ with tab1:
   
   _, _, _, col4 = st.columns(4)
   with col4:
-    st.image("https://img.soccersuck.com/images/2025/01/21/principle-5-1-1024x666.png", width=300)
+    st.image("https://img.soccersuck.com/images/2025/01/21/principle-5-1-1024x666.png", width=400)
     
   st.link_button("พื้นฐาน Global_macro (Price_Cycle)", "https://drive.google.com/file/d/1-bNM1gPEG7i-CW1TMd_6Cu6Z5132UjGZ/view?usp=sharing")
 
