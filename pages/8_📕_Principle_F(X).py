@@ -8,8 +8,8 @@ def iframe ():
   # src="https://www.mindmeister.com/app/map/3178532454?fullscreen=1&v=embedded&m=outline" 
   # st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
   
-  src="https://www.mermaidchart.com/raw/e3003041-c706-467f-b732-e3b1754530d2?theme=light&version=v0.1&format=svg" 
-  st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
+  src="https://www.mermaidchart.com/raw/e3003041-c706-467f-b732-e3b1754530d2" 
+  # st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
 
 iframe()
 st.write('____')
