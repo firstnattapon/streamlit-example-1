@@ -13,7 +13,7 @@ def iframe ():
   with tab1:
     src="https://img.soccersuck.com/images/2025/01/21/Untitled-diagram-2025-01-21-05484687b4cd362b7500dc.png" 
     st.components.v1.iframe(src, width=1500 , height=1000, scrolling=1)
-  
+    
     iframe()
 st.write('____')
 
