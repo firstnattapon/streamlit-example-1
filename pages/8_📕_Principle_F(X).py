@@ -15,7 +15,7 @@ def iframe ():
     st.components.v1.iframe(src, width=1500 , height=1000, scrolling=1)
   
     iframe()
-    st.write('____')
+st.write('____')
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
