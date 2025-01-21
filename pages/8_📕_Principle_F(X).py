@@ -12,7 +12,6 @@ def iframe ():
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
   
 iframe()
-# st.link_button("Principle", "https://www.mermaidchart.com/raw/e3003041-c706-467f-b732-e3b1754530d2?theme=light&version=v0.1&format=svg")
 st.write('____')
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
