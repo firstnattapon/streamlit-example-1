@@ -8,7 +8,7 @@ st.set_page_config(page_title="Principle_F(X)", page_icon="📕" , layout="wide"
 def iframe ():
   # src="https://www.mindmeister.com/app/map/3178532454?fullscreen=1&v=embedded&m=outline" 
   # st.components.v1.iframe(src, width=1500 , height=2000, scrolling=1)
-  src = "https://img.soccersuck.com/images/2025/01/21/mermaid-diagram-2025-01-12-143129.svgfe3065f41bce8639.png"
+  src = "https://img.soccersuck.com/images/2025/01/21/mermaid-diagram-2025-01-12-143129.svgb333dee1071b110d.png"
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
   
 iframe()
