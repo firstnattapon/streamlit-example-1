@@ -15,14 +15,19 @@ st.set_page_config(page_title="Principle_F(X)", page_icon="📕" , layout="wide"
 
 # iframe()
 
-code = """
-graph TD
-A --> B
-B --> C
-C --> A
-"""
 
-stmd( stmd.st_mermaid(code) , height="500px")
+st.markdown("""
+```mermaid
+graph TD;
+    A-->B;
+    A-->C;
+    B-->D;
+    C-->D;
+
+""", unsafe_allow_html=True)
+
+
+
 st.write('____')
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
