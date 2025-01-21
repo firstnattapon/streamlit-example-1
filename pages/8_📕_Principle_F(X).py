@@ -21,7 +21,7 @@ with tab2:
 
 with tab3:
   st.image("https://img.soccersuck.com/images/2025/01/21/275206549_1046792219234327_607135450348777933_n.jpg", width=1000)
-  st.video("https://drive.google.com/file/d/1x_zlS7y9tTxWxHqD_yWpqrvFkGH2J2pB/view?usp=sharing", subtitles="subtitles.vtt")
+  st.video("https://drive.google.com/file/d/1x_zlS7y9tTxWxHqD_yWpqrvFkGH2J2pB/view?usp=sharing")
 
 
 with tab4:
