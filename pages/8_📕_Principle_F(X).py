@@ -20,7 +20,7 @@ with tab1:
   with _:
     st.image("https://img.soccersuck.com/images/2025/01/21/principle-5-1-1024x666.png", width=400)
     
-  st.link_button("พื้นฐาน Global_macro (Price_Cycle)", "https://drive.google.com/file/d/1-bNM1gPEG7i-CW1TMd_6Cu6Z5132UjGZ/view?usp=sharing")
+  st.link_button("(Price_Cycle) พื้นฐาน Global_macro ", "https://drive.google.com/file/d/1-bNM1gPEG7i-CW1TMd_6Cu6Z5132UjGZ/view?usp=sharing")
 
 
 with tab2:
