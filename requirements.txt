@@ -6,4 +6,3 @@ thingspeak
 plotly
 stocksymbol
 telebot
-streamlit-mermaid
