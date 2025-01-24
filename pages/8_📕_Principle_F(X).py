@@ -8,7 +8,6 @@ st.set_page_config(page_title="Principle_F(X)", page_icon="📕" , layout="wide"
 def iframe ():
   src = "https://monica.im/share/artifact?id=EoDyXJCkbU5U4G3dFvsAdm"
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
-iframe()
 
 tab1, tab2, tab3 , tab4  = st.tabs(["tab1", "tab2", "tab3" , "tab4"])
 
@@ -32,8 +31,6 @@ with tab3:
 with tab4:
   st.image("https://img.soccersuck.com/images/2025/01/21/407896427_1617027032037031_1189622303379814904_n.jpg", width=1000)
 
-st.write('____')
-st.link_button("Principle", "https://claude.site/artifacts/f8e8bc35-1eed-4f5f-9545-2a8faf9a86dd")
 st.write('____')
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
