@@ -130,28 +130,13 @@ write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
 
-# def Gen_fx (Ticker =  'FFWM' ,  field = 2 ):
-#     container = st.container(border=True)
-#     fx = [0]
-#     for j in range(1):
-#         pred  = delta2(Ticker=Ticker)
-#         siz = len(pred)
-#         z = int( pred.net_pv.values[-1])
-#         container.write("x , {}".format(z))
-         
-#         for i in range(2000):
-#             np.random.seed(i)
-#             pred  = delta2(Ticker= Ticker , pred= np.random.randint(2, size= siz) )
-#             y = int( pred.net_pv.values[-1])
-#             if  y > z :
-#                 container.write("{} , {}".format(i,y))
-#                 z = y
-#                 fx.append(i)
-#     client.update(  {'field{}'.format(field) : fx[-1] } )
-
 def Gen_fx (Ticker =  'FFWM' ,  field = 2 ):
     container = st.container(border=True)
     fx = [0]
+
+    progress_text = "Processing iterations. Please wait."
+    my_bar = st.progress(0, text=progress_text)
+    
     for j in range(1):
         pred  = delta2(Ticker=Ticker)
         siz = len(pred)
@@ -160,14 +145,19 @@ def Gen_fx (Ticker =  'FFWM' ,  field = 2 ):
          
         for i in range(2000):
             rng = np.random.default_rng(i)  # <-- แก้ตรงนี้
-            pred  = delta2(Ticker= Ticker , pred= rng.integers(2, size= siz) ) 
+            pred  = delta2(Ticker= Ticker , pred= rng.integers(2, size= siz) ) #เมธอด integers() ใน default_rng() ทำงานเหมือน randint() แต่มีประสิทธิภาพดีกว่า
             y = int( pred.net_pv.values[-1])
             if  y > z :
                 container.write("{} , {}".format(i,y))
                 z = y
                 fx.append(i)
-    client.update(  {'field{}'.format(field) : fx[-1] } )
+                
+            percent_complete = (i + 1) / 2000 * 100
+            my_bar.progress(int(percent_complete), text=progress_text)
 
+    time.sleep(1)
+    my_bar.empty()
+    client.update(  {'field{}'.format(field) : fx[-1] } )
 
 
 FFWM_Check_Gen = st.checkbox('FFWM_Add_Gen')
