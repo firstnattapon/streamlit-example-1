@@ -100,7 +100,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
     df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
     rng = np.random.default_rng(fx_js)   # <-- แก้ตรงนี้
-    df['action'] = rng.integers(2, size = len(df))   # <-- แก้ตรงนี้
+    df['action'] = rng.integers(2, size=len(df))   # <-- แก้ตรงนี้
     return df.tail(7) , fx_js
 
 df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
