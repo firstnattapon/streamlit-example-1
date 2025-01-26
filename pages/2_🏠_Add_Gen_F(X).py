@@ -4,6 +4,7 @@ import yfinance as yf
 import streamlit as st
 import thingspeak
 import json
+import time
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
@@ -160,64 +161,72 @@ def Gen_fx (Ticker =  'FFWM' ,  field = 2 ):
     client.update(  {'field{}'.format(field) : fx[-1] } )
 
 
-FFWM_Check_Gen = st.checkbox('FFWM_Add_Gen')
-if FFWM_Check_Gen :
-    re = st.button("Rerun_Gen")
-    if re :
-        Gen_fx (Ticker = 'FFWM' , field = 2 )
+
+tab1, tab2, tab3  , tab4  = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS'])
+
+with tab1:
+    FFWM_Check_Gen = st.checkbox('FFWM_Add_Gen')
+    if FFWM_Check_Gen :
+        re = st.button("Rerun_Gen")
+        if re :
+            Gen_fx (Ticker = 'FFWM' , field = 2 )
+    
+    FFWM_Check_Gen_M = st.checkbox('FFWM_Add_Gen_M')
+    if FFWM_Check_Gen_M :    
+        input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
+        re_ = st.button("Rerun_Gen_M")
+        if re_ :
+            client.update(  {'field2': input } )
+            st.write(input)        
+    st.write("_____") 
 
 
-FFWM_Check_Gen_M = st.checkbox('FFWM_Add_Gen_M')
-if FFWM_Check_Gen_M :    
-    input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
-    re_ = st.button("Rerun_Gen_M")
-    if re_ :
-        client.update(  {'field2': input } )
-        st.write(input)        
-st.write("_____") 
+with tab2:
+    NEGG_Check_Gen = st.checkbox('NEGG_Add_Gen')
+    if NEGG_Check_Gen :
+        re = st.button("Rerun_Gen")
+        if re :
+            Gen_fx (Ticker = 'NEGG' , field = 3 )
 
-NEGG_Check_Gen = st.checkbox('NEGG_Add_Gen')
-if NEGG_Check_Gen :
-    re = st.button("Rerun_Gen")
-    if re :
-        Gen_fx (Ticker = 'NEGG' , field = 3 )
-
-NEGG_Check_Gen_M = st.checkbox('NEGG_Add_Gen_M')
-if NEGG_Check_Gen_M :    
-    input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
-    re_ = st.button("Rerun_Gen_M")
-    if re_ :
-        client.update(  {'field3': input } )
-        st.write(input)    
-st.write("_____") 
-
-RIVN_Check_Gen = st.checkbox('RIVN_Add_Gen')
-if RIVN_Check_Gen :
-    re = st.button("Rerun_Gen")
-    if re :
-        Gen_fx (Ticker = 'RIVN' , field = 4)
-
-RIVN_Check_Gen_M = st.checkbox('RIVN_Add_Gen_M')
-if RIVN_Check_Gen_M :    
-    input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
-    re_ = st.button("Rerun_Gen_M")
-    if re_ :
-        client.update(  {'field4': input } )
-        st.write(input)    
-st.write("_____") 
+    NEGG_Check_Gen_M = st.checkbox('NEGG_Add_Gen_M')
+    if NEGG_Check_Gen_M :    
+        input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
+        re_ = st.button("Rerun_Gen_M")
+        if re_ :
+            client.update(  {'field3': input } )
+            st.write(input)    
+    st.write("_____") 
 
 
-APLS_Check_Gen = st.checkbox('APLS_Add_Gen')
-if APLS_Check_Gen :
-    re = st.button("Rerun_Gen")
-    if re :
-        Gen_fx (Ticker = 'APLS' , field = 5)
+with tab3:
+    RIVN_Check_Gen = st.checkbox('RIVN_Add_Gen')
+    if RIVN_Check_Gen :
+        re = st.button("Rerun_Gen")
+        if re :
+            Gen_fx (Ticker = 'RIVN' , field = 4)
+    
+    RIVN_Check_Gen_M = st.checkbox('RIVN_Add_Gen_M')
+    if RIVN_Check_Gen_M :    
+        input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
+        re_ = st.button("Rerun_Gen_M")
+        if re_ :
+            client.update(  {'field4': input } )
+            st.write(input)    
+    st.write("_____") 
 
-APLS_Check_Gen_M = st.checkbox('APLS_Add_Gen_M')
-if APLS_Check_Gen_M :    
-    input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
-    re_ = st.button("Rerun_Gen_M")
-    if re_ :
-        client.update(  {'field5': input } )
-        st.write(input)    
-st.write("_____") 
+
+with tab4:
+    APLS_Check_Gen = st.checkbox('APLS_Add_Gen')
+    if APLS_Check_Gen :
+        re = st.button("Rerun_Gen")
+        if re :
+            Gen_fx (Ticker = 'APLS' , field = 5)
+    
+    APLS_Check_Gen_M = st.checkbox('APLS_Add_Gen_M')
+    if APLS_Check_Gen_M :    
+        input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
+        re_ = st.button("Rerun_Gen_M")
+        if re_ :
+            client.update(  {'field5': input } )
+            st.write(input)    
+    st.write("_____") 
