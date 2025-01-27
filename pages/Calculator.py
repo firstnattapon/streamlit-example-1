@@ -10,7 +10,7 @@ st.set_page_config( page_title="Calculator", page_icon="⌨️")
 
 if st.button("rerun"):
     st.rerun()
-
+    
 channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
