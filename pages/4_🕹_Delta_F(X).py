@@ -6,6 +6,12 @@ import thingspeak
 import json
 st.set_page_config(page_title="Delta_F(X)", page_icon="🕹")
 
+
+channel_id = 2385118
+write_api_key = 'IPSG3MMMBJEB9DY8'
+client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
+fx = client.get_field_last(field='{}'.format(field))
+
 # @st.cache_data
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
@@ -200,10 +206,9 @@ if FFWM_Graph :
         delta_y('FFWM')
 FFWM_Graph_M = st.checkbox('FFWM_Graph_F(X)_M')
 if FFWM_Graph_M :
-    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=68  ,  key=1 )
-    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=36   , key=2 )
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value= int(json.loads(fx)["field{}".format(2)])   ,  key=1 )
     all_id_m = [] ; all_m = []
-    number = [number_1 , number_2 ]
+    number = [number_1]
     delta_x( Ticker = 'FFWM'  , number = number)
 st.write("_____") 
 NEGG_Graph = st.checkbox('NEGG_Graph_F(X)')
