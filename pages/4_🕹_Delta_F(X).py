@@ -223,7 +223,7 @@ if NEGG_Graph :
 
 NEGG_Graph_M = st.checkbox('NEGG_Graph_F(X)_M')
 if NEGG_Graph_M :
-    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value= value= field(3)     ,  key=1 )
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value= field(3)     ,  key=1 )
     all_id_m = [] ; all_m = []
     number = [number_1  ]
     delta_x( Ticker = 'NEGG'  , number = number)
