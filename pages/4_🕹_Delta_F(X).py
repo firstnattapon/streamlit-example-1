@@ -223,10 +223,9 @@ if NEGG_Graph :
 
 NEGG_Graph_M = st.checkbox('NEGG_Graph_F(X)_M')
 if NEGG_Graph_M :
-    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=130     ,  key=1 )
-    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=553    , key=2 )
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value= value= field(3)     ,  key=1 )
     all_id_m = [] ; all_m = []
-    number = [number_1 , number_2 ]
+    number = [number_1  ]
     delta_x( Ticker = 'NEGG'  , number = number)
 
 st.write("_____") 
@@ -238,10 +237,9 @@ if RIVN_Graph :
 
 RIVN_Graph_M = st.checkbox('RIVN_Graph_F(X)_M')
 if RIVN_Graph_M :
-    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=1075  ,  key=1 )
-    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=144    , key=2 )
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value= field(4)  ,  key=1 )
     all_id_m = [] ; all_m = []
-    number = [number_1 , number_2 ]
+    number = [number_1  ]
     delta_x( Ticker = 'RIVN'  , number = number)
 st.write("_____") 
 
@@ -254,10 +252,9 @@ if APLS_Graph :
 
 APLS_Graph_M = st.checkbox('APLS_Graph_F(X)_M')
 if APLS_Graph_M :
-    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=168  ,  key=1 )
-    number_2 =  st.number_input('Insert a number{}'.format(2),step=1 , value=23    , key=2 )
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value=  field(5)  ,  key=1 )
     all_id_m = [] ; all_m = []
-    number = [number_1 , number_2 ]
+    number = [number_1  ]
     delta_x( Ticker = 'APLS'  , number = number)
 st.write("_____") 
 
