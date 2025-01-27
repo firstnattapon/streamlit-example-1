@@ -46,8 +46,8 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     
     fx = client_2.get_field_last(field='{}'.format(field))
     fx_js = int(json.loads(fx)["field{}".format(field)])
-    np.random.seed(fx_js)
-    data = np.random.randint(2, size = len(tickerData))
+    rng = np.random.default_rng(fx_js)
+    data = rng.integers(2, size = len(tickerData))
     tickerData['action'] = data
     tickerData['index'] = [ i+1 for i in range(len(tickerData))]
     
@@ -55,8 +55,8 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     tickerData_1['action'] =  [ i for i in range(5)]
     tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
     df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
-    np.random.seed(fx_js)
-    df['action'] = np.random.randint(2, size = len(df))
+    rng = np.random.default_rng(fx_js)
+    df['action'] = rng.integers(2, size = len(df))
     return df.tail(7) , fx_js
 
 df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
