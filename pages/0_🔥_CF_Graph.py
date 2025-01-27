@@ -65,13 +65,13 @@ with tab1:
     x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
     x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
     x_5 = st.number_input('Fixed_Asset_Value', step=0.01 ,   value = 1500. ) 
-    x_6 = st.number_input('Cash_Balan', step=0.01 ,   value = 650. ) 
+    x_6 = st.number_input('Cash_Balan', step=0.01 ,   value = 0. ) 
     st.write("_____") 
 
 with tab2:
     df ,  df_FFWM = CF_Graph(entry = 6.88, ref = x_2 , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
     as_1 =  df.set_index('Asset_Price')
-    as_1_py = px.line( as_1 )
+    as_1_py = px.line( as_1['net_pv'] )
     as_1_py.add_vline(x= x_2  , line_width=1 , line_dash="dash")
     as_1_py.add_vline(x= 6.88  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
