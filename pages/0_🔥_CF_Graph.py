@@ -71,7 +71,7 @@ with tab1:
 with tab2:
     df ,  df_FFWM = CF_Graph(entry = 6.88, ref = x_2 , Fixed_Asset_Value = x_5 , Cash_Balan=x_6 )
     as_1 =  df.set_index('Asset_Price')
-    as_1_py = px.line( as_1['net_pv'] )
+    as_1_py = px.line( as_1  )
     as_1_py.add_vline(x= x_2  , line_width=1 , line_dash="dash")
     as_1_py.add_vline(x= 6.88  , line_width=0.1 )
     st.plotly_chart( as_1_py ) 
