@@ -135,8 +135,9 @@ def delta_x (Ticker = 'FFWM' , number = [68 , 36]):
         container_1.write("min , {}".format(z))
     
         for i in number:
-            np.random.seed(i)
-            pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
+            # np.random.seed(i)
+            rng = np.random.default_rng(i)
+            pred  = delta2(Ticker=Ticker , pred= rng.integers(2, size= siz))
             prd_y = pred.net_pv.values
             y = int(prd_y[-1])
             all_m.append(prd_y)
@@ -178,8 +179,9 @@ def delta_y (Ticker = 'FFWM' ):
         container.write("min , {}".format(z))
         
         for i in range(2000):
-            np.random.seed(i)
-            pred  = delta2(Ticker=Ticker , pred= np.random.randint(2, size= siz))
+            # np.random.seed(i)
+            rng = np.random.default_rng(i)
+            pred  = delta2(Ticker=Ticker , pred= rng.integers(2, size= siz))
             prd_y = pred.net_pv.values
             y = int(prd_y[-1])
             if  y > z :
