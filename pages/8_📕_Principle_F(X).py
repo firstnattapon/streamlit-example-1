@@ -6,7 +6,7 @@ st.set_page_config(page_title="Principle_F(X)", page_icon="📕" , layout="wide"
 
 @st.cache_data
 def iframe ():
-  src = "https://monica.im/share/artifact?id=EoDyXJCkbU5U4G3dFvsAdm"
+  src = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL"
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
 
 tab1, tab2, tab3 , tab4  = st.tabs(["tab1", "tab2", "tab3" , "tab4"])
