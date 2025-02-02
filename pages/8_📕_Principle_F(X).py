@@ -34,7 +34,7 @@ with tab4:
 st.write('____')
 
 with Control:
-  iframe(frame = "https://monica.im/share/artifact?id=j2KjDfrNPCsjWvG7vRdacV")
+  iframe(frame = "https://monica.im/share/artifact?id=5Wnw9KrxPXZw4HnBYmR65P")
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
