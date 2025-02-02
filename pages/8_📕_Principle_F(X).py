@@ -5,14 +5,14 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Principle_F(X)", page_icon="📕" , layout="wide")
 
 @st.cache_data
-def iframe ():
-  src = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL"
+def iframe ( frame = ''):
+  src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
 
 tab1, tab2, tab3 , tab4  = st.tabs(["tab1", "tab2", "tab3" , "tab4"])
 
 with tab1:
-  iframe()
+  iframe( = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL")
   _, _, _, _ = st.columns(4)
   with _:
     st.image("https://img.soccersuck.com/images/2025/01/21/principle-5-1-1024x666.png", width=400)
@@ -33,6 +33,10 @@ with tab4:
 
 st.write('____')
 
+Control, tab6, tab7 , tab8  = st.tabs(["Control", "tab2", "tab3" , "tab4"])
+with Control:
+  iframe( = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL")
+
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
-  st.write('https://www.mindmeister.com/app/map/3178532454?m=outline')
+  st.write('https://monica.im/share/artifact?id=ooTqwuLDMnAWd8E6PkR5ZM')
