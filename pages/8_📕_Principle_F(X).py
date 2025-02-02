@@ -9,7 +9,7 @@ def iframe ( frame = ''):
   src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
 
-tab1, tab2, tab3 , tab4  = st.tabs(["tab1", "tab2", "tab3" , "tab4"])
+tab1, tab2, tab3 , tab4 , Control  = st.tabs(["tab1", "tab2", "tab3" , "tab4" , "Control"])
 
 with tab1:
   iframe(frame = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL")
@@ -33,7 +33,6 @@ with tab4:
 
 st.write('____')
 
-Control, tab6, tab7 , tab8  = st.tabs(["Control", "tab2", "tab3" , "tab4"])
 with Control:
   iframe(frame = "https://monica.im/share/artifact?id=ooTqwuLDMnAWd8E6PkR5ZM")
 
