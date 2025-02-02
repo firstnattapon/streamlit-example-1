@@ -12,7 +12,7 @@ def iframe ( frame = ''):
 tab1, tab2, tab3 , tab4  = st.tabs(["tab1", "tab2", "tab3" , "tab4"])
 
 with tab1:
-  iframe( = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL")
+  iframe(frame = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL")
   _, _, _, _ = st.columns(4)
   with _:
     st.image("https://img.soccersuck.com/images/2025/01/21/principle-5-1-1024x666.png", width=400)
@@ -35,7 +35,7 @@ st.write('____')
 
 Control, tab6, tab7 , tab8  = st.tabs(["Control", "tab2", "tab3" , "tab4"])
 with Control:
-  iframe( = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL")
+  iframe(frame = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL")
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
