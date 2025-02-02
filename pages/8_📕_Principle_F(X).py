@@ -35,7 +35,7 @@ st.write('____')
 
 Control, tab6, tab7 , tab8  = st.tabs(["Control", "tab2", "tab3" , "tab4"])
 with Control:
-  iframe(frame = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL")
+  iframe(frame = "https://monica.im/share/artifact?id=ooTqwuLDMnAWd8E6PkR5ZM")
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
