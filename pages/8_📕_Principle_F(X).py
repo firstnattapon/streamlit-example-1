@@ -38,4 +38,4 @@ with Control:
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
-  st.write('https://monica.im/share/artifact?id=ooTqwuLDMnAWd8E6PkR5ZM')
+  st.write('https://www.mindmeister.com/app/map/3178532454?m=outline')
