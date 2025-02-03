@@ -75,7 +75,7 @@ def feed_data( data = "APLS"):
         if net_cf[-1] > net_initial:
             net_initial = net_cf[-1]
             seed  = i 
-    return = i
+    return  seed
 
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
     try:
