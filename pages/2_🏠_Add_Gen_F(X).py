@@ -250,10 +250,10 @@ with tab1:
             client.update(  {'field2': input } )
             st.write(input)        
             
-    njit = st.checkbox('njit')
-    if njit : 
-        njit_ = st.button("njit_")
-        if njit_ :
+    FFWM_njit = st.checkbox('FFWM_njit')
+    if FFWM_njit : 
+        FFWM_njit_ = st.button("FFWM_njit_")
+        if FFWM_njit_ :
             ix =  feed_data(data= 'FFWM')
             client.update(  {'field2': ix } )
             st.write(ix) 
@@ -273,8 +273,15 @@ with tab2:
         if re_ :
             client.update(  {'field3': input } )
             st.write(input)    
-    st.write("_____") 
 
+    NEGG_njit = st.checkbox('NEGG_njit')
+    if NEGG_njit : 
+        NEGG_njit_ = st.button("NEGG_njit_")
+        if NEGG_njit_ :
+            ix =  feed_data(data= 'NEGG')
+            client.update(  {'field3': ix } )
+            st.write(ix)     
+    st.write("_____") 
 
 with tab3:
     RIVN_Check_Gen = st.checkbox('RIVN_Add_Gen')
@@ -290,8 +297,16 @@ with tab3:
         if re_ :
             client.update(  {'field4': input } )
             st.write(input)    
-    st.write("_____") 
 
+    RIVN_njit = st.checkbox('RIVN_njit')
+    if RIVN_njit : 
+        RIVN_njit_ = st.button("RIVN_njit_")
+        if RIVN_njit_ :
+            ix =  feed_data(data= 'RIVN')
+            client.update(  {'field4': ix } )
+            st.write(ix)     
+    st.write("_____") 
+    
 
 with tab4:
     APLS_Check_Gen = st.checkbox('APLS_Add_Gen')
@@ -306,5 +321,13 @@ with tab4:
         re_ = st.button("Rerun_Gen_M")
         if re_ :
             client.update(  {'field5': input } )
-            st.write(input)    
+            st.write(input)  
+
+    APLS_njit = st.checkbox('APLS_njit')
+    if APLS_njit : 
+        APLS_njit_ = st.button("APLS_njit_")
+        if APLS_njit_ :
+            ix =  feed_data(data= 'APLS')
+            client.update(  {'field5': ix } )
+            st.write(ix)     
     st.write("_____") 
