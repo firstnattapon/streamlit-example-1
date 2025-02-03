@@ -5,6 +5,7 @@ import streamlit as st
 import thingspeak
 import json
 import time
+from numba import njit
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
 
