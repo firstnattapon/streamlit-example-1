@@ -6,3 +6,4 @@ thingspeak
 plotly
 stocksymbol
 telebot
+numba
