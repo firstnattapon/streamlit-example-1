@@ -48,7 +48,7 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
     net_cf =  cash   -  refer
     return buffers, cash, sumusd, refer , net_cf
 
-def feed_data( data = "APLS")
+def feed_data( data = "APLS"):
     Ticker = data
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = yf.Ticker(Ticker)
