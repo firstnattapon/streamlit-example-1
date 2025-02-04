@@ -36,15 +36,15 @@ with tab5:
   st.write('____')
 
 with tab6:
-  iframe(frame = "https://monica.im/share/chat?shareId=Mz1XoUKDiso8crQw")
+  iframe(frame = "https://monica.im/share/chat?shareId=0QTT4X0ajaBB0VsB")
   st.write('____')
   
 with tab7:
-  iframe(frame = "https://monica.im/share/chat?shareId=dYOLba5dwULEKc4F")
+  iframe(frame = "https://monica.im/share/chat?shareId=Ai6I7TDCrdj55BkE")
   st.write('____')
 
 with tab8:
-  iframe(frame = "https://monica.im/share/chat?shareId=dYOLba5dwULEKc4F")
+  iframe(frame = "https://monica.im/share/chat?shareId=E7t7v5an984aJzVz")
   st.write('____')
 
 with tab9:
