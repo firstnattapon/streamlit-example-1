@@ -13,11 +13,12 @@ def iframe ( frame = ''):
   src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
 
-tab1,  Control ,  tab2, tab3 , tab4  = st.tabs(["สรุปบทที่ 1 การคิดระดับสอง", "Control" ,"tab2", "tab3" , "tab4"  ])
-
+tab1,  tab2, tab3 , tab4 , tab5   = st.tabs(["สรุปบทที่_1", "สรุปบทที่_2" ,"สรุปบทที่_3", "สรุปบทที่_4" , "สรุปบทที่_5"  ])
 
 with tab1:
   iframe(frame = "https://monica.im/share/chat?shareId=DeGdfM5eVeodP6Vn")
   st.write('____')
   
-
+with tab2:
+  iframe(frame = "https://monica.im/share/chat?shareId=yPPCO6zGemygtGg5")
+  st.write('____')
