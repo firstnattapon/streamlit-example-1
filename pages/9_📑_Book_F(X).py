@@ -13,7 +13,7 @@ def iframe ( frame = ''):
   src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
 
-tab1,  tab2, tab3 , tab4 , tab5   = st.tabs(["สรุปบทที่ 1", "สรุปบทที่ 2" ,"สรุปบทที่ 3", "สรุปบทที่_4" , "สรุปบทที่_5"  ])
+tab1,  tab2, tab3 , tab4 , tab5   = st.tabs(["บทที่_1", "บทที่_2" ,"บทที่_3", "บทที่_4" , "บทที่_5"  ])
 
 with tab1:
   iframe(frame = "https://monica.im/share/chat?shareId=DeGdfM5eVeodP6Vn")
@@ -26,3 +26,13 @@ with tab2:
 with tab3:
   iframe(frame = "https://monica.im/share/chat?shareId=XUh5BcMKrOWcuczd")
   st.write('____')
+
+with tab4:
+  iframe(frame = "https://monica.im/share/chat?shareId=sXn5UKzj8lDE4N0y")
+  st.write('____')
+
+with tab5:
+  iframe(frame = "https://monica.im/share/chat?shareId=pc9UBD2WxBh6tSi8")
+  st.write('____')
+
+
