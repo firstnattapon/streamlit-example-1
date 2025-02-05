@@ -12,7 +12,7 @@ def iframe ( frame = ''):
 tab1,  Control ,  tab2, tab3 , tab4  = st.tabs(["tab1", "Control" ,"tab2", "tab3" , "tab4"  ])
 
 with tab1:
-  iframe(frame = "https://monica.im/share/artifact?id=N6YLzkpuohS9UnAyJadQVL")
+  iframe(frame = "https://monica.im/share/artifact?id=ijJtUaWKvCzjFNHtZUysRd")
   _, _, _, _ = st.columns(4)
   with _:
     st.image("https://img.soccersuck.com/images/2025/01/21/principle-5-1-1024x666.png", width=400)
