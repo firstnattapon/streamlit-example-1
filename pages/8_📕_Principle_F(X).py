@@ -14,7 +14,7 @@ tab1,  Control ,  tab2, tab3 , tab4  = st.tabs(["tab1", "Control" ,"tab2", "tab3
 with tab1:
   iframe(frame = "https://monica.im/share/artifact?id=ijJtUaWKvCzjFNHtZUysRd")    
   st.link_button("(Price_Cycle) พื้นฐาน Global_macro ", "https://drive.google.com/file/d/1-bNM1gPEG7i-CW1TMd_6Cu6Z5132UjGZ/view?usp=sharing")
-
+ 
 
 with tab2:
   st.image("https://img.soccersuck.com/images/2025/01/21/455599160_312374775229941_5381968498530104178_n.jpg", width=1000)
