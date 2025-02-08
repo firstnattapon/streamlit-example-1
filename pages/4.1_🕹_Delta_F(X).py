@@ -70,7 +70,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
                 up_dn = append(0)
             else: # ราคาคงที่
                 up_dn = append(up_dn[-1]) # ใช้ค่าล่าสุดซ้ำ
-        actions = up_dn
+        actions = np.array(up_dn , dtype=np.int64)
 
     else :
         rng = np.random.default_rng(act)
