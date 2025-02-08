@@ -43,10 +43,10 @@ def calculate_optimized(actions, prices, cash_start, initial_asset_value, initia
         prev_amount = current_amount
         prev_cash = cash[i]
 
-    # net_cf   =   cash   -    refer
-    net_cf   =   sumusd   -  (refer + initial_asset_value)
+    net_cf   =   cash   -    refer
+    # net_cf   =   sumusd   -  (refer + initial_asset_value)
     
-    return buffers, cash, sumusd, refer+500 , net_cf
+    return buffers, cash, sumusd, refer  , net_cf
 
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
