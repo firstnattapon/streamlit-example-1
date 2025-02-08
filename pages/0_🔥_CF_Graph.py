@@ -66,7 +66,7 @@ with tab1:
     x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] )
     x_7 = st.number_input('ราคา_NVTS_3.05', step=0.01 ,   value = yf.Ticker('NVTS').fast_info['lastPrice'])
     x_5 = st.number_input('Fixed_Asset_Value', step=0.01 ,   value = 1500. ) 
-    x_6 = st.number_input('Cash_Balan', step=0.01 ,   value = 0. ) 
+    x_6 = st.number_input('Cash_Balan', step=0.01 ,   value = 650. ) 
     st.write("_____") 
 
 with tab2:
