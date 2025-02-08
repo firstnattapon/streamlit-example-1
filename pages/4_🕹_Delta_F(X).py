@@ -208,7 +208,6 @@ if FFWM_Graph_M :
     all_id_m = [] ; all_m = []
     number = [number_1]
     delta_x( Ticker = 'FFWM'  , number = number)
-    st.write(delta_x( Ticker = 'FFWM'  , number = number)) 
     
 st.write("_____") 
 NEGG_Graph = st.checkbox('NEGG_Graph_F(X)')
@@ -268,5 +267,9 @@ if NVTS_Graph_M :
     number = [number_1  ]
     delta_x( Ticker = 'NVTS'  , number = number)
 st.write("_____") 
+
+
+st.write(delta_x( Ticker = 'FFWM'  , number = 1)) 
+
 
 st.stop()
