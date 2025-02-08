@@ -111,6 +111,8 @@ if Start :
       if _NVTS_ASSET:
           client.update({'field5': add_5})
 
+"""
+
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
 
@@ -281,7 +283,7 @@ st.write("_____")
 if st.button("RERUN"):
   st.rerun()
 
-
+"""
 # except:pass
 
 
