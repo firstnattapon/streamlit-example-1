@@ -120,3 +120,11 @@ plot( Ticker = 'NEGG'  , act =  NEGG_act_js  )
 RIVN_act = client.get_field_last(field='{}'.format(4))
 RIVN_act_js = int(json.loads(RIVN_act)["field{}".format(4) ])
 plot( Ticker = 'RIVN'  , act =  RIVN_act_js  )
+
+APLS_act = client.get_field_last(field='{}'.format(5))
+APLS_act_js = int(json.loads(APLS_act)["field{}".format(5) ])
+plot( Ticker = 'APLS'  , act =  APLS_act_js  )
+
+NVTS_act = client.get_field_last(field='{}'.format(6))
+NVTS_act_js = int(json.loads(NVTS_act)["field{}".format(6) ])
+plot( Ticker = 'NVTS'  , act =  NVTS_act_js  )
