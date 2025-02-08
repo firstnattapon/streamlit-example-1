@@ -36,7 +36,8 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
 ###
 channel_id_2 = 2385118
 write_api_key_2 = 'IPSG3MMMBJEB9DY8'
-client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json')
+client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json
+
 def Monitor (Ticker = 'FFWM' , field = 2 ):
     tickerData = yf.Ticker( Ticker)
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
@@ -63,7 +64,7 @@ df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
 df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
 df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
 df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
-
+df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 
 ###
 
@@ -147,7 +148,8 @@ u1 , u2 , u3 = sell( asset = x_5 , Diff= x_2)
 u4 , u5 , u6 = buy( asset = x_5 , Diff= x_2)
 p1 , p2 , p3 = sell( asset = x_6 , Diff= x_2)
 p4 , p5 , p6 = buy( asset = x_6 , Diff= x_2)
-
+u7 , u8 , u9 = sell( asset = x_7 , Diff= x_2)
+p7 , p8 , p9 = buy( asset = x_7 , Diff= x_2)
 
 Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value= df_7_1.action.values[1] )
 if Limut_Order_NEGG :
