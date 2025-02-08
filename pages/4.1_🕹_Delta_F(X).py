@@ -85,10 +85,10 @@ def Limit_fx (Ticker = '' , act = -1 ):
         # ตรวจสอบการเปลี่ยนแปลงค่าใน up_dn
         for vv in up_dn:
             if vv != final_x:
-                xl = np.append(xl, 1 )  # มีการเปลี่ยนแปลง
+                xl = np.append(xl, 0 )  # มีการเปลี่ยนแปลง
                 final_x = vv
             else:
-                xl = np.append(xl, 0 )  # ไม่เปลี่ยนแปลง
+                xl = np.append(xl, 1 )  # ไม่เปลี่ยนแปลง
 
         actions = xl
 
