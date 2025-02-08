@@ -47,28 +47,29 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
     return buffers, cash, sumusd, refer , net_cf
 
 
-def Limit_fx (Ticker = ''):
-  Ticker = Ticker
-  filter_date = '2023-01-01 12:00:00+07:00'
-  tickerData = yf.Ticker(Ticker)
-  tickerData = tickerData.history(period= 'max' )[['Close']]
-  tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-  filter_date = filter_date
-  tickerData = tickerData[tickerData.index >= filter_date]
-  
-  prices = np.array( tickerData.Close.values , dtype=np.float64)
-  
-  actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
-  # rng = np.random.default_rng(490527)
-  # actions = rng.integers(0, 2, len(prices))
-  
-  initial_cash = 500.0
-  initial_asset_value = 500.0
-  initial_price = prices[0]
-  
-  buffers, cash, sumusd, refer , net_cf = calculate_optimized(actions, prices, initial_cash, initial_asset_value, initial_price)
+def Limit_fx (Ticker = '' , act = -1 ):
+    filter_date = '2023-01-01 12:00:00+07:00'
+    tickerData = yf.Ticker(Ticker)
+    tickerData = tickerData.history(period= 'max' )[['Close']]
+    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+    filter_date = filter_date
+    tickerData = tickerData[tickerData.index >= filter_date]
     
-  df = pd.DataFrame({
+    prices = np.array( tickerData.Close.values , dtype=np.float64)
+
+    if act == -1 :
+        actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
+    else :
+        rng = np.random.default_rng(act)
+        actions = rng.integers(0, 2, len(prices))
+    
+    initial_cash = 500.0
+    initial_asset_value = 500.0
+    initial_price = prices[0]
+    
+    buffers, cash, sumusd, refer , net_cf = calculate_optimized(actions, prices, initial_cash, initial_asset_value, initial_price)
+    
+    df = pd.DataFrame({
         'price': prices,
         'action': actions,
         'buffer': np.round(buffers, 2),
@@ -77,7 +78,7 @@ def Limit_fx (Ticker = ''):
         'refer': np.round(refer, 2),
         'net_cf': np.round(net_cf, 2)
     })
-  return df.net_cf
+    return df.net_cf    
 
 
 
