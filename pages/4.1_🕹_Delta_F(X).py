@@ -61,7 +61,8 @@ def Limit_fx (Ticker = '' , act = -1 ):
     if act == -1 : # min
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
     if act == -2 : # max
-        actions = np.where(prices[1:] > prices[:-1], 0, 1).astype(np.int64)
+        actions = np.zeros(len(prices), dtype=np.int64)
+        actions[1:] = np.where(prices[1:] > prices[:-1], 0, 1)        
     else :
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
@@ -88,7 +89,7 @@ def plot (Ticker = ''   ,  act = -1 ):
     all = []
     all_id = []
     #min
-    all.append(Limit_fx(Ticker , act = -1 ).net_cf )
+    all.append( Limit_fx(Ticker , act = -1 ).net_cf )
     all_id.append('min')
     #fx
     all.append(Limit_fx( Ticker , act = act ).net_cf )
