@@ -16,7 +16,6 @@ def field (field = 2):
     id = int(json.loads(fx)["field{}".format(field)])  
     return id
 
-# @st.cache_data
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2023-01-01 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
