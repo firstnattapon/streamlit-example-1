@@ -58,9 +58,9 @@ def Limit_fx (Ticker = '' , act = -1 ):
     
     prices = np.array( tickerData.Close.values , dtype=np.float64)
 
-    if act == -1 : # min
+    if  act == -1 : # min
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
-    if act == -2 : # max
+    elif act == -2 : # max
         actions = np.zeros(len(prices), dtype=np.int64)
         actions[1:] = np.where(prices[1:] > prices[:-1], 0, 1)        
     else :
