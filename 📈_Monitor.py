@@ -66,7 +66,7 @@ df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 
 
-col13, col16 , col14 , col15 , col17 , col18 , col19   = st.columns(7)
+col13, col16, col14, col15, col17, col18, col19 = st.columns(7)
 
 x_2 = col16.number_input('Diff', step=1 , value= 60  )
 
@@ -105,12 +105,11 @@ if Start :
       col13.write(add_4) 
 
   thingspeak_5 = col13.checkbox('@_NVTS_ASSET')
-  if thingspeak_5 :
-      add_5 = col13.number_input('@_NVTS_ASSET', step=0.001 ,  value=0.) 
+  if thingspeak_5:
+      add_5 = col13.number_input('@_NVTS_ASSET', step=0.001, value=492.0)  # Set default value
       _NVTS_ASSET = col13.button("GO!")
-      if _NVTS_ASSET :
-        client.update(  {'field5': add_5 } )
-        col13.write(add_5) 
+      if _NVTS_ASSET:
+          client.update({'field5': add_5})
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
@@ -147,6 +146,7 @@ p1 , p2 , p3 = sell( asset = x_6 , Diff= x_2)
 p4 , p5 , p6 = buy( asset = x_6 , Diff= x_2)
 u7 , u8 , u9 = sell( asset = x_7 , Diff= x_2)
 p7 , p8 , p9 = buy( asset = x_7 , Diff= x_2)
+
 
 Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value= df_7_1.action.values[1] )
 if Limut_Order_NEGG :
@@ -253,29 +253,27 @@ if Limut_Order_APLS :
 
 st.write("_____")
 
-Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS',value= df_7_4.action.values[1] )
-if Limut_Order_NVTS :    
-  st.write( 'sell' , '   ' , 'A', p8 , 'P' , p7  , 'C' , p9  )
-  
-  col_nvts1, col_nvts2 , col_nvts3  = st.columns(3)
-  sell_NVTS = col_nvts3.checkbox('sell_match_NVTS')
-  if sell_NVTS :
-    GO_NVTS_sell = col_nvts3.button("GO!")
-    if GO_NVTS_sell :
-      client.update(  {'field5': NVTS_ASSET_LAST - p8  } )
-      col_nvts3.write(NVTS_ASSET_LAST - p8) 
-
-  pv_nvts =    yf.Ticker('NVTS').fast_info['lastPrice'] * x_7
-  st.write(yf.Ticker('NVTS').fast_info['lastPrice'] , pv_nvts ,'(',  pv_nvts - 1500 ,')', )
-  
-  col_nvts4 , col_nvts5 , col_nvts6  = st.columns(3)
-  st.write(  'buy' , '   ', 'A', u8 , 'P' , u7  , 'C'  , u9  )
-  buy_NVTS = col_nvts6.checkbox('buy_match_NVTS')
-  if buy_NVTS :
-    GO_NVTS_Buy = col_nvts6.button("GO!")
-    if GO_NVTS_Buy :
-      client.update(  {'field5': NVTS_ASSET_LAST + u8  } )
-      col_nvts6.write(NVTS_ASSET_LAST + u8) 
+Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS', value=df_7_4.action.values[1])
+if Limut_Order_NVTS:    
+    st.write('sell', '   ', 'A', u8, 'P', u7, 'C', u9)  # Fixed variable order
+    
+    col_nvts1, col_nvts2, col_nvts3 = st.columns(3)
+    sell_NVTS = col_nvts3.checkbox('sell_match_NVTS')
+    if sell_NVTS:
+        GO_NVTS_sell = col_nvts3.button("GO!")
+        if GO_NVTS_sell:
+            client.update({'field5': NVTS_ASSET_LAST - u8})
+    
+    pv_nvts = yf.Ticker('NVTS').fast_info['lastPrice'] * x_7
+    st.write(yf.Ticker('NVTS').fast_info['lastPrice'], pv_nvts, '(', pv_nvts - 1500, ')')
+    
+    col_nvts4, col_nvts5, col_nvts6 = st.columns(3)
+    st.write('buy', '   ', 'A', p8, 'P', p7, 'C', p9)  # Fixed variable order
+    buy_NVTS = col_nvts6.checkbox('buy_match_NVTS')
+    if buy_NVTS:
+        GO_NVTS_Buy = col_nvts6.button("GO!")
+        if GO_NVTS_Buy:
+            client.update({'field5': NVTS_ASSET_LAST + p8})
 
 st.write("_____")
 
