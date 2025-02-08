@@ -258,4 +258,19 @@ if APLS_Graph_M :
     delta_x( Ticker = 'APLS'  , number = number)
 st.write("_____") 
 
+#
+NVTS_Graph = st.checkbox('NVTS_Graph_F(X)')
+if NVTS_Graph :
+    re = st.button("Rerun_Graph")
+    if re :
+        delta_y('NVTS')
+
+NVTS_Graph_M = st.checkbox('NVTS_Graph_F(X)_M')
+if NVTS_Graph_M :
+    number_1  = st.number_input('Insert a number{}'.format(1),step=1 , value= field(6)  ,  key=1 )
+    all_id_m = [] ; all_m = []
+    number = [number_1  ]
+    delta_x( Ticker = 'NVTS'  , number = number)
+st.write("_____") 
+
 st.stop()
