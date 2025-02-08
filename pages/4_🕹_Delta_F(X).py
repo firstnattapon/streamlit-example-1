@@ -268,8 +268,4 @@ if NVTS_Graph_M :
     delta_x( Ticker = 'NVTS'  , number = number)
 st.write("_____") 
 
-
-st.write(delta_x( Ticker = 'FFWM'  , number = 1)) 
-
-
 st.stop()
