@@ -80,13 +80,16 @@ def Limit_fx (Ticker = '' , act = -1 ):
     })
     return df 
 
-all = []
-all_id = []
+def plot (Ticker = ''   ,  act = -1 ):
+    all = []
+    all_id = []
+    all.append(Limit_fx(Ticker).net_cf )
+    all_id.append('min')
+    all.append(Limit_fx( Ticker , act = act ).net_cf )
+    all_id.append('fx')
+    
+    chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
+    st.line_chart(chart_data)
 
-all.append(Limit_fx('FFWM').net_cf )
-all_id.append('min')
-all.append(Limit_fx('FFWM' , act = 1182379 ).net_cf )
-all_id.append('fx')
 
-chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
-st.line_chart(chart_data)
+plot( Ticker = ''  , act = 1182379  )
