@@ -100,3 +100,7 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 FFWM_act = client.get_field_last(field='{}'.format(2))
 FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
 plot( Ticker = 'FFWM'  , act =  FFWM_act_js  )
+
+NEGG_act = client.get_field_last(field='{}'.format(3))
+NEGG_act_js = int(json.loads(NEGG_act)["field{}".format(3) ])
+plot( Ticker = 'NEGG'  , act =  NEGG_act_js  )
