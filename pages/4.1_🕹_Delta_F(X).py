@@ -47,42 +47,46 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
     return buffers, cash, sumusd, refer , net_cf
 
 
-def calculate_optimized_actions(prices):
-    n = len(prices)
+def calculate_optimized_actions(prices = np.nan):
+
+    n = prices.shape[0]
     if n < 2:
-        return []
+        return np.array([], dtype=int)
     
-    # Initialize DP table and action tracker
-    dp = [{} for _ in range(n)]
-    actions = [0] * n
+    # Initialize state arrays
+    cash = np.zeros(n)
+    amount = np.zeros(n)
+    actions = np.zeros(n, dtype=int)
     
-    # Base case at last step
-    dp[-1] = {'cash': 0, 'amount': 0}  # Placeholder, will be updated
+    # Initialize last step
+    cash[-1] = 0
+    amount[-1] = 0  # Placeholder value
     
-    # Backward induction
+    # Backward induction with vectorized operations
     for i in range(n-2, 0, -1):
-        current_price = prices[i]
         prev_price = prices[i-1]
+        current_price = prices[i]
         next_price = prices[i+1] if i+1 < n else current_price
         
-        # Calculate potential outcomes for action 0 and 1
-        # Action 1
-        buffer_action1 = dp[i+1]['amount'] * (current_price - prev_price)
-        cash_action1 = dp[i+1]['cash'] + buffer_action1
-        new_amount_action1 = (dp[i+1]['amount'] * prev_price) / current_price
+        # Calculate action 1 outcome
+        buffer_action1 = amount[i+1] * (current_price - prev_price)
+        cash_action1 = cash[i+1] + buffer_action1
+        amount_action1 = (amount[i+1] * prev_price) / current_price
         
-        # Action 0
-        cash_action0 = dp[i+1]['cash']
-        new_amount_action0 = dp[i+1]['amount']
+        # Action 0 outcome
+        cash_action0 = cash[i+1]
+        amount_action0 = amount[i+1]
         
-        # Choose the action with higher cash
+        # Choose optimal action
         if cash_action1 > cash_action0:
-            dp[i] = {'cash': cash_action1, 'amount': new_amount_action1}
+            cash[i] = cash_action1
+            amount[i] = amount_action1
             actions[i] = 1
         else:
-            dp[i] = {'cash': cash_action0, 'amount': new_amount_action0}
+            cash[i] = cash_action0
+            amount[i] = amount_action0
             actions[i] = 0
-    
+            
     return actions
 
 
@@ -101,7 +105,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
     elif act == -2:  # max  
-        actions =  calculate_optimized_actions (prices.tolist()) 
+        actions =  calculate_optimized_actions(prices)
 
     else :
         rng = np.random.default_rng(act)
