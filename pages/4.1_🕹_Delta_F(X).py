@@ -46,49 +46,7 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
     net_cf =  cash   -  refer
     return buffers, cash, sumusd, refer , net_cf
 
-def calculate_optimized_actions(prices: np.ndarray, initial_cash: float, initial_asset_value: float) -> np.ndarray:
-    n = prices.shape[0]
-    if n < 2:
-        return np.array([], dtype=int)
-    
-    # กำหนดโครงสร้างข้อมูล
-    cash_backward = np.zeros(n)
-    amount_backward = np.zeros(n)
-    actions = np.zeros(n, dtype=int)
-    
-    # เงื่อนไขเริ่มต้น (วันสุดท้าย)
-    cash_backward[-1] = initial_cash
-    amount_backward[-1] = initial_asset_value / prices[-1]
-    
-    # คำนวณย้อนกลับ (Dynamic Programming)
-    for i in range(n-2, -1, -1):
-        current_price = prices[i]
-        next_price = prices[i+1]
-        
-        # คำนวณผลลัพธ์ของแต่ละ Action
-        # Action 1: ทำการซื้อ/ขาย
-        potential_profit = amount_backward[i+1] * (next_price - current_price)
-        cash_action1 = cash_backward[i+1] + potential_profit
-        amount_action1 = (amount_backward[i+1] * next_price) / current_price
-        
-        # Action 0: ไม่ทำอะไร
-        cash_action0 = cash_backward[i+1]
-        amount_action0 = amount_backward[i+1]
-        
-        # เลือก Action ที่ให้มูลค่าสูงสุด
-        if cash_action1 > cash_action0:
-            cash_backward[i] = cash_action1
-            amount_backward[i] = amount_action1
-            actions[i] = 1
-        else:
-            cash_backward[i] = cash_action0  # แก้ไขส่วนที่ขาด
-            amount_backward[i] = amount_action0
-            actions[i] = 0
-    
-    return actions
-
 def Limit_fx (Ticker = '' , act = -1 ):
-    
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = yf.Ticker(Ticker)
     tickerData = tickerData.history(period= 'max' )[['Close']]
@@ -102,7 +60,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
     elif act == -2:  # max  
-        actions =  actions = calculate_optimized_actions(prices, initial_cash=10000, initial_asset_value=5000)
+        actions =  np.array( np.zeros( len(prices) ) , dtype=np.int64)
 
     else :
         rng = np.random.default_rng(act)
@@ -124,7 +82,6 @@ def Limit_fx (Ticker = '' , act = -1 ):
         'net_cf': np.round(net_cf, 2)
     })
     return df 
-
 
 def plot (Ticker = ''   ,  act = -1 ):
     all = []
