@@ -101,7 +101,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
     elif act == -2:  # max  
-        actions =  np.array( calculate_optimized_actions (prices) ) , dtype=np.int64)
+        actions =  calculate_optimized_actions (prices) 
 
     else :
         rng = np.random.default_rng(act)
