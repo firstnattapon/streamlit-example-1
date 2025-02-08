@@ -127,7 +127,11 @@ st.write("f(x): {}".format(fx_js_3) ," , " , "Production: {}".format(    np.arou
 st.table(df_7_3)
 st.write("_____") 
 
-
+df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
+st.write( 'NVTS')
+st.write("f(x): {}".format(fx_js_4) ," , " , "Production: {}".format(    np.around(Production('NVTS'), 2) ))
+st.table(df_7_4)
+st.write("_____")
 
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
 st.write("***RE > 60 USD")
