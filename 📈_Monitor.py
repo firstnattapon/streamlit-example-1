@@ -12,6 +12,7 @@ channel_id = 2528199
 write_api_key = '2E65V8XEIPH9B2VV'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
+
 def sell (asset = 0 , fix_c=1500 , Diff=60):
   s1 =  (1500-Diff) /asset
   s2 =  round(s1, 2)
@@ -36,7 +37,9 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
 channel_id_2 = 2385118
 write_api_key_2 = 'IPSG3MMMBJEB9DY8'
 client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json' )
+client_2.update(  {'field6': 0. } )
 
+"""
 def Monitor (Ticker = 'FFWM' , field = 2 ):
     tickerData = yf.Ticker( Ticker)
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
@@ -283,6 +286,7 @@ st.write("_____")
 
 if st.button("RERUN"):
   st.rerun()
+"""
 
 # except:pass
 
