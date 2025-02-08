@@ -106,9 +106,9 @@ def plot (Ticker = ''   ,  act = -1 ):
     all.append(Limit_fx( Ticker , act = act ).net_cf )
     all_id.append('fx')
     
-    #max
-    # all.append(Limit_fx( Ticker , act = -2 ).net_cf )
-    # all_id.append('max')
+    max
+    all.append(Limit_fx( Ticker , act = -2 ).net_cf )
+    all_id.append('max')
     
     chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
     st.line_chart(chart_data)
