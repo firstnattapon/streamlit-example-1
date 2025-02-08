@@ -46,7 +46,8 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
         prev_amount = current_amount
         prev_cash = cash[i]
 
-    net_cf =  cash   -  refer
+    # net_cf =  cash   -  refer
+    net_cf   =   sumusd   -  (refer + initial_asset_value)
     return buffers, cash, sumusd, refer , net_cf
 
 def feed_data( data = "APLS"):
@@ -78,7 +79,7 @@ def feed_data( data = "APLS"):
             seed  = i 
     return  seed
 
-def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
+def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date ='2023-01-01 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
 
