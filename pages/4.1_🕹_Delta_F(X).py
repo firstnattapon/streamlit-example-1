@@ -79,7 +79,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
                 up_dn = np.append(up_dn, up_dn[-1])  # กรณีจบ array
         
         # สร้าง array เก็บตำแหน่งที่เปลี่ยนค่า
-        final_x = 1
+        final_x = 0
         xl = np.array([])
         
         # ตรวจสอบการเปลี่ยนแปลงค่าใน up_dn
@@ -90,7 +90,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
             else:
                 xl = np.append(xl, 0 )  # ไม่เปลี่ยนแปลง
 
-        actions = xl
+        actions = up_dn
 
     else :
         rng = np.random.default_rng(act)
