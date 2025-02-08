@@ -19,7 +19,6 @@ def field (field = 2):
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2023-01-01 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
-        filter_date = '2023-01-01 12:00:00+07:00'
         tickerData = tickerData.history(period= 'max' )[['Close']]
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
         filter_date = filter_date
@@ -106,7 +105,6 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2023-01-01 12:00:00+07:0
             return  final
     except:pass
         
-# @st.cache_data
 def delta_z (Ticker = 'FFWM' , T = np.nan ) :
     up_dn = np.array([])
     for idX , v in enumerate(T)  :
@@ -144,7 +142,6 @@ def delta_x (Ticker = 'FFWM' , number = [68 , 36]):
         container_1.write("min , {}".format(z))
     
         for i in number:
-            # np.random.seed(i)
             rng = np.random.default_rng(i)
             pred  = delta2(Ticker=Ticker , pred= rng.integers(2, size= siz))
             prd_y = pred.net_pv.values
@@ -187,7 +184,6 @@ def delta_y (Ticker = 'FFWM' ):
         container.write("min , {}".format(z))
         
         for i in range(2000):
-            # np.random.seed(i)
             rng = np.random.default_rng(i)
             pred  = delta2(Ticker=Ticker , pred= rng.integers(2, size= siz))
             prd_y = pred.net_pv.values
