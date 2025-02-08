@@ -93,7 +93,7 @@ def plot (Ticker = ''   ,  act = -1 ):
     #fx
     all.append(Limit_fx( Ticker , act = act ).net_cf )
     all_id.append('fx')
-    max
+    #max
     all.append(Limit_fx( Ticker , act = -2 ).net_cf )
     all_id.append('max')
     
