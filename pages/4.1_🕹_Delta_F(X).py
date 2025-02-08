@@ -97,5 +97,7 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
+fx = client.get_field_last(field='{}'.format(2))
+fx_js = int(json.loads(fx)["field{}".format(2)
 
-plot( Ticker = 'FFWM'  , act =   client.get_field_last(field='{}'.format(2))   )
+plot( Ticker = 'FFWM'  , act =  fx_js   )
