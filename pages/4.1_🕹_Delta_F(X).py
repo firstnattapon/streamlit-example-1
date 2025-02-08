@@ -78,8 +78,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         'refer': np.round(refer, 2),
         'net_cf': np.round(net_cf, 2)
     })
-    return df.net_cf    
-
+    return df 
 
 
 st.line_chart(Limit_fx('FFWM'))
