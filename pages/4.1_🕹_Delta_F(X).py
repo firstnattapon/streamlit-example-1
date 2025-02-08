@@ -66,9 +66,7 @@ def Limit_fx (Ticker = ''):
   initial_asset_value = 500.0
   initial_price = prices[0]
   
-    buffers, cash, sumusd, refer , net_cf = calculate_optimized(
-        actions, prices, initial_cash, initial_asset_value, initial_price
-    )
+  buffers, cash, sumusd, refer , net_cf = calculate_optimized(actions, prices, initial_cash, initial_asset_value, initial_price)
     
   df = pd.DataFrame({
         'price': prices,
