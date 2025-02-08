@@ -33,7 +33,6 @@ def buy (asset = 0 , fix_c=1500 , Diff=60):
   return b2 , b5 , round(b7, 2)
 
 
-###
 channel_id_2 = 2385118
 write_api_key_2 = 'IPSG3MMMBJEB9DY8'
 client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json
@@ -66,9 +65,8 @@ df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
 df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 
-###
 
-col13, col16 , col14 , col15 , col17 , col18   = st.columns(6)
+col13, col16 , col14 , col15 , col17 , col18 , col19   = st.columns(7)
 
 x_2 = col16.number_input('Diff', step=1 , value= 60  )
 
@@ -114,8 +112,6 @@ if Start :
         client.update(  {'field5': add_5 } )
         col13.write(add_5) 
 
-"""
-
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
 
@@ -135,7 +131,7 @@ x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
 x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST  )
 x_6 = col18.number_input('APLS_ASSET', step=0.001  , value= APLS_ASSET_LAST  )
-x_7 = col18.number_input('NVTS_ASSET', step=0.001  , value= NVTS_ASSET_LAST  )
+x_7 = col19.number_input('NVTS_ASSET', step=0.001  , value= NVTS_ASSET_LAST  )
 
 st.write("_____") 
 
@@ -287,7 +283,6 @@ st.write("_____")
 if st.button("RERUN"):
   st.rerun()
 
-"""
 
 # except:pass
 
