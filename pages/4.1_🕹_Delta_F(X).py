@@ -65,15 +65,15 @@ def Limit_fx (Ticker = '' , act = -1 ):
         T = prices
         up_dn = np.array([])
         for idX , v in enumerate(T)  :
-        try :
-            if  T[idX+1] > v :
-                up_dn = np.append( up_dn , 1)
-            elif T[idX+1] <  v :
-                up_dn = np.append( up_dn , 0)
-            elif  T[idX+1] ==  v:
+            try :
+                if  T[idX+1] > v :
+                    up_dn = np.append( up_dn , 1)
+                elif T[idX+1] <  v :
+                    up_dn = np.append( up_dn , 0)
+                elif  T[idX+1] ==  v:
+                    up_dn = np.append( up_dn , up_dn[-1])
+            except :
                 up_dn = np.append( up_dn , up_dn[-1])
-        except :
-            up_dn = np.append( up_dn , up_dn[-1])
         
         final_x = 0
         xl = np.array([])
