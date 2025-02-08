@@ -62,16 +62,14 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
     elif act == -2:  # max (แก้ไขส่วนนี้)
-        try:
-            up_dn = []
-            for idX, v in enumerate(prices):
-                if T[idX+1] > v:  # ราคาขึ้น
-                    up_dn = append(1)
-                elif T[idX+1] < v: # ราคาลง
-                    up_dn = append(0)
-                else: # ราคาคงที่
-                    up_dn = append(up_dn[-1]) # ใช้ค่าล่าสุดซ้ำ
-        except : pass
+        up_dn = []
+        for idX, v in enumerate(prices):
+            if T[idX+1] > v:  # ราคาขึ้น
+                up_dn = append(1)
+            elif T[idX+1] < v: # ราคาลง
+                up_dn = append(0)
+            else: # ราคาคงที่
+                up_dn = append(up_dn[-1]) # ใช้ค่าล่าสุดซ้ำ
         actions = up_dn
 
     else :
