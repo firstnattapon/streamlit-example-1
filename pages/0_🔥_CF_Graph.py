@@ -57,13 +57,14 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
             return   df[['Asset_Price', 'Cash_Balan' , 'net_pv' ,'Fixed_Asset_Value']] ,  df_2[-1]
     except:pass
 
-tab1, tab2, tab3  , tab4  , tab5 = st.tabs([ 'DATA' ,"FFWM", "NEGG", "RIVN" , 'APLS'])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([ 'DATA' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS'])
 
 with tab1:
     x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
     x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker('FFWM').fast_info['lastPrice']   ) 
     x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
-    x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
+    x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] )
+    x_7 = st.number_input('ราคา_NVTS_3.05', step=0.01 ,   value = yf.Ticker('NVTS').fast_info['lastPrice'])
     x_5 = st.number_input('Fixed_Asset_Value', step=0.01 ,   value = 1500. ) 
     x_6 = st.number_input('Cash_Balan', step=0.01 ,   value = 0. ) 
     st.write("_____") 
@@ -108,5 +109,19 @@ with tab5:
     st.write( 'rf:' , df_APLS)
     st.write("_____") 
 
-st.write( 'sum_rf:' , (df_FFWM+df_NEGG+df_RIVN+df_APLS) , 'asset' ,   x_5*4  , 'Cash' , x_6*4 , 'Lv_Cash' , -1000 )
-st.write( 'real_rf:' , (df_FFWM+df_NEGG+df_RIVN+df_APLS) - 1000)
+with tab6:
+    df, df_NVTS = CF_Graph(entry=3.05, ref=x_7 , Fixed_Asset_Value =x_5 , Cash_Balan=x_6)
+    as_1 = df.set_index('Asset_Price')
+    as_1_py = px.line(as_1)
+    as_1_py.add_vline(x=x_7, line_width=1, line_dash="dash")
+    as_1_py.add_vline(x=3.05, line_width=0.1)
+    st.plotly_chart(as_1_py)
+    st.write('rf:', df_NVTS)
+    st.write("_____")
+
+
+
+# st.write( 'sum_rf:' , (df_FFWM+df_NEGG+df_RIVN+df_APLS) , 'asset' ,   x_5*4  , 'Cash' , x_6*4 , 'Lv_Cash' , -1000 )
+st.write( 'sum_rf:',  (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS), 'asset', x_5*5,   'Cash', x_6*5, 'Lv_Cash', -1000)
+st.write('real_rf:', (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS) - 1000)
+# st.write( 'real_rf:' , (df_FFWM+df_NEGG+df_RIVN+df_APLS) - 1000)
