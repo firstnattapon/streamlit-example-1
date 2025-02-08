@@ -137,153 +137,154 @@ x_7 = col18.number_input('NVTS_ASSET', step=0.001  , value= NVTS_ASSET_LAST  )
 
 st.write("_____") 
 
-try:
-  s8 , s9 , s10 =  sell( asset = x_3 , Diff= x_2)
-  s11 , s12 , s13 =  sell(asset = x_4 , Diff= x_2)
-  b8 , b9 , b10 =  buy(asset = x_3 , Diff= x_2)
-  b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
-  u1 , u2 , u3 = sell( asset = x_5 , Diff= x_2)
-  u4 , u5 , u6 = buy( asset = x_5 , Diff= x_2)
-  p1 , p2 , p3 = sell( asset = x_6 , Diff= x_2)
-  p4 , p5 , p6 = buy( asset = x_6 , Diff= x_2)
+# try:
 
-  
-  Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value= df_7_1.action.values[1] )
-  if Limut_Order_NEGG :
-    st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
-    
-    col1, col2 , col3  = st.columns(3)
-    sell_negg = col3.checkbox('sell_match_NEGG')
-    if sell_negg :
-      GO_NEGG_SELL = col3.button("GO!")
-      if GO_NEGG_SELL :
-        client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
-        col3.write(NEGG_ASSET_LAST - b9) 
+s8 , s9 , s10 =  sell( asset = x_3 , Diff= x_2)
+s11 , s12 , s13 =  sell(asset = x_4 , Diff= x_2)
+b8 , b9 , b10 =  buy(asset = x_3 , Diff= x_2)
+b11 , b12 , b13 =  buy(asset = x_4 , Diff= x_2)
+u1 , u2 , u3 = sell( asset = x_5 , Diff= x_2)
+u4 , u5 , u6 = buy( asset = x_5 , Diff= x_2)
+p1 , p2 , p3 = sell( asset = x_6 , Diff= x_2)
+p4 , p5 , p6 = buy( asset = x_6 , Diff= x_2)
 
-    pv_negg =  yf.Ticker('NEGG').fast_info['lastPrice'] * x_3 
-    st.write(yf.Ticker('NEGG').fast_info['lastPrice'] , pv_negg  ,'(',  pv_negg - 1500 ,')',  )
-    
-    col4, col5 , col6  = st.columns(3)
-    st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
-    buy_negg = col6.checkbox('buy_match_NEGG')
-    if buy_negg :
-      GO_NEGG_Buy = col6.button("GO!")
-      if GO_NEGG_Buy :
-        client.update(  {'field2': NEGG_ASSET_LAST + s9  } )
-        col6.write(NEGG_ASSET_LAST + s9) 
-  
-  st.write("_____") 
-  
-  Limut_Order_FFWM = st.checkbox('Limut_Order_FFWM',value= df_7.action.values[1] )
-  if Limut_Order_FFWM :
-    st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
-    
-    col7, col8 , col9  = st.columns(3)
-    sell_ffwm = col9.checkbox('sell_match_FFWM')
-    if sell_ffwm :
-      GO_ffwm_sell = col9.button("GO!")
-      if GO_ffwm_sell :
-        client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
-        col9.write(FFWM_ASSET_LAST - b12) 
 
-    pv_ffwm =    yf.Ticker('FFWM').fast_info['lastPrice'] * x_4
-    st.write(yf.Ticker('FFWM').fast_info['lastPrice'] , pv_ffwm ,'(',  pv_ffwm - 1500 ,')', )
-    
-    col10, col11 , col12  = st.columns(3)
-    st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
-    buy_ffwm = col12.checkbox('buy_match_FFWM')
-    if buy_ffwm :
-      GO_ffwm_Buy = col12.button("GO!")
-      if GO_ffwm_Buy :
-        client.update(  {'field1': FFWM_ASSET_LAST + s12  } )
-        col12.write(FFWM_ASSET_LAST + s12) 
-    
-  st.write("_____") 
+Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value= df_7_1.action.values[1] )
+if Limut_Order_NEGG :
+  st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
   
-  Limut_Order_RIVN = st.checkbox('Limut_Order_RIVN',value= df_7_2.action.values[1] )
-  if Limut_Order_RIVN :    
-    st.write( 'sell' , '   ' , 'A', u5 , 'P' , u4  , 'C' , u6  )
-    
-    col77, col88 , col99  = st.columns(3)
-    sell_RIVN = col99.checkbox('sell_match_RIVN')
-    if sell_RIVN :
-      GO_RIVN_sell = col99.button("GO!")
-      if GO_RIVN_sell :
-        client.update(  {'field3': RIVN_ASSET_LAST - u5  } )
-        col99.write(RIVN_ASSET_LAST - u5) 
+  col1, col2 , col3  = st.columns(3)
+  sell_negg = col3.checkbox('sell_match_NEGG')
+  if sell_negg :
+    GO_NEGG_SELL = col3.button("GO!")
+    if GO_NEGG_SELL :
+      client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
+      col3.write(NEGG_ASSET_LAST - b9) 
 
-    pv_rivn =    yf.Ticker('RIVN').fast_info['lastPrice'] * x_5
-    st.write(yf.Ticker('RIVN').fast_info['lastPrice'] , pv_rivn ,'(',  pv_rivn - 1500 ,')', )
-    
-    col100 , col111 , col122  = st.columns(3)
-    st.write(  'buy' , '   ', 'A', u2 , 'P' , u1  , 'C'  , u3  )
-    buy_RIVN = col122.checkbox('buy_match_RIVN')
-    if buy_RIVN :
-      GO_RIVN_Buy = col122.button("GO!")
-      if GO_RIVN_Buy :
-        client.update(  {'field3': RIVN_ASSET_LAST + u2  } )
-        col122.write(RIVN_ASSET_LAST + u2) 
+  pv_negg =  yf.Ticker('NEGG').fast_info['lastPrice'] * x_3 
+  st.write(yf.Ticker('NEGG').fast_info['lastPrice'] , pv_negg  ,'(',  pv_negg - 1500 ,')',  )
   
-  st.write("_____") 
+  col4, col5 , col6  = st.columns(3)
+  st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
+  buy_negg = col6.checkbox('buy_match_NEGG')
+  if buy_negg :
+    GO_NEGG_Buy = col6.button("GO!")
+    if GO_NEGG_Buy :
+      client.update(  {'field2': NEGG_ASSET_LAST + s9  } )
+      col6.write(NEGG_ASSET_LAST + s9) 
+
+st.write("_____") 
+
+Limut_Order_FFWM = st.checkbox('Limut_Order_FFWM',value= df_7.action.values[1] )
+if Limut_Order_FFWM :
+  st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
+  
+  col7, col8 , col9  = st.columns(3)
+  sell_ffwm = col9.checkbox('sell_match_FFWM')
+  if sell_ffwm :
+    GO_ffwm_sell = col9.button("GO!")
+    if GO_ffwm_sell :
+      client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
+      col9.write(FFWM_ASSET_LAST - b12) 
+
+  pv_ffwm =    yf.Ticker('FFWM').fast_info['lastPrice'] * x_4
+  st.write(yf.Ticker('FFWM').fast_info['lastPrice'] , pv_ffwm ,'(',  pv_ffwm - 1500 ,')', )
+  
+  col10, col11 , col12  = st.columns(3)
+  st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
+  buy_ffwm = col12.checkbox('buy_match_FFWM')
+  if buy_ffwm :
+    GO_ffwm_Buy = col12.button("GO!")
+    if GO_ffwm_Buy :
+      client.update(  {'field1': FFWM_ASSET_LAST + s12  } )
+      col12.write(FFWM_ASSET_LAST + s12) 
+  
+st.write("_____") 
+
+Limut_Order_RIVN = st.checkbox('Limut_Order_RIVN',value= df_7_2.action.values[1] )
+if Limut_Order_RIVN :    
+  st.write( 'sell' , '   ' , 'A', u5 , 'P' , u4  , 'C' , u6  )
+  
+  col77, col88 , col99  = st.columns(3)
+  sell_RIVN = col99.checkbox('sell_match_RIVN')
+  if sell_RIVN :
+    GO_RIVN_sell = col99.button("GO!")
+    if GO_RIVN_sell :
+      client.update(  {'field3': RIVN_ASSET_LAST - u5  } )
+      col99.write(RIVN_ASSET_LAST - u5) 
+
+  pv_rivn =    yf.Ticker('RIVN').fast_info['lastPrice'] * x_5
+  st.write(yf.Ticker('RIVN').fast_info['lastPrice'] , pv_rivn ,'(',  pv_rivn - 1500 ,')', )
+  
+  col100 , col111 , col122  = st.columns(3)
+  st.write(  'buy' , '   ', 'A', u2 , 'P' , u1  , 'C'  , u3  )
+  buy_RIVN = col122.checkbox('buy_match_RIVN')
+  if buy_RIVN :
+    GO_RIVN_Buy = col122.button("GO!")
+    if GO_RIVN_Buy :
+      client.update(  {'field3': RIVN_ASSET_LAST + u2  } )
+      col122.write(RIVN_ASSET_LAST + u2) 
+
+st.write("_____") 
 
 #  
-  Limut_Order_APLS = st.checkbox('Limut_Order_APLS',value= df_7_3.action.values[1] )
-  if Limut_Order_APLS :    
-    st.write( 'sell' , '   ' , 'A', p5 , 'P' , p4  , 'C' , p6  )
-    
-    col7777, col8888 , col9999  = st.columns(3)
-    sell_APLS = col9999.checkbox('sell_match_APLS')
-    if sell_APLS :
-      GO_APLS_sell = col9999.button("GO!")
-      if GO_APLS_sell :
-        client.update(  {'field4': APLS_ASSET_LAST - p5  } )
-        col9999.write(APLS_ASSET_LAST - p5) 
-
-    pv_apls =    yf.Ticker('APLS').fast_info['lastPrice'] * x_6
-    st.write(yf.Ticker('APLS').fast_info['lastPrice'] , pv_apls ,'(',  pv_apls - 1500 ,')', )
-    
-    col1000 , col1111 , col1222  = st.columns(3)
-    st.write(  'buy' , '   ', 'A', p2 , 'P' , p1  , 'C'  , p3  )
-    buy_APLS = col1222.checkbox('buy_match_APLS')
-    if buy_APLS :
-      GO_APLS_Buy = col1222.button("GO!")
-      if GO_APLS_Buy :
-        client.update(  {'field4': APLS_ASSET_LAST + p2  } )
-        col1222.write(APLS_ASSET_LAST + p2) 
+Limut_Order_APLS = st.checkbox('Limut_Order_APLS',value= df_7_3.action.values[1] )
+if Limut_Order_APLS :    
+  st.write( 'sell' , '   ' , 'A', p5 , 'P' , p4  , 'C' , p6  )
   
-  st.write("_____")
+  col7777, col8888 , col9999  = st.columns(3)
+  sell_APLS = col9999.checkbox('sell_match_APLS')
+  if sell_APLS :
+    GO_APLS_sell = col9999.button("GO!")
+    if GO_APLS_sell :
+      client.update(  {'field4': APLS_ASSET_LAST - p5  } )
+      col9999.write(APLS_ASSET_LAST - p5) 
+
+  pv_apls =    yf.Ticker('APLS').fast_info['lastPrice'] * x_6
+  st.write(yf.Ticker('APLS').fast_info['lastPrice'] , pv_apls ,'(',  pv_apls - 1500 ,')', )
+  
+  col1000 , col1111 , col1222  = st.columns(3)
+  st.write(  'buy' , '   ', 'A', p2 , 'P' , p1  , 'C'  , p3  )
+  buy_APLS = col1222.checkbox('buy_match_APLS')
+  if buy_APLS :
+    GO_APLS_Buy = col1222.button("GO!")
+    if GO_APLS_Buy :
+      client.update(  {'field4': APLS_ASSET_LAST + p2  } )
+      col1222.write(APLS_ASSET_LAST + p2) 
+
+st.write("_____")
 
 Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS',value= df_7_4.action.values[1] )
 if Limut_Order_NVTS :    
-    st.write( 'sell' , '   ' , 'A', p8 , 'P' , p7  , 'C' , p9  )
-    
-    col_nvts1, col_nvts2 , col_nvts3  = st.columns(3)
-    sell_NVTS = col_nvts3.checkbox('sell_match_NVTS')
-    if sell_NVTS :
-      GO_NVTS_sell = col_nvts3.button("GO!")
-      if GO_NVTS_sell :
-        client.update(  {'field5': NVTS_ASSET_LAST - p8  } )
-        col_nvts3.write(NVTS_ASSET_LAST - p8) 
-
-    pv_nvts =    yf.Ticker('NVTS').fast_info['lastPrice'] * x_7
-    st.write(yf.Ticker('NVTS').fast_info['lastPrice'] , pv_nvts ,'(',  pv_nvts - 1500 ,')', )
-    
-    col_nvts4 , col_nvts5 , col_nvts6  = st.columns(3)
-    st.write(  'buy' , '   ', 'A', u8 , 'P' , u7  , 'C'  , u9  )
-    buy_NVTS = col_nvts6.checkbox('buy_match_NVTS')
-    if buy_NVTS :
-      GO_NVTS_Buy = col_nvts6.button("GO!")
-      if GO_NVTS_Buy :
-        client.update(  {'field5': NVTS_ASSET_LAST + u8  } )
-        col_nvts6.write(NVTS_ASSET_LAST + u8) 
+  st.write( 'sell' , '   ' , 'A', p8 , 'P' , p7  , 'C' , p9  )
   
+  col_nvts1, col_nvts2 , col_nvts3  = st.columns(3)
+  sell_NVTS = col_nvts3.checkbox('sell_match_NVTS')
+  if sell_NVTS :
+    GO_NVTS_sell = col_nvts3.button("GO!")
+    if GO_NVTS_sell :
+      client.update(  {'field5': NVTS_ASSET_LAST - p8  } )
+      col_nvts3.write(NVTS_ASSET_LAST - p8) 
+
+  pv_nvts =    yf.Ticker('NVTS').fast_info['lastPrice'] * x_7
+  st.write(yf.Ticker('NVTS').fast_info['lastPrice'] , pv_nvts ,'(',  pv_nvts - 1500 ,')', )
+  
+  col_nvts4 , col_nvts5 , col_nvts6  = st.columns(3)
+  st.write(  'buy' , '   ', 'A', u8 , 'P' , u7  , 'C'  , u9  )
+  buy_NVTS = col_nvts6.checkbox('buy_match_NVTS')
+  if buy_NVTS :
+    GO_NVTS_Buy = col_nvts6.button("GO!")
+    if GO_NVTS_Buy :
+      client.update(  {'field5': NVTS_ASSET_LAST + u8  } )
+      col_nvts6.write(NVTS_ASSET_LAST + u8) 
+
 st.write("_____")
-  
-  
-  if st.button("RERUN"):
-    st.rerun()
 
 
-except:pass
+if st.button("RERUN"):
+  st.rerun()
+
+
+# except:pass
 
 
