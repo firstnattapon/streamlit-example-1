@@ -62,8 +62,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
 df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
 df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
 df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
-# df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
-df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 6)
+df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 
 
 ###
