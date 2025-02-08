@@ -17,7 +17,7 @@ def field (field = 2):
     return id
 
 # @st.cache_data
-def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
+def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2023-01-01 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
         tickerData = tickerData.history(period= 'max' )[['Close']]
