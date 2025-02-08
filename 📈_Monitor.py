@@ -59,11 +59,12 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     df['action'] = rng.integers(2, size = len(df))
     return df.tail(7) , fx_js
 
-df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
-df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
-df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
-df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
-df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
+
+# df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
+# df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
+# df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
+# df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
+# df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 
 
 col13, col16, col14, col15, col17, col18, col19 = st.columns(7)
@@ -111,7 +112,7 @@ if Start :
       if _NVTS_ASSET:
           client.update({'field5': add_5})
 
-"""
+
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
@@ -283,7 +284,6 @@ st.write("_____")
 if st.button("RERUN"):
   st.rerun()
 
-"""
 # except:pass
 
 
