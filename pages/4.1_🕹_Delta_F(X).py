@@ -70,9 +70,9 @@ def Limit_fx (Ticker = '' , act = -1 ):
             try:
                 next_val = T[idX+1]
                 if next_val > v:
-                    up_dn = np.append(up_dn, 1)  # ค่าเพิ่มขึ้น
+                    up_dn = np.append(up_dn, 0)  # ค่าเพิ่มขึ้น
                 elif next_val < v:
-                    up_dn = np.append(up_dn, 0)  # ค่าลดลง
+                    up_dn = np.append(up_dn, 1)  # ค่าลดลง
                 else:
                     up_dn = np.append(up_dn, up_dn[-1])  # ค่าเท่าเดิม -> ใช้ค่าล่าสุด
             except IndexError:
