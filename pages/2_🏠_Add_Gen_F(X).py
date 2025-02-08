@@ -10,7 +10,7 @@ st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
 
 @njit
-def calculate_optimized(actions, prices, cash_start, asset_values_start, initial_price):
+def calculate_optimized(actions, prices, cash_start, initial_asset_value, initial_price):
     n = len(actions)
     buffers = np.zeros(n)
     cash = np.zeros(n)
@@ -19,10 +19,10 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
 
     # คำนวณค่า refer
     for i in range(n):
-        refer[i] = cash_start + (-asset_values_start) * np.log(initial_price / prices[i])
+        refer[i] = cash_start + (-initial_asset_value) * np.log(initial_price / prices[i])
 
     # คำนวณค่าเริ่มต้น
-    current_amount = asset_values_start / initial_price  # ใช้ initial_price แทน prices[0]
+    current_amount = initial_asset_value / initial_price  # ใช้ initial_price แทน prices[0]
     cash[0] = cash_start
     sumusd[0] = cash[0] + (current_amount * prices[0])
 
