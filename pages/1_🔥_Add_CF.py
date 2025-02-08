@@ -28,8 +28,8 @@ RIVN_ASSET_LAST = eval(json.loads(RIVN_ASSET_LAST)['field3'])
 APLS_ASSET_LAST = client_2.get_field_last(field='field4')
 APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
 
-NVTS_ASSET_LAST = client_2.get_field_last(field='field5')
-NVTS_ASSET_LAST = eval(json.loads(NVTS_ASSET_LAST)['field5'])
+# NVTS_ASSET_LAST = client_2.get_field_last(field='field5')
+# NVTS_ASSET_LAST = eval(json.loads(NVTS_ASSET_LAST)['field5'])
 NVTS_ASSET_LAST = 492
 
 
