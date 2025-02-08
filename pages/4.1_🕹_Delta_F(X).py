@@ -67,9 +67,9 @@ def Limit_fx (Ticker = '' , act = -1 ):
         for idX , v in enumerate(T)  :
             try :
                 if  T[idX+1] > v :
-                    up_dn = np.append( up_dn , 1)
-                elif T[idX+1] <  v :
                     up_dn = np.append( up_dn , 0)
+                elif T[idX+1] <  v :
+                    up_dn = np.append( up_dn , 1)
                 elif  T[idX+1] ==  v:
                     up_dn = np.append( up_dn , up_dn[-1])
             except :
