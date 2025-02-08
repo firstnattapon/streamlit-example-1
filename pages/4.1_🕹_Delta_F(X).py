@@ -61,8 +61,9 @@ def Limit_fx (Ticker = '' , act = -1 ):
     if  act == -1 : # min
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
-    elif act == -2:  # max (แก้ไขแล้ว)
-        up_dn = [0]  # เริ่มต้นด้วยค่า default
+    elif act == -2:  # max  
+        
+        up_dn = [0]  # 
         for i in range(len(prices)-1):  # หลีกเลี่ยง index out of range
             current_price = prices[i]
             next_price = prices[i+1]
@@ -97,7 +98,6 @@ def Limit_fx (Ticker = '' , act = -1 ):
     })
     return df 
 
-
 def plot (Ticker = ''   ,  act = -1 ):
     all = []
     all_id = []
@@ -115,7 +115,7 @@ def plot (Ticker = ''   ,  act = -1 ):
     chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
     st.line_chart(chart_data)
 
-    st.write(Limit_fx( Ticker , act = -1 ))
+    st.write(Limit_fx( Ticker , act = -2 ))
 
 channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
