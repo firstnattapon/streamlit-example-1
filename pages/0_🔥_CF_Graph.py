@@ -119,9 +119,6 @@ with tab6:
     st.write('rf:', df_NVTS)
     st.write("_____")
 
-
-
 # st.write( 'sum_rf:' , (df_FFWM+df_NEGG+df_RIVN+df_APLS) , 'asset' ,   x_5*4  , 'Cash' , x_6*4 , 'Lv_Cash' , -1000 )
-st.write( 'sum_rf:',  (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS), 'asset', x_5*5,   'Cash', x_6*5, 'Lv_Cash', -1000)
-st.write('real_rf:', (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS) - 1000)
-# st.write( 'real_rf:' , (df_FFWM+df_NEGG+df_RIVN+df_APLS) - 1000)
+st.write( 'sum_rf:',  (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS), 'asset', x_5*5,   'Cash', x_6*5, 'Lv_Cash', -1650)
+st.write('real_rf:', (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS) -1650)
