@@ -125,6 +125,7 @@ x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
 x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST  )
 x_6 = col18.number_input('APLS_ASSET', step=0.001  , value= APLS_ASSET_LAST  )
+x_7 = col18.number_input('NVTS_ASSET', step=0.001  , value= NVTS_ASSET_LAST  )
 
 st.write("_____") 
 
