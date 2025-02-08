@@ -118,6 +118,9 @@ RIVN_ASSET_LAST = eval(json.loads(RIVN_ASSET_LAST)['field3'])
 APLS_ASSET_LAST = client.get_field_last(field='field4')
 APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
 
+NVTS_ASSET_LAST = client.get_field_last(field='field5')
+NVTS_ASSET_LAST = eval(json.loads(NVTS_ASSET_LAST)['field5'])
+
 x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST  )
 x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST  )
