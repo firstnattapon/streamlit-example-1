@@ -48,6 +48,7 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
 
 
 def Limit_fx (Ticker = '' , act = -1 ):
+    
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = yf.Ticker(Ticker)
     tickerData = tickerData.history(period= 'max' )[['Close']]
@@ -80,6 +81,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
     })
     return df 
 
+
 def plot (Ticker = ''   ,  act = -1 ):
     all = []
     all_id = []
@@ -92,4 +94,4 @@ def plot (Ticker = ''   ,  act = -1 ):
     st.line_chart(chart_data)
 
 
-plot( Ticker = ''  , act = 1182379  )
+plot( Ticker = 'FFWM'  , act = 1182379  )
