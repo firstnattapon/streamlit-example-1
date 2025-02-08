@@ -83,6 +83,8 @@ def Limit_fx (Ticker = '' , act = -1 ):
 
 all = []
 all.append(Limit_fx('FFWM').net_cf )
+all.append(Limit_fx('FFWM' , act = 1182379 ).net_cf )
+
 chart_data = pd.DataFrame(np.array(all).T)
 st.line_chart(chart_data)
 
