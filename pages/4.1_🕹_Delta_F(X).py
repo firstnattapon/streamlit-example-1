@@ -81,4 +81,4 @@ def Limit_fx (Ticker = '' , act = -1 ):
     return df 
 
 
-st.line_chart(Limit_fx('FFWM'))
+st.line_chart( Limit_fx('FFWM').net_cf)
