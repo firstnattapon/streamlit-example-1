@@ -46,49 +46,46 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
     net_cf =  cash   -  refer
     return buffers, cash, sumusd, refer , net_cf
 
-
-def calculate_optimized_actions(prices = np.nan):
-
+def calculate_optimized_actions(prices: np.ndarray, initial_cash: float, initial_asset_value: float) -> np.ndarray:
     n = prices.shape[0]
     if n < 2:
         return np.array([], dtype=int)
     
-    # Initialize state arrays
-    cash = np.zeros(n)
-    amount = np.zeros(n)
+    # กำหนดโครงสร้างข้อมูล
+    cash_backward = np.zeros(n)
+    amount_backward = np.zeros(n)
     actions = np.zeros(n, dtype=int)
     
-    # Initialize last step
-    cash[-1] = 0
-    amount[-1] = 0  # Placeholder value
+    # เงื่อนไขเริ่มต้น (วันสุดท้าย)
+    cash_backward[-1] = initial_cash
+    amount_backward[-1] = initial_asset_value / prices[-1]
     
-    # Backward induction with vectorized operations
-    for i in range(n-2, 0, -1):
-        prev_price = prices[i-1]
+    # คำนวณย้อนกลับ (Dynamic Programming)
+    for i in range(n-2, -1, -1):
         current_price = prices[i]
-        next_price = prices[i+1] if i+1 < n else current_price
+        next_price = prices[i+1]
         
-        # Calculate action 1 outcome
-        buffer_action1 = amount[i+1] * (current_price - prev_price)
-        cash_action1 = cash[i+1] + buffer_action1
-        amount_action1 = (amount[i+1] * prev_price) / current_price
+        # คำนวณผลลัพธ์ของแต่ละ Action
+        # Action 1: ทำการซื้อ/ขาย
+        potential_profit = amount_backward[i+1] * (next_price - current_price)
+        cash_action1 = cash_backward[i+1] + potential_profit
+        amount_action1 = (amount_backward[i+1] * next_price) / current_price
         
-        # Action 0 outcome
-        cash_action0 = cash[i+1]
-        amount_action0 = amount[i+1]
+        # Action 0: ไม่ทำอะไร
+        cash_action0 = cash_backward[i+1]
+        amount_action0 = amount_backward[i+1]
         
-        # Choose optimal action
+        # เลือก Action ที่ให้มูลค่าสูงสุด
         if cash_action1 > cash_action0:
-            cash[i] = cash_action1
-            amount[i] = amount_action1
+            cash_backward[i] = cash_action1
+            amount_backward[i] = amount_action1
             actions[i] = 1
         else:
-            cash[i] = cash_action0
-            amount[i] = amount_action0
+            cash_backward[i] = cash_action0  # แก้ไขส่วนที่ขาด
+            amount_backward[i] = amount_action0
             actions[i] = 0
-            
+    
     return actions
-
 
 def Limit_fx (Ticker = '' , act = -1 ):
     
@@ -105,7 +102,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
     elif act == -2:  # max  
-        actions =  calculate_optimized_actions(prices)
+        actions =  actions = calculate_optimized_actions(prices, initial_cash=10000, initial_asset_value=5000)
 
     else :
         rng = np.random.default_rng(act)
@@ -129,18 +126,16 @@ def Limit_fx (Ticker = '' , act = -1 ):
     return df 
 
 
-
-
 def plot (Ticker = ''   ,  act = -1 ):
     all = []
     all_id = []
+    
     #min
     all.append( Limit_fx(Ticker , act = -1 ).net_cf )
     all_id.append('min')
     #fx
     all.append(Limit_fx( Ticker , act = act ).net_cf )
     all_id.append('fx')
-    
     max
     all.append(Limit_fx( Ticker , act = -2 ).net_cf )
     all_id.append('max')
