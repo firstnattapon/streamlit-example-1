@@ -43,8 +43,8 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
         prev_amount = current_amount
         prev_cash = cash[i]
 
-    # net_cf =  sumusd  -  (refer + 500 )
-    net_cf =  cash   -  refer
+    net_cf =  sumusd  -  (refer + 500 )
+    # net_cf =  cash   -  refer
 
     return buffers, cash, sumusd, refer , net_cf
 
