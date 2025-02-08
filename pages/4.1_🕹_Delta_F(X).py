@@ -102,6 +102,9 @@ def plot (Ticker = ''   ,  act = -1 ):
     chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
     st.line_chart(chart_data)
 
+    st.write(imit_fx(Ticker , act = -1 )  ) 
+
+
 channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
