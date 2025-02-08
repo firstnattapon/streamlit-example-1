@@ -131,7 +131,6 @@ def delta_z (Ticker = 'FFWM' , T = np.nan ) :
         delta_z_re = delta2(Ticker =  Ticker  , pred = xl)
     return  delta_z_re.net_pv.values
 
-# @st.cache_data
 def delta_x (Ticker = 'FFWM' , number = [68 , 36]):
     container_1 = st.container(border=True)
     for i in range(1):
@@ -173,7 +172,6 @@ def delta_x (Ticker = 'FFWM' , number = [68 , 36]):
         st.line_chart(chart_data)
         st.stop()
         
-# @st.cache_data
 def delta_y (Ticker = 'FFWM' ):
     container = st.container(border=True)
     all = []
