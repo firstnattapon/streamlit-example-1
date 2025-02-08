@@ -102,7 +102,7 @@ if Start :
     add_4 = col13.number_input('@_APLS_ASSET', step=0.001 ,  value=0.)
     _APLS_ASSET = col13.button("GO!")
     if _APLS_ASSET :
-      client.update(  {'field5': add_4 }  )
+      client.update(  {'field6': add_4 }  )
       col13.write(add_4) 
 
 
