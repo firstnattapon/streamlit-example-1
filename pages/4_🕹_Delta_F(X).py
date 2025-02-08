@@ -19,6 +19,7 @@ def field (field = 2):
 def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2023-01-01 12:00:00+07:00'):
     try:
         tickerData = yf.Ticker(Ticker)
+        filter_date = '2023-01-01 12:00:00+07:00'
         tickerData = tickerData.history(period= 'max' )[['Close']]
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
         filter_date = filter_date
