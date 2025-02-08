@@ -52,7 +52,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = yf.Ticker(Ticker)
     tickerData = tickerData.history(period= 'max' )[['Close']]
-    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+    tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
     filter_date = filter_date
     tickerData = tickerData[tickerData.index >= filter_date]
     
@@ -61,16 +61,20 @@ def Limit_fx (Ticker = '' , act = -1 ):
     if  act == -1 : # min
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
-    elif act == -2:  # max (แก้ไขส่วนนี้)
-        up_dn = []
-        for idX, v in enumerate(prices):
-            if T[idX+1] > v:  # ราคาขึ้น
-                up_dn = append(1)
-            elif T[idX+1] < v: # ราคาลง
-                up_dn = append(0)
-            else: # ราคาคงที่
-                up_dn = append(up_dn[-1]) # ใช้ค่าล่าสุดซ้ำ
-        actions = np.array(up_dn , dtype=np.int64)
+   elif act == -2:  # max (แก้ไขแล้ว)
+    up_dn = [0]  # เริ่มต้นด้วยค่า default
+    for i in range(len(prices)-1):  # หลีกเลี่ยง index out of range
+        current_price = prices[i]
+        next_price = prices[i+1]
+        
+        if next_price > current_price:  # ราคาขึ้น
+            up_dn.append(1)
+        elif next_price < current_price: # ราคาลง
+            up_dn.append(0)
+        else: # ราคาคงที่
+            up_dn.append(up_dn[-1]) # ใช้ค่าล่าสุดซ้ำ
+    
+    actions = np.array(up_dn, dtype=np.int64)
 
     else :
         rng = np.random.default_rng(act)
