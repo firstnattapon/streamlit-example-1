@@ -46,6 +46,7 @@ def calculate_optimized(actions, prices, cash_start, asset_values_start, initial
     net_cf =  cash   -  refer
     return buffers, cash, sumusd, refer , net_cf
 
+
 def calculate_optimized_actions(prices):
     n = len(prices)
     if n < 2:
@@ -85,7 +86,6 @@ def calculate_optimized_actions(prices):
     return actions
 
 
-
 def Limit_fx (Ticker = '' , act = -1 ):
     
     filter_date = '2023-01-01 12:00:00+07:00'
@@ -101,7 +101,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
     elif act == -2:  # max  
-        actions =  calculate_optimized_actions (prices) 
+        actions =  calculate_optimized_actions (prices.tolist()) 
 
     else :
         rng = np.random.default_rng(act)
