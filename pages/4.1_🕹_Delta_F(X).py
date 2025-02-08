@@ -67,11 +67,11 @@ def Limit_fx (Ticker = '' , act = -1 ):
         for i in range(len(prices)-1):  # หลีกเลี่ยง index out of range
             current_price = prices[i]
             next_price = prices[i+1]
-            
+
             if next_price > current_price:  # ราคาขึ้น
-                up_dn.append(1)
-            elif next_price < current_price: # ราคาลง
                 up_dn.append(0)
+            elif next_price < current_price: # ราคาลง
+                up_dn.append(1)
             else: # ราคาคงที่
                 up_dn.append(up_dn[-1]) # ใช้ค่าล่าสุดซ้ำ
         
