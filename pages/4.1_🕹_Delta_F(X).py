@@ -61,14 +61,14 @@ def generate_actions(prices):
             actions.append(np.nan)
         else:
             if prices[i] < prices[i-1]:
-                consecutive_decreases += 1
+                consecutive_decreases += 0
             else:
-                consecutive_decreases = 0
+                consecutive_decreases = 1
             
             if prices[i+1] > prices[i] and consecutive_decreases >= 1:
-                actions.append(1)
-            else:
                 actions.append(0)
+            else:
+                actions.append(1)
     
     return np.array(actions, dtype=np.float64)  # แปลงเป็น numpy array
 
