@@ -81,7 +81,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
 
     elif act == -2:  # max  
         # actions = get_action(prices)
-        actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
+        action = np.empty(len(prices))
         action[0] = 1           # กำหนดให้ element ตัวแรกเป็น 1
         action[-1] = np.nan     # ตัวสุดท้ายเป็น nan เพราะไม่มีข้อมูลเปรียบเทียบ
         
