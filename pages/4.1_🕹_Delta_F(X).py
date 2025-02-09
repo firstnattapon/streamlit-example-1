@@ -63,18 +63,17 @@ def Limit_fx (Ticker = '' , act = -1 ):
 
     elif act == -2:  # max  
         actions = np.full(len(prices), np.nan, dtype=np.float64)
-        actions_1 = actions
-        actions_2 = actions
+
         
         for idx in range(len(prices) - 1) :  
             if  prices[idx+1] > prices[idx]     :
-                actions_1[idx] =  1
+                actions[idx] =  1
                 
             # elif prices[idx+1] < prices[idx]    :
             #     actions[idx] =   0
             
             else :
-                actions_1[idx] =  np.nan
+                actions[idx] =  np.nan
                 
     else :
         rng = np.random.default_rng(act)
@@ -84,7 +83,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
     initial_asset_value = 500.0
     initial_price = prices[0]
     
-    buffers, cash, sumusd, refer , net_cf = calculate_optimized(actions_1, prices, initial_cash, initial_asset_value, initial_price)
+    buffers, cash, sumusd, refer , net_cf = calculate_optimized(actions, prices, initial_cash, initial_asset_value, initial_price)
     
     df = pd.DataFrame({
         'price': prices,
