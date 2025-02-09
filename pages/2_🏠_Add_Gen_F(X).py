@@ -9,7 +9,7 @@ from numba import njit
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
 @njit(fastmath=True)  # เพิ่ม fastmath=True เพื่อให้ compiler optimize มากขึ้น
-def compute_values_optimized_v4(action_list, price_list, fix=500):
+def calculate_optimized(action_list, price_list, fix=500):
     # แปลงเป็น numpy array และกำหนด dtype ให้ชัดเจน
     action_array = np.asarray(action_list, dtype=np.int32)
     action_array[0] = 1
