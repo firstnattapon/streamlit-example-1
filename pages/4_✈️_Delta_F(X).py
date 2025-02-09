@@ -6,6 +6,8 @@ import streamlit as st
 import thingspeak
 import json
 
+# st.set_page_config(page_title="Delta_F(X)", page_icon="✈️")
+
 @njit(fastmath=True)  # เพิ่ม fastmath=True เพื่อให้ compiler optimize มากขึ้น
 def calculate_optimized(action_list, price_list, fix=500):
     # แปลงเป็น numpy array และกำหนด dtype ให้ชัดเจน
