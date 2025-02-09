@@ -92,10 +92,6 @@ def Limit_fx (Ticker = '' , act = -1 ):
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices)) 
     
-    # initial_cash = 500.0
-    # initial_asset_value = 500.0
-    # initial_price = prices[0]
-    
     buffer, sumusd, cash, asset_value, amount , refer = calculate_optimized( actions ,  prices)
     
     df = pd.DataFrame({
