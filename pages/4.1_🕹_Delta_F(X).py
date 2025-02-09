@@ -47,7 +47,7 @@ def calculate_optimized(actions, prices, cash_start, initial_asset_value, initia
     # net_cf   =   sumusd   -  (refer + initial_asset_value)
     
     return buffers, cash, sumusd, refer  , net_cf
-
+    
 def generate_actions(prices):
     actions = []
     consecutive_decreases = 0
@@ -70,7 +70,7 @@ def generate_actions(prices):
             else:
                 actions.append(0)
     
-    return actions
+    return np.array(actions, dtype=np.float64)  # แปลงเป็น numpy array
 
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
