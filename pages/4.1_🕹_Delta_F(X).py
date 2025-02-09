@@ -66,7 +66,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         n = np.nan
         for idx in range(len(prices) - 1):  
             if  prices[idx+1] > prices[idx]:
-                actions[idx] =  0
+                actions[idx] =  1
     else :
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
