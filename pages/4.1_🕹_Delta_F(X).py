@@ -52,7 +52,7 @@ def generate_actions(prices):
     prices_array = np.array(prices, dtype=np.float32)
     actions = np.empty_like(prices_array)
     
-    actions[0] = 1            # จุดเริ่มต้น
+    actions[0] = 0            # จุดเริ่มต้น
     actions[-1] = np.nan      # จุดสุดท้าย
     
     # ตรวจสอบ local maxima/minima สำหรับจุดกลาง
