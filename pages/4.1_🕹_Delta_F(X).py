@@ -111,6 +111,8 @@ def Limit_fx (Ticker = '' , act = -1 ):
     })
     return df 
 
+st.write( Limit_fx(Ticker , act = -2 )  ) 
+
 # def plot (Ticker = ''   ,  act = -1 ):
 #     all = []
 #     all_id = []
