@@ -55,7 +55,7 @@ def generate_actions(prices):
     for i in range(len(prices)):
         if i == 0:
             # Initial buy
-            actions.append(1)
+            actions.append(0)
         elif i == len(prices) - 1:
             # Last element, no next day
             actions.append(np.nan)
