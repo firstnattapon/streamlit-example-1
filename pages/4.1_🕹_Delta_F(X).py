@@ -113,19 +113,20 @@ def plot (Ticker = ''   ,  act = -1 ):
     all_id = []
     
     #min
-    all.append( Limit_fx(Ticker , act = -1 ).net_cf )
+    all.append( Limit_fx(Ticker , act = -1 ).net  )
     all_id.append('min')
-#     #fx
-#     all.append(Limit_fx( Ticker , act = act ).net_cf )
-#     all_id.append('fx')
-#     #max
-#     all.append(Limit_fx( Ticker , act = -2 ).net_cf )
-#     all_id.append('max')
-    
-#     chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
-#     st.line_chart(chart_data)
 
-#     st.write( Limit_fx(Ticker , act = -2 )  ) 
+    #fx
+    all.append(Limit_fx( Ticker , act = act ).net )
+    all_id.append('fx')
+    #max
+    all.append(Limit_fx( Ticker , act = -2 ).net )
+    all_id.append('max')
+    
+    chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
+    st.line_chart(chart_data)
+
+    st.write( Limit_fx(Ticker , act = -2 )  ) 
 
 
 channel_id = 2385118
@@ -136,18 +137,18 @@ FFWM_act = client.get_field_last(field='{}'.format(2))
 FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
 plot( Ticker = 'FFWM'  , act =  FFWM_act_js  )
 
-# NEGG_act = client.get_field_last(field='{}'.format(3))
-# NEGG_act_js = int(json.loads(NEGG_act)["field{}".format(3) ])
-# plot( Ticker = 'NEGG'  , act =  NEGG_act_js  )
+NEGG_act = client.get_field_last(field='{}'.format(3))
+NEGG_act_js = int(json.loads(NEGG_act)["field{}".format(3) ])
+plot( Ticker = 'NEGG'  , act =  NEGG_act_js  )
 
-# RIVN_act = client.get_field_last(field='{}'.format(4))
-# RIVN_act_js = int(json.loads(RIVN_act)["field{}".format(4) ])
-# plot( Ticker = 'RIVN'  , act =  RIVN_act_js  )
+RIVN_act = client.get_field_last(field='{}'.format(4))
+RIVN_act_js = int(json.loads(RIVN_act)["field{}".format(4) ])
+plot( Ticker = 'RIVN'  , act =  RIVN_act_js  )
 
-# APLS_act = client.get_field_last(field='{}'.format(5))
-# APLS_act_js = int(json.loads(APLS_act)["field{}".format(5) ])
-# plot( Ticker = 'APLS'  , act =  APLS_act_js  )
+APLS_act = client.get_field_last(field='{}'.format(5))
+APLS_act_js = int(json.loads(APLS_act)["field{}".format(5) ])
+plot( Ticker = 'APLS'  , act =  APLS_act_js  )
 
-# NVTS_act = client.get_field_last(field='{}'.format(6))
-# NVTS_act_js = int(json.loads(NVTS_act)["field{}".format(6) ])
-# plot( Ticker = 'NVTS'  , act =  NVTS_act_js  )
+NVTS_act = client.get_field_last(field='{}'.format(6))
+NVTS_act_js = int(json.loads(NVTS_act)["field{}".format(6) ])
+plot( Ticker = 'NVTS'  , act =  NVTS_act_js  )
