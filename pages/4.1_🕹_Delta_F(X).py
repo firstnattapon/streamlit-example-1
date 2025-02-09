@@ -49,28 +49,23 @@ def calculate_optimized(actions, prices, cash_start, initial_asset_value, initia
     return buffers, cash, sumusd, refer  , net_cf
     
 def generate_actions(prices):
-    actions = []
-    consecutive_decreases = 0
+    prices_array = np.array(prices, dtype=np.float32)
+    actions = np.empty_like(prices_array)
     
-    for i in range(len(prices)):
-        if i == 0:
-            # Initial buy
-            actions.append(0)
-        elif i == len(prices) - 1:
-            # Last element, no next day
-            actions.append(np.nan)
-        else:
-            if prices[i] < prices[i-1]:
-                consecutive_decreases += 0
-            else:
-                consecutive_decreases = 1
-            
-            if prices[i+1] > prices[i] and consecutive_decreases >= 1:
-                actions.append(0)
-            else:
-                actions.append(1)
+    actions[0] = 1            # จุดเริ่มต้น
+    actions[-1] = np.nan      # จุดสุดท้าย
     
-    return np.array(actions, dtype=np.float64)  # แปลงเป็น numpy array
+    # ตรวจสอบ local maxima/minima สำหรับจุดกลาง
+    prev = prices_array[:-2]
+    curr = prices_array[1:-1]
+    next_ = prices_array[2:]
+    
+    is_max = (curr > prev) & (curr > next_)
+    is_min = (curr < prev) & (curr < next_)
+    
+    actions[1:-1] = (is_max | is_min).astype(float)
+    
+    return actions
 
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
