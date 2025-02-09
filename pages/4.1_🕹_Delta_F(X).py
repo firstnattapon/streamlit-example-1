@@ -133,22 +133,29 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-FFWM_act = client.get_field_last(field='{}'.format(2))
-FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
-plot( Ticker = 'FFWM'  , act =  FFWM_act_js  )
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS'])
 
-NEGG_act = client.get_field_last(field='{}'.format(3))
-NEGG_act_js = int(json.loads(NEGG_act)["field{}".format(3) ])
-plot( Ticker = 'NEGG'  , act =  NEGG_act_js  )
+with tab1:
+    FFWM_act = client.get_field_last(field='{}'.format(2))
+    FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
+    plot( Ticker = 'FFWM'  , act =  FFWM_act_js  )
+    
+with tab2:
+    NEGG_act = client.get_field_last(field='{}'.format(3))
+    NEGG_act_js = int(json.loads(NEGG_act)["field{}".format(3) ])
+    plot( Ticker = 'NEGG'  , act =  NEGG_act_js  )
 
-RIVN_act = client.get_field_last(field='{}'.format(4))
-RIVN_act_js = int(json.loads(RIVN_act)["field{}".format(4) ])
-plot( Ticker = 'RIVN'  , act =  RIVN_act_js  )
+with tab3:
+    RIVN_act = client.get_field_last(field='{}'.format(4))
+    RIVN_act_js = int(json.loads(RIVN_act)["field{}".format(4) ])
+    plot( Ticker = 'RIVN'  , act =  RIVN_act_js  )
 
-APLS_act = client.get_field_last(field='{}'.format(5))
-APLS_act_js = int(json.loads(APLS_act)["field{}".format(5) ])
-plot( Ticker = 'APLS'  , act =  APLS_act_js  )
+with tab4:
+    APLS_act = client.get_field_last(field='{}'.format(5))
+    APLS_act_js = int(json.loads(APLS_act)["field{}".format(5) ])
+    plot( Ticker = 'APLS'  , act =  APLS_act_js  )
 
-NVTS_act = client.get_field_last(field='{}'.format(6))
-NVTS_act_js = int(json.loads(NVTS_act)["field{}".format(6) ])
-plot( Ticker = 'NVTS'  , act =  NVTS_act_js  )
+with tab5:
+    NVTS_act = client.get_field_last(field='{}'.format(6))
+    NVTS_act_js = int(json.loads(NVTS_act)["field{}".format(6) ])
+    plot( Ticker = 'NVTS'  , act =  NVTS_act_js  )
