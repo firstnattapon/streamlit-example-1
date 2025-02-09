@@ -48,24 +48,24 @@ def calculate_optimized(actions, prices, cash_start, initial_asset_value, initia
     
     return buffers, cash, sumusd, refer  , net_cf
     
-def generate_actions(prices):
-    prices_array = np.array(prices, dtype=np.float32)
-    actions = np.empty_like(prices_array)
+
+def get_action(prices):
+    prices = np.array(prices, dtype=np.float64)
+    n = len(prices)
+    action = np.empty(n, dtype=np.int64)
     
-    actions[0] = 0            # จุดเริ่มต้น
-    actions[-1] = np.nan      # จุดสุดท้าย
+    action[0] = 0
+
+    if n > 2:
+        diff = np.diff(prices) 
+        action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
+    elif n == 2:
+        action[1] = -1
+
+    action[-1] = -1
     
-    # ตรวจสอบ local maxima/minima สำหรับจุดกลาง
-    prev = prices_array[:-2]
-    curr = prices_array[1:-1]
-    next_ = prices_array[2:]
-    
-    is_max = (curr > prev) & (curr > next_)
-    is_min = (curr < prev) & (curr < next_)
-    
-    actions[1:-1] = (is_max | is_min).astype(float)
-    
-    return actions
+    return action
+
 
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
@@ -81,7 +81,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
     elif act == -2:  # max  
-        actions = generate_actions(prices)
+        actions = get_action(prices)
         
     else :
         rng = np.random.default_rng(act)
