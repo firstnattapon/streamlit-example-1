@@ -8,47 +8,55 @@ import time
 from numba import njit
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
-
 @njit
-def calculate_optimized(actions, prices, cash_start, initial_asset_value, initial_price):
-    n = len(actions)
-    buffers = np.zeros(n)
-    cash = np.zeros(n)
-    sumusd = np.zeros(n)
-    refer = np.zeros(n)
-
-    # คำนวณค่า refer
+def calculate_optimized(action_list, price_list, fix =500):
+    action_array = np.asarray(action_list)
+    action_array[0] = 1
+    price_array = np.asarray(price_list)
+    n = len(action_array)
+    refer = np.zeros(n) #
+    
+    # Preallocate arrays
+    amount = np.zeros(n, dtype=np.float64)
+    buffer = np.zeros(n, dtype=np.float64)
+    cash = np.zeros(n, dtype=np.float64)
+    asset_value = np.zeros(n, dtype=np.float64)
+    sumusd = np.zeros(n, dtype=np.float64)
+    
+    # Initialize variables
+    prev_amount = 0.0
+    prev_cash = 0.0
+    initial_price = price_array[0]
+    
     for i in range(n):
-        refer[i] = cash_start + (-initial_asset_value) * np.log(initial_price / prices[i])
+        current_price = price_array[i]
+        refer[i] =  fix + (- fix) * np.log(initial_price / price_array[i]) #
 
-    # คำนวณค่าเริ่มต้น
-    current_amount = initial_asset_value / initial_price  # ใช้ initial_price แทน prices[0]
-    cash[0] = cash_start
-    sumusd[0] = cash[0] + (current_amount * prices[0])
-
-    prev_amount = current_amount
-    prev_cash = cash[0]
-
-    for i in range(1, n):
-        if actions[i] == 1:
-            current_amount = (prev_amount * prices[i-1]) / prices[i]
+        
+        if i == 0:
+            if action_array[i] != 0:
+                amount[i] = fix / current_price
+                cash[i] = fix
+            # else: default zeros
         else:
-            current_amount = prev_amount
-
-        if actions[i] != 0:
-            buffers[i] = prev_amount * (prices[i] - prices[i-1])
-        else:
-            buffers[i] = 0.0
-
-        cash[i] = prev_cash + buffers[i]
-        sumusd[i] = cash[i] + (current_amount * prices[i])
-
-        prev_amount = current_amount
+            if action_array[i] == 0:
+                amount[i] = prev_amount
+            else:
+                amount[i] = fix / current_price
+                buffer[i] = prev_amount * current_price - fix
+                
+            cash[i] = prev_cash + buffer[i]
+            
+        # Update tracking variables
+        asset_value[i] = amount[i] * current_price
+        sumusd[i] = cash[i] + asset_value[i]
+        
+        # Store previous values
+        prev_amount = amount[i]
         prev_cash = cash[i]
-
-    net_cf =  cash   -  refer
-    # net_cf   =   sumusd   -  (refer + initial_asset_value)
-    return buffers, cash, sumusd, refer , net_cf
+        refer =  sumusd - (refer+fix)
+    
+    return buffer, sumusd, cash, asset_value, amount , refer
 
 def feed_data( data = "APLS"):
     Ticker = data
@@ -71,8 +79,7 @@ def feed_data( data = "APLS"):
         rng = np.random.default_rng(i)
         actions = rng.integers(0, 2, len(prices))
 
-        _ , _, _, _ , net_cf = calculate_optimized(
-            actions, prices, initial_cash, initial_asset_value, initial_price)
+        _, _, _, _, _ , net_cf = calculate_optimized(actions, prices)
 
         if net_cf[-1] > net_initial:
             net_initial = net_cf[-1]
