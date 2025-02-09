@@ -47,7 +47,31 @@ def calculate_optimized(actions, prices, cash_start, initial_asset_value, initia
     # net_cf   =   sumusd   -  (refer + initial_asset_value)
     
     return buffers, cash, sumusd, refer  , net_cf
- 
+
+def generate_actions(prices):
+    actions = []
+    consecutive_decreases = 0
+    
+    for i in range(len(prices)):
+        if i == 0:
+            # Initial buy
+            actions.append(1)
+        elif i == len(prices) - 1:
+            # Last element, no next day
+            actions.append(np.nan)
+        else:
+            if prices[i] < prices[i-1]:
+                consecutive_decreases += 1
+            else:
+                consecutive_decreases = 0
+            
+            if prices[i+1] > prices[i] and consecutive_decreases >= 1:
+                actions.append(1)
+            else:
+                actions.append(0)
+    
+    return actions
+
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = yf.Ticker(Ticker)
@@ -62,32 +86,8 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
     elif act == -2:  # max  
-        actions = np.full(len(prices), np.nan, dtype=np.float64)
-
-        up_dn = np.array([])
-        for idX , v in enumerate(prices)  :
-            try :
-                if  prices[idX+1] > v :
-                    up_dn = np.append( up_dn , 1)
-                elif prices[idX+1] <  v :
-                    up_dn = np.append( up_dn , 0)
-                elif  prices[idX+1] ==  v:
-                    up_dn = np.append( up_dn , up_dn[-1])
-            except :
-                up_dn = np.append( up_dn , up_dn[-1])
-
+        actions = generate_actions(prices)
         
-        final_x = 0
-        xl = np.array([])
-        for  vv in  up_dn:
-            if  vv  != final_x :
-                xl = np.append( xl , 1)
-                final_x = vv
-            else:
-                xl = np.append( xl , 0)
-        actions = xl
-    
-                
     else :
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
