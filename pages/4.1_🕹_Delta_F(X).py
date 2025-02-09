@@ -6,7 +6,6 @@ import streamlit as st
 import thingspeak
 import json
 
-
 @njit
 def calculate_optimized(action_list, price_list, fix =500):
     action_array = np.asarray(action_list)
@@ -118,7 +117,8 @@ def plot (Ticker = ''   ,  act = -1 ):
 
     #fx
     all.append(Limit_fx( Ticker , act = act ).net )
-    all_id.append('fx')
+    all_id.append('fx_{}'.format(act))
+
     #max
     all.append(Limit_fx( Ticker , act = -2 ).net )
     all_id.append('max')
@@ -126,7 +126,7 @@ def plot (Ticker = ''   ,  act = -1 ):
     chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
     st.line_chart(chart_data)
 
-    st.write( Limit_fx(Ticker , act = -2 )  ) 
+    st.write( Limit_fx(Ticker , act = act )  ) 
 
 
 channel_id = 2385118
