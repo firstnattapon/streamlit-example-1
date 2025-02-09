@@ -63,15 +63,15 @@ def Limit_fx (Ticker = '' , act = -1 ):
 
     elif act == -2:  # max  
         actions = np.full(len(prices), np.nan, dtype=np.float64)
-        # n = 'buy'
+        n = 0
         for idx in range(len(prices) - 1):  
-            if  prices[idx+1] > prices[idx] :
+            if  prices[idx+1] > prices[idx] != n :
                 actions[idx] =  1
-                # n = 'buy'
+                n = 1
                 
-            elif prices[idx+1] < prices[idx]  :
+            elif prices[idx+1] < prices[idx] != n  :
                 actions[idx] =  0
-                # n = 'sell'
+                n = 0
             else :
                 actions[idx] =  np.nan
                 
