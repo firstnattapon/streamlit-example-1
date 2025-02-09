@@ -83,14 +83,14 @@ def Limit_fx (Ticker = '' , act = -1 ):
     prices = np.array( tickerData.Close.values , dtype=np.float64)
 
     if  act == -1 : # min
-        actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
+        actions = np.array( np.ones( len(prices) ) , dtype=np.int64).tolist()
 
     elif act == -2:  # max  
-        actions = get_max_action(prices)
+        actions = get_max_action(prices).tolist()
       
     else :
         rng = np.random.default_rng(act)
-        actions = rng.integers(0, 2, len(prices))
+        actions = rng.integers(0, 2, len(prices)).tolist()
     
     # initial_cash = 500.0
     # initial_asset_value = 500.0
