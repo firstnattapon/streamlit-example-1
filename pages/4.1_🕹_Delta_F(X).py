@@ -65,19 +65,18 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.full(len(prices), np.nan, dtype=np.float64)
 
         up_dn = np.array([])
-            for idX , v in enumerate(prices)  :
-                try :
-                    if  prices[idX+1] > v :
-                        up_dn = np.append( up_dn , 1)
-                    elif prices[idX+1] <  v :
-                        up_dn = np.append( up_dn , 0)
-                    elif  prices[idX+1] ==  v:
-                        up_dn = np.append( up_dn , up_dn[-1])
-                except :
+        for idX , v in enumerate(prices)  :
+            try :
+                if  prices[idX+1] > v :
+                    up_dn = np.append( up_dn , 1)
+                elif prices[idX+1] <  v :
+                    up_dn = np.append( up_dn , 0)
+                elif  prices[idX+1] ==  v:
                     up_dn = np.append( up_dn , up_dn[-1])
-
-        
+            except :
+                up_dn = np.append( up_dn , up_dn[-1])
         actions = up_dn
+
                 # final_x = 0
                 # xl = np.array([])
                 # for  vv in  up_dn:
