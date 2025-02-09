@@ -73,7 +73,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
                 actions[idx] =  1
                 n = 0
             else :
-                actions[idx] =  -100
+                actions[idx] =   np.nan
                 
     else :
         rng = np.random.default_rng(act)
