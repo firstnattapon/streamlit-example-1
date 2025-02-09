@@ -111,7 +111,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
     })
     return df 
 
-st.write( Limit_fx(Ticker , act = -2 )  ) 
+st.write( Limit_fx( 'NVTS' , act = -2 )  ) 
 
 # def plot (Ticker = ''   ,  act = -1 ):
 #     all = []
