@@ -53,9 +53,8 @@ def get_action(prices):
     prices = np.array(prices, dtype=np.float64)
     n = len(prices)
     action = np.empty(n, dtype=np.int64)
+    action[0] = 1
     
-    action[0] = 0
-
     if n > 2:
         diff = np.diff(prices) 
         action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
