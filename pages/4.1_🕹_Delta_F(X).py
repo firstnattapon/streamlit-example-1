@@ -47,7 +47,7 @@ def calculate_optimized(actions, prices, cash_start, initial_asset_value, initia
     # net_cf   =   sumusd   -  (refer + initial_asset_value)
     
     return buffers, cash, sumusd, refer  , net_cf
-
+ 
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = yf.Ticker(Ticker)
