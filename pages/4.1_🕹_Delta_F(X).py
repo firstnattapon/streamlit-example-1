@@ -69,9 +69,9 @@ def Limit_fx (Ticker = '' , act = -1 ):
                 actions[idx] =  0
                 n = 1
                 
-            # elif prices[idx+1] < prices[idx] != n  :
-            #     actions[idx] =  1
-            #     n = 0
+            elif prices[idx+1] < prices[idx] != n  :
+                actions[idx] =  1
+                n = 0
             else :
                 actions[idx] =   np.nan
                 
