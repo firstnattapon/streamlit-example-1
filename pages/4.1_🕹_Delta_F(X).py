@@ -49,21 +49,21 @@ def calculate_optimized(actions, prices, cash_start, initial_asset_value, initia
     return buffers, cash, sumusd, refer  , net_cf
     
 
-def get_action(prices):
-    prices = np.array(prices, dtype=np.float64)
-    n = len(prices)
-    action = np.empty(n, dtype=np.int64)
-    action[0] = 1
+# def get_action(prices):
+#     prices = np.array(prices, dtype=np.float64)
+#     n = len(prices)
+#     action = np.empty(n, dtype=np.int64)
+#     action[0] = 1
     
-    if n > 2:
-        diff = np.diff(prices) 
-        action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
-    elif n == 2:
-        action[1] = -1
+#     if n > 2:
+#         diff = np.diff(prices) 
+#         action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
+#     elif n == 2:
+#         action[1] = -1
 
-    action[-1] = -1
+#     action[-1] = -1
     
-    return action
+#     return action
 
 
 def Limit_fx (Ticker = '' , act = -1 ):
@@ -93,6 +93,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
                 action[i] = 1
             else:
                 action[i] = 0
+        actions = action
         
     else :
         rng = np.random.default_rng(act)
