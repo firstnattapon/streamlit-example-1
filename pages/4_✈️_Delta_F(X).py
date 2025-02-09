@@ -125,8 +125,8 @@ def plot (Ticker = ''   ,  act = -1 ):
     st.line_chart(chart_data)
 
     df_plot =  Limit_fx(Ticker , act = -1 )
-    st.line_chart( df_plot[['cash']] )
-    st.write( Limit_fx(Ticker , act = act )  ) 
+    st.line_chart( df_plot[['sumusd']] )
+    st.write( Limit_fx(Ticker , act = -1 )  ) 
 
 
 channel_id = 2385118
