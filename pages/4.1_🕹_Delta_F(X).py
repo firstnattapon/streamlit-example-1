@@ -6,54 +6,99 @@ import streamlit as st
 import thingspeak
 import json
 
+# @njit
+# def calculate_optimized(action_list, price_list, fix =500):
+#     action_array = np.asarray(action_list)
+#     action_array[0] = 1
+#     price_array = np.asarray(price_list)
+#     n = len(action_array)
+#     refer = np.zeros(n) #
+    
+#     # Preallocate arrays
+#     amount = np.zeros(n, dtype=np.float64)
+#     buffer = np.zeros(n, dtype=np.float64)
+#     cash = np.zeros(n, dtype=np.float64)
+#     asset_value = np.zeros(n, dtype=np.float64)
+#     sumusd = np.zeros(n, dtype=np.float64)
+    
+#     # Initialize variables
+#     prev_amount = 0.0
+#     prev_cash = 0.0
+#     initial_price = price_array[0]
+    
+#     for i in range(n):
+#         current_price = price_array[i]
+#         refer[i] =  fix + (- fix) * np.log(initial_price / price_array[i]) #
+
+        
+#         if i == 0:
+#             if action_array[i] != 0:
+#                 amount[i] = fix / current_price
+#                 cash[i] = fix
+#             # else: default zeros
+#         else:
+#             if action_array[i] == 0:
+#                 amount[i] = prev_amount
+#             else:
+#                 amount[i] = fix / current_price
+#                 buffer[i] = prev_amount * current_price - fix
+                
+#             cash[i] = prev_cash + buffer[i]
+            
+#         # Update tracking variables
+#         asset_value[i] = amount[i] * current_price
+#         sumusd[i] = cash[i] + asset_value[i]
+        
+#         # Store previous values
+#         prev_amount = amount[i]
+#         prev_cash = cash[i]
+    
+#     return buffer, sumusd, cash, asset_value, amount , refer
+
 @njit
-def calculate_optimized(action_list, price_list, fix =500):
+def calculate_optimized(action_list, price_list, fix=500):
+    # แปลงเป็น numpy array
     action_array = np.asarray(action_list)
-    action_array[0] = 1
+    action_array[0] = 1  # กำหนดค่าแรกเป็น 1
     price_array = np.asarray(price_list)
     n = len(action_array)
-    refer = np.zeros(n) #
     
-    # Preallocate arrays
+    # คำนวณ refer vector ทั้งหมดในครั้งเดียว
+    refer = fix + (-fix) * np.log(price_array[0] / price_array)
+    
+    # สร้าง arrays สำหรับเก็บผลลัพธ์
     amount = np.zeros(n, dtype=np.float64)
     buffer = np.zeros(n, dtype=np.float64)
     cash = np.zeros(n, dtype=np.float64)
     asset_value = np.zeros(n, dtype=np.float64)
     sumusd = np.zeros(n, dtype=np.float64)
     
-    # Initialize variables
-    prev_amount = 0.0
-    prev_cash = 0.0
-    initial_price = price_array[0]
+    # คำนวณ amount เริ่มต้น
+    amount[0] = fix / price_array[0] if action_array[0] != 0 else 0
+    cash[0] = fix if action_array[0] != 0 else 0
     
-    for i in range(n):
-        current_price = price_array[i]
-        refer[i] =  fix + (- fix) * np.log(initial_price / price_array[i]) #
-
+    # ใช้ vectorized operations สำหรับการคำนวณหลัก
+    for i in range(1, n):
+        # คำนวณ amount
+        amount[i] = fix / price_array[i] if action_array[i] != 0 else amount[i-1]
         
-        if i == 0:
-            if action_array[i] != 0:
-                amount[i] = fix / current_price
-                cash[i] = fix
-            # else: default zeros
-        else:
-            if action_array[i] == 0:
-                amount[i] = prev_amount
-            else:
-                amount[i] = fix / current_price
-                buffer[i] = prev_amount * current_price - fix
-                
-            cash[i] = prev_cash + buffer[i]
+        # คำนวณ buffer เมื่อมีการเปลี่ยนแปลง position
+        if action_array[i] != 0:
+            buffer[i] = amount[i-1] * price_array[i] - fix
             
-        # Update tracking variables
-        asset_value[i] = amount[i] * current_price
-        sumusd[i] = cash[i] + asset_value[i]
+        # อัพเดท cash
+        cash[i] = cash[i-1] + buffer[i]
         
-        # Store previous values
-        prev_amount = amount[i]
-        prev_cash = cash[i]
+        # คำนวณมูลค่าสินทรัพย์และมูลค่ารวม
+        asset_value[i] = amount[i] * price_array[i]
+        sumusd[i] = cash[i] + asset_value[i]
     
-    return buffer, sumusd, cash, asset_value, amount , refer
+    # คำนวณ asset_value และ sumusd สำหรับ index 0
+    asset_value[0] = amount[0] * price_array[0]
+    sumusd[0] = cash[0] + asset_value[0]
+    
+    return buffer, sumusd, cash, asset_value, amount, refer
+
 
 def get_max_action(prices):
     prices = np.array(prices, dtype=np.float64)
