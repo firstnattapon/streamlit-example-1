@@ -98,18 +98,18 @@ def Limit_fx (Ticker = '' , act = -1 ):
     
     buffer, sumusd, cash, asset_value, amount , refer = calculate_optimized( actions ,  prices)
     
-#     df = pd.DataFrame({
-#         'price': prices,
-#         'action': actions,
-#         'buffer': np.round(buffer, 2),
-#         'sumusd': np.round(sumusd, 2),
-#         'cash': np.round(cash, 2),
-#         'asset_value': np.round(asset_value, 2),
-#         'amount': np.round(amount, 2),
-#         'refer': np.round(refer, 2),
-#         'net': np.round( sumusd -  (refer+500) , 2)
-#     })
-#     return df 
+    df = pd.DataFrame({
+        'price': prices,
+        'action': actions,
+        'buffer': np.round(buffer, 2),
+        'sumusd': np.round(sumusd, 2),
+        'cash': np.round(cash, 2),
+        'asset_value': np.round(asset_value, 2),
+        'amount': np.round(amount, 2),
+        'refer': np.round(refer, 2),
+        'net': np.round( sumusd -  (refer+500) , 2)
+    })
+    return df 
 
 # def plot (Ticker = ''   ,  act = -1 ):
 #     all = []
