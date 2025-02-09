@@ -6,50 +6,57 @@ import streamlit as st
 import thingspeak
 import json
 
+
 @njit
-def calculate_optimized(actions, prices, cash_start, initial_asset_value, initial_price):
-    n = len(actions)
-    buffers = np.zeros(n)
-    cash = np.zeros(n)
-    sumusd = np.zeros(n)
-    refer = np.zeros(n)
-
-    # คำนวณค่า refer ด้วยสูตรใหม่
+def calculate_optimized(action_list, price_list, fix =500):
+    action_array = np.asarray(action_list)
+    action_array[0] = 1
+    price_array = np.asarray(price_list)
+    n = len(action_array)
+    refer = np.zeros(n) #
+    
+    # Preallocate arrays
+    amount = np.zeros(n, dtype=np.float64)
+    buffer = np.zeros(n, dtype=np.float64)
+    cash = np.zeros(n, dtype=np.float64)
+    asset_value = np.zeros(n, dtype=np.float64)
+    sumusd = np.zeros(n, dtype=np.float64)
+    
+    # Initialize variables
+    prev_amount = 0.0
+    prev_cash = 0.0
+    initial_price = price_array[0]
+    
     for i in range(n):
-        refer[i] = cash_start + (-initial_asset_value) * np.log(initial_price / prices[i])
+        current_price = price_array[i]
+        refer[i] =  fix + (- fix) * np.log(initial_price / price_array[i]) #
 
-    # คำนวณค่าเริ่มต้น
-    current_amount = initial_asset_value / initial_price  # ใช้ initial_price แทน prices[0]
-    cash[0] = cash_start
-    sumusd[0] = cash[0] + (current_amount * prices[0])
-
-    prev_amount = current_amount
-    prev_cash = cash[0]
-
-    for i in range(1, n):
-        if actions[i] == 1:
-            current_amount = (prev_amount * prices[i-1]) / prices[i]
+        
+        if i == 0:
+            if action_array[i] != 0:
+                amount[i] = fix / current_price
+                cash[i] = fix
+            # else: default zeros
         else:
-            current_amount = prev_amount
-
-        if actions[i] != 0:
-            buffers[i] = prev_amount * (prices[i] - prices[i-1])
-        else:
-            buffers[i] = 0.0
-
-        cash[i] = prev_cash + buffers[i]
-        sumusd[i] = cash[i] + (current_amount * prices[i])
-
-        prev_amount = current_amount
+            if action_array[i] == 0:
+                amount[i] = prev_amount
+            else:
+                amount[i] = fix / current_price
+                buffer[i] = prev_amount * current_price - fix
+                
+            cash[i] = prev_cash + buffer[i]
+            
+        # Update tracking variables
+        asset_value[i] = amount[i] * current_price
+        sumusd[i] = cash[i] + asset_value[i]
+        
+        # Store previous values
+        prev_amount = amount[i]
         prev_cash = cash[i]
-
-    net_cf   =   cash   -    refer
-    # net_cf   =   sumusd   -  (refer + initial_asset_value)
     
-    return buffers, cash, sumusd, refer   , net_cf
-    
+    return buffer, sumusd, cash, asset_value, amount , refer
 
-def get_action(prices):
+def get_max_action(prices):
     prices = np.array(prices, dtype=np.float64)
     n = len(prices)
     action = np.empty(n, dtype=np.int64)
@@ -60,9 +67,8 @@ def get_action(prices):
         action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
     elif n == 2:
         action[1] = -1
-
     action[-1] = -1
-    
+
     return action
 
 
@@ -80,26 +86,28 @@ def Limit_fx (Ticker = '' , act = -1 ):
         actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
 
     elif act == -2:  # max  
-        actions = get_action(prices)
+        actions = get_max_action(prices)
       
     else :
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
     
-    initial_cash = 500.0
-    initial_asset_value = 500.0
-    initial_price = prices[0]
+    # initial_cash = 500.0
+    # initial_asset_value = 500.0
+    # initial_price = prices[0]
     
-    buffers, cash, sumusd, refer , net_cf = calculate_optimized(actions, prices, initial_cash, initial_asset_value, initial_price)
+    buffer, sumusd, cash, asset_value, amount , refer = calculate_optimized( actions ,  prices)
     
     df = pd.DataFrame({
         'price': prices,
         'action': actions,
-        'buffer': np.round(buffers, 2),
+        'buffer': np.round(buffer, 2),
         'sumusd': np.round(sumusd, 2),
         'cash': np.round(cash, 2),
+        'asset_value': np.round(asset_value, 2),
+        'amount': np.round(amount, 2),
         'refer': np.round(refer, 2),
-        'net_cf': np.round(net_cf, 2)
+        'net': np.round( sumusd -  (refer+500) , 2)
     })
     return df 
 
