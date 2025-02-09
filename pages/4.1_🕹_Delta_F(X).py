@@ -81,15 +81,14 @@ def Limit_fx (Ticker = '' , act = -1 ):
 
     elif act == -2:  # max  
         # actions = get_action(prices)
-        action = np.empty(len(prices))
+        action = np.empty(len(prices), dtype=np.int64)
         action[0] = 1           # กำหนดให้ element ตัวแรกเป็น 1
-        action[-1] = np.nan     # ตัวสุดท้ายเป็น nan เพราะไม่มีข้อมูลเปรียบเทียบ
+        action[-1] = -1     # ตัวสุดท้ายเป็น nan เพราะไม่มีข้อมูลเปรียบเทียบ
         
         for i in range(1, len(prices)-1):
             diff_prev = prices[i] - prices[i-1]
             diff_next = prices[i+1] - prices[i]
             
-            # ถ้าผลคูณของ diff_prev และ diff_next น้อยกว่า 0 แปลว่าสัญญาณเปลี่ยนทิศ
             if diff_prev * diff_next < 0:
                 action[i] = 1
             else:
