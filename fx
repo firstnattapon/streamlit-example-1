@@ -18,6 +18,52 @@ def get_action(prices):
     
     return action
 
+
+
+# V2
+@njit(fastmath=True)  # เพิ่ม fastmath=True เพื่อให้ compiler optimize มากขึ้น
+def calculate_optimized(action_list, price_list, fix=500):
+    # แปลงเป็น numpy array และกำหนด dtype ให้ชัดเจน
+    action_array = np.asarray(action_list, dtype=np.int32)
+    action_array[0] = 1
+    price_array = np.asarray(price_list, dtype=np.float64)
+    n = len(action_array)
+    
+    # Pre-allocate arrays ด้วย dtype ที่เหมาะสม
+    amount = np.empty(n, dtype=np.float64)
+    buffer = np.zeros(n, dtype=np.float64)
+    cash = np.empty(n, dtype=np.float64)
+    asset_value = np.empty(n, dtype=np.float64)
+    sumusd = np.empty(n, dtype=np.float64)
+    
+    # คำนวณค่าเริ่มต้นที่ index 0
+    initial_price = price_array[0]
+    amount[0] = fix / initial_price
+    cash[0] = fix
+    asset_value[0] = amount[0] * initial_price
+    sumusd[0] = cash[0] + asset_value[0]
+    
+    # คำนวณ refer ทั้งหมดในครั้งเดียว (แยกออกมาจาก loop หลัก)
+    refer = fix * (1 - np.log(initial_price / price_array))
+    
+    # Main loop with minimal operations
+    for i in range(1, n):
+        curr_price = price_array[i]
+        if action_array[i] == 0:
+            amount[i] = amount[i-1]
+            buffer[i] = 0
+        else:
+            amount[i] = fix / curr_price
+            buffer[i] = amount[i-1] * curr_price - fix
+        
+        cash[i] = cash[i-1] + buffer[i]
+        asset_value[i] = amount[i] * curr_price
+        sumusd[i] = cash[i] + asset_value[i]
+
+    refer =  sumusd - (refer+fix)
+    return buffer, sumusd, cash, asset_value, amount, refer
+
+
 @njit
 def compute_values_optimized_v2(action_list, price_list, fix =500):
     action_array = np.asarray(action_list)
@@ -90,4 +136,3 @@ df = pd.DataFrame({
     'refer': np.round(refer, 2),
     'net': np.round( sumusd -  (refer+500) , 2)
 })
-
