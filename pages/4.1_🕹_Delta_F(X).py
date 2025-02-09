@@ -111,15 +111,14 @@ def Limit_fx (Ticker = '' , act = -1 ):
     })
     return df 
 
-st.write( Limit_fx( 'NVTS' , act = -2 )  ) 
 
-# def plot (Ticker = ''   ,  act = -1 ):
-#     all = []
-#     all_id = []
+def plot (Ticker = ''   ,  act = -1 ):
+    all = []
+    all_id = []
     
-#     #min
-#     all.append( Limit_fx(Ticker , act = -1 ).net_cf )
-#     all_id.append('min')
+    #min
+    all.append( Limit_fx(Ticker , act = -1 ).net_cf )
+    all_id.append('min')
 #     #fx
 #     all.append(Limit_fx( Ticker , act = act ).net_cf )
 #     all_id.append('fx')
@@ -133,13 +132,13 @@ st.write( Limit_fx( 'NVTS' , act = -2 )  )
 #     st.write( Limit_fx(Ticker , act = -2 )  ) 
 
 
-# channel_id = 2385118
-# write_api_key = 'IPSG3MMMBJEB9DY8'
-# client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
+channel_id = 2385118
+write_api_key = 'IPSG3MMMBJEB9DY8'
+client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-# FFWM_act = client.get_field_last(field='{}'.format(2))
-# FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
-# plot( Ticker = 'FFWM'  , act =  FFWM_act_js  )
+FFWM_act = client.get_field_last(field='{}'.format(2))
+FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
+plot( Ticker = 'FFWM'  , act =  FFWM_act_js  )
 
 # NEGG_act = client.get_field_last(field='{}'.format(3))
 # NEGG_act_js = int(json.loads(NEGG_act)["field{}".format(3) ])
