@@ -43,10 +43,10 @@ def calculate_optimized(actions, prices, cash_start, initial_asset_value, initia
         prev_amount = current_amount
         prev_cash = cash[i]
 
-    # net_cf   =   cash   -    refer
-    net_cf   =   sumusd   -  (refer + initial_asset_value)
+    net_cf   =   cash   -    refer
+    # net_cf   =   sumusd   -  (refer + initial_asset_value)
     
-    return buffers, cash, sumusd, refer+500  , net_cf
+    return buffers, cash, sumusd, refer   , net_cf
     
 
 def get_action(prices):
@@ -82,7 +82,6 @@ def Limit_fx (Ticker = '' , act = -1 ):
     elif act == -2:  # max  
         actions = get_action(prices)
       
-        
     else :
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
