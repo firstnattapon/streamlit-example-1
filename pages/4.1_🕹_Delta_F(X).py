@@ -114,7 +114,7 @@ def plot (Ticker = ''   ,  act = -1 ):
     chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
     st.line_chart(chart_data)
 
-    st.write( Limit_fx(Ticker , act = -2 )  ) 
+    st.write( Limit_fx(Ticker , act = -1 )  ) 
 
 
 channel_id = 2385118
