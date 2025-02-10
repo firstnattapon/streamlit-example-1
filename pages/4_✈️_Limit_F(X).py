@@ -178,9 +178,10 @@ with Ref_index_Log:
 
 
     buffers = {
-    'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in tickers}
+    'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in tickers}
 
     df_burn_cash = pd.DataFrame(buffers)
+    df_burn_cash['daily_sumusd'] = df_burn_cash.sum(axis=1)
     st.write( df_burn_cash )
 
 
