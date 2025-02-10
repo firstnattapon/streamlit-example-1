@@ -173,16 +173,15 @@ with Ref_index_Log:
     
     prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)    
     prices_df = prices_df.reset_index()
-    
-    # st.write( prices_df )
+    prices_df = prices_df.ref_log.values 
 
-
-    buffers = {
+    sumusd_ = {
     'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in tickers}
 
-    df_burn_cash = pd.DataFrame(buffers)
-    df_burn_cash['daily_sumusd'] = df_burn_cash.sum(axis=1)
-    st.write( df_burn_cash )
+    df_sumusd_ = pd.DataFrame(sumusd_)
+    df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
+    df_sumusd_['ref_log'] = prices_df
+    st.write( df_sumusd_ )
 
 
 with Burn_Cash:
