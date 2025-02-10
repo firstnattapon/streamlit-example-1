@@ -148,7 +148,7 @@ with Burn_Cash:
         'buffer_APLS': buffer_APLS,
     })
     
-    df_Burn_Cashp['sum'] = df_Burn_Cash.sum(axis=1)
+    df_Burn_Cash['sum'] = df_Burn_Cash.sum(axis=1)
         
     st.write(df_Burn_Cash)
         
