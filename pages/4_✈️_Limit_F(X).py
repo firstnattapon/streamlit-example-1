@@ -151,6 +151,7 @@ with Ref_index_Log:
         return prices[0] 
 
     int_st = np.array( [ get_int(i)  for i in STOCK_SYMBOLS  ] )
+    int_st = np.prod(int_st)
         
     st.write( int_st )
     sumusd = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in STOCK_SYMBOLS}
