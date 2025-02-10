@@ -143,8 +143,8 @@ with Ref_index_Log:
         'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd
         for symbol in STOCK_SYMBOLS}
     df_burn_cash_ = pd.DataFrame(sumusd)
-    df_burn_cash_['daily_burn'] = df_burn_cash_.sum(axis=1)
     
+    df_burn_cash_['daily_sum'] = df_burn_cash_.sum(axis=1)
     st.dataframe(df_burn_cash_)
 
 
