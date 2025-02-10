@@ -160,12 +160,10 @@ with Ref_index_Log:
     int_st = np.array( [ get_int(i , 0)   for i in STOCK_SYMBOLS  ] )
     int_st = np.prod(int_st)
     
-
-    # int_st = np.prod(int_st)
-    # int_end = np.prod(int_end)
-    # ref_log =  15000 +  (1500 * np.log( int_st / int_st ))
+    int_end = np.prod(int_end)
+    ref_log =  15000 +  (1500 * np.log( int_st / int_end[0] ))
     
-    st.write( int_st )
+    st.write( ref_log )
 
 
 
