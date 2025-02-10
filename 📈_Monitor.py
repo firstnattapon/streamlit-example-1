@@ -281,7 +281,7 @@ if Limut_Order_NVTS:
         GO_NVTS_Buy = col_nvts6.button("GO!")
         if GO_NVTS_Buy:
             client.update({'field5': NVTS_ASSET_LAST + u8})
-            col_nvts6..write(NVTS_ASSET_LAST  + u8) 
+            col_nvts6.write(NVTS_ASSET_LAST  + u8) 
 
 
 st.write("_____")
