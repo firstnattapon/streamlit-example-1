@@ -50,7 +50,6 @@ def calculate_optimized(action_list, price_list, fix=1500):
 
 
 
-
 def get_max_action(prices):
     prices = np.array(prices, dtype=np.float64)
     n = len(prices)
@@ -150,19 +149,17 @@ with Ref_index_Log:
         prices = np.array( tickerData.Close.values , dtype=np.float64)  
         prices = prices[idx]
         return prices 
-
-    # prices_ = get_int
     
     int_st = np.array( [ get_int(i , 0)   for i in STOCK_SYMBOLS  ] )
-    # int_st = np.prod(int_st)
+    int_st = np.prod(int_st)
     
-    # int_end = np.array( [ get_int(i)  for i in STOCK_SYMBOLS  ] )
+    int_end = np.array( [ get_int(i , idx )  for idx  , i in enumerate(STOCK_SYMBOLS)  ] )
 
     # int_st = np.prod(int_st)
     # int_end = np.prod(int_end)
     # ref_log =  15000 +  (1500 * np.log( int_st / int_st ))
     
-    st.write( int_st )
+    st.write( int_end )
 
     
     sumusd = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in STOCK_SYMBOLS}
