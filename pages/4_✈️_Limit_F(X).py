@@ -174,7 +174,14 @@ with Ref_index_Log:
     prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)    
     prices_df = prices_df.reset_index()
     
-    st.write( prices_df )
+    # st.write( prices_df )
+
+
+    buffers = {
+    'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in STOCK_SYMBOLS}
+
+    df_burn_cash = pd.DataFrame(buffers)
+    st.write( df_burn_cash )
 
 
 with Burn_Cash:
