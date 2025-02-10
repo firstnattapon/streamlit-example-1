@@ -144,10 +144,9 @@ with Ref_index_Log:
         for symbol in STOCK_SYMBOLS}
     df_burn_cash_ = pd.DataFrame(sumusd)
     
-    df_burn_cash_['daily_sum'] = df_burn_cash_.sum(axis=1)
+    
+    df_burn_cash_['daily_allsum'] = df_burn_cash_.sum(axis=1)
     st.dataframe(df_burn_cash_)
-
-
 
 with Burn_Cash:
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
