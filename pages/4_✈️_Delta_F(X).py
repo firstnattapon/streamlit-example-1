@@ -154,10 +154,12 @@ with Burn_Cash:
     # 4. Visualization ด้วย Streamlit
     st.line_chart(df_burn_cash['cumulative_burn'])
 
-    
+    df_burn_cash = df.reset_index()
+
+
     # แสดงตารางข้อมูลแบบ expandable
     with st.expander("View Raw Data"):
-        st.dataframe(df_burn_cash['cumulative_burn'])
+        st.dataframe(df_burn_cash)
         
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
