@@ -158,7 +158,7 @@ with Burn_Cash:
 
     # แสดงตารางข้อมูลแบบ expandable
     with st.expander("View Raw Data"):
-        st.dataframe(df_burn_cash[[1:]])
+        st.dataframe(df_burn_cash[[:-1]])
         
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
