@@ -109,7 +109,7 @@ if Start :
 
   thingspeak_5 = col13.checkbox('@_NVTS_ASSET')
   if thingspeak_5:
-      add_5 = col13.number_input('@_NVTS_ASSET', step=0.001, value=492.0)  # Set default value
+      add_5 = col13.number_input('@_NVTS_ASSET', step=0.001, value= 0.)  # Set default value
       _NVTS_ASSET = col13.button("GO!")
       if _NVTS_ASSET:
           client.update({'field5': add_5})
@@ -268,7 +268,7 @@ if Limut_Order_NVTS:
     if sell_NVTS:
         GO_NVTS_sell = col_nvts3.button("GO!")
         if GO_NVTS_sell:
-            client.update({'field5': NVTS_ASSET_LAST - u8})
+            client.update({'field5': NVTS_ASSET_LAST - p8})
     
     pv_nvts = yf.Ticker('NVTS').fast_info['lastPrice'] * x_7
     st.write(yf.Ticker('NVTS').fast_info['lastPrice'], pv_nvts, '(', pv_nvts - 1500, ')')
@@ -279,7 +279,7 @@ if Limut_Order_NVTS:
     if buy_NVTS:
         GO_NVTS_Buy = col_nvts6.button("GO!")
         if GO_NVTS_Buy:
-            client.update({'field5': NVTS_ASSET_LAST + p8})
+            client.update({'field5': NVTS_ASSET_LAST + u8})
 
 st.write("_____")
 
