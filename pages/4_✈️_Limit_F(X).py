@@ -166,7 +166,7 @@ with Ref_index_Log:
 
     int_st = np.prod(int_st)
     int_end = np.prod(int_end)
-    ref_log =  1500 * np.log( int_st / int_end )
+    ref_log =  15000 +  (1500 * np.log( int_st / int_st ))
     
     
         
