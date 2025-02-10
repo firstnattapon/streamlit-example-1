@@ -134,7 +134,7 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-tab1, tab2, tab3, tab4, tab5  , Ref_index_Log ,  Burn_Cash  = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' , 'Ref_index_Log' ,'Burn_Cash' ])
+tab1, tab2, tab3, tab4, tab5  ,  Burn_Cash  , Ref_index_Log   = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ,  'Burn_Cash' ,  'Ref_index_Log' ])
 
 
 with Ref_index_Log:
@@ -175,10 +175,8 @@ with Ref_index_Log:
     df_sumusd_['net'] = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log']
     
     df_sumusd_ = df_sumusd_.reset_index().set_index('index')
-
     st.line_chart(df_sumusd_.net)
-    with st.expander("View Raw Data "):
-        st.dataframe(df_sumusd_)
+    st.dataframe(df_sumusd_)
 
 
 with Burn_Cash:
@@ -199,8 +197,7 @@ with Burn_Cash:
 
     df_burn_cash = df_burn_cash.reset_index(drop=True)
     # แสดงตารางข้อมูลแบบ expandable
-    with st.expander("View Raw Data"):
-        st.dataframe(df_burn_cash)
+    st.dataframe(df_burn_cash)
         
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
