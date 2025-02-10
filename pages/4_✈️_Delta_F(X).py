@@ -99,7 +99,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         'asset_value': np.round(asset_value, 2),
         'amount': np.round(amount, 2),
         'refer': np.round(refer, 2),
-        'net': np.round( sumusd -  (refer+500) , 2) # add500
+        'net': np.round( sumusd -  (refer+1500) , 2) # add500
     })
     return df 
 
