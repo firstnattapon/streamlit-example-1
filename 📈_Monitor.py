@@ -289,7 +289,7 @@ st.write("_____")
 if st.button("RERUN"):
   st.rerun()
 
-st.write(df_7) 
+st.write(df_7)  
 
 
 # except:pass
