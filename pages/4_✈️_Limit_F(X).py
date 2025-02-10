@@ -181,6 +181,7 @@ with Ref_index_Log:
     df_sumusd_ = pd.DataFrame(sumusd_)
     df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
     df_sumusd_['ref_log'] = prices_df
+    df_sumusd_['net'] = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log']
     st.write( df_sumusd_ )
 
 
