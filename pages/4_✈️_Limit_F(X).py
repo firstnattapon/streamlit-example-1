@@ -136,8 +136,9 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
 Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index_Log' ,'Burn_Cash' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ])
 
+
 with Ref_index_Log:
-    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' ,  'NVTS']
+    tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS' ,  'NVTS']
 
     def get_prices(tickers, start_date):
         df_list = []
@@ -153,10 +154,7 @@ with Ref_index_Log:
     
     # กำหนดวันที่เริ่มต้น
     filter_date = '2023-01-01 12:00:00+07:00'
-    
-    # รายชื่อ Ticker
-    tickers = STOCK_SYMBOLS
-    
+        
     # ดึงข้อมูลราคาและสร้าง DataFrame
     prices_df = get_prices(tickers, filter_date)
     
@@ -173,15 +171,10 @@ with Ref_index_Log:
         ref_log = 15000 + 1500 * np.log(int_st / int_end)
         return ref_log
     
-    prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)
-    
-    # รีเซ็ตดัชนีเพื่อให้วันที่เป็นคอลัมน์
+    prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)    
     prices_df = prices_df.reset_index()
     
-    
     st.write( prices_df )
-
-
 
 
 with Burn_Cash:
