@@ -146,7 +146,9 @@ with Burn_Cash:
         'buffer_NEGG': buffer_NEGG,
         'buffer_RIVN': buffer_RIVN,
         'buffer_APLS': buffer_APLS,
+        'sum' : np.nan
     })
+    
     df_Burn_Cashp['sum'] = df_Burn_Cash.sum()
         
     st.write(df_Burn_Cash)
