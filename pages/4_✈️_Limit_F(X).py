@@ -150,10 +150,27 @@ with Ref_index_Log:
         prices = np.array( tickerData.Close.values , dtype=np.float64)        
         return prices[0] 
 
+    def get_end (Ticker):
+        filter_date = '2023-01-01 12:00:00+07:00'
+        tickerData = yf.Ticker(Ticker)
+        tickerData = tickerData.history(period= 'max' )[['Close']]
+        tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
+        filter_date = filter_date
+        tickerData = tickerData[tickerData.index >= filter_date]
+        prices = np.array( tickerData.Close.values , dtype=np.float64)        
+        return prices[-1] 
+
+
     int_st = np.array( [ get_int(i)  for i in STOCK_SYMBOLS  ] )
+    int_end = np.array( [ get_end(i)  for i in STOCK_SYMBOLS  ] )
+
     int_st = np.prod(int_st)
+    int_end = np.prod(int_end)
+    ref_log =  1500 * np.log( int_st / int_end )
+    
+    
         
-    st.write( int_st )
+    st.write( ref_log )
     sumusd = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in STOCK_SYMBOLS}
     df_burn_cash_ = pd.DataFrame(sumusd)
     df_burn_cash_['daily_allsum'] = df_burn_cash_.sum(axis=1)
