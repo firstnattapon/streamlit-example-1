@@ -66,11 +66,14 @@ df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
 df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
 df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
-nex = 0 
 
-Nex_day = col13.checkbox('@_FFWM_ASSET')
-if st.button("Nex_day"):
-  nex = 1
+nex = 0 
+Nex_day = col13.checkbox('Nex_day')
+if Nex_day :
+  st.write(nex) 
+  if st.button("Nex_day"):
+    nex = 1
+    st.write(nex) 
 st.write("_____") 
 
 
