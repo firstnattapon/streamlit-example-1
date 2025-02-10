@@ -139,12 +139,22 @@ Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index
 
 with Ref_index_Log:
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' ,  'NVTS']
-    sumusd = {
-        'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd
-        for symbol in STOCK_SYMBOLS}
+
+    def get_int (Ticker):
+        filter_date = '2023-01-01 12:00:00+07:00'
+        tickerData = yf.Ticker(Ticker)
+        tickerData = tickerData.history(period= 'max' )[['Close']]
+        tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
+        filter_date = filter_date
+        tickerData = tickerData[tickerData.index >= filter_date]
+        prices = np.array( tickerData.Close.values , dtype=np.float64)        
+        return prices[0] 
+
+    int_st = np.array( [ get_int(i)  for i in STOCK_SYMBOLS  ] )
+        
+    st.write( int_st )
+    sumusd = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in STOCK_SYMBOLS}
     df_burn_cash_ = pd.DataFrame(sumusd)
-    
-    
     df_burn_cash_['daily_allsum'] = df_burn_cash_.sum(axis=1)
     st.dataframe(df_burn_cash_)
 
