@@ -151,6 +151,7 @@ with Burn_Cash:
     df_Burn_Cash['sum'] = df_Burn_Cash.sum(axis=1)
     df_Burn = df_Burn_Cash['sum'].values
     df_Burn_Cash['Burn'] = df_Burn_Cash['sum'].cumsum()
+    st.line_chart(df_Burn_Cash.Burn )
     st.write(df_Burn_Cash)
         
 with tab1:
