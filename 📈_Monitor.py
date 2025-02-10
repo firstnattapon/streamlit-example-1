@@ -68,7 +68,7 @@ df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 
 st.write(df_7)   
-nex = 1
+nex = 2
 st.write(df_7.action.values[1+nex])   
 
 
