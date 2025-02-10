@@ -178,7 +178,7 @@ with Ref_index_Log:
 
 
     buffers = {
-    'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in STOCK_SYMBOLS}
+    'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in tickers}
 
     df_burn_cash = pd.DataFrame(buffers)
     st.write( df_burn_cash )
