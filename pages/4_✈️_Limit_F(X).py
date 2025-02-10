@@ -138,7 +138,7 @@ Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index
 
 
 with Ref_index_Log:
-    tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS' ,  'NVTS']
+    tickers = ['FFWM', 'NEGG' ]
 
     def get_prices(tickers, start_date):
         df_list = []
@@ -168,7 +168,7 @@ with Ref_index_Log:
     # คำนวณ ref_log สำหรับแต่ละแถว
     def calculate_ref_log(row):
         int_end = np.prod(row[tickers])  # ผลคูณของราคาปิดในแถวปัจจุบัน
-        ref_log = 15000 + 1500 * np.log(int_st / int_end)
+        ref_log = 6000 + (1500 * np.log(int_st / int_end))
         return ref_log
     
     prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)    
