@@ -139,10 +139,10 @@ Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index
 
 with Ref_index_Log:
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS']
-    buffers = {
-        'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd
+    sumusd = {
+        'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd
         for symbol in STOCK_SYMBOLS}
-    df_burn_cash = pd.DataFrame(buffers)
+    df_burn_cash = pd.DataFrame(sumusd)
     st.dataframe(df_burn_cash)
 
 
