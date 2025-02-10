@@ -174,10 +174,10 @@ with Ref_index_Log:
     df_sumusd_['ref_log'] = prices_df
     df_sumusd_['net'] = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log']
     df_sumusd_ = df_sumusd_.reset_index(drop=True)
-    
+    df_sumusd_ = df_sumusd_.reset_index(drop=True)
     st.line_chart(df_sumusd_.net)
-    st.write( df_sumusd_)
-
+    with st.expander("View Raw Data"):
+        st.dataframe(df_sumusd_)
 
 with Burn_Cash:
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
