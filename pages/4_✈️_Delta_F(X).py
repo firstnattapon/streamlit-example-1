@@ -155,7 +155,6 @@ with Burn_Cash:
     st.line_chart(df_burn_cash['cumulative_burn'])
 
     df_burn_cash = df_burn_cash.reset_index(drop=True)
-
     # แสดงตารางข้อมูลแบบ expandable
     with st.expander("View Raw Data"):
         st.dataframe(df_burn_cash)
