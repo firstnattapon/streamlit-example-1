@@ -140,7 +140,13 @@ with Burn_Cash:
     buffer_NEGG =  Limit_fx('NEGG' , act = -1 ).buffer
     buffer_RIVN =  Limit_fx('RIVN' , act = -1 ).buffer
     buffer_APLS =  Limit_fx( 'APLS' , act = -1 ).buffer
-    st.line_chart(buffer_FFWM+buffer_NEGG)
+     
+    df_Burn_Cash = pd.DataFrame({
+        'buffer_FFWM': buffer_FFWM,
+        'buffer_NEGG': buffer_NEGG,
+        'buffer_RIVN': buffer_RIVN,
+        'buffer_APLS': buffer_APLS,
+    st.line_chart(df_Burn_Cash)
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
     FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
