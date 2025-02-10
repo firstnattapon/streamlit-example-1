@@ -138,7 +138,7 @@ Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs(['Burn_Cash' ,"FFWM", "NEGG",
 with Burn_Cash:
     buffer_FFWM =  Limit_fx('FFWM' , act = -1 ).buffer
     buffer_NEGG =  Limit_fx('NEGG' , act = -1 ).buffer
-    buffer_RIVN =  Limit_fx('RIVN ' , act = -1 ).buffer
+    buffer_RIVN =  Limit_fx('RIVN' , act = -1 ).buffer
     buffer_APLS =  Limit_fx( 'APLS' , act = -1 ).buffer
     st.line_chart(buffer_FFWM)
 with tab1:
