@@ -136,8 +136,11 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs(['Burn_Cash' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ])
 
 with Burn_Cash:
-    pass 
-
+    buffer_FFWM =  Limit_fx(Ticker , act = -1 ).buffer
+    buffer_NEGG =  Limit_fx(Ticker , act = -1 ).buffer
+    buffer_RIVN =  Limit_fx(Ticker , act = -1 ).buffer
+    buffer_APLS =  Limit_fx(Ticker , act = -1 ).buffer
+    st.line_chart(buffer_FFWM)
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
     FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
