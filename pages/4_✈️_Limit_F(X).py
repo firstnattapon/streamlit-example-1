@@ -146,7 +146,7 @@ with Ref_index_Log:
 
     
     
-    def get_int (Ticker , idx = 0):
+    def get_int (Ticker):
         filter_date = '2023-01-01 12:00:00+07:00'
         tickerData = yf.Ticker(Ticker)
         tickerData = tickerData.history(period= 'max' )[['Close']]
@@ -154,17 +154,17 @@ with Ref_index_Log:
         filter_date = filter_date
         tickerData = tickerData[tickerData.index >= filter_date]
         prices = np.array( tickerData.Close.values , dtype=np.float64)  
-        prices = prices[idx]
         return prices 
     
     int_st = np.array( [ get_int(i , 0)   for i in STOCK_SYMBOLS  ] )
     int_st = np.prod(int_st)
     
-    int_end = np.array( [ get_int(i , 0)   for i in STOCK_SYMBOLS  ] )
-    int_end = np.prod(int_st)
-    ref_log =  15000 +  (1500 * np.log( int_st / int_end  ))
+    int_end_ffwn = np.array(get_int)
+    # int_end_ffwm = np.prod(int_st)
+
+    # ref_log =  15000 +  (1500 * np.log( int_st / int_end  ))
     
-    st.write( ref_log )
+    st.write( int_end_ffwm )
 
 
 
