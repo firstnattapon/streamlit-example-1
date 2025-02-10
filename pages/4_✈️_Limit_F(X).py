@@ -139,7 +139,6 @@ Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index
 
 with Ref_index_Log:
     tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
-
     def get_prices(tickers, start_date):
         df_list = []
         for ticker in tickers:
@@ -152,16 +151,10 @@ with Ref_index_Log:
         prices_df = pd.concat(df_list, axis=1)
         return prices_df
     
-    # กำหนดวันที่เริ่มต้น
     filter_date = '2023-01-01 12:00:00+07:00'
-        
-    # ดึงข้อมูลราคาและสร้าง DataFrame
     prices_df = get_prices(tickers, filter_date)
-    
-    # ดรอปแถวที่มีค่าว่าง (ถ้ามี)
     prices_df = prices_df.dropna()
     
-    # คำนวณ int_st: ผลคูณของราคาปิดเริ่มต้นของแต่ละ Ticker
     int_st_list = prices_df.iloc[0][tickers]  # ราคาปิดเริ่มต้นของแต่ละ Ticker
     int_st = np.prod(int_st_list)
     
@@ -175,16 +168,15 @@ with Ref_index_Log:
     prices_df = prices_df.reset_index()
     prices_df = prices_df.ref_log.values 
 
-    sumusd_ = {
-    'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in tickers}
-
+    sumusd_ = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in tickers}
     df_sumusd_ = pd.DataFrame(sumusd_)
     df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
     df_sumusd_['ref_log'] = prices_df
     df_sumusd_['net'] = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log']
+    df_sumusd_ = df_sumusd_.reset_index(drop=True)
     
     st.line_chart(df_sumusd_.net)
-    st.write( df_sumusd_ )
+    st.write( df_sumusd_)
 
 
 with Burn_Cash:
