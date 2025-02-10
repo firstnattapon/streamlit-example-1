@@ -138,7 +138,14 @@ Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index
 
 with Ref_index_Log:
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' ,  'NVTS']
+    
+    sumusd = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in STOCK_SYMBOLS}
+    df_burn_cash_ = pd.DataFrame(sumusd)
+    df_burn_cash_['daily_allsum'] = df_burn_cash_.sum(axis=1)
+    st.dataframe(df_burn_cash_)
 
+    
+    
     def get_int (Ticker , idx = 0):
         filter_date = '2023-01-01 12:00:00+07:00'
         tickerData = yf.Ticker(Ticker)
@@ -153,19 +160,16 @@ with Ref_index_Log:
     int_st = np.array( [ get_int(i , 0)   for i in STOCK_SYMBOLS  ] )
     int_st = np.prod(int_st)
     
-    int_end = np.array( [ get_int(i , idx )  for idx  , i in enumerate(STOCK_SYMBOLS)  ] )
+    FFWM_end = np.array( [ get_int( 'FFWM' , i )  for i in (len(df_burn_cash_))  ] )
 
     # int_st = np.prod(int_st)
     # int_end = np.prod(int_end)
     # ref_log =  15000 +  (1500 * np.log( int_st / int_st ))
     
-    st.write( int_end )
+    st.write( FFWM_end )
 
-    
-    sumusd = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in STOCK_SYMBOLS}
-    df_burn_cash_ = pd.DataFrame(sumusd)
-    df_burn_cash_['daily_allsum'] = df_burn_cash_.sum(axis=1)
-    st.dataframe(df_burn_cash_)
+
+
 
 with Burn_Cash:
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
