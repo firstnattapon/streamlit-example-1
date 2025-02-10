@@ -177,7 +177,8 @@ with Ref_index_Log:
     
     st.line_chart(df_sumusd_.net)
     with st.expander("View Raw Data"):
-        st.dataframe(df_sumusd_) 
+        st.dataframe(df_sumusd_, hide_index=True)
+
 
 with Burn_Cash:
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
