@@ -237,11 +237,11 @@ def Gen_fx (Ticker =  'FFWM' ,  field = 2 ):
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["FFWM", "NEGG", "RIVN", "APLS", "NVTS"])
 
 with tab1:
-    FFWM_Check_Gen = st.checkbox('FFWM_Add_Gen')
-    if FFWM_Check_Gen :
-        re = st.button("Rerun_Gen_tab1")
-        if re :
-            Gen_fx (Ticker = 'FFWM' , field = 2 )
+    # FFWM_Check_Gen = st.checkbox('FFWM_Add_Gen')
+    # if FFWM_Check_Gen :
+    #     re = st.button("Rerun_Gen_tab1")
+    #     if re :
+    #         Gen_fx (Ticker = 'FFWM' , field = 2 )
     
     FFWM_Check_Gen_M = st.checkbox('FFWM_Add_Gen_M')
     if FFWM_Check_Gen_M :    
@@ -261,11 +261,11 @@ with tab1:
     st.write("_____") 
 
 with tab2:
-    NEGG_Check_Gen = st.checkbox('NEGG_Add_Gen')
-    if NEGG_Check_Gen :
-        re = st.button("Rerun_Gen_tab2")
-        if re :
-            Gen_fx (Ticker = 'NEGG' , field = 3 )
+    # NEGG_Check_Gen = st.checkbox('NEGG_Add_Gen')
+    # if NEGG_Check_Gen :
+    #     re = st.button("Rerun_Gen_tab2")
+    #     if re :
+    #         Gen_fx (Ticker = 'NEGG' , field = 3 )
 
     NEGG_Check_Gen_M = st.checkbox('NEGG_Add_Gen_M')
     if NEGG_Check_Gen_M :    
@@ -285,11 +285,11 @@ with tab2:
     st.write("_____") 
 
 with tab3:
-    RIVN_Check_Gen = st.checkbox('RIVN_Add_Gen')
-    if RIVN_Check_Gen :
-        re = st.button("Rerun_Gen_tab3")
-        if re :
-            Gen_fx (Ticker = 'RIVN' , field = 4)
+    # RIVN_Check_Gen = st.checkbox('RIVN_Add_Gen')
+    # if RIVN_Check_Gen :
+    #     re = st.button("Rerun_Gen_tab3")
+    #     if re :
+    #         Gen_fx (Ticker = 'RIVN' , field = 4)
     
     RIVN_Check_Gen_M = st.checkbox('RIVN_Add_Gen_M')
     if RIVN_Check_Gen_M :    
@@ -310,11 +310,11 @@ with tab3:
     
 
 with tab4:
-    APLS_Check_Gen = st.checkbox('APLS_Add_Gen')
-    if APLS_Check_Gen :
-        re = st.button("Rerun_Gen_tab4")
-        if re :
-            Gen_fx (Ticker = 'APLS' , field = 5)
+    # APLS_Check_Gen = st.checkbox('APLS_Add_Gen')
+    # if APLS_Check_Gen :
+    #     re = st.button("Rerun_Gen_tab4")
+    #     if re :
+    #         Gen_fx (Ticker = 'APLS' , field = 5)
     
     APLS_Check_Gen_M = st.checkbox('APLS_Add_Gen_M')
     if APLS_Check_Gen_M :    
@@ -335,11 +335,11 @@ with tab4:
 
 
 with tab5:
-    NVTS_Check_Gen = st.checkbox('NVTS_Add_Gen')
-    if NVTS_Check_Gen :
-        re = st.button("Rerun_Gen_tab5")
-        if re :
-            Gen_fx (Ticker = 'NVTS' , field = 6)
+    # NVTS_Check_Gen = st.checkbox('NVTS_Add_Gen')
+    # if NVTS_Check_Gen :
+    #     re = st.button("Rerun_Gen_tab5")
+    #     if re :
+    #         Gen_fx (Ticker = 'NVTS' , field = 6)
     
     NVTS_Check_Gen_M = st.checkbox('NVTS_Add_Gen_M')
     if NVTS_Check_Gen_M :    
