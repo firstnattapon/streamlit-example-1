@@ -68,13 +68,12 @@ df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 
 nex = 0 
-with st.expander("nex_day"):
-  Nex_day_ = st.checkbox('nex_day')
-  if Nex_day_ :
+Nex_day_ = st.checkbox('nex_day')
+if Nex_day_ :
+  st.write( "value = " , nex) 
+  if st.button("Nex_day"):
+    nex = 1
     st.write( "value = " , nex) 
-    if st.button("Nex_day"):
-      nex = 1
-      st.write( "value = " , nex) 
 st.write("_____") 
 
 
