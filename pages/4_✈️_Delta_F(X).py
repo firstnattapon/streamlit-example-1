@@ -136,7 +136,7 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs(['Burn_Cash' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ])
 
 with Burn_Cash:
-    st.write( Limit_fx(Ticker , act = -1 )  ) 
+    st.write( Limit_fx(Ticker , act = -1 )    
 
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
