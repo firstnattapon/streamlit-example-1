@@ -168,12 +168,13 @@ with Ref_index_Log:
     prices_df = prices_df.reset_index()
     prices_df = prices_df.ref_log.values 
 
-    sumusd_ = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in tickers}
+    sumusd_ = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in tickers }
     df_sumusd_ = pd.DataFrame(sumusd_)
     df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
     df_sumusd_['ref_log'] = prices_df
     df_sumusd_['net'] = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log']
     df_sumusd_ = df_sumusd_.reset_index(drop=True)
+    
     st.line_chart(df_sumusd_.net)
     with st.expander("View Raw Data"):
         st.write(df_sumusd_) 
