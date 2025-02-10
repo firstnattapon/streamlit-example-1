@@ -143,15 +143,13 @@ with Ref_index_Log:
         'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).buffer
         for symbol in STOCK_SYMBOLS}
     df_burn_cash = pd.DataFrame(buffers)
-    st.dataframe(df_burn_cash)
+    st.dataframe(df_burn_cash['sumusd'])
 
 
 
 with Burn_Cash:
-    # 1. กำหนดรายการหุ้นที่จะวิเคราะห์
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS']
     
-    # 2. สร้าง buffer ด้วย Loop เพื่อลด code duplication
     buffers = {
         'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).buffer
         for symbol in STOCK_SYMBOLS}
