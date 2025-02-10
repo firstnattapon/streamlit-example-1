@@ -109,12 +109,12 @@ if Start :
 
   thingspeak_5 = col13.checkbox('@_NVTS_ASSET')
   if thingspeak_5:
-      add_5 = col13.number_input('@_NVTS_ASSET', step=0.001, value= 0.)  # Set default value
-      _NVTS_ASSET = col13.button("GO!")
-      if _NVTS_ASSET:
-          client.update({'field5': add_5})
-
-
+    add_5 = col13.number_input('@_NVTS_ASSET', step=0.001, value= 0.)  # Set default value         
+    _NVTS_ASSET = col13.button("GO!")
+    if _NVTS_ASSET:
+      client.update({'field5': add_5})
+      col13.write(add_5) 
+  
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
