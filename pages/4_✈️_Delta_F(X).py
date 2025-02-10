@@ -126,6 +126,7 @@ def plot (Ticker = ''   ,  act = -1 ):
 
     df_plot =  Limit_fx(Ticker , act = -1 )
     df_plot = df_plot[['buffer']].cumsum()
+    st.write('Burn_Cash')
     st.line_chart(df_plot)
     st.write( Limit_fx(Ticker , act = -1 ) ) 
 
