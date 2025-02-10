@@ -143,6 +143,8 @@ with Ref_index_Log:
         'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd
         for symbol in STOCK_SYMBOLS}
     df_burn_cash_ = pd.DataFrame(sumusd)
+    df_burn_cash_['daily_burn'] = df_burn_cash_.sum(axis=1)
+    
     st.dataframe(df_burn_cash_)
 
 
@@ -154,7 +156,6 @@ with Burn_Cash:
         'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).buffer
         for symbol in STOCK_SYMBOLS}
     
-    # 3. สร้าง DataFrame และคำนวณค่าที่ต้องการ
     df_burn_cash = pd.DataFrame(buffers)
     # คำนวณผลรวมรายวัน
     df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
