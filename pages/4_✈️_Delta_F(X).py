@@ -136,23 +136,28 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs(['Burn_Cash' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ])
 
 with Burn_Cash:
-    buffer_FFWM =  Limit_fx('FFWM' , act = -1 ).buffer
-    buffer_NEGG =  Limit_fx('NEGG' , act = -1 ).buffer
-    buffer_RIVN =  Limit_fx('RIVN' , act = -1 ).buffer
-    buffer_APLS =  Limit_fx( 'APLS' , act = -1 ).buffer
-     
-    df_Burn_Cash = pd.DataFrame({
-        'buffer_FFWM': buffer_FFWM,
-        'buffer_NEGG': buffer_NEGG,
-        'buffer_RIVN': buffer_RIVN,
-        'buffer_APLS': buffer_APLS,
-    })
+    # 1. กำหนดรายการหุ้นที่จะวิเคราะห์
+    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS']
     
-    df_Burn_Cash['sum'] = df_Burn_Cash.sum(axis=1)
-    df_Burn = df_Burn_Cash['sum'].values
-    df_Burn_Cash['Burn'] = df_Burn_Cash['sum'].cumsum()
-    st.line_chart(df_Burn_Cash.Burn )
-    st.write(df_Burn_Cash)
+    # 2. สร้าง buffer ด้วย Loop เพื่อลด code duplication
+    buffers = {
+        'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).buffer
+        for symbol in STOCK_SYMBOLS}
+    
+    # 3. สร้าง DataFrame และคำนวณค่าที่ต้องการ
+    df_burn_cash = pd.DataFrame(buffers)
+    # คำนวณผลรวมรายวัน
+    df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
+    # คำนวณผลรวมสะสม
+    df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
+    
+    # 4. Visualization ด้วย Streamlit
+    st.subheader('Cash Burn Analysis')
+    st.line_chart(df_burn_cash['cumulative_burn'])
+    
+    # แสดงตารางข้อมูลแบบ expandable
+    with st.expander("View Raw Data"):
+        st.dataframe(df_burn_cash)
         
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
