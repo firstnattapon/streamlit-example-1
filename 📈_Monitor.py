@@ -161,7 +161,7 @@ u7 , u8 , u9 = sell( asset = x_7 , Diff= x_2)
 p7 , p8 , p9 = buy( asset = x_7 , Diff= x_2)
 
 
-Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value= df_7_1.action.values[1] )
+Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value= df_7_1.action.values[1+nex] )
 if Limut_Order_NEGG :
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
   
@@ -187,7 +187,7 @@ if Limut_Order_NEGG :
 
 st.write("_____") 
 
-Limut_Order_FFWM = st.checkbox('Limut_Order_FFWM',value= df_7.action.values[1] )
+Limut_Order_FFWM = st.checkbox('Limut_Order_FFWM',value= df_7.action.values[1+nex] )
 if Limut_Order_FFWM :
   st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
   
@@ -213,7 +213,7 @@ if Limut_Order_FFWM :
   
 st.write("_____") 
 
-Limut_Order_RIVN = st.checkbox('Limut_Order_RIVN',value= df_7_2.action.values[1] )
+Limut_Order_RIVN = st.checkbox('Limut_Order_RIVN',value= df_7_2.action.values[1+nex] )
 if Limut_Order_RIVN :    
   st.write( 'sell' , '   ' , 'A', u5 , 'P' , u4  , 'C' , u6  )
   
@@ -240,7 +240,7 @@ if Limut_Order_RIVN :
 st.write("_____") 
 
 #  
-Limut_Order_APLS = st.checkbox('Limut_Order_APLS',value= df_7_3.action.values[1] )
+Limut_Order_APLS = st.checkbox('Limut_Order_APLS',value= df_7_3.action.values[1+nex] )
 if Limut_Order_APLS :    
   st.write( 'sell' , '   ' , 'A', p5 , 'P' , p4  , 'C' , p6  )
   
@@ -266,7 +266,7 @@ if Limut_Order_APLS :
 
 st.write("_____")
 
-Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS', value=df_7_4.action.values[1])
+Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS', value=df_7_4.action.values[1+nex])
 if Limut_Order_NVTS:    
     st.write('sell', '   ', 'A', p8 , 'P', p7  , 'C', p9  )  # Fixed variable order
   
