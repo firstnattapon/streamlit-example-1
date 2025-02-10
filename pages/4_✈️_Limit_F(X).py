@@ -140,20 +140,23 @@ Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index
 with Ref_index_Log:
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' ,  'NVTS']
 
-    def get_int (Ticker):
+    def get_int (Ticker , idx = 0):
         filter_date = '2023-01-01 12:00:00+07:00'
         tickerData = yf.Ticker(Ticker)
         tickerData = tickerData.history(period= 'max' )[['Close']]
         tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
         filter_date = filter_date
         tickerData = tickerData[tickerData.index >= filter_date]
-        prices = np.array( tickerData.Close.values , dtype=np.float64)        
+        prices = np.array( tickerData.Close.values , dtype=np.float64)  
+        prices = prices[idx]
         return prices 
 
     # prices_ = get_int
     
-    int_st = np.array( [ get_int(i)[0]  for i in STOCK_SYMBOLS  ] )
-    # int_end = np.array( [ get_end(i)  for i in STOCK_SYMBOLS  ] )
+    int_st = np.array( [ get_int(i , 0)   for i in STOCK_SYMBOLS  ] )
+    # int_st = np.prod(int_st)
+    
+    # int_end = np.array( [ get_int(i)  for i in STOCK_SYMBOLS  ] )
 
     # int_st = np.prod(int_st)
     # int_end = np.prod(int_end)
