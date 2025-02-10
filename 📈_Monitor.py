@@ -67,15 +67,6 @@ df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
 df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
 df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 
-nex = 0 
-Nex_day_ = st.checkbox('nex_day')
-if Nex_day_ :
-  st.write( "value = " , nex) 
-  if st.button("Nex_day"):
-    nex = 1
-    st.write( "value = " , nex) 
-st.write("_____") 
-
 
 col13, col16, col14, col15, col17, col18, col19 = st.columns(7)
 
@@ -122,7 +113,17 @@ if Start :
     if _NVTS_ASSET:
       client.update({'field5': add_5})
       col13.write(add_5) 
-  
+
+
+nex = 0 
+Nex_day_ = st.checkbox('nex_day')
+if Nex_day_ :
+  st.write( "value = " , nex) 
+  if st.button("Nex_day"):
+    nex = 1
+    st.write( "value = " , nex) 
+st.write("_____") 
+
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
 FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
