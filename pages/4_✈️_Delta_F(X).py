@@ -150,7 +150,12 @@ with Burn_Cash:
     
     df_Burn_Cash['sum'] = df_Burn_Cash.sum(axis=1)
     df_Burn = df_Burn_Cash['sum'].values
-    df_Burn_Cash['Burn_Cash'] =  [0+ i  for i in df_Burn]
+    x_1 = 0 
+    for i in df_Burn:
+        x_2 = x_1 + i
+        x_1 = x_2
+        
+    df_Burn_Cash['Burn_Cash'] =  x_1
 
     st.write(df_Burn_Cash)
         
