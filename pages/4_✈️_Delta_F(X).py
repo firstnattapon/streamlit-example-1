@@ -149,8 +149,9 @@ with Burn_Cash:
     })
     
     df_Burn_Cash['sum'] = df_Burn_Cash.sum(axis=1)
+    df_Burn = df_Burn_Cash.sum.values
         
-    st.write(df_Burn_Cash)
+    st.write(df_Burn)
         
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
