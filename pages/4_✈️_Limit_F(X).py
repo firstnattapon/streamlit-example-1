@@ -174,6 +174,8 @@ with Ref_index_Log:
     df_sumusd_['ref_log'] = prices_df
     df_sumusd_['net'] = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log']
     df_sumusd_ = df_sumusd_.reset_index()
+    df_sumusd_.set_index("index", inplace=True)
+
     
     st.line_chart(df_sumusd_.net)
     with st.expander("View Raw Data"):
