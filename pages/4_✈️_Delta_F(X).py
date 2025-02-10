@@ -122,7 +122,7 @@ def plot (Ticker = ''   ,  act = -1 ):
     
     chart_data = pd.DataFrame(np.array(all).T , columns= np.array(all_id))
     
-    st.write('refer')
+    st.write('Refer_log')
     st.line_chart(chart_data)
 
     df_plot =  Limit_fx(Ticker , act = -1 )
