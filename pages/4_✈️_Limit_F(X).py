@@ -138,33 +138,48 @@ Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index
 
 with Ref_index_Log:
     STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' ,  'NVTS']
-    
-    sumusd = {'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd for symbol in STOCK_SYMBOLS}
-    df_burn_cash_ = pd.DataFrame(sumusd)
-    df_burn_cash_['daily_allsum'] = df_burn_cash_.sum(axis=1)
-    st.dataframe(df_burn_cash_)
 
+    def get_prices(tickers, start_date):
+        df_list = []
+        for ticker in tickers:
+            tickerData = yf.Ticker(ticker)
+            tickerHist = tickerData.history(period='max')[['Close']]
+            tickerHist.index = tickerHist.index.tz_convert(tz='Asia/Bangkok')
+            tickerHist = tickerHist[tickerHist.index >= start_date]
+            tickerHist = tickerHist.rename(columns={'Close': ticker})
+            df_list.append(tickerHist[[ticker]])
+        prices_df = pd.concat(df_list, axis=1)
+        return prices_df
+    
+    # กำหนดวันที่เริ่มต้น
+    filter_date = '2023-01-01 12:00:00+07:00'
+    
+    # รายชื่อ Ticker
+    tickers = STOCK_SYMBOLS
+    
+    # ดึงข้อมูลราคาและสร้าง DataFrame
+    prices_df = get_prices(tickers, filter_date)
+    
+    # ดรอปแถวที่มีค่าว่าง (ถ้ามี)
+    prices_df = prices_df.dropna()
+    
+    # คำนวณ int_st: ผลคูณของราคาปิดเริ่มต้นของแต่ละ Ticker
+    int_st_list = prices_df.iloc[0][tickers]  # ราคาปิดเริ่มต้นของแต่ละ Ticker
+    int_st = np.prod(int_st_list)
+    
+    # คำนวณ ref_log สำหรับแต่ละแถว
+    def calculate_ref_log(row):
+        int_end = np.prod(row[tickers])  # ผลคูณของราคาปิดในแถวปัจจุบัน
+        ref_log = 15000 + 1500 * np.log(int_st / int_end)
+        return ref_log
+    
+    prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)
+    
+    # รีเซ็ตดัชนีเพื่อให้วันที่เป็นคอลัมน์
+    prices_df = prices_df.reset_index()
     
     
-    def get_int (Ticker):
-        filter_date = '2023-01-01 12:00:00+07:00'
-        tickerData = yf.Ticker(Ticker)
-        tickerData = tickerData.history(period= 'max' )[['Close']]
-        tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
-        filter_date = filter_date
-        tickerData = tickerData[tickerData.index >= filter_date]
-        prices = np.array( tickerData.Close.values , dtype=np.float64)  
-        return prices 
-    
-    int_st = np.array( [ get_int(i , 0)   for i in STOCK_SYMBOLS  ] )
-    int_st = np.prod(int_st)
-    
-    int_end_ffwn = np.array(get_int)
-    # int_end_ffwm = np.prod(int_st)
-
-    # ref_log =  15000 +  (1500 * np.log( int_st / int_end  ))
-    
-    st.write( int_end_ffwm )
+    st.write( prices_df )
 
 
 
