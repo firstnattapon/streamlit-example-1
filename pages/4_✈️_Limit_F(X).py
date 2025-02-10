@@ -134,7 +134,7 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index_Log' ,'Burn_Cash' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ])
+ tab1, tab2, tab3, tab4, tab5  , Ref_index_Log ,  Burn_Cash  = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' , 'Ref_index_Log' ,'Burn_Cash' ])
 
 
 with Ref_index_Log:
@@ -176,11 +176,9 @@ with Ref_index_Log:
     
     df_sumusd_ = df_sumusd_.reset_index().set_index('index')
 
-    
     st.line_chart(df_sumusd_.net)
     with st.expander("View Raw Data "):
-        st.dataframe(df_sumusd_, use_container_width=True, )
-
+        st.dataframe(df_sumusd_)
 
 
 with Burn_Cash:
