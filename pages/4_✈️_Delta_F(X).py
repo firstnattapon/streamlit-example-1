@@ -146,7 +146,7 @@ with Burn_Cash:
         'buffer_NEGG': buffer_NEGG,
         'buffer_RIVN': buffer_RIVN,
         'buffer_APLS': buffer_APLS,})
-    st.line_chart(df_Burn_Cash)
+    st.write(df_Burn_Cash)
         
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
