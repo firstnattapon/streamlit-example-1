@@ -115,6 +115,8 @@ if Start :
       col13.write(add_5) 
 
 
+st.write("_____") 
+
 nex = 0 
 Nex_day_ = st.checkbox('nex_day')
 if Nex_day_ :
@@ -122,7 +124,6 @@ if Nex_day_ :
   if st.button("Nex_day"):
     nex = 1
     st.write( "value = " , nex) 
-st.write("_____") 
 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
