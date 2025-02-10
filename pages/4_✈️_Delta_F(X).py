@@ -153,7 +153,7 @@ with Burn_Cash:
     
     # 4. Visualization ด้วย Streamlit
     st.line_chart(df_burn_cash['cumulative_burn'])
-    df_burn_cash = df.drop(df.columns[[0]], axis=1)  
+    df_burn_cash = df.drop(df.columns[0], axis=1)  
     
     # แสดงตารางข้อมูลแบบ expandable
     with st.expander("View Raw Data"):
