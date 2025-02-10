@@ -152,12 +152,12 @@ with Burn_Cash:
     df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
     
     # 4. Visualization ด้วย Streamlit
-    st.subheader('Cash Burn Analysis')
     st.line_chart(df_burn_cash['cumulative_burn'])
+    df_burn_cash = df_burn_cash.reset_index()
     
     # แสดงตารางข้อมูลแบบ expandable
     with st.expander("View Raw Data"):
-        st.dataframe(df_burn_cash)
+        st.dataframe(df_burn_cash[])
         
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
