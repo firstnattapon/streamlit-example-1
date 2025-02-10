@@ -133,7 +133,10 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS'])
+Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs(['Burn_Cash' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ])
+
+with Burn_Cash:
+    pass
 
 with tab1:
     FFWM_act = client.get_field_last(field='{}'.format(2))
