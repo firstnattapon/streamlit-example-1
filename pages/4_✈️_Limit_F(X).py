@@ -176,7 +176,8 @@ with Ref_index_Log:
     
     st.line_chart(df_sumusd_.net)
     with st.expander("View Raw Data"):
-        st.dataframe(df_sumusd_, hide_index=True)
+        st.dataframe(df_sumusd_, use_container_width=True, hide_index=True)
+
 
 
 with Burn_Cash:
