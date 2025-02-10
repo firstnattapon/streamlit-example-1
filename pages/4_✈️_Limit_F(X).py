@@ -173,6 +173,7 @@ with Ref_index_Log:
     
     prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)    
     prices_df = prices_df.reset_index()
+    st.write( prices_df )
     prices_df = prices_df.ref_log.values 
 
     sumusd_ = {
