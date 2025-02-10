@@ -138,7 +138,12 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index_Log' ,'Burn_Cash' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ])
 
 with Ref_index_Log:
-    pass
+    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS']
+    buffers = {
+        'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).buffer
+        for symbol in STOCK_SYMBOLS}
+    df_burn_cash = pd.DataFrame(buffers)
+    st.dataframe(df_burn_cash)
 
 
 
