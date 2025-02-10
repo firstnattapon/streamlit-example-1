@@ -138,7 +138,7 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 Ref_index_Log ,  Burn_Cash , tab1, tab2, tab3, tab4, tab5 = st.tabs([ 'Ref_index_Log' ,'Burn_Cash' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ])
 
 with Ref_index_Log:
-    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' 'NVTS']
+    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS']
     sumusd = {
         'sumusd_{}'.format(symbol) : Limit_fx(symbol, act=-1).sumusd
         for symbol in STOCK_SYMBOLS}
