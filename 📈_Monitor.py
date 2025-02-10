@@ -260,10 +260,11 @@ st.write("_____")
 
 Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS', value=df_7_4.action.values[1])
 if Limut_Order_NVTS:    
-    st.write('sell', '   ', 'A', u8, 'P', u7, 'C', u9)  # Fixed variable order
+    st.write('sell', '   ', 'A', u8, 'P', p7  , 'C', u9)  # Fixed variable order
     
     col_nvts1, col_nvts2, col_nvts3 = st.columns(3)
     sell_NVTS = col_nvts3.checkbox('sell_match_NVTS')
+  
     if sell_NVTS:
         GO_NVTS_sell = col_nvts3.button("GO!")
         if GO_NVTS_sell:
@@ -273,7 +274,7 @@ if Limut_Order_NVTS:
     st.write(yf.Ticker('NVTS').fast_info['lastPrice'], pv_nvts, '(', pv_nvts - 1500, ')')
     
     col_nvts4, col_nvts5, col_nvts6 = st.columns(3)
-    st.write('buy', '   ', 'A', p8, 'P', p7, 'C', p9)  # Fixed variable order
+    st.write('buy', '   ', 'A', p8, 'P', u7  , 'C', p9)  # Fixed variable order
     buy_NVTS = col_nvts6.checkbox('buy_match_NVTS')
     if buy_NVTS:
         GO_NVTS_Buy = col_nvts6.button("GO!")
