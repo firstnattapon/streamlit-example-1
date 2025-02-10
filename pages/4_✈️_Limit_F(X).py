@@ -160,13 +160,12 @@ with Ref_index_Log:
     int_st = np.array( [ get_int(i , 0)   for i in STOCK_SYMBOLS  ] )
     int_st = np.prod(int_st)
     
-    FFWM_end = np.array( [  get_int( 'FFWM' , i )  for i in  len(df_burn_cash_)    ] )
 
     # int_st = np.prod(int_st)
     # int_end = np.prod(int_end)
     # ref_log =  15000 +  (1500 * np.log( int_st / int_st ))
     
-    st.write( FFWM_end )
+    st.write( int_st )
 
 
 
