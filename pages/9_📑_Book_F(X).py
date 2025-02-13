@@ -9,8 +9,8 @@ import pandas as pd
 
 st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
 
-tab1   = st.tabs([ "the most important thing "])
-with tab1:
+tab_x   = st.tabs([ "the most important thing "])
+with tab_x:
   st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
   
 
