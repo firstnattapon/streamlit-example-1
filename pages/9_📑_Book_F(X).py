@@ -7,12 +7,11 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 
+st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
+
 tab1   = st.tabs([ "the most important thing "])
 with tab1:
   
-  
-  
-  st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
   
   st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
   
