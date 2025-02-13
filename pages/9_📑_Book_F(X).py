@@ -9,6 +9,9 @@ import pandas as pd
 
 st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
 
+st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
+
+
 st.markdown('''
 ###### สรุปบทที่ 1: การคิดระดับสอง
 - Second-Level Thinking (second opinion)? คิดซ้อน อย่าคิดแบบผิวเผินตรงไปตรงมา
