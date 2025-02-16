@@ -9,10 +9,7 @@ import pandas as pd
 
 st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
 
-# st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
-
-st.components.v1.iframe("https://www.youtube.com/watch?v=9neT0cTCbgY", width=1500 , height=800  , scrolling=0)
-
+st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
 
 
 st.markdown('''
