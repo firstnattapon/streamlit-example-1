@@ -134,7 +134,7 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-tab1, tab2, tab3, tab4, tab5  ,  Burn_Cash  , Ref_index_Log   = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ,  'Burn_Cash' ,  'Ref_index_Log' ])
+tab1, tab2, tab3, tab4, tab5  ,  Burn_Cash  , Ref_index_Log , cf_log   = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ,  'Burn_Cash' ,  'Ref_index_Log' , 'cf_log' ])
 
 
 with Ref_index_Log:
@@ -223,3 +223,6 @@ with tab5:
     NVTS_act = client.get_field_last(field='{}'.format(6))
     NVTS_act_js = int(json.loads(NVTS_act)["field{}".format(6) ])
     plot( Ticker = 'NVTS'  , act =  NVTS_act_js  )
+
+with cf_log:
+    pass
