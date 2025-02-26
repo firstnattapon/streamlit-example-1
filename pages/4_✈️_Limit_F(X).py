@@ -233,5 +233,7 @@ with cf_log:
     st.write ('t_0' , t_0)
     st.write ('t_n' , t_n)
     st.write ('fix' , ln)
-    st.write ('pv_adjust_cf' , 9100 + ln)
+    st.write ('pv' , 9100 + ln)
+    st.write ('now_pv' , number)
+    st.write ('____')
     st.write ( 'net_cf' , number - (9100 + ln))
