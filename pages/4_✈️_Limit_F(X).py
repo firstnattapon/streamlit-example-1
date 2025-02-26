@@ -225,4 +225,14 @@ with tab5:
     plot( Ticker = 'NVTS'  , act =  NVTS_act_js  )
 
 with cf_log:
-    pass
+    t_0 = 1.26 * 6.88 * 10.07 * 39.61 * 3.05
+    t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice']
+    ln =  -1500 * np.log ( t_0 / t_n)
+    
+    st.write ('t_0' , t_0)
+    st.write ('t_n' , t_n)
+    st.write (' ')
+    st.write ('ln' , ln)
+    st.write ('now_pv' , 9100 + ln)
+    st.write (' ')
+    st.write ( 'net_cf' , 7972.34 - 6207.41)
