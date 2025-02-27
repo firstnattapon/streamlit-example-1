@@ -317,6 +317,7 @@ k_3 =  10750 + z_1
 ref = k_2
 cf = k_1 - k_2
 
+st.write('pv:' , k_1) 
 st.write('ref:' , ref) 
 st.write('cf:' , cf ) 
 
