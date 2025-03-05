@@ -75,6 +75,11 @@ if Nex_day_ :
   if st.button("Nex_day"):
     nex = 1
     st.write( "value = " , nex) 
+    
+    if st.button("Nex_day_sell"):
+      pass
+      
+
 
 st.write("_____") 
 
@@ -268,7 +273,7 @@ if Limut_Order_APLS :
 
 st.write("_____")
 
-Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS', value=df_7_4.action.values[1+nex])
+Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS', value=df_7_4.action.values[1+nex] )
 if Limut_Order_NVTS:    
     st.write('sell', '   ', 'A', p8 , 'P', p7  , 'C', p9  )  # Fixed variable order
   
