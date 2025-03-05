@@ -75,9 +75,9 @@ toggle = lambda x : 1 - x
 Nex_day_ = st.checkbox('nex_day')
 if Nex_day_ :
   st.write( "value = " , nex) 
-  nex_Col , Nex_day_sell_col ,_,_,_  = st.columns(5)
+  nex_col , Nex_day_sell_col ,_,_,_  = st.columns(5)
 
-  if nex_Col.button("Nex_day"):
+  if nex_col.button("Nex_day"):
     nex = 1
     st.write( "value = " , nex) 
     
@@ -200,7 +200,7 @@ if Limut_Order_NEGG :
 
 st.write("_____") 
 
-Limut_Order_FFWM = st.checkbox('Limut_Order_FFWM',value= df_7.action.values[1+nex] )
+Limut_Order_FFWM = st.checkbox('Limut_Order_FFWM',  value =  np.where(  Nex_day_sell == 1 ,  toggle(  df_7.action.values[1+nex] )   ,  df_7.action.values[1+nex]  ))
 if Limut_Order_FFWM :
   st.write( 'sell' , '   ' , 'A', b12 , 'P' , b11  , 'C' , b13  )
   
@@ -226,7 +226,7 @@ if Limut_Order_FFWM :
   
 st.write("_____") 
 
-Limut_Order_RIVN = st.checkbox('Limut_Order_RIVN',value= df_7_2.action.values[1+nex] )
+Limut_Order_RIVN = st.checkbox('Limut_Order_RIVN',value =  np.where(  Nex_day_sell == 1 ,  toggle(  df_7_2.action.values[1+nex] )   ,  df_7_2.action.values[1+nex]  ))
 if Limut_Order_RIVN :    
   st.write( 'sell' , '   ' , 'A', u5 , 'P' , u4  , 'C' , u6  )
   
@@ -252,8 +252,7 @@ if Limut_Order_RIVN :
 
 st.write("_____") 
 
-#  
-Limut_Order_APLS = st.checkbox('Limut_Order_APLS',value= df_7_3.action.values[1+nex] )
+Limut_Order_APLS = st.checkbox('Limut_Order_APLS',value =  np.where(  Nex_day_sell == 1 ,  toggle(  df_7_3.action.values[1+nex] )   ,  df_7_3.action.values[1+nex]  ))
 if Limut_Order_APLS :    
   st.write( 'sell' , '   ' , 'A', p5 , 'P' , p4  , 'C' , p6  )
   
@@ -279,7 +278,7 @@ if Limut_Order_APLS :
 
 st.write("_____")
 
-Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS', value=df_7_4.action.values[1+nex] )
+Limut_Order_NVTS = st.checkbox('Limut_Order_NVTS', np.where(  Nex_day_sell == 1 ,  toggle(  df_7_4.action.values[1+nex] )   ,  df_7_4.action.values[1+nex]  ))
 if Limut_Order_NVTS:    
     st.write('sell', '   ', 'A', p8 , 'P', p7  , 'C', p9  )  # Fixed variable order
   
