@@ -69,17 +69,20 @@ df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 
 
 nex = 0 
+Nex_day_sell = 0
+toggle = lambda x: 1 - x
+
 Nex_day_ = st.checkbox('nex_day')
 if Nex_day_ :
   st.write( "value = " , nex) 
   if st.button("Nex_day"):
     nex = 1
     st.write( "value = " , nex) 
-    
     if st.button("Nex_day_sell"):
-      pass
+      Nex_day_sell = 1 
+      st.write( "value = " , nex)
+      st.write( "Nex_day_sell = " , Nex_day_sell)
       
-
 
 st.write("_____") 
 
@@ -168,7 +171,7 @@ u7 , u8 , u9 = sell( asset = x_7 , Diff= x_2)
 p7 , p8 , p9 = buy( asset = x_7 , Diff= x_2)
 
 
-Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value= df_7_1.action.values[1+nex] )
+Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value =  np.where( Nex_day_sell = 1 ,  toggle( df_7_1.action.values[1+nex])    ,  df_7_1.action.values[1+nex]  )
 if Limut_Order_NEGG :
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
   
