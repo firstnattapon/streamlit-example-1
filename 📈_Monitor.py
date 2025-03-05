@@ -71,11 +71,12 @@ df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 nex = 0 
 Nex_day_sell = 0
 toggle = lambda x : 1 - x
-nex_Col , Nex_day_sell_col  = st.columns(2)
 
 Nex_day_ = st.checkbox('nex_day')
 if Nex_day_ :
   st.write( "value = " , nex) 
+  nex_Col , Nex_day_sell_col  = st.columns(2)
+
   if nex_Col.button("Nex_day"):
     nex = 1
     st.write( "value = " , nex) 
