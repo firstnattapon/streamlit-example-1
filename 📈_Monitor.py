@@ -78,11 +78,12 @@ if Nex_day_ :
   if st.button("Nex_day"):
     nex = 1
     st.write( "value = " , nex) 
-    if st.button("Nex_day_sell"):
-      Nex_day_sell = 1 
-      st.write( "value = " , nex)
-      st.write( "Nex_day_sell = " , Nex_day_sell)
-      
+    
+if st.button("Nex_day_sell"):
+  Nex_day_sell = 1 
+  st.write( "value = " , nex)
+  st.write( "Nex_day_sell = " , Nex_day_sell)
+  
 
 st.write("_____") 
 
