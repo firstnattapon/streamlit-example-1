@@ -75,7 +75,7 @@ toggle = lambda x : 1 - x
 Nex_day_ = st.checkbox('nex_day')
 if Nex_day_ :
   st.write( "value = " , nex) 
-  nex_Col , Nex_day_sell_col ,_,_,_,_ = st.columns(6)
+  nex_Col , Nex_day_sell_col ,_,_,_  = st.columns(5)
 
   if nex_Col.button("Nex_day"):
     nex = 1
