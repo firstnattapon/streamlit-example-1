@@ -171,7 +171,7 @@ u7 , u8 , u9 = sell( asset = x_7 , Diff= x_2)
 p7 , p8 , p9 = buy( asset = x_7 , Diff= x_2)
 
 
-Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value =  np.where( Nex_day_sell = 1 ,  toggle( df_7_1.action.values[1+nex])    ,  df_7_1.action.values[1+nex]  )
+Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG',value =  np.where(  Nex_day_sell = 1 ,  toggle( df_7_1.action.values[1+nex])   ,  df_7_1.action.values[1+nex]  ))
 if Limut_Order_NEGG :
   st.write( 'sell' , '   ' ,'A', b9  , 'P' , b8 ,'C' ,b10  )
   
