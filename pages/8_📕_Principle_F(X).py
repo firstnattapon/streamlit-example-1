@@ -9,7 +9,7 @@ def iframe ( frame = ''):
   src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
 
-tab1,  Control ,  tab2, tab3 , tab4  = st.tabs(["tab1", "Control" ,"tab2", "tab3" , "tab4"  ])
+tab1,  Control , Mind  ,   tab2, tab3 , tab4  = st.tabs(["tab1", "Control" , "Mind"  ,"tab2", "tab3" , "tab4"  ])
 
 with tab1:
   iframe(frame = "https://monica.im/share/artifact?id=ybc5eexwsxVUDh4FbKSwjA")    
@@ -31,6 +31,9 @@ st.write('____')
 
 with Control:
   iframe(frame = "https://monica.im/share/artifact?id=DF3TydyEV664kgsgbbySs3")
+
+with Mind:
+  pass
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
