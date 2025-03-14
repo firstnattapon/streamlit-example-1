@@ -32,13 +32,10 @@ with Control:
   iframe(frame = "https://monica.im/share/artifact?id=DF3TydyEV664kgsgbbySs3")
 
 with Mind:
-  col11, col22, col33 = st.columns(3)
-
   with st.expander("คลิป"):
-    col11.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
+    st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
   with st.expander("Note"):
-    col22.components.v1.iframe('https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn', width=1500 , height=800  , scrolling=0)
-
+    st.components.v1.iframe('https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn', width=1500 , height=800  , scrolling=0)
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
