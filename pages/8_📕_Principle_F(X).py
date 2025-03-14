@@ -32,11 +32,9 @@ with Control:
   iframe(frame = "https://monica.im/share/artifact?id=DF3TydyEV664kgsgbbySs3")
 
 with Mind:
-  # Mind_col1, Mind_col2  = st.columns(2)
-  Mind_col1,  Mind_col2 = st.tabs(["Mind_col1", "Mind_col2" ])
+  Mind_col1,  Mind_col2 = st.tabs(["คลิป", "Note" ])
   Mind_col1.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
   Mind_col2.components.v2.iframe(src="https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn", width=700, scrolling=False)
-
 
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
