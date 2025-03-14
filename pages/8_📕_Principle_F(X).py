@@ -32,9 +32,10 @@ with Control:
   iframe(frame = "https://monica.im/share/artifact?id=DF3TydyEV664kgsgbbySs3")
 
 with Mind:
-  with st.expander("See explanation"):
+  with st.expander("คลิป"):
     st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
-  iframe(frame = "https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")  
+  with st.expander("Note"):
+    iframe(frame = "https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")  
 
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
