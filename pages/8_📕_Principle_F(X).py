@@ -34,6 +34,8 @@ with Control:
 
 with Mind:
   st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
+  iframe(frame = "https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")
+
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
