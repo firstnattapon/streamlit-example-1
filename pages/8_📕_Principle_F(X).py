@@ -37,7 +37,7 @@ with Mind:
   with st.expander("คลิป"):
     col11.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
   with st.expander("Note"):
-    iframe(frame = "https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")  
+    col22.components.v1.iframe('https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn', width=1500 , height=800  , scrolling=0)
 
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
