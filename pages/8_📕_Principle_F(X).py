@@ -35,7 +35,7 @@ with Mind:
   with st.expander("คลิป"):
     st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
   with st.expander("Note"):
-    st.components.v1.iframe('https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn', width=1500 , height=800  , scrolling=0)
+    st.components.v1.iframe('https://monica.im/share/artifact?id=dKModf53bUtZswz2SbrNoJ', width=1500 , height=800  , scrolling=0)
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
