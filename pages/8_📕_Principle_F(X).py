@@ -33,7 +33,7 @@ with Control:
   iframe(frame = "https://monica.im/share/artifact?id=DF3TydyEV664kgsgbbySs3")
 
 with Mind:
-  pass
+  st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
