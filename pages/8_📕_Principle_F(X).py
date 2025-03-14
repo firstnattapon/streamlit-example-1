@@ -15,7 +15,6 @@ with tab1:
   iframe(frame = "https://monica.im/share/artifact?id=ybc5eexwsxVUDh4FbKSwjA")    
   st.link_button("(Price_Cycle) พื้นฐาน Global_macro ", "https://drive.google.com/file/d/1-bNM1gPEG7i-CW1TMd_6Cu6Z5132UjGZ/view?usp=sharing")
  
-
 with tab2:
   st.image("https://img.soccersuck.com/images/2025/01/21/455599160_312374775229941_5381968498530104178_n.jpg", width=1000)
 
@@ -33,10 +32,13 @@ with Control:
   iframe(frame = "https://monica.im/share/artifact?id=DF3TydyEV664kgsgbbySs3")
 
 with Mind:
-  st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
-  iframe(frame = "https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")
-
+  Mind_col1, Mind_col2  = st.columns(2)
+  Mind_col1.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
+  Mind_col2.components.v1.iframe("https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn", width=1500 , height=800  , scrolling=0)
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
   st.write('https://www.mindmeister.com/app/map/3178532454?m=outline')
+
+
+
