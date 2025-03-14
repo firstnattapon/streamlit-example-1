@@ -32,9 +32,11 @@ with Control:
   iframe(frame = "https://monica.im/share/artifact?id=DF3TydyEV664kgsgbbySs3")
 
 with Mind:
-  with st.expander("คลิป"):
+  col11, col22, col33 = st.columns(3)
+
+  col11.with st.expander("คลิป"):
     st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
-  with st.expander("Note"):
+  col22.with st.expander("Note"):
     iframe(frame = "https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")  
 
 
