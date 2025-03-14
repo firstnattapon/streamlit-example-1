@@ -4,7 +4,7 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Principle_F(X)", page_icon="📕" , layout="wide")
 
-@st.cache_data
+# @st.cache_data
 def iframe ( frame = ''):
   src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
