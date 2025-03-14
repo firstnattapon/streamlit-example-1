@@ -32,7 +32,8 @@ with Control:
   iframe(frame = "https://monica.im/share/artifact?id=DF3TydyEV664kgsgbbySs3")
 
 with Mind:
-  st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
+  with st.expander("See explanation"):
+    st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
   iframe(frame = "https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")  
 
 
