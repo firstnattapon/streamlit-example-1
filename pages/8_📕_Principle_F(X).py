@@ -34,7 +34,7 @@ with Control:
 with Mind:
   Mind_col1,  Mind_col2 = st.tabs(["คลิป", "Note" ])
   Mind_col1.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
-  # Mind_col2.st.components.v2.iframe(src="https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")
+  Mind_col2.components.v2.iframe(src="https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")
 
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
