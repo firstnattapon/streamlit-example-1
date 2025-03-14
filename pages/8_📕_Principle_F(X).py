@@ -35,7 +35,7 @@ with Mind:
   col11, col22, col33 = st.columns(3)
 
   with st.expander("คลิป"):
-    col11.st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
+    col11.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
   with st.expander("Note"):
     iframe(frame = "https://monica.im/share/artifact?id=wBtgUhDcA94wLY7mD9PmRn")  
 
