@@ -9,10 +9,10 @@ def iframe ( frame = ''):
   src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
 
-tab1,  Control , Mind  ,   tab2, tab3 , tab4  = st.tabs(["tab1", "Control" , "Mind"  ,"tab2", "tab3" , "tab4"  ])
+main,  Control , Mind  ,   tab2, tab3 , tab4  = st.tabs(["Main", "Control" , "Mind"  ,"tab2", "tab3" , "tab4"  ])
 
-with tab1:
-  iframe(frame = "https://monica.im/share/artifact?id=ybc5eexwsxVUDh4FbKSwjA")    
+with main:
+  iframe(frame = "https://monica.im/share/artifact?id=seKBNUZRU9wGxiT9pN5pBm")    
   st.link_button("(Price_Cycle) พื้นฐาน Global_macro ", "https://drive.google.com/file/d/1-bNM1gPEG7i-CW1TMd_6Cu6Z5132UjGZ/view?usp=sharing")
  
 with tab2:
