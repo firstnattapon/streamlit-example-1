@@ -190,7 +190,7 @@ def un_16 (df_pc_pe =[]):
 
   return  a_x
   
-Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS'])
+Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS' , 'NVTS'])
 list_from_string = eval(Ticker_input)
 data = un_16(list_from_string)
 for i in list_from_string :
