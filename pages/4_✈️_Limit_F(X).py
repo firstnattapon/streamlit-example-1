@@ -224,6 +224,10 @@ with tab5:
     NVTS_act_js = int(json.loads(NVTS_act)["field{}".format(6) ])
     plot( Ticker = 'NVTS'  , act =  NVTS_act_js  )
 
+import streamlit.components.v1 as components
+channel_id_log = 2329127
+write_api_key_log = 'V10DE0HKR4JKB014'
+client_log = thingspeak.Channel(channel_id_log, write_api_key_log)
 with cf_log:
     t_0 = 1.26 * 6.88 * 10.07 * 39.61 * 3.05
     t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice']
@@ -237,3 +241,9 @@ with cf_log:
     st.write ('now_pv' , number)
     st.write ('____')
     st.write ( 'net_cf' , number - (9500 + ln)) ##แก้
+    client_log.update(  {'field3': number - (9500 + ln) } )
+    components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+
+    
+
+    
