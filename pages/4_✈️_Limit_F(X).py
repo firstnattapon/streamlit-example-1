@@ -241,7 +241,9 @@ with cf_log:
     st.write ('now_pv' , number)
     st.write ('____')
     st.write ( 'net_cf' , number - (9500 + ln)) ##แก้
-    client_log.update(  {'field3': number - (9500 + ln) } )
+    if st.button("client_log"):
+        client_log.update(  {'field3': number - (9500 + ln) } )
+    st.write ('____')
     components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
 
     
