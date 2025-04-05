@@ -32,7 +32,7 @@ NVTS_ASSET_LAST = client_2.get_field_last(field='field5')
 NVTS_ASSET_LAST = eval(json.loads(NVTS_ASSET_LAST)['field5'])
 
 
-def NEGG(entry = 1.26 , ref = 1.26  ):
+def NEGG(entry = 25.20 , ref = 25.20  ):
     try:
         entry  = entry ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
         if entry < 10000 :
@@ -269,7 +269,7 @@ def NVTS(entry = 3.05 , ref = 3.05  ):
     except:pass
 
 
-x_1 = st.number_input('ราคา_NEGG_1.26' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
+x_1 = st.number_input('ราคา_NEGG_1.26 , 25.20' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
 x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker('FFWM').fast_info['lastPrice']   ) 
 x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
 x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
