@@ -228,7 +228,7 @@ import streamlit.components.v1 as components
 channel_id_log = 2329127
 write_api_key_log = 'V10DE0HKR4JKB014'
 client_log = thingspeak.Channel(channel_id_log, write_api_key_log)
-with cf_log:
+with cf_log: 
     t_0 = 1.26 * 6.88 * 10.07 * 39.61 * 3.05
     t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice']
     ln =  -1500 * np.log ( t_0 / t_n)
@@ -237,12 +237,12 @@ with cf_log:
     st.write ('t_0' , t_0)
     st.write ('t_n' , t_n)
     st.write ('fix' , ln)
-    st.write ('pv' , 9500 + ln) ### แก้
+    st.write ('pv' , 10500 + ln) ### แก้
     st.write ('now_pv' , number)
     st.write ('____')
-    st.write ( 'net_cf' , number - (9500 + ln)) ##แก้
+    st.write ( 'net_cf' , number - (10500 + ln)) ##แก้
     if st.button("add_logcf"):
-        client_log.update(  {'field4': number - (9500 + ln) } )
+        client_log.update(  {'field4': number - (10500 + ln) } ) ### แก้
     st.write ('____')
     components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/4?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
 
