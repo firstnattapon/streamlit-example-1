@@ -245,7 +245,7 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
     st.write('____')
 
 
-with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0  ):
-  pass
+with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
+   st.write('____') 
 
 
