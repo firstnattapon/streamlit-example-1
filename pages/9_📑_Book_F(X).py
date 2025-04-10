@@ -264,6 +264,6 @@ with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ปร�
    st.write('____') 
 
 with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
-   st.write('____') 
+   st.write('____')  
 
 
