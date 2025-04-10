@@ -254,6 +254,9 @@ with st.expander("Book : margin of safety : ส่วนเผื่อเพื
 with st.expander("Book : The Intelligent Investor  : ลงทุนแบบเน้นคุณค่า " , expanded = 0 ):
    st.write('____') 
 
+with st.expander("Book : The Alchemy of Finance  : จอร์จ โซรอส " , expanded = 0 ):
+   st.write('____') 
+
 with st.expander("Book :Capital in the Twenty-First Century : ทุนนิยมในศตวรรษที่ 21" , expanded = 0 ):
    st.write('____') 
 
