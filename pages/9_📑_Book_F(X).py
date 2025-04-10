@@ -10,7 +10,7 @@ import pandas as pd
 st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
 
 
-with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น" , expanded= 1  ):
+with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น" , expanded= 0  ):
   
   
   st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
@@ -243,4 +243,9 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
   with tab20:
     iframe(frame = "https://monica.im/share/chat?shareId=oznm4bVmlX7D61Rn")
     st.write('____')
+
+
+with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0  ):
+  pass
+
 
