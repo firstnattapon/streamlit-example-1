@@ -245,10 +245,10 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
     st.write('____')
 
 
-with st.expander("Book : หลักการ : Principles" , expanded = 0 ):
+with st.expander("Book : Principles : หลักการ" , expanded = 0 ):
    st.write('____') 
 
-with st.expander("Book : ทุนนิยมในศตวรรษที่ 21 : Capital in the Twenty-First Century" , expanded = 0 ):
+with st.expander("Book :Capital in the Twenty-First Century : ทุนนิยมในศตวรรษที่ 21" , expanded = 0 ):
    st.write('____') 
 
 with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ประวัติศาสตร์เงิน" , expanded = 0 ):
