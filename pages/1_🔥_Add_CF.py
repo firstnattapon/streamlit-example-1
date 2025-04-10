@@ -277,7 +277,7 @@ x_5 = st.number_input('ราคา_NVTS_3.05', step=0.01, value=yf.Ticker('NVTS
 
 st.write("_____") 
 
-z_1 = st.number_input('Adjust', step=1 , value = -250)   
+z_1 = st.number_input('Adjust', step=1 , value = -0)   
 
 st.write("_____") 
 
