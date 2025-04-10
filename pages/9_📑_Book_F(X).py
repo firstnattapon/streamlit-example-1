@@ -10,7 +10,7 @@ import pandas as pd
 st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
 
 
-with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น"):
+with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น" , expanded= 1  ):
   
   
   st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
