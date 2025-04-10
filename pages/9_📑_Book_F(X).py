@@ -244,6 +244,8 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
     iframe(frame = "https://monica.im/share/chat?shareId=oznm4bVmlX7D61Rn")
     st.write('____')
 
+with st.expander("Book : ทุนนิยมในศตวรรษที่ 21 : Capital in the Twenty-First Century" , expanded = 0 ):
+   st.write('____') 
 
 with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
    st.write('____') 
