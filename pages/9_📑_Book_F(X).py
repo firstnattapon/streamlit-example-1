@@ -247,7 +247,7 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
 with st.expander("Book : ทุนนิยมในศตวรรษที่ 21 : Capital in the Twenty-First Century" , expanded = 0 ):
    st.write('____') 
 
-with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard" : ประวัติศาสตร์เงิน" , expanded = 0 ):
+with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ประวัติศาสตร์เงิน" , expanded = 0 ):
    st.write('____') 
 
 with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
