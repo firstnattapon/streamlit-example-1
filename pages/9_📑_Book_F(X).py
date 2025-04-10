@@ -255,7 +255,8 @@ with st.expander("Book : The Intelligent Investor  : ลงทุนแบบเ
    st.write('____') 
 
 with st.expander("Book : The Alchemy of Finance  : จอร์จ โซรอส " , expanded = 0 ):
-   st.write('____') 
+  st.video('https://www.youtube.com/watch?v=wek-SSkDxGg') 
+  st.write('____') 
 
 with st.expander("Book :Capital in the Twenty-First Century : ทุนนิยมในศตวรรษที่ 21" , expanded = 0 ):
    st.write('____') 
