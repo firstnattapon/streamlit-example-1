@@ -272,7 +272,7 @@ with st.expander("Book : the power of now : พลังแห่งจิตป
    st.write('____')  
 
 
-st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1000 , height=1500  , scrolling=0)
+st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1100 , height=1500  , scrolling=0)
 
 
 
