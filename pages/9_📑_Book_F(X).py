@@ -9,9 +9,7 @@ import pandas as pd
 
 st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
 
-st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1500 , height=800  , scrolling=0)
 st.write('____')
-
 
 with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น & Mastering the Market Cycle : เหนือกว่าวัฏจักรการลงทุน " , expanded= 0  ):
   
@@ -272,5 +270,12 @@ with st.expander("Book :  Start with Why(How, What) : เริ่มต้น�
 
 with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
    st.write('____')  
+
+
+st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1500 , height=200  , scrolling=0)
+
+
+
+
 
 
