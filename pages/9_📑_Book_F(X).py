@@ -10,7 +10,7 @@ import pandas as pd
 st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
 
 
-with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น" , expanded= 0  ):
+with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น & Mastering the Market Cycle : เหนือกว่าวัฏจักรการลงทุน " , expanded= 0  ):
   
   
   st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
@@ -244,8 +244,7 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
     iframe(frame = "https://monica.im/share/chat?shareId=oznm4bVmlX7D61Rn")
     st.write('____')
 
-
-with st.expander("Book : Principles : หลักการ" , expanded = 0 ):
+with st.expander("Book : Principles : หลักการ (ทุกอย่างมีระบบของมัน)" , expanded = 0 ):
    st.write('____') 
 
 with st.expander("Book : margin of safety : ส่วนเผื่อเพื่อความปลอดภัย " , expanded = 0 ):
@@ -263,6 +262,10 @@ with st.expander("Book :Capital in the Twenty-First Century : ทุนนิย
 
 with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ประวัติศาสตร์เงิน" , expanded = 0 ):
    st.write('____') 
+
+with st.expander("Book :  Start with Why(How, What) : เริ่มต้นด้วยทำไม & Start with the End in Mind (Stephen Covey) : mental blueprint  " , expanded = 0 ):
+   st.write('____')  
+
 
 with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
    st.write('____')  
