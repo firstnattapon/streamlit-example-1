@@ -249,28 +249,29 @@ with st.expander("Book : Principles : หลักการ (ทุกอย่�
    st.write('____') 
 
 with st.expander("Book : margin of safety : ส่วนเผื่อเพื่อความปลอดภัย " , expanded = 0 ):
-   st.write('____') 
+  st.video('https://www.youtube.com/watch?v=sQgn7xb_TOo') 
+  st.write('____') 
 
 with st.expander("Book : The Intelligent Investor  : ลงทุนแบบเน้นคุณค่า " , expanded = 0 ):
-   st.write('____') 
+  st.video('https://www.youtube.com/watch?v=PL2Ji-Wb7bc') 
+  st.write('____') 
 
 with st.expander("Book : The Alchemy of Finance  : จอร์จ โซรอส " , expanded = 0 ):
   st.video('https://www.youtube.com/watch?v=wek-SSkDxGg') 
   st.write('____') 
 
 with st.expander("Book :Capital in the Twenty-First Century : ทุนนิยมในศตวรรษที่ 21" , expanded = 0 ):
-   st.write('____') 
+  st.video('https://www.youtube.com/watch?v=4W7_Ei_EzQs') 
+  st.write('____') 
 
 with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ประวัติศาสตร์เงิน" , expanded = 0 ):
-   st.write('____') 
+  st.write('____') 
 
 with st.expander("Book :  Start with Why(How, What) : เริ่มต้นด้วยทำไม & Start with the End in Mind (Stephen Covey) : mental blueprint  " , expanded = 0 ):
-   st.write('____')  
-
+  st.write('____')  
 
 with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
-   st.write('____')  
-
+  st.write('____')  
 
 st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1100 , height=1000  , scrolling=0)
 
