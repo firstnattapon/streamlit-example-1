@@ -10,6 +10,10 @@ import pandas as pd
 st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
 
 
+iframe(frame = "https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW")
+st.write('____')
+
+
 with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น & Mastering the Market Cycle : เหนือกว่าวัฏจักรการลงทุน " , expanded= 0  ):
   
   
