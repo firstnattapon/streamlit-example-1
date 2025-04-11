@@ -9,8 +9,7 @@ import pandas as pd
 
 st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="wide")
 
-
-iframe(frame = "https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW")
+st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1500 , height=800  , scrolling=0)
 st.write('____')
 
 
