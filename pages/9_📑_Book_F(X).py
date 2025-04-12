@@ -245,7 +245,8 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
     st.write('____')
 
 with st.expander("Book : Principles : หลักการ (ทุกอย่างมีระบบของมัน)" , expanded = 0 ):
-   st.write('____') 
+  st.video('  https://www.youtube.com/watch?v=D6LRTghic7c') 
+  st.write('____') 
 
 with st.expander("Book : margin of safety : ส่วนเผื่อเพื่อความปลอดภัย " , expanded = 0 ):
   st.video('https://www.youtube.com/watch?v=sQgn7xb_TOo') 
