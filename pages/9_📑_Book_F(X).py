@@ -260,8 +260,9 @@ with st.expander("Book : The Alchemy of Finance  : จอร์จ โซรอ�
   st.write('____') 
 
 with st.expander("Book :Capital in the Twenty-First Century : ทุนนิยมในศตวรรษที่ 21" , expanded = 0 ):
-  st.video('https://www.youtube.com/watch?v=Fe42UWyqk-Y') 
   st.video('https://www.youtube.com/watch?v=4W7_Ei_EzQs') 
+  st.video('https://www.youtube.com/watch?v=Fe42UWyqk-Y') 
+  st.video('https://www.youtube.com/watch?v=DaDB-hLgakE') 
   st.write('____') 
 
 with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ประวัติศาสตร์เงิน" , expanded = 0 ):
