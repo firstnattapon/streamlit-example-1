@@ -276,6 +276,7 @@ with st.expander("Book :  Start with Why(How, What) : เริ่มต้น�
 
 with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
   st.video('https://www.youtube.com/watch?v=WfGfBFWPQKA') 
+  st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8') 
   st.write('____')  
 
 st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1100 , height=1000  , scrolling=0)
