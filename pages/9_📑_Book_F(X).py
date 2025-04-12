@@ -15,7 +15,7 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
   
   
   st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
-  
+  st.video('  https://www.youtube.com/watch?v=APegVkFI39w')  
   
   st.markdown('''
   ###### สรุปบทที่ 1: การคิดระดับสอง
@@ -262,15 +262,18 @@ with st.expander("Book : The Alchemy of Finance  : จอร์จ โซรอ�
 
 with st.expander("Book :Capital in the Twenty-First Century : ทุนนิยมในศตวรรษที่ 21" , expanded = 0 ):
   st.video('https://www.youtube.com/watch?v=4W7_Ei_EzQs') 
+  st.video('https://www.youtube.com/watch?v=Fe42UWyqk-Y') 
   st.write('____') 
 
 with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ประวัติศาสตร์เงิน" , expanded = 0 ):
+  st.video('  https://www.youtube.com/watch?v=pU1HSLhwhig') 
   st.write('____') 
 
 with st.expander("Book :  Start with Why(How, What) : เริ่มต้นด้วยทำไม & Start with the End in Mind (Stephen Covey) : mental blueprint  " , expanded = 0 ):
   st.write('____')  
 
 with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
+  st.video('https://www.youtube.com/watch?v=WfGfBFWPQKA') 
   st.write('____')  
 
 st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1100 , height=1000  , scrolling=0)
