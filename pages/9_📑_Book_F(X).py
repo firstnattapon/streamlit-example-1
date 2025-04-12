@@ -13,7 +13,7 @@ st.set_page_config(page_title="Book_F(X)", page_icon="📑" , layout="centered")
 with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น & Mastering the Market Cycle : เหนือกว่าวัฏจักรการลงทุน " , expanded= 0  ):
   
   st.video('https://www.youtube.com/watch?v=APegVkFI39w')  
-  st.video('  https://www.youtube.com/watch?v=KWG5kKgBHxE') 
+  st.video('https://www.youtube.com/watch?v=KWG5kKgBHxE') 
   st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
 
   st.markdown('''
