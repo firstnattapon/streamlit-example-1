@@ -15,7 +15,7 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
   
   
   st.video('https://www.youtube.com/watch?v=9neT0cTCbgY')
-  st.video('  https://www.youtube.com/watch?v=APegVkFI39w')  
+  st.video('https://www.youtube.com/watch?v=APegVkFI39w')  
   
   st.markdown('''
   ###### สรุปบทที่ 1: การคิดระดับสอง
@@ -261,12 +261,12 @@ with st.expander("Book : The Alchemy of Finance  : จอร์จ โซรอ�
   st.write('____') 
 
 with st.expander("Book :Capital in the Twenty-First Century : ทุนนิยมในศตวรรษที่ 21" , expanded = 0 ):
-  st.video('https://www.youtube.com/watch?v=4W7_Ei_EzQs') 
   st.video('https://www.youtube.com/watch?v=Fe42UWyqk-Y') 
+  st.video('https://www.youtube.com/watch?v=4W7_Ei_EzQs') 
   st.write('____') 
 
 with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ประวัติศาสตร์เงิน" , expanded = 0 ):
-  st.video('https://www.youtube.com/watch?v=APegVkFI39w') 
+  st.video('https://www.youtube.com/watch?v=_0dvh8D5OPg') 
   st.video('https://www.youtube.com/watch?v=pU1HSLhwhig') 
   st.write('____') 
 
