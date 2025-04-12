@@ -273,6 +273,7 @@ with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ปร�
   st.write('____') 
 
 with st.expander("Book :  Start with Why(How, What) : เริ่มต้นด้วยทำไม & Start with the End in Mind (Stephen Covey) : mental blueprint  " , expanded = 0 ):
+  st.video('https://www.youtube.com/watch?v=Y-qJiiF0wPM')
   st.write('____')  
 
 with st.expander("Book : the power of now : พลังแห่งจิตปัจจุบัน " , expanded = 0 ):
