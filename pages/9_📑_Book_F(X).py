@@ -267,6 +267,7 @@ with st.expander("Book :Capital in the Twenty-First Century : ทุนนิย
 with st.expander("Book : 1 The Bitcoin Standard & 2 The Fiat Standard : ประวัติศาสตร์เงิน" , expanded = 0 ):
   st.video('https://www.youtube.com/watch?v=_0dvh8D5OPg') 
   st.video('https://www.youtube.com/watch?v=pU1HSLhwhig') 
+  st.video('https://www.youtube.com/watch?v=Mn4UACzMVa0') 
   st.write('____') 
 
 with st.expander("Book :  Start with Why(How, What) : เริ่มต้นด้วยทำไม & Start with the End in Mind (Stephen Covey) : mental blueprint  " , expanded = 0 ):
