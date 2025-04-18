@@ -242,7 +242,7 @@ with cf_log:
     st.write ('____')
     st.write ( 'net_cf' , number - (10750 + ln)) ##แก้
     if st.button("add_logcf"):
-        client_log.update(  {'field4': number - (10750 + ln) } ) ### แก้
+        # client_log.update(  {'field4': number - (10750 + ln) } ) ### แก้
         client_log.update(  {'field5': 10750  } ) ### แก้
         # client_log.update(  {'field5': 10750 -(number - (10750 + ln)) } ) ### แก้
     st.write ('____')
