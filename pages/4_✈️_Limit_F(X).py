@@ -243,7 +243,7 @@ with cf_log:
     st.write ( 'net_cf' , number - (10750 + ln)) ##แก้
     if st.button("add_logcf"):
         client_log.update(  {'field4': number - (10750 + ln) } ) ### แก้
-    if st.button("cost"):
+    if st.button("add_cost"):
         client_log.update(  {'field5': 10750 -(number - (10750 + ln)) } ) ### แก้
     st.write ('____')
     components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/4?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
