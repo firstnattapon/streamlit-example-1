@@ -45,7 +45,7 @@ client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json' )
 
 def Monitor (Ticker = 'FFWM' , field = 2 ):
     tickerData = yf.Ticker( Ticker)
-    tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
+    tickerData = round(tickerData.history(period= '2y' )[['Close']] , 3 )
     tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = tickerData[tickerData.index >= filter_date]
@@ -67,13 +67,13 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
 
 
 df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
-time.sleep(2)
+time.sleep(10)
 df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
-time.sleep(2)
+time.sleep(10)
 df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
-time.sleep(2)
+time.sleep(10)
 df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
-time.sleep(2)
+time.sleep(10)
 df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
 
 nex = 0 
