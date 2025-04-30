@@ -310,6 +310,11 @@ st.write("_____")
 if st.button("RERUN"):
   st.rerun()
 
+if st.button("stop"):
+  st.stop()
+
+
+
 # except:pass
 
 
