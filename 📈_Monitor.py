@@ -45,8 +45,8 @@ write_api_key_2 = 'IPSG3MMMBJEB9DY8'
 client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json' )
 
 
-def Monitor (Ticker = 'FFWM' , field = 2 ):
-    tickerData = yf.Ticker( Ticker , session=session)
+def Monitor (Ticker = 'FFWM' , field = 2 , S = session ):
+    tickerData = yf.Ticker( Ticker , session = S )
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
     tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
     filter_date = '2023-01-01 12:00:00+07:00'
@@ -68,11 +68,11 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     return df.tail(7) , fx_js
 
 
-df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
-df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
-df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
-df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
-df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
+df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2 , S = session)
+df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3 , S = session)
+df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4, S = session)
+df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5, S = session)
+df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6, S = session)
 
 nex = 0 
 Nex_day_sell = 0
