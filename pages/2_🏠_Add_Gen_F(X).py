@@ -10,10 +10,12 @@ st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
 tickerData = yf.Ticker( 'FFWM')
 tickerData = round(tickerData.download(period= '5d' )[['Close']] , 3 )
+recent_data = yf.download("AAPL", period="5d")
+
 # tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 # filter_date = '2023-01-01 12:00:00+07:00'
 # tickerData = tickerData[tickerData.index >= filter_date]
-st.write(tickerData) 
+st.write(recent_data) 
 
 
 @njit(fastmath=True)  # เพิ่ม fastmath=True เพื่อให้ compiler optimize มากขึ้น
