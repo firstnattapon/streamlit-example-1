@@ -11,7 +11,7 @@ from curl_cffi import requests
 session = requests.Session(impersonate="chrome")
 
 
-tickerData = yf.Ticker('NEGG' ,session = session )
+tickerData = yf.Ticker('FFWM' ,session = session )
 tickerData = round(tickerData.history(period= '5y' )[['Close']] , 3 )
 # tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 # filter_date = '2023-01-01 12:00:00+07:00'
