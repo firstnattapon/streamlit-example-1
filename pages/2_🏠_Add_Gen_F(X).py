@@ -9,7 +9,7 @@ from numba import njit
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
 tickerData = yf.Ticker( 'FFWM')
-# tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
+tickerData = round(tickerData.history(period= '3MO' )[['Close']] , 3 )
 # tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 # filter_date = '2023-01-01 12:00:00+07:00'
 # tickerData = tickerData[tickerData.index >= filter_date]
