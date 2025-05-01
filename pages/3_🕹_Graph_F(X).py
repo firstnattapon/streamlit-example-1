@@ -7,10 +7,11 @@ import yfinance as yf
 import json
 import time
 import pytz
+from curl_cffi import requests
+session = requests.Session(impersonate="chrome")
 
 
-
-tickerData = yf.Ticker('FFWM')
+tickerData = yf.Ticker('FFWM' ,session = session )
 tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
 tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 filter_date = '2023-01-01 12:00:00+07:00'
