@@ -1,3 +1,27 @@
+import streamlit as st
+import numpy as np
+import datetime
+import thingspeak
+import pandas as pd
+import yfinance as yf
+import json
+import time
+import pytz
+
+
+
+tickerData = yf.Ticker('FFWM')
+tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
+tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+filter_date = '2023-01-01 12:00:00+07:00'
+tickerData = tickerData[tickerData.index >= filter_date]
+
+
+st.write(tickerData) 
+
+
+
+
 # import numpy as np
 # import pandas as pd
 # import yfinance as yf
