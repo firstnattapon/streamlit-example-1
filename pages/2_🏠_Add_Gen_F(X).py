@@ -9,7 +9,7 @@ from numba import njit
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
 tickerData = yf.Ticker( 'FFWM')
-tickerData = round(tickerData.download(period= '5d' )[['Close']] , 3 )
+# tickerData = round(tickerData.download(period= '5d' )[['Close']] , 3 )
 recent_data = yf.download("AAPL", period="5d")
 
 # tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
