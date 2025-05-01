@@ -8,9 +8,9 @@ import time
 from numba import njit
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
-tickerData = yf.Ticker( 'FFWM')
-# tickerData = round(tickerData.download(period= '5d' )[['Close']] , 3 )
-recent_data = yf.download("AAPL", period="5d")
+# tickerData = yf.Ticker( 'FFWM')
+# tickerData = round(tickerData.download(period= 'ma' )[['Close']] , 3 )
+recent_data = yf.download("AAPL", period="max")
 
 # tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 # filter_date = '2023-01-01 12:00:00+07:00'
