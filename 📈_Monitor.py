@@ -52,11 +52,12 @@ def Monitor (Ticker = 'FFWM' , field = 2 , S = session ):
     # filter_date = '2023-01-01 12:00:00+07:00'
     # tickerData = tickerData[tickerData.index >= filter_date]
 
-   tickerData = round(tickerData.history(period='max')[['Close']], 3)
+    tickerData = round(tickerData.history(period='max')[['Close']], 3)
     if tickerData.index.tz is None:
         tickerData.index = tickerData.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
     else:
         tickerData.index = tickerData.index.tz_convert('Asia/Bangkok')
+      
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = tickerData[tickerData.index >= filter_date]
   
