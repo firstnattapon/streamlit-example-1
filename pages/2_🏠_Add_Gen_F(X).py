@@ -8,18 +8,6 @@ import time
 from numba import njit
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 
-# tickerData = yf.Ticker( 'FFWM')
-# tickerData = round(tickerData.download(period= 'ma' )[['Close']] , 3 )
-
-
-# tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-# filter_date = '2023-01-01 12:00:00+07:00'
-# tickerData = tickerData[tickerData.index >= filter_date]
-data = yf.download("AAPL", start="2020-01-01", end="2025-01-01")
-
-
-st.write(data) 
-
 
 @njit(fastmath=True)  # เพิ่ม fastmath=True เพื่อให้ compiler optimize มากขึ้น
 def calculate_optimized(action_list, price_list, fix=500):
