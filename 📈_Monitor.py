@@ -15,7 +15,7 @@ client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
 
 # if st.button("stop"):
-#   st.stop()
+st.stop()
 
 def sell (asset = 0 , fix_c=1500 , Diff=60):
   s1 =  (1500-Diff) /asset
