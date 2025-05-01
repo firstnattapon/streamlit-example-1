@@ -15,9 +15,10 @@ st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
 # tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 # filter_date = '2023-01-01 12:00:00+07:00'
 # tickerData = tickerData[tickerData.index >= filter_date]
-apple = yf.Ticker("AAPL")
+data = yf.download("AAPL", start="2020-01-01", end="2021-01-01")
 
-st.write(apple.history(period="1d")) 
+
+st.write(data) 
 
 
 @njit(fastmath=True)  # เพิ่ม fastmath=True เพื่อให้ compiler optimize มากขึ้น
