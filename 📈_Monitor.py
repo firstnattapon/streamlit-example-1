@@ -36,8 +36,6 @@ write_api_key_2 = 'IPSG3MMMBJEB9DY8'
 client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json' )
 
 def Monitor (Ticker = 'FFWM' , field = 2  ):
-    # from curl_cffi import requests
-    # session = requests.Session(impersonate="chrome")
   
     tickerData = yf.Ticker(Ticker )
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
@@ -86,7 +84,6 @@ if Nex_day_ :
     st.write( "Nex_day_sell = " , Nex_day_sell)
     
 st.write("_____") 
-
 
 col13, col16, col14, col15, col17, col18, col19 = st.columns(7)
 
