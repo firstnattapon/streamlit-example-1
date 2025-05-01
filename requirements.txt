@@ -7,3 +7,4 @@ plotly
 stocksymbol
 telebot
 numba
+alpha_vantage
