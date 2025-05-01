@@ -1,11 +1,16 @@
 import streamlit as st
 import numpy as np
-import datetime
+# import datetime
 import thingspeak
 import pandas as pd
 import yfinance as yf
 import json
 import time
+
+from alpha_vantage.timeseries import TimeSeries
+from datetime import datetime
+import pytz
+
 
 st.set_page_config(page_title="Monitor", page_icon="📈")
 
@@ -49,7 +54,25 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = tickerData[tickerData.index >= filter_date]
-    
+
+
+    # ต้องมี API key สำหรับ Alpha Vantage
+    api_key = '1VHY3T2TEUQ25263'  # ต้องใส่ API key ของคุณที่นี่
+    # สร้าง TimeSeries object
+    ts = TimeSeries(key=api_key, output_format='pandas')
+    # ดึงข้อมูลแบบรายวัน
+    data , meta_data = ts.get_daily_adjusted(symbol=Ticker, outputsize='full')
+    # เลือกเฉพาะคอลัมน์ close และปัดเศษ
+    tickerData = round(data[['4. close']].rename(columns={'4. close': 'Close'}), 3)
+    # แปลง index เป็น datetime และเปลี่ยน timezone
+    tickerData.index = pd.to_datetime(tickerData.index)
+    bangkok_tz = pytz.timezone('Asia/Bangkok')
+    tickerData.index = tickerData.index.tz_localize('UTC').tz_convert(bangkok_tz)
+    # กรองข้อมูลตั้งแต่วันที่กำหนด
+    filter_date = '2023-01-01 12:00:00+07:00'
+    tickerData = tickerData[tickerData.index >= filter_date]
+
+  
     fx = client_2.get_field_last(field='{}'.format(field))
     fx_js = int(json.loads(fx)["field{}".format(field)])
     rng = np.random.default_rng(fx_js)
