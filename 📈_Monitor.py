@@ -6,6 +6,7 @@ import pandas as pd
 import yfinance as yf
 import json
 import time
+import pytz
 
 from curl_cffi import requests
 session = requests.Session(impersonate="chrome")
