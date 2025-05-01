@@ -12,7 +12,7 @@ session = requests.Session(impersonate="chrome")
 
 
 tickerData = yf.Ticker('NEGG' ,session = session )
-tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
+tickerData = round(tickerData.history(period= '5y' )[['Close']] , 3 )
 # tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
 # filter_date = '2023-01-01 12:00:00+07:00'
 # tickerData = tickerData[tickerData.index >= filter_date]
