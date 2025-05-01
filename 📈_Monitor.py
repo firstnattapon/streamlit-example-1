@@ -48,19 +48,19 @@ client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json' )
 
 def Monitor (Ticker = 'FFWM' , field = 2 , S = session ):
     tickerData = yf.Ticker( Ticker , session = S )
-    # tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
+    tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
     # tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
     # filter_date = '2023-01-01 12:00:00+07:00'
     # tickerData = tickerData[tickerData.index >= filter_date]
 
-    tickerData = round(tickerData.history(period='max')[['Close']], 3)
-    if tickerData.index.tz is None:
-        tickerData.index = tickerData.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
-    else:
-        tickerData.index = tickerData.index.tz_convert('Asia/Bangkok')
+    # tickerData = round(tickerData.history(period='max')[['Close']], 3)
+    # if tickerData.index.tz is None:
+    #     tickerData.index = tickerData.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+    # else:
+    #     tickerData.index = tickerData.index.tz_convert('Asia/Bangkok')
       
-    filter_date = '2023-01-01 12:00:00+07:00'
-    tickerData = tickerData[tickerData.index >= filter_date]
+    # filter_date = '2023-01-01 12:00:00+07:00'
+    # tickerData = tickerData[tickerData.index >= filter_date]
   
     fx = client_2.get_field_last(field='{}'.format(field))
     fx_js = int(json.loads(fx)["field{}".format(field)])
