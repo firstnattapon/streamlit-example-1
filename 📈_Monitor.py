@@ -194,8 +194,8 @@ if Limut_Order_NEGG :
       client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
       col3.write(NEGG_ASSET_LAST - b9) 
 
-  pv_negg =  yf.Ticker('NEGG',session=session ).fast_info['lastPrice'] * x_3 
-  st.write(yf.Ticker('NEGG',session=session ).fast_info['lastPrice'] , pv_negg  ,'(',  pv_negg - 1500 ,')',  )
+  pv_negg =  yf.Ticker('NEGG'  ).fast_info['lastPrice'] * x_3 
+  st.write(yf.Ticker('NEGG'  ).fast_info['lastPrice'] , pv_negg  ,'(',  pv_negg - 1500 ,')',  )
   
   col4, col5 , col6  = st.columns(3)
   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
