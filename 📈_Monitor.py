@@ -5,6 +5,7 @@ import thingspeak
 import pandas as pd
 import yfinance as yf
 import json
+from curl_cffi import requests
 
 st.set_page_config(page_title="Monitor", page_icon="📈")
 channel_id = 2528199
@@ -36,8 +37,10 @@ write_api_key_2 = 'IPSG3MMMBJEB9DY8'
 client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json' )
 
 def Monitor (Ticker = 'FFWM' , field = 2  ):
+
+    session = requests.Session(impersonate="chrome")
   
-    tickerData = yf.Ticker(Ticker )
+    tickerData = yf.Ticker(Ticker ,session= session )
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
     tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
     filter_date = '2023-01-01 12:00:00+07:00'
@@ -180,8 +183,9 @@ if Limut_Order_NEGG :
       client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
       col3.write(NEGG_ASSET_LAST - b9) 
 
-  pv_negg =  yf.Ticker('NEGG').fast_info['lastPrice'] * x_3 
-  st.write(yf.Ticker('NEGG').fast_info['lastPrice'] , pv_negg  ,'(',  pv_negg - 1500 ,')',  )
+  session_NEGG = requests.Session(impersonate="chrome")
+  pv_negg =  yf.Ticker('NEGG' , session = session_NEGG).fast_info['lastPrice'] * x_3 
+  st.write(yf.Ticker('NEGG'   , session = session_NEGG).fast_info['lastPrice'] , pv_negg  ,'(',  pv_negg - 1500 ,')',  )
   
   col4, col5 , col6  = st.columns(3)
   st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10  )
@@ -206,8 +210,9 @@ if Limut_Order_FFWM :
       client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
       col9.write(FFWM_ASSET_LAST - b12) 
 
-  pv_ffwm =    yf.Ticker('FFWM').fast_info['lastPrice'] * x_4
-  st.write(yf.Ticker('FFWM').fast_info['lastPrice'] , pv_ffwm ,'(',  pv_ffwm - 1500 ,')', )
+  session_FFWM = requests.Session(impersonate="chrome")
+  pv_ffwm =    yf.Ticker('session_FFWM').fast_info['lastPrice'] * x_4
+  st.write(yf.Ticker('session_FFWM').fast_info['lastPrice'] , pv_ffwm ,'(',  pv_ffwm - 1500 ,')', )
   
   col10, col11 , col12  = st.columns(3)
   st.write(  'buy' , '   ', 'A', s12 , 'P' , s11  , 'C'  , s13  )
@@ -231,9 +236,10 @@ if Limut_Order_RIVN :
     if GO_RIVN_sell :
       client.update(  {'field3': RIVN_ASSET_LAST - u5  } )
       col99.write(RIVN_ASSET_LAST - u5) 
-
-  pv_rivn =    yf.Ticker('RIVN').fast_info['lastPrice'] * x_5
-  st.write(yf.Ticker('RIVN').fast_info['lastPrice'] , pv_rivn ,'(',  pv_rivn - 1500 ,')', )
+      
+  session_RIVN = requests.Session(impersonate="chrome")
+  pv_rivn =    yf.Ticker('RIVN', session = session_RIVN).fast_info['lastPrice'] * x_5
+  st.write(yf.Ticker('RIVN'    , session = session_RIVN).fast_info['lastPrice'] , pv_rivn ,'(',  pv_rivn - 1500 ,')', )
   
   col100 , col111 , col122  = st.columns(3)
   st.write(  'buy' , '   ', 'A', u2 , 'P' , u1  , 'C'  , u3  )
@@ -258,8 +264,9 @@ if Limut_Order_APLS :
       client.update(  {'field4': APLS_ASSET_LAST - p5  } )
       col9999.write(APLS_ASSET_LAST - p5) 
 
-  pv_apls =    yf.Ticker('APLS').fast_info['lastPrice'] * x_6
-  st.write(yf.Ticker('APLS').fast_info['lastPrice'] , pv_apls ,'(',  pv_apls - 1500 ,')', )
+  session_APLS = requests.Session(impersonate="chrome")
+  pv_apls =    yf.Ticker('APLS' , session  = session_APLS).fast_info['lastPrice'] * x_6
+  st.write(yf.Ticker('APLS' , session  = session_APLS).fast_info['lastPrice'] , pv_apls ,'(',  pv_apls - 1500 ,')', )
   
   col1000 , col1111 , col1222  = st.columns(3)
   st.write(  'buy' , '   ', 'A', p2 , 'P' , p1  , 'C'  , p3  )
@@ -284,9 +291,10 @@ if Limut_Order_NVTS:
         if GO_NVTS_sell:
           client.update({'field5': NVTS_ASSET_LAST - p8})
           col_nvts3.write(NVTS_ASSET_LAST - p8) 
-    
-    pv_nvts = yf.Ticker('NVTS').fast_info['lastPrice'] * x_7
-    st.write(yf.Ticker('NVTS').fast_info['lastPrice'], pv_nvts, '(', pv_nvts - 1500, ')')
+  
+    session_NVTS = requests.Session(impersonate="chrome")
+    pv_nvts = yf.Ticker('NVTS', session = session_NVTS).fast_info['lastPrice'] * x_7
+    st.write(yf.Ticker('NVTS', session = session_NVTS).fast_info['lastPrice'], pv_nvts, '(', pv_nvts - 1500, ')')
     
     col_nvts4, col_nvts5, col_nvts6 = st.columns(3)
     st.write('buy', '   ', 'A', u8, 'P', u7  , 'C',u9 )  # Fixed variable order
@@ -297,9 +305,7 @@ if Limut_Order_NVTS:
             client.update({'field5': NVTS_ASSET_LAST + u8})
             col_nvts6.write(NVTS_ASSET_LAST  + u8) 
 
-
 st.write("_____")
-
 
 if st.button("RERUN"):
   st.rerun()
