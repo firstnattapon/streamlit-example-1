@@ -50,7 +50,9 @@ def Monitor (Ticker = 'FFWM' , field = 2 , S = session ):
   
     tickerData = yf.Ticker( Ticker , session = S )
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
-    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+    # tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+    tickerData.index = tickerData.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = tickerData[tickerData.index >= filter_date]
 
