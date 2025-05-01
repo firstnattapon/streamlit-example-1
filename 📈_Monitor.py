@@ -5,14 +5,11 @@ import thingspeak
 import pandas as pd
 import yfinance as yf
 import json
-import time
-# import pytz
 
 st.set_page_config(page_title="Monitor", page_icon="📈")
 channel_id = 2528199
 write_api_key = '2E65V8XEIPH9B2VV'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
-
 
 def sell (asset = 0 , fix_c=1500 , Diff=60):
   s1 =  (1500-Diff) /asset
@@ -39,10 +36,10 @@ write_api_key_2 = 'IPSG3MMMBJEB9DY8'
 client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json' )
 
 def Monitor (Ticker = 'FFWM' , field = 2  ):
-    from curl_cffi import requests
-    session = requests.Session(impersonate="chrome")
-
-    tickerData = yf.Ticker(Ticker , session = session)
+    # from curl_cffi import requests
+    # session = requests.Session(impersonate="chrome")
+  
+    tickerData = yf.Ticker(Ticker )
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
     tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
     filter_date = '2023-01-01 12:00:00+07:00'
@@ -62,7 +59,6 @@ def Monitor (Ticker = 'FFWM' , field = 2  ):
     rng = np.random.default_rng(fx_js)
     df['action'] = rng.integers(2, size = len(df))
     return df.tail(7) , fx_js
-
 
 df_7   , fx_js    = Monitor(Ticker = 'FFWM', field = 2  )
 df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3  )
@@ -90,7 +86,6 @@ if Nex_day_ :
     st.write( "Nex_day_sell = " , Nex_day_sell)
     
 st.write("_____") 
-
 
 
 col13, col16, col14, col15, col17, col18, col19 = st.columns(7)
