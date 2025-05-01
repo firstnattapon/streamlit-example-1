@@ -54,14 +54,24 @@ def Monitor (Ticker = 'FFWM' , field = 2 , S = session ):
     # filter_date = '2023-01-01 12:00:00+07:00'
     # tickerData = tickerData[tickerData.index >= filter_date]
 
-    tickerData = yf.Ticker(Ticker , session=S)
-    tickerData = round(tickerData.history(period='max')[['Close']], 3)
-    if tickerData.index.tz is None:
-        tickerData.index = tickerData.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+    tickerData = yf.Ticker(Ticker, session=S)
+    hist = tickerData.history(period='max')
+    
+    if hist.empty:
+        print(f"No data found for ticker {Ticker}")
     else:
-        tickerData.index = tickerData.index.tz_convert('Asia/Bangkok')
-    filter_date = '2023-01-01 12:00:00+07:00'
-    tickerData = tickerData[tickerData.index >= filter_date]
+        df = round(hist[['Close']], 3)
+        # ตรวจสอบและแปลง index เป็น DatetimeIndex ถ้ายังไม่ใช่
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index)
+        # หลังจากนี้จึงเช็คและแปลง timezone
+        if df.index.tz is None:
+            df.index = df.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+        else:
+            df.index = df.index.tz_convert('Asia/Bangkok')
+        filter_date = '2023-01-01 12:00:00+07:00'
+        tickerData = df[df.index >= filter_date]
+  
 
     fx = client_2.get_field_last(field='{}'.format(field))
     fx_js = int(json.loads(fx)["field{}".format(field)])
