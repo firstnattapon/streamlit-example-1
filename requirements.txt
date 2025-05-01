@@ -8,3 +8,4 @@ stocksymbol
 telebot
 numba
 curl_cffi
+pytz
