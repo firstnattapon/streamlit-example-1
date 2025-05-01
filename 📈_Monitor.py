@@ -7,8 +7,6 @@ import yfinance as yf
 import json
 import time
 
-
-
 st.set_page_config(page_title="Monitor", page_icon="📈")
 
 channel_id = 2528199
@@ -46,7 +44,9 @@ client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json' )
 
 
 def Monitor (Ticker = 'FFWM' , field = 2 ):
-    tickerData = yf.Ticker( Ticker)
+    from curl_cffi import requests
+    session = requests.Session(impersonate="chrome")
+    tickerData = yf.Ticker( Ticker , session=session)
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
     tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
     filter_date = '2023-01-01 12:00:00+07:00'
