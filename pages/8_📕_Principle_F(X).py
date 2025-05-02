@@ -12,7 +12,7 @@ def iframe ( frame = ''):
 Main,  Control , Mind  ,   tab2, tab3 , tab4  = st.tabs(["Main", "Control" , "Mind"  ,"tab2", "tab3" , "tab4"  ])
 
 with Main:
-  iframe(frame = "https://monica.im/share/artifact?id=SgmC4Yoj7Pw2JvJ8hbfu3Q")    
+  iframe(frame = "https://monica.im/share/artifact?id=9ZkVULFxD58aFRgywPN3Xa")    
   st.link_button("(Price_Cycle) พื้นฐาน Global_macro ", "https://drive.google.com/file/d/1-bNM1gPEG7i-CW1TMd_6Cu6Z5132UjGZ/view?usp=sharing")
  
 with tab2:
