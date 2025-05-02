@@ -1,91 +1,19 @@
-import streamlit as st
-import pandas as pd
-import requests
-import re
-from datetime import datetime, date
+import yfinance as yf
+from curl_cffi import requests as curl_requests
+import yfinance_cookie_patch
 
-# ฟังก์ชันดึงราคาปิดรายวันจาก Yahoo Finance
-def fetch_yahoo_history(symbol: str, start_date: str, end_date: str):
-    session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                      'AppleWebKit/537.36 (KHTML, like Gecko) '
-                      'Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': f'https://finance.yahoo.com/quote/{symbol}/history'
-    })
-
-    html = session.get(f'https://finance.yahoo.com/quote/{symbol}/history').text
-    m = re.search(r'CrumbStore":{"crumb":"(?P<crumb>[^"]+)"}', html)
-    if not m:
-        raise RuntimeError("ไม่พบ crumb ใน HTML")
-
-    crumb = m.group('crumb').replace('\\u002F', '/')
-
-    period1 = int(datetime.strptime(start_date, "%Y-%m-%d").timestamp())
-    period2 = int(datetime.strptime(end_date, "%Y-%m-%d").timestamp())
-
-    params = {
-        'period1': period1,
-        'period2': period2,
-        'interval': '1d',
-        'events': 'history',
-        'crumb': crumb
-    }
-    url = f'https://query2.finance.yahoo.com/v8/finance/chart/{symbol}'
-    resp = session.get(url, params=params)
-
-    if resp.status_code != 200:
-        st.error(f"Error: Received status code {resp.status_code}")
-        st.error(resp.text)
-        return None
-
-    try:
-        data = resp.json()['chart']['result'][0]
-        ts = data['timestamp']
-        close = data['indicators']['quote'][0]['close']
-        df = pd.DataFrame({
-            'Date': [datetime.fromtimestamp(t) for t in ts],
-            'Close': close
-        }).set_index('Date')
-        return df
-    except Exception as e:
-        st.error("ไม่สามารถแปลงข้อมูล JSON ได้")
-        st.error(str(e))
-        return None
-
-# ส่วนของ Streamlit UI
-st.set_page_config(page_title="Yahoo Finance Price Fetcher", page_icon="📈")
-st.title("📈 ดึงราคาปิดรายวันจาก Yahoo Finance (requests + crumb)")
-
-symbol = st.text_input('กรอกชื่อ Symbol (เช่น SPY, FFWM, NEGG, RIVN, APLS, NVTS)', 'SPY')
-col1, col2 = st.columns(2)
-with col1:
-    start_date = st.date_input('เริ่มวันที่', value=date(2023, 1, 1))
-with col2:
-    end_date = st.date_input('ถึงวันที่', value=date(2023, 12, 31))
-
-if st.button("ดึงข้อมูล"):
-    try:
-        df = fetch_yahoo_history(symbol, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
-        if df is not None and not df.empty:
-            st.success(f"ดึงข้อมูลสำเร็จ {len(df)} แถว")
-            st.dataframe(df)
-            st.line_chart(df['Close'])
-        else:
-            st.warning("ไม่พบข้อมูลหรือไม่มีข้อมูลในช่วงเวลานี้")
-    except Exception as e:
-        st.error(f"เกิดข้อผิดพลาด: {e}")
-
-st.markdown("""
----
-**หมายเหตุ**
-- หากดึงข้อมูลไม่ได้ อาจเกิดจาก Yahoo Finance เปลี่ยนโครงสร้างเว็บหรือ block bot
-- Symbol ต้องตรงกับ Yahoo Finance (เช่น SPY, AAPL, TSLA, ฯลฯ)
-- สามารถนำ DataFrame ที่ได้ไปประยุกต์ใช้ต่อกับระบบของคุณได้เลย
-""")
+yfinance_cookie_patch.patch_yfdata_cookie_basic()
 
 
+def main():
+    session = curl_requests.Session(impersonate="chrome")
+    ticker = yf.Ticker("AAPL", session=session)
+    df = ticker.history(raise_errors=True)
+    print(df)
 
+
+if __name__ == "__main__":
+    main()
 
 
 
