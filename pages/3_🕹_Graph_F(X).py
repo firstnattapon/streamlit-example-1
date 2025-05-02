@@ -1,6 +1,15 @@
 import yfinance as yf
 from curl_cffi import requests as curl_requests
 import yfinance_cookie_patch
+import streamlit as st
+import numpy as np
+import datetime
+import thingspeak
+import pandas as pd
+import yfinance as yf
+import json
+import time
+import pytz
 
 yfinance_cookie_patch.patch_yfdata_cookie_basic()
 
@@ -10,6 +19,7 @@ def main():
     ticker = yf.Ticker("AAPL", session=session)
     df = ticker.history(raise_errors=True)
     print(df)
+    st.write(df) 
 
 
 if __name__ == "__main__":
