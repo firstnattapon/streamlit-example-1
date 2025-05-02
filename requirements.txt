@@ -9,3 +9,4 @@ telebot
 numba
 curl_cffi
 pytz
+alpha_vantage
