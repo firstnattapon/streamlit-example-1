@@ -9,7 +9,7 @@ def iframe ( frame = ''):
   src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
 
-Main,  Control , Mind  ,   tab2, tab3 , tab4  = st.tabs(["Main", "Control" , "Mind"  ,"tab2", "tab3" , "tab4"  ])
+Main,  Control , Mind  ,   tab2, tab3 , tab4  , tap5 = st.tabs(["Main", "Control" , "Mind"  ,"tab2", "tab3" , "tab4"  , "tab5" ])
 
 with Main:
   iframe(frame = "https://monica.im/share/artifact?id=9ZkVULFxD58aFRgywPN3Xa")    
@@ -36,6 +36,9 @@ with Mind:
     st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8')
   with st.expander("Note"):
     st.components.v1.iframe('https://monica.im/share/artifact?id=dKModf53bUtZswz2SbrNoJ', width=1500 , height=800  , scrolling=0)
+
+with tab5:
+  iframe(frame = "https://monica.im/share/artifact?id=3hLbin8nTkbceW2aVvitoZ")
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
