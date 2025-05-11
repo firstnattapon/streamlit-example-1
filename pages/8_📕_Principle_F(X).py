@@ -29,7 +29,7 @@ with tab4:
 st.write('____')
 
 with Control:
-  iframe(frame = "https://monica.im/share/artifact?id=DF3TydyEV664kgsgbbySs3")
+  iframe(frame = "https://monica.im/share/artifact?id=kEuJ7iSugk9vb5FPuUJGwh")
 
 with Mind:
   with st.expander("คลิป"):
