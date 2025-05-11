@@ -9,7 +9,7 @@ def iframe ( frame = ''):
   src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
 
-Main,  Control , Mind  ,   tab2, tab3 , tab4  , tap5 = st.tabs(["Main", "Control" , "Mind"  ,"tab2", "tab3" , "tab4"  , "tab5" ])
+Main,  Control , Mind  ,   tab2, tab3 , tab4  , tab5 = st.tabs(["Main", "Control" , "Mind"  ,"tab2", "tab3" , "tab4"  , "tab5" ])
 
 with Main:
   iframe(frame = "https://monica.im/share/artifact?id=9ZkVULFxD58aFRgywPN3Xa")    
