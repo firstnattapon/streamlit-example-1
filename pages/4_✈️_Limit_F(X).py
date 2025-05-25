@@ -180,7 +180,11 @@ with Ref_index_Log:
 
 
 with Burn_Cash:
-    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
+
+    Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS' , 'NVTS'])
+    STOCK_SYMBOLS = eval(Ticker_input)
+    
+    # STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
     
     buffers = {
         'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).buffer
