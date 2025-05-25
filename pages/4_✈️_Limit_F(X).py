@@ -180,9 +180,76 @@ with Ref_index_Log:
 
 
 with Burn_Cash:
+    ans = ['SSII',
+         'LUNR',
+         'QXO',
+         'QUBT',
+         'BULL',
+         'SOUN',
+         'JANX',
+         'NMAX',
+         'DJT',
+         'CLSK',
+         'VKTX',
+         'UPST',
+         'SMCI',
+         'RXRX',
+         'VERA',
+         'ENVX',
+         'GPCR',
+         'GIBO',
+         'DYN',
+         'EWTX',
+         'WRD',
+         'QS',
+         'POWL',
+         'TWST',
+         'IMVT',
+         'BHVN',
+         'APLS',
+         'BEAM',
+         'SRPT',
+         'ZETA',
+         'BILL',
+         'ARWR',
+         'MBLY',
+         'RDDT',
+         'DNLI',
+         'PCVX',
+         'CRNX',
+         'ELF',
+         'MDB',
+         'CELH',
+         'MRNA',
+         'RVLV',
+         'ONTO',
+         'GLBE',
+         'IBTA',
+         'FLYW',
+         'CAMT',
+         'CLDX',
+         'IDYA',
+         'FORM',
+         'AMR',
+         'ACLS',
+         'AGIO',
+         'AMKR',
+         'AZTA',
+         'LEGN',
+         'ATKR',
+         'LGIH',
+         'TER',
+         'DECK',
+         'SHOO',
+         'CCS',
+         'ROG',
+         'REGN']
 
-    Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS' , 'NVTS'])
-    STOCK_SYMBOLS = eval(Ticker_input)
+    number = st.number_input('Ticker_input', value=0 , step =1 , min_value=0  ) 
+    title = st.text_input('Ticker_Yahoo', ans[number])
+    Ticker_s = ['SPY' , 'QQQM' , 'GLD' , title ]
+    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , title ]
+
     
     # STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
     
