@@ -344,7 +344,7 @@ with tab5:
     
     NVTS_Check_Gen_M = st.checkbox('NVTS_Add_Gen_M')
     if NVTS_Check_Gen_M :    
-        input = st.number_input('Insert a number{}'.format(6),step=1 ,  key=6 )
+        input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
         re_ = st.button("Rerun_Gen_M_tab5")
         if re_ :
             client.update(  {'field6': input } )
