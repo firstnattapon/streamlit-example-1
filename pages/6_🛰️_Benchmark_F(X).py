@@ -153,22 +153,8 @@ def Un_15 (Ticker = '' ):
     di = di.dif.values
     return  a_1 , a_0 , a_3 , di
 
-ans = ['VERV',
- 'SMCI',
- 'RLAY',
- 'MRVI',
- 'DYN',
- 'EVLV',
- 'IOVA',
- 'NVTS',
- 'QS',
- 'GYRE',
- 'AGL',
- 'SFIX',
- 'SYRE',
- 'LAB',
- 'RXRX']
- 
+ans = ['SSII', 'LUNR', 'QXO', 'QUBT', 'BULL', 'SOUN', 'JANX', 'NMAX', 'DJT', 'CLSK']
+
 col1, col2  = st.columns(2)
 number = col2.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
 title = col1.text_input('Ticker_Yahoo', ans[number])
