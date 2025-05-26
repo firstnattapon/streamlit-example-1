@@ -180,16 +180,13 @@ with Ref_index_Log:
 
 
 with Burn_Cash:
-    ans = ['SSII', 'LUNR', 'QXO', 'QUBT', 'BULL', 'SOUN', 'JANX', 'NMAX', 'DJT', 'CLSK']
+    # ans = ['SSII', 'LUNR', 'QXO', 'QUBT', 'BULL', 'SOUN', 'JANX', 'NMAX', 'DJT', 'CLSK']
+    # number = st.number_input('Ticker_input', value=0 , step =1 , min_value=0  ) 
+    # title = st.text_input('Ticker_Yahoo', ans[number])
+    # Ticker_s = ['SPY' , 'QQQM' , 'GLD' , title ]
+    # STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , title ]
 
-
-    number = st.number_input('Ticker_input', value=0 , step =1 , min_value=0  ) 
-    title = st.text_input('Ticker_Yahoo', ans[number])
-    Ticker_s = ['SPY' , 'QQQM' , 'GLD' , title ]
-    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , title ]
-
-    
-    # STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
+    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , 'QXO' ]
     
     buffers = {
         'buffer_{}'.format(symbol) : Limit_fx(symbol, act=-1).buffer
