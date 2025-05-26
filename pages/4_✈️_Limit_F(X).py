@@ -134,7 +134,7 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-tab1, tab2, tab3, tab4, tab5 , tab5  ,  Burn_Cash  , Ref_index_Log , cf_log   = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS', 'QXO' ,  'Burn_Cash' ,  'Ref_index_Log' , 'cf_log' ])
+tab1, tab2, tab3, tab4, tab5 , tab6  ,  Burn_Cash  , Ref_index_Log , cf_log   = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS', 'QXO' ,  'Burn_Cash' ,  'Ref_index_Log' , 'cf_log' ])
 
 
 with Ref_index_Log:
