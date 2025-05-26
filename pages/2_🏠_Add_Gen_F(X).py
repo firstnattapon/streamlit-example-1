@@ -235,7 +235,7 @@ def Gen_fx (Ticker =  'FFWM' ,  field = 2 ):
 
 
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["FFWM", "NEGG", "RIVN", "APLS", "NVTS"])
+tab1, tab2, tab3, tab4, tab5 , tab6  = st.tabs(["FFWM", "NEGG", "RIVN", "APLS", "NVTS" , 'QXO'])
 
 with tab1:
     # FFWM_Check_Gen = st.checkbox('FFWM_Add_Gen')
@@ -356,5 +356,24 @@ with tab5:
         if NVTS_njit_ :
             ix =  feed_data(data= 'NVTS')
             client.update(  {'field6': ix } )
+            st.write(ix)     
+    st.write("_____")
+
+
+with tab6:
+    QXO_Check_Gen_M = st.checkbox('QXO_Add_Gen_M')
+    if QXO_Check_Gen_M :    
+        input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
+        re_ = st.button("Rerun_Gen_M_tab6")
+        if re_ :
+            client.update(  {'field7': input } )
+            st.write(input)  
+
+    QXO_njit = st.checkbox('QXO_njit')
+    if QXO_njit : 
+        QXO_njit_ = st.button("QXO_njit_")
+        if QXO_njit_ :
+            ix =  feed_data(data= 'QXO')
+            client.update(  {'field7': ix } )
             st.write(ix)     
     st.write("_____")
