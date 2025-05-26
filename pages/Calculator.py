@@ -133,6 +133,13 @@ st.write("f(x): {}".format(fx_js_4) ," , " , "Production: {}".format(    np.arou
 st.table(df_7_4)
 st.write("_____")
 
+df_7_5 , fx_js_5  = Monitor(Ticker = 'QXO', field = 7)
+st.write( 'QXO')
+st.write("f(x): {}".format(fx_js_5) ," , " , "Production: {}".format(    np.around(Production('QXO'), 2) ))
+st.table(df_7_5)
+st.write("_____")
+
+
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
 st.write("***RE > 60 USD")
 st.stop()
