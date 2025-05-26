@@ -134,11 +134,11 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-tab1, tab2, tab3, tab4, tab5  ,  Burn_Cash  , Ref_index_Log , cf_log   = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' ,  'Burn_Cash' ,  'Ref_index_Log' , 'cf_log' ])
+tab1, tab2, tab3, tab4, tab5 , tab5  ,  Burn_Cash  , Ref_index_Log , cf_log   = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS', 'QXO' ,  'Burn_Cash' ,  'Ref_index_Log' , 'cf_log' ])
 
 
 with Ref_index_Log:
-    tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' ]
+    tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , 'QXO' ]
     def get_prices(tickers, start_date):
         df_list = []
         for ticker in tickers:
@@ -229,6 +229,11 @@ with tab5:
     NVTS_act = client.get_field_last(field='{}'.format(6))
     NVTS_act_js = int(json.loads(NVTS_act)["field{}".format(6) ])
     plot( Ticker = 'NVTS'  , act =  NVTS_act_js  )
+
+with tab6:
+    QXO_act = client.get_field_last(field='{}'.format(6))
+    QXO_act_js = int(json.loads(QXO_act)["field{}".format(7) ])
+    plot( Ticker = 'QXO'  , act =  QXO_act_js  )
 
 import streamlit.components.v1 as components
 channel_id_log = 2329127
