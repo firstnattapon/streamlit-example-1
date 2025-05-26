@@ -232,7 +232,7 @@ with tab5:
 
 with tab6:
     QXO_act = client.get_field_last(field='{}'.format(6))
-    QXO_act_js = int(json.loads(QXO_act)["field{}".format(7) ])
+    QXO_act_js = int(json.loads(QXO_act)["field{}".format(6) ])
     plot( Ticker = 'QXO'  , act =  QXO_act_js  )
 
 import streamlit.components.v1 as components
