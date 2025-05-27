@@ -125,7 +125,7 @@ with tab7:
     df, df_QXO = CF_Graph(entry=19.00 , ref=x_8 , Fixed_Asset_Value =x_5 , Cash_Balan=x_6)
     as_1 = df.set_index('Asset_Price')
     as_1_py = px.line(as_1)
-    as_1_py.add_vline(x=x_7, line_width=1, line_dash="dash")
+    as_1_py.add_vline(x=x_8, line_width=1, line_dash="dash")
     as_1_py.add_vline(x=19.00 , line_width=0.1)
     st.plotly_chart(as_1_py)
     st.write('rf:', df_QXO)
