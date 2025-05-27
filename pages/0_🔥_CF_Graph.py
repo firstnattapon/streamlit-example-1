@@ -131,5 +131,5 @@ with tab7:
     st.write('rf:', df_QXO)
     st.write("_____")
 
-st.write( 'sum_rf:',  (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS , df_QXO ), 'asset', x_5*6,   'Cash', x_6*6, 'Lv_Cash', -0)
+st.write( 'sum_rf:',  (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS + df_QXO ), 'asset', x_5*6,   'Cash', x_6*6, 'Lv_Cash', -0)
 st.write('real_rf:', (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS + df_QXO) - 0)
