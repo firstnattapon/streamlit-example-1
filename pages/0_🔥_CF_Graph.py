@@ -57,7 +57,7 @@ def CF_Graph(entry = 1.26 , ref = 1.26 , Fixed_Asset_Value =1500. , Cash_Balan =
             return   df[['Asset_Price', 'Cash_Balan' , 'net_pv' ,'Fixed_Asset_Value']] ,  df_2[-1]
     except:pass
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([ 'DATA' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS'])
+tab1, tab2, tab3, tab4, tab5, tab6 , tab7 = st.tabs([ 'DATA' ,"FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS' , 'QXO' ])
 
 with tab1:
     x_1 = st.number_input('ราคา_NEGG_1.26 , 25.20' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
@@ -65,6 +65,8 @@ with tab1:
     x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
     x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] )
     x_7 = st.number_input('ราคา_NVTS_3.05', step=0.01 ,   value = yf.Ticker('NVTS').fast_info['lastPrice'])
+    x_8 = st.number_input('ราคา_QXO_19.00', step=0.01 ,   value = yf.Ticker('QXO').fast_info['lastPrice'])
+
     x_5 = st.number_input('Fixed_Asset_Value', step=0.01 ,   value = 1500. ) 
     x_6 = st.number_input('Cash_Balan', step=0.01 ,   value = 650. ) 
     st.write("_____") 
@@ -119,5 +121,15 @@ with tab6:
     st.write('rf:', df_NVTS)
     st.write("_____")
 
-st.write( 'sum_rf:',  (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS), 'asset', x_5*5,   'Cash', x_6*5, 'Lv_Cash', -0)
-st.write('real_rf:', (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS) -0)
+with tab7:
+    df, df_QXO = CF_Graph(entry=19.00 , ref=x_8 , Fixed_Asset_Value =x_5 , Cash_Balan=x_6)
+    as_1 = df.set_index('Asset_Price')
+    as_1_py = px.line(as_1)
+    as_1_py.add_vline(x=x_7, line_width=1, line_dash="dash")
+    as_1_py.add_vline(x=19.00 , line_width=0.1)
+    st.plotly_chart(as_1_py)
+    st.write('rf:', df_QXO)
+    st.write("_____")
+
+st.write( 'sum_rf:',  (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS , df_QXO ), 'asset', x_5*6,   'Cash', x_6*6, 'Lv_Cash', -0)
+st.write('real_rf:', (df_FFWM + df_NEGG + df_RIVN + df_APLS + df_NVTS + df_QXO) - 0)
