@@ -277,10 +277,6 @@ with cf_log:
     
     st.write("_____") 
     
-    z_1 = st.number_input('Adjust', step=1 , value = -0)   
-    
-    st.write("_____") 
-    
     y_1 = st.number_input('FFWM_asset', step=0.01 , value = FFWM_ASSET_LAST ) 
     y_1 = y_1*x_2
     st.write(y_1) 
