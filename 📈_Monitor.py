@@ -65,7 +65,6 @@ df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5 )
 df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6 )
 df_7_5 , fx_js_5  = Monitor(Ticker = 'QXO', field = 7 )
 
-
 nex = 0
 Nex_day_sell = 0
 toggle = lambda x : 1 - x
@@ -158,7 +157,7 @@ APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
 NVTS_ASSET_LAST = client.get_field_last(field='field5')
 NVTS_ASSET_LAST = eval(json.loads(NVTS_ASSET_LAST)['field5'])
 
-QXO_ASSET_LAST = client.get_field_last(field='field6')
+QXO_ASSET_LAST = client.get_field_last(field='field6') ####
 if 'field6' in json.loads(QXO_ASSET_LAST):
     QXO_ASSET_LAST = eval(json.loads(QXO_ASSET_LAST)['field6'])
 else:
@@ -169,8 +168,9 @@ x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
 x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST   )
 x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST   )
 x_6 = col18.number_input('APLS_ASSET', step=0.001  , value= APLS_ASSET_LAST   )
-x_7 = col19.number_input('NVTS_ASSET', step=0.001  , value= NVTS_ASSET_LAST   )
-x_8 = col20.number_input('QXO_ASSET', step=0.001, value=QXO_ASSET_LAST)
+x_7 = col19.number_input('NVTS_ASSET', step=0.001  , value= NVTS_ASSET_LAST )
+x_8 = col20.number_input('QXO_ASSET', step=0.001   , value=QXO_ASSET_LAST)  
+col20.write("LV = 79 (1500 / 19.0)")
 
 
 st.write("_____")
