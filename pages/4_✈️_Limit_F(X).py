@@ -237,7 +237,8 @@ with tab6:
 
 
 with cf_log: 
-    st.write(' เงินที่ต้องจ่าย  =  -fix * ln( t0 / tn )')
+    st.write('')
+    st.write(' Rebalance   =  -fix * ln( t0 / tn )')
     
     
 
