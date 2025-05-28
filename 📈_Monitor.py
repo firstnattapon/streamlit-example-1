@@ -171,7 +171,7 @@ x_6 = col18.number_input('APLS_ASSET', step=0.001  , value= APLS_ASSET_LAST   )
 x_7 = col19.number_input('NVTS_ASSET', step=0.001  , value= NVTS_ASSET_LAST )
 
 QXO_OPTION = 79.
-QXO_REAL  =  col20.number_input('QXO_ASSET', step=0.001  , value=  QXO_ASSET_LAST)    
+QXO_REAL  =  col20.number_input('QXO_ASSET (LV:79@19.0)', step=0.001  , value=  QXO_ASSET_LAST)    
 x_8 =  QXO_OPTION  + QXO_REAL
 
 st.write("_____")
