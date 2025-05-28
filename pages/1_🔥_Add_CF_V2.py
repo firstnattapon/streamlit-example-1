@@ -69,7 +69,7 @@ y_5 = st.number_input('NVTS_asset', step=0.01, value= NVTS_ASSET_LAST)
 y_5 = y_5 * x_5
 st.write(y_5)
 
-y_6 = st.number_input('QXO_asset', step=0.01, value= QXO_ASSET_LAST)
+y_6 = st.number_input('QXO_asset', step=0.01, value= QXO_ASSET_LAST+79 ) # LV
 y_6 = y_6 * x_6
 st.write(y_6)
 
