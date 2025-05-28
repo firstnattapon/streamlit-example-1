@@ -267,6 +267,47 @@ with cf_log:
     
     QXO_ASSET_LAST = client_2.get_field_last(field='field6')
     QXO_ASSET_LAST = eval(json.loads(QXO_ASSET_LAST)['field6'])
+
+    x_1 = st.number_input('ราคา_NEGG_1.26 , 25.20' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
+    x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker('FFWM').fast_info['lastPrice']   ) 
+    x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
+    x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
+    x_5 = st.number_input('ราคา_NVTS_3.05', step=0.01, value=yf.Ticker('NVTS').fast_info['lastPrice'])
+    x_6 = st.number_input('ราคา_QXO_19.00', step=0.01, value=yf.Ticker('QXO').fast_info['lastPrice'])
+    
+    st.write("_____") 
+    
+    z_1 = st.number_input('Adjust', step=1 , value = -0)   
+    
+    st.write("_____") 
+    
+    y_1 = st.number_input('FFWM_asset', step=0.01 , value = FFWM_ASSET_LAST ) 
+    y_1 = y_1*x_2
+    st.write(y_1) 
+    
+    y_2 = st.number_input('NEGG_asset', step=0.01 , value = NEGG_ASSET_LAST  ) 
+    y_2 = y_2*x_1
+    st.write(y_2) 
+    
+    y_3 = st.number_input('RIVN_asset', step=0.01 , value = RIVN_ASSET_LAST  ) 
+    y_3 = y_3*x_3
+    st.write(y_3)
+    
+    y_4 = st.number_input('APLS_asset', step=0.01 , value = APLS_ASSET_LAST ) 
+    y_4 = y_4*x_4
+    st.write(y_4) 
+    
+    y_5 = st.number_input('NVTS_asset', step=0.01, value= NVTS_ASSET_LAST)
+    y_5 = y_5 * x_5
+    st.write(y_5)
+    
+    y_6 = st.number_input('QXO_asset', step=0.01, value= QXO_ASSET_LAST)
+    y_6 = y_6 * x_6
+    st.write(y_6)
+    
+    j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
+    st.write("_____") 
+    
     
     
     t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00
