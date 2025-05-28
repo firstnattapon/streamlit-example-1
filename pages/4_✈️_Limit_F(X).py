@@ -241,6 +241,34 @@ channel_id_log = 2329127
 write_api_key_log = 'V10DE0HKR4JKB014'
 client_log = thingspeak.Channel(channel_id_log, write_api_key_log)
 with cf_log: 
+    
+    channel_id = 2394198
+    write_api_key = 'OVZNYQBL57GJW5JF'
+    client = thingspeak.Channel(channel_id, write_api_key)
+    
+    channel_id_2 = 2528199
+    write_api_key_2 = '2E65V8XEIPH9B2VV'
+    client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json')
+    
+    FFWM_ASSET_LAST = client_2.get_field_last(field='field1')
+    FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
+    
+    NEGG_ASSET_LAST = client_2.get_field_last(field='field2')
+    NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
+    
+    RIVN_ASSET_LAST = client_2.get_field_last(field='field3')
+    RIVN_ASSET_LAST = eval(json.loads(RIVN_ASSET_LAST)['field3'])
+    
+    APLS_ASSET_LAST = client_2.get_field_last(field='field4')
+    APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
+    
+    NVTS_ASSET_LAST = client_2.get_field_last(field='field5')
+    NVTS_ASSET_LAST = eval(json.loads(NVTS_ASSET_LAST)['field5'])
+    
+    QXO_ASSET_LAST = client_2.get_field_last(field='field6')
+    QXO_ASSET_LAST = eval(json.loads(QXO_ASSET_LAST)['field6'])
+    
+    
     t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00
     t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice'] * yf.Ticker('QXO').info['currentPrice']
     ln =  -1500 * np.log ( t_0 / t_n)
