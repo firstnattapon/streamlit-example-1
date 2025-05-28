@@ -313,7 +313,8 @@ with cf_log:
     st.write("_____")
 
     
-    t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00
+    t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00 # แก้
+    
     t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice'] * yf.Ticker('QXO').info['currentPrice']
     ln =  -1500 * np.log ( t_0 / t_n)
 
@@ -336,24 +337,18 @@ with cf_log:
         button_ADD = st.button("ADD_CF")
         if button_ADD:    
             try:
-                client.update(  {'field1': net_cf , 'field2': net_cf / Product_cost , 'field3': j_1  }  )
+                client.update(  {'field1': net_cf , 'field2': net_cf / Product_cost , 'field3': j_1 , 'field4': Product_cost - net_cf }  )
                 st.write({'Cashflow': net_cf , 'Pure_Alpha': net_cf / Product_cost ,  'ฺBuffer': j_1  }) 
             except:pass
 
-    # if st.button("add_logcf"):
-    #     client_log.update(  {'field4': number - (Product_cost + ln) } ) ### แก้
-    # if st.button("add_cost"):
-    #     client_log.update(  {'field5': Product_cost -(number - (Product_cost + ln)) } ) ### แก้
-    st.write ('____')
-    components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/4?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-    components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/5?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-    
     st.write("_____")
     st.write("Cashflow") 
     components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
     st.write("_____")
     st.write("Pure_Alpha")
     components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+    components.iframe('https://thingspeak.mathworks.com/channels/2394198/charts/4?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+
     st.write("_____") 
     st.write("ฺBuffer")
     components.iframe('https://thingspeak.com/channels/2394198/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
