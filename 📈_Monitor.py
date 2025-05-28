@@ -6,7 +6,7 @@ import pandas as pd
 import yfinance as yf
 import json
 
-st.set_page_config(page_title="Monitor", page_icon="📈")
+st.set_page_config(page_title="Monitor", page_icon="📈" , layout="wide" )
 channel_id = 2528199
 write_api_key = '2E65V8XEIPH9B2VV'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
