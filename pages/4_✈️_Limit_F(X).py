@@ -300,20 +300,20 @@ with cf_log:
     y_6 = st.number_input('QXO_asset', step=0.01, value= QXO_ASSET_LAST)
     y_6 = y_6 * x_6
     st.write(y_6)
-    
-    j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
-    st.write("_____") 
-    
-    k_1 = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6) + j_1
-    st.write('pv:' , k_1) 
+
     st.write("_____")
 
-    
+    j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
+    k_1 = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6) + j_1
+    st.write('pv:' , k_1) 
+    number = st.number_input("now_pv" , k_1 )
+
+    st.write("_____")
+
     
     t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00
     t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice'] * yf.Ticker('QXO').info['currentPrice']
     ln =  -1500 * np.log ( t_0 / t_n)
-    number = st.number_input("now_pv")
 
     st.write ('t_0' , t_0)
     st.write ('t_n' , t_n)
