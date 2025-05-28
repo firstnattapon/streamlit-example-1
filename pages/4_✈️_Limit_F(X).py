@@ -302,11 +302,14 @@ with cf_log:
     st.write(y_6)
 
     st.write("_____")
-
-    j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
+    st.write("_____")
+    
+    Product_cost = st.number_input('Product_cost', step=0.01 , value = 10750 )
+    j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00 )
     number = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6) + j_1
     st.write('now_pv:' , number) 
-
+    
+    st.write("_____")
     st.write("_____")
 
     
@@ -317,14 +320,14 @@ with cf_log:
     st.write ('t_0' , t_0)
     st.write ('t_n' , t_n)
     st.write ('fix' , ln)
-    st.write ('pv' , 10750 + ln) ### แก้
+    st.write ('pv' , Product_cost + ln) ### แก้
     st.write ('now_pv' , number)
     st.write ('____')
-    st.write ( 'net_cf' , number - (10750 + ln)) ##แก้
+    st.write ( 'net_cf' , number - (Product_cost + ln)) ##แก้
     if st.button("add_logcf"):
-        client_log.update(  {'field4': number - (10750 + ln) } ) ### แก้
+        client_log.update(  {'field4': number - (Product_cost + ln) } ) ### แก้
     if st.button("add_cost"):
-        client_log.update(  {'field5': 10750 -(number - (10750 + ln)) } ) ### แก้
+        client_log.update(  {'field5': Product_cost -(number - (Product_cost + ln)) } ) ### แก้
     st.write ('____')
     components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/4?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
     components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/5?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
