@@ -304,8 +304,8 @@ with cf_log:
     st.write("_____")
 
     j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
-    k_1 = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6) + j_1
-    st.write('pv:' , k_1) 
+    number = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6) + j_1
+    st.write('now_pv:' , number) 
 
     st.write("_____")
 
@@ -318,7 +318,7 @@ with cf_log:
     st.write ('t_n' , t_n)
     st.write ('fix' , ln)
     st.write ('pv' , 10750 + ln) ### แก้
-    st.write ('now_pv' , k_1)
+    st.write ('now_pv' , number)
     st.write ('____')
     st.write ( 'net_cf' , number - (10750 + ln)) ##แก้
     if st.button("add_logcf"):
