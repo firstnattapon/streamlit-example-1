@@ -235,13 +235,14 @@ with tab6:
     QXO_act_js = int(json.loads(QXO_act)["field{}".format(7) ]) 
     plot( Ticker = 'QXO'  , act =  QXO_act_js  )
 
+
 import streamlit.components.v1 as components
 channel_id_log = 2329127
 write_api_key_log = 'V10DE0HKR4JKB014'
 client_log = thingspeak.Channel(channel_id_log, write_api_key_log)
 with cf_log: 
-    t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 
-    t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice']
+    t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00
+    t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice'] * yf.Ticker('QXO').info['currentPrice']
     ln =  -1500 * np.log ( t_0 / t_n)
     number = st.number_input("now_pv")
 
