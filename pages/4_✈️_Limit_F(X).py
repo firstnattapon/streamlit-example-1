@@ -323,16 +323,41 @@ with cf_log:
     st.write ('pv' , Product_cost + ln) ### แก้
     st.write ('now_pv' , number)
     st.write ('____')
-    st.write ( 'net_cf' , number - (Product_cost + ln)) ##แก้
-    if st.button("add_logcf"):
-        client_log.update(  {'field4': number - (Product_cost + ln) } ) ### แก้
-    if st.button("add_cost"):
-        client_log.update(  {'field5': Product_cost -(number - (Product_cost + ln)) } ) ### แก้
+    net_cf = number - (Product_cost + ln)
+    st.write ( 'net_cf' , net_cf ) ##แก้
+    st.write ('____')
+
+    if st.button("rerun"):
+        st.rerun()
+    st.write("_____") 
+        
+    Check_ADD = st.checkbox('ADD_CF ')
+    if Check_ADD :
+        button_ADD = st.button("ADD_CF")
+        if button_ADD:    
+            try:
+                client.update(  {'field1': net_cf , 'field2': net_cf / Product_cost , 'field3': j_1  }  )
+                st.write({'Cashflow': net_cf , 'Pure_Alpha': net_cf / Product_cost ,  'ฺBuffer': j_1  }) 
+            except:pass
+
+    # if st.button("add_logcf"):
+    #     client_log.update(  {'field4': number - (Product_cost + ln) } ) ### แก้
+    # if st.button("add_cost"):
+    #     client_log.update(  {'field5': Product_cost -(number - (Product_cost + ln)) } ) ### แก้
     st.write ('____')
     components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/4?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
     components.iframe('https://thingspeak.mathworks.com/channels/2329127/charts/5?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-
-
     
+    st.write("_____")
+    st.write("Cashflow") 
+    components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+    st.write("_____")
+    st.write("Pure_Alpha")
+    components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+    st.write("_____") 
+    st.write("ฺBuffer")
+    components.iframe('https://thingspeak.com/channels/2394198/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+    st.write("_____")
+        
 
     
