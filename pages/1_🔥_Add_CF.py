@@ -324,7 +324,7 @@ x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker(
 x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
 x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
 x_5 = st.number_input('ราคา_NVTS_3.05', step=0.01, value=yf.Ticker('NVTS').fast_info['lastPrice'])
-x_6 = st.number_input('ราคา_NVTS_19.00', step=0.01, value=yf.Ticker('QXO').fast_info['lastPrice'])
+x_6 = st.number_input('ราคา_QXO_19.00', step=0.01, value=yf.Ticker('QXO').fast_info['lastPrice'])
 
 st.write("_____") 
 
