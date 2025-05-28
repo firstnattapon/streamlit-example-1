@@ -304,7 +304,7 @@ with cf_log:
     st.write("_____")
     st.write("_____")
     
-    Product_cost = st.number_input('Product_cost', step=0.01 , value = 10750 )
+    Product_cost = st.number_input('Product_cost', step=0.01 , value = 10750. )
     j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00 )
     number = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6) + j_1
     st.write('now_pv:' , number) 
