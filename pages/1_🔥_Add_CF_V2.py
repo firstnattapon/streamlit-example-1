@@ -74,14 +74,12 @@ y_6 = y_6 * x_6
 st.write(y_6)
 
 st.write("_____")
-st.write("_____")
 
 Product_cost = st.number_input('Product_cost', step=0.01 , value = 10750. )
 j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00 )
 number = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6) + j_1
 st.write('now_pv:' , number) 
 
-st.write("_____")
 st.write("_____")
 
 
@@ -119,6 +117,7 @@ components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23f
 st.write("_____")
 st.write("Pure_Alpha")
 components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+st.write("Product_cost")
 components.iframe('https://thingspeak.mathworks.com/channels/2394198/charts/4?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
 
 st.write("_____") 
