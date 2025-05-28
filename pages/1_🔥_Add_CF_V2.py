@@ -124,5 +124,5 @@ components.iframe('https://thingspeak.mathworks.com/channels/2394198/charts/4?bg
 st.write("_____") 
 st.write("ฺBuffer")
 components.iframe('https://thingspeak.com/channels/2394198/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-    st.write("_____")
+    st.write("_____") 
         
