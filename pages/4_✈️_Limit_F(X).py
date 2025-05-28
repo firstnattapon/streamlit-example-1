@@ -304,6 +304,10 @@ with cf_log:
     j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00  )
     st.write("_____") 
     
+    k_1 = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6) + j_1
+    st.write('pv:' , k_1) 
+    st.write("_____")
+
     
     
     t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00
