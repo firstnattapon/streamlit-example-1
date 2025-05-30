@@ -143,7 +143,7 @@ df_7_6 , fx_js_6  = Monitor(Ticker = 'RXRX', field = 8)
 st.write( 'RXRX')
 st.write("f(x): {}".format(fx_js_6) ," , " , "Production: {}".format(    np.around(Production('RXRX'), 2) ))
 st.table(df_7_6)
-st.write("_____")
+st.write("_____") 
 
 
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
