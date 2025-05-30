@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Add_CF_V2", page_icon="🔥")
 
-
+ 
 channel_id_log = 2329127
 write_api_key_log = 'V10DE0HKR4JKB014'
 client_log = thingspeak.Channel(channel_id_log, write_api_key_log)
