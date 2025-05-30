@@ -40,12 +40,17 @@ NVTS_ASSET_LAST = eval(json.loads(NVTS_ASSET_LAST)['field5'])
 QXO_ASSET_LAST = client_2.get_field_last(field='field6')
 QXO_ASSET_LAST = eval(json.loads(QXO_ASSET_LAST)['field6'])
 
+RXRX_ASSET_LAST = client_2.get_field_last(field='field7')
+RXRX_ASSET_LAST = eval(json.loads(RXRX_ASSET_LAST)['field7'])
+
+
 x_1 = st.number_input('ราคา_NEGG_1.26 , 25.20' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
 x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker('FFWM').fast_info['lastPrice']   ) 
 x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
 x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
 x_5 = st.number_input('ราคา_NVTS_3.05', step=0.01, value=yf.Ticker('NVTS').fast_info['lastPrice'])
 x_6 = st.number_input('ราคา_QXO_19.00', step=0.01, value=yf.Ticker('QXO').fast_info['lastPrice'])
+x_7 = st.number_input('ราคา_RXRX_5.40', step=0.01, value=yf.Ticker('RXRX').fast_info['lastPrice'])
 
 st.write("_____") 
 
@@ -73,19 +78,23 @@ y_6 = st.number_input('QXO_asset', step=0.01, value= QXO_ASSET_LAST+79 ) # LV
 y_6 = y_6 * x_6
 st.write(y_6)
 
+y_7 = st.number_input('RXRX_asset', step=0.01, value= RXRX_ASSET_LAST+278 ) # LV
+y_7 = y_7 * x_7
+st.write(y_7)
+
 st.write("_____")
 
 Product_cost = st.number_input('Product_cost', step=0.01 , value = 10750. )
 j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00 )
-number = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6) + j_1
+number = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6 + y_6 ) + j_1
 st.write('now_pv:' , number) 
 
 st.write("_____")
 
 
-t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00 # แก้
+t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00 * 5.40 # แก้
 
-t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice'] * yf.Ticker('QXO').info['currentPrice']
+t_n = yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice'] * yf.Ticker('QXO').info['currentPrice']  * yf.Ticker('RXRX').info['currentPrice']
 ln =  -1500 * np.log ( t_0 / t_n)
 
 st.write ('t_0' , t_0)
