@@ -146,7 +146,6 @@ st.table(df_7_6)
 st.write("_____")
 
 
-
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
 st.write("***RE > 60 USD")
 st.stop()
