@@ -74,11 +74,11 @@ y_5 = st.number_input('NVTS_asset', step=0.01, value= NVTS_ASSET_LAST)
 y_5 = y_5 * x_5
 st.write(y_5)
 
-y_6 = st.number_input('QXO_asset', step=0.01, value= QXO_ASSET_LAST+79 ) # LV
+y_6 = st.number_input('QXO_asset', step=0.01, value= QXO_ASSET_LAST ) # LV
 y_6 = y_6 * x_6
 st.write(y_6)
 
-y_7 = st.number_input('RXRX_asset', step=0.01, value= RXRX_ASSET_LAST+278 ) # LV
+y_7 = st.number_input('RXRX_asset', step=0.01, value= RXRX_ASSET_LAST ) # LV
 y_7 = y_7 * x_7
 st.write(y_7)
 
@@ -100,7 +100,7 @@ ln =  -1500 * np.log ( t_0 / t_n)
 st.write ('t_0' , t_0)
 st.write ('t_n' , t_n)
 st.write ('fix' , ln)
-st.write ('pv' , Product_cost + ln) ### แก้
+st.write ('log_pv' , Product_cost + ln) ### แก้
 st.write ('now_pv' , number)
 st.write ('____')
 net_cf = number - (Product_cost + ln)
