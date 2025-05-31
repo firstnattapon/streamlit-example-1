@@ -64,6 +64,8 @@ df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4 )
 df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5 )
 df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6 )
 df_7_5 , fx_js_5  = Monitor(Ticker = 'QXO', field = 7 )
+df_7_6 , fx_js_6  = Monitor(Ticker = 'RXRX', field = 8 )
+
 
 nex = 0
 Nex_day_sell = 0
@@ -86,7 +88,7 @@ if Nex_day_ :
 
 st.write("_____")
 
-col13, col16, col14, col15, col17, col18, col19, col20 = st.columns(8)
+col13, col16, col14, col15, col17, col18, col19, col20, col21 = st.columns(9)
 
 x_2 = col16.number_input('Diff', step=1 , value= 60   )
 
@@ -139,7 +141,14 @@ if Start :
         if _QXO_ASSET:
             client.update({'field6': add_6})
             col13.write(add_6)
-
+    
+    thingspeak_7 = col13.checkbox('@_RXRX_ASSET')
+    if thingspeak_7:
+        add_7 = col13.number_input('@_RXRX_ASSET', step=0.001, value=0.)
+        _RXRX_ASSET = col13.button("GO!      ")
+        if _RXRX_ASSET:
+            client.update({'field7': add_7})
+            col13.write(add_7)
 
 
 FFWM_ASSET_LAST = client.get_field_last(field='field1')
@@ -157,11 +166,11 @@ APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
 NVTS_ASSET_LAST = client.get_field_last(field='field5')
 NVTS_ASSET_LAST = eval(json.loads(NVTS_ASSET_LAST)['field5'])
 
-QXO_ASSET_LAST = client.get_field_last(field='field6') ####
-if 'field6' in json.loads(QXO_ASSET_LAST):
-    QXO_ASSET_LAST = eval(json.loads(QXO_ASSET_LAST)['field6'])
-else:
-    QXO_ASSET_LAST = 0
+QXO_ASSET_LAST = client.get_field_last(field='field6')
+QXO_ASSET_LAST = eval(json.loads(QXO_ASSET_LAST)['field6'])
+
+RXRX_ASSET_LAST = client.get_field_last(field='field7')
+RXRX_ASSET_LAST = eval(json.loads(RXRX_ASSET_LAST)['field7'])
 
 
 x_3 = col14.number_input('NEGG_ASSET', step=0.001 ,  value= NEGG_ASSET_LAST )
@@ -171,12 +180,15 @@ x_6 = col18.number_input('APLS_ASSET', step=0.001  , value= APLS_ASSET_LAST    )
 x_7 = col19.number_input('NVTS_ASSET', step=0.001  , value= NVTS_ASSET_LAST )
 
 QXO_OPTION = 79.
-QXO_REAL   =  col20.number_input('QXO_ASSET (LV:79@19.0)', step=0.001  , value=  QXO_ASSET_LAST)
+QXO_REAL   =  col20.number_input('QXO (LV:79@19.0)', step=0.001  , value=  QXO_ASSET_LAST)
 x_8 =  QXO_OPTION  + QXO_REAL
+
+RXRX_OPTION = 278.
+RXRX_REAL   =  col21.number_input('RXRX (LV:278@5.4)', step=0.001  , value=  RXRX_ASSET_LAST)
+x_9 =  RXRX_OPTION  + RXRX_REAL
 
 st.write("_____")
 
-# try:
 
 s8 , s9 , s10 =  sell( asset = x_3 , Diff= x_2)
 s11 , s12 , s13 =  sell(asset = x_4 , Diff= x_2)
@@ -190,6 +202,8 @@ u7 , u8 , u9 = sell( asset = x_7 , Diff= x_2)
 p7 , p8 , p9 = buy( asset = x_7 , Diff= x_2)
 q1, q2, q3 = sell(asset=x_8, Diff=x_2)
 q4, q5, q6 = buy(asset=x_8, Diff=x_2)
+rx1, rx2, rx3 = sell(asset=x_9, Diff=x_2)
+rx4, rx5, rx6 = buy(asset=x_9, Diff=x_2)
 
 
 Limut_Order_NEGG = st.checkbox('Limut_Order_NEGG', value =  np.where(  Nex_day_sell == 1 ,  toggle(  df_7_1.action.values[1+nex] )   ,  df_7_1.action.values[1+nex]   ))
@@ -199,7 +213,7 @@ if Limut_Order_NEGG :
     col1, col2 , col3  = st.columns(3)
     sell_negg = col3.checkbox('sell_match_NEGG')
     if sell_negg :
-        GO_NEGG_SELL = col3.button("GO!     ")
+        GO_NEGG_SELL = col3.button("GO!   ")
         if GO_NEGG_SELL :
             client.update(  {'field2': NEGG_ASSET_LAST - b9  } )
             col3.write(NEGG_ASSET_LAST - b9)
@@ -208,10 +222,10 @@ if Limut_Order_NEGG :
     st.write(yf.Ticker('NEGG').fast_info['lastPrice'] , pv_negg  ,'(',  pv_negg - 1500 ,')',  )
 
     col4, col5 , col6  = st.columns(3)
-    st.write( 'buy' , '    ','A',  s9  ,  'P' , s8 , 'C' ,s10    )
+    st.write( 'buy' , '   ','A',  s9  ,  'P' , s8 , 'C' ,s10    )
     buy_negg = col6.checkbox('buy_match_NEGG')
     if buy_negg :
-        GO_NEGG_Buy = col6.button("GO!      ")
+        GO_NEGG_Buy = col6.button("GO!    ")
         if GO_NEGG_Buy :
             client.update(  {'field2': NEGG_ASSET_LAST + s9  } )
             col6.write(NEGG_ASSET_LAST + s9)
@@ -225,7 +239,7 @@ if Limut_Order_FFWM :
     col7, col8 , col9  = st.columns(3)
     sell_ffwm = col9.checkbox('sell_match_FFWM')
     if sell_ffwm :
-        GO_ffwm_sell = col9.button("GO!       ")
+        GO_ffwm_sell = col9.button("GO!    ")
         if GO_ffwm_sell :
             client.update(  {'field1': FFWM_ASSET_LAST - b12  } )
             col9.write(FFWM_ASSET_LAST - b12)
@@ -237,7 +251,7 @@ if Limut_Order_FFWM :
     st.write(  'buy' , '    ', 'A', s12 , 'P' , s11  , 'C'  , s13    )
     buy_ffwm = col12.checkbox('buy_match_FFWM')
     if buy_ffwm :
-        GO_ffwm_Buy = col12.button("GO!        ")
+        GO_ffwm_Buy = col12.button("GO!     ")
         if GO_ffwm_Buy :
             client.update(  {'field1': FFWM_ASSET_LAST + s12  } )
             col12.write(FFWM_ASSET_LAST + s12)
@@ -251,7 +265,7 @@ if Limut_Order_RIVN :
     col77, col88 , col99  = st.columns(3)
     sell_RIVN = col99.checkbox('sell_match_RIVN')
     if sell_RIVN :
-        GO_RIVN_sell = col99.button("GO!         ")
+        GO_RIVN_sell = col99.button("GO!     ")
         if GO_RIVN_sell :
             client.update(  {'field3': RIVN_ASSET_LAST - u5  } )
             col99.write(RIVN_ASSET_LAST - u5)
@@ -263,7 +277,7 @@ if Limut_Order_RIVN :
     st.write(  'buy' , '    ', 'A', u2 , 'P' , u1  , 'C'  , u3    )
     buy_RIVN = col122.checkbox('buy_match_RIVN')
     if buy_RIVN :
-        GO_RIVN_Buy = col122.button("GO!          ")
+        GO_RIVN_Buy = col122.button("GO!      ")
         if GO_RIVN_Buy :
             client.update(  {'field3': RIVN_ASSET_LAST + u2  } )
             col122.write(RIVN_ASSET_LAST + u2)
@@ -277,7 +291,7 @@ if Limut_Order_APLS :
     col7777, col8888 , col9999  = st.columns(3)
     sell_APLS = col9999.checkbox('sell_match_APLS')
     if sell_APLS :
-        GO_APLS_sell = col9999.button("GO!           ")
+        GO_APLS_sell = col9999.button("GO!      ")
         if GO_APLS_sell :
             client.update(  {'field4': APLS_ASSET_LAST - p5  } )
             col9999.write(APLS_ASSET_LAST - p5)
@@ -289,7 +303,7 @@ if Limut_Order_APLS :
     st.write(  'buy' , '    ', 'A', p2 , 'P' , p1  , 'C'  , p3    )
     buy_APLS = col1222.checkbox('buy_match_APLS')
     if buy_APLS :
-        GO_APLS_Buy = col1222.button("GO!            ")
+        GO_APLS_Buy = col1222.button("GO!       ")
         if GO_APLS_Buy :
             client.update(  {'field4': APLS_ASSET_LAST + p2  } )
             col1222.write(APLS_ASSET_LAST + p2)
@@ -304,7 +318,7 @@ if Limut_Order_NVTS:
     sell_NVTS = col_nvts3.checkbox('sell_match_NVTS')
 
     if sell_NVTS:
-        GO_NVTS_sell = col_nvts3.button("GO!             ")
+        GO_NVTS_sell = col_nvts3.button("GO!       ")
         if GO_NVTS_sell:
             client.update({'field5': NVTS_ASSET_LAST - p8})
             col_nvts3.write(NVTS_ASSET_LAST - p8)
@@ -316,7 +330,7 @@ if Limut_Order_NVTS:
     st.write('buy', '    ', 'A', u8, 'P', u7  , 'C',u9 )
     buy_NVTS = col_nvts6.checkbox('buy_match_NVTS')
     if buy_NVTS:
-        GO_NVTS_Buy = col_nvts6.button("GO!              ")
+        GO_NVTS_Buy = col_nvts6.button("GO!        ")
         if GO_NVTS_Buy:
             client.update({'field5': NVTS_ASSET_LAST + u8})
             col_nvts6.write(NVTS_ASSET_LAST  + u8)
@@ -331,7 +345,7 @@ if Limut_Order_QXO:
     sell_QXO = col_qxo3.checkbox('sell_match_QXO')
 
     if sell_QXO:
-        GO_QXO_sell = col_qxo3.button("GO!               ")
+        GO_QXO_sell = col_qxo3.button("GO!        ")
         if GO_QXO_sell:
             client.update({'field6': QXO_ASSET_LAST - q5})
             col_qxo3.write(QXO_ASSET_LAST - q5)
@@ -343,16 +357,40 @@ if Limut_Order_QXO:
     st.write('buy', '    ', 'A', q2, 'P', q1, 'C', q3)
     buy_QXO = col_qxo6.checkbox('buy_match_QXO')
     if buy_QXO:
-        GO_QXO_Buy = col_qxo6.button("GO!                ")
+        GO_QXO_Buy = col_qxo6.button("GO!         ")
         if GO_QXO_Buy:
             client.update({'field6': QXO_ASSET_LAST + q2})
             col_qxo6.write(QXO_ASSET_LAST + q2)
 
 st.write("_____")
 
+Limut_Order_RXRX = st.checkbox('Limut_Order_RXRX', value = np.where( Nex_day_sell == 1 , toggle( df_7_6.action.values[1+nex] ) , df_7_6.action.values[1+nex] ))
+if Limut_Order_RXRX:
+    st.write('sell', '    ', 'A', rx5, 'P', rx4, 'C', rx6)
+
+    col_rxrx1, col_rxrx2, col_rxrx3 = st.columns(3)
+    sell_RXRX = col_rxrx3.checkbox('sell_match_RXRX')
+
+    if sell_RXRX:
+        GO_RXRX_sell = col_rxrx3.button("GO!         ")
+        if GO_RXRX_sell:
+            client.update({'field7': RXRX_ASSET_LAST - rx5})
+            col_rxrx3.write(RXRX_ASSET_LAST - rx5)
+    
+    pv_rxrx = yf.Ticker('RXRX').fast_info['lastPrice'] * x_9
+    st.write(yf.Ticker('RXRX').fast_info['lastPrice'], pv_rxrx, '(', pv_rxrx - 1500, ')')
+
+    col_rxrx4, col_rxrx5, col_rxrx6 = st.columns(3)
+    st.write('buy', '    ', 'A', rx2, 'P', rx1, 'C', rx3)
+    buy_RXRX = col_rxrx6.checkbox('buy_match_RXRX')
+    if buy_RXRX:
+        GO_RXRX_Buy = col_rxrx6.button("GO!          ")
+        if GO_RXRX_Buy:
+            client.update({'field7': RXRX_ASSET_LAST + rx2})
+            col_rxrx6.write(RXRX_ASSET_LAST + rx2)
+
+st.write("_____")
+
 
 if st.button("RERUN"):
     st.rerun()
-
-
-# except:pass
