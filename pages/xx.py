@@ -178,9 +178,14 @@ x_4 = col15.number_input('FFWM_ASSET', step=0.001  , value= FFWM_ASSET_LAST    )
 x_5 = col17.number_input('RIVN_ASSET', step=0.001  , value= RIVN_ASSET_LAST    )
 x_6 = col18.number_input('APLS_ASSET', step=0.001  , value= APLS_ASSET_LAST    )
 x_7 = col19.number_input('NVTS_ASSET', step=0.001  , value= NVTS_ASSET_LAST )
-x_8 =  col20.number_input('QXO_ASSET', step=0.001  , value= QXO_ASSET_LAST )
-x_9 =  col21.number_input('RXRX_ASSET', step=0.001 , value= RXRX_ASSET_LAST )
 
+QXO_OPTION = 79.
+QXO_REAL   =  col20.number_input('QXO:ASSET(LV:79@19.0)', step=0.001  , value=  QXO_ASSET_LAST)
+x_8 =  QXO_OPTION  + QXO_REAL
+
+RXRX_OPTION = 278.
+RXRX_REAL   =  col21.number_input('RXRX:ASSET(LV:278@5.4)', step=0.001  , value=  RXRX_ASSET_LAST)
+x_9 =  RXRX_OPTION  + RXRX_REAL
 
 st.write("_____")
 
