@@ -205,7 +205,7 @@ if Start :
     _QXO_ASSET_BTN = col13.button("GO!", key='go_qxo_asset') # Unique key for button
     if _QXO_ASSET_BTN:
       try:
-        client.update({'field7': add_6})
+        client.update({'field6': add_6})
         col13.write(f"QXO Asset Updated: {add_6}")
       except Exception as e:
         col13.error(f"ThingSpeak Error: {e}")
@@ -217,7 +217,7 @@ if Start :
     _RXRX_ASSET_BTN = col13.button("GO!", key='go_rxrx_asset') # Unique key for button
     if _RXRX_ASSET_BTN:
       try:
-        client.update({'field8': add_7})
+        client.update({'field7': add_7})
         col13.write(f"RXRX Asset Updated: {add_7}")
       except Exception as e:
         col13.error(f"ThingSpeak Error: {e}")
