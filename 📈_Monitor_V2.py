@@ -345,6 +345,9 @@ for config in trading_configs:
             col_nvtsm2.write(nvts_MM)
         except:
             col_nvtsm1.write("Calculation error")
+        st.write("_____")
+        
+        
 
 if st.button("RERUN"):
     st.cache_data.clear()
