@@ -334,11 +334,13 @@ if Limut_Order_NVTS:
         if GO_NVTS_Buy:
             client.update({'field5': NVTS_ASSET_LAST + u8})
             col_nvts6.write(NVTS_ASSET_LAST  + u8)
-            
+
+    st.write("_____")
     fix = 2100 ; diff = {"buy": 60,"sell": -60} ; asset = 361 ; fx = lambda fix, diff_value, asset: (fix + diff_value) / asset
     nvts_M = { 'buy' : fx(fix, diff['buy'], asset) , 'Price':  yf.Ticker('NVTS').fast_info['lastPrice']   ,  'sell' :   fx(fix, diff['sell'], asset) }
-
-    st.write(nvts_M )
+    nvts_MM =  { 'buy' : ''  , 'Price': ''   ,  'sell' :  '' }
+    col_nvts1.write(nvts_M )
+    col_nvts1.write(nvts_MM)
 
 st.write("_____")
 
