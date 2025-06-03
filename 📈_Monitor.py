@@ -371,8 +371,47 @@ for config in trading_configs:
 #     st.success("🗑️ Clear ALL caches complete!")
 #     st.rerun()
 
+# CSS สำหรับปุ่ม RERUN ลอย
+st.markdown("""
+<style>
+.fixed-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 15px 25px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+}
 
-if st.button("RERUN"):
+.fixed-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    background: linear-gradient(45deg, #ee5a52, #ff6b6b);
+}
+
+.fixed-button:active {
+    transform: translateY(0);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ปุ่ม RERUN ลอย
+st.markdown("""
+<button class="fixed-button" onclick="document.querySelector('[data-testid=\'stButton\'] button').click()">
+    🔄 RERUN
+</button>
+""", unsafe_allow_html=True)
+
+# ปุ่มจริง (ซ่อน)
+if st.button("RERUN", key="hidden_rerun"):
     # Clear Streamlit caches
     st.cache_data.clear()
     st.cache_resource.clear()
@@ -386,7 +425,5 @@ if st.button("RERUN"):
         _price_cache.clear()
         _cache_timestamp.clear()
     
-    # 🎈 Balloons animation + Toast
-    st.balloons()
-    st.toast("🗑️ Clear ALL caches complete!", icon="🧹")
+    st.toast("🗑️ Clear ALL caches complete!", icon="✅")
     st.rerun()
