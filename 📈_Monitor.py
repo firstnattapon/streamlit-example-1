@@ -353,73 +353,22 @@ for config in trading_configs:
 #     st.cache_resource.clear()
 #     st.rerun()
 
-# ใหม่ (clear ทุกอย่าง)
-# if st.button("RERUN"):
-#     # Clear Streamlit caches
-#     st.cache_data.clear()
-#     st.cache_resource.clear()
-    
-#     # Clear lru_cache
-#     sell.cache_clear()
-#     buy.cache_clear()
-    
-#     # Clear manual price cache
-#     with _cache_lock:
-#         _price_cache.clear()
-#         _cache_timestamp.clear()
-    
-#     st.success("🗑️ Clear ALL caches complete!")
-#     st.rerun()
-
-st.markdown("""
-<style>
-.top-bar {
-    position: fixed;
-    top: 0;
-    right: 0;
-    background: rgba(255,255,255,0.95);
-    backdrop-filter: blur(10px);
-    padding: 10px 20px;
-    z-index: 9999;
-    border-bottom-left-radius: 15px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.top-rerun {
-    background: #ff4757;
-    color: white;
-    border: none;
-    border-radius: 25px;
-    padding: 8px 16px;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.top-rerun:hover {
-    background: #ff3742;
-    transform: translateY(-1px);
-}
-</style>
-
-<div class="top-bar">
-    <button class="top-rerun" onclick="document.querySelector('[key=\'top_rerun\'] button').click()">
-        🔄 RERUN
-    </button>
-</div>
-""", unsafe_allow_html=True)
-
-if st.button("RERUN", key="top_rerun"):
-    # Clear all caches
+ใหม่ (clear ทุกอย่าง)
+if st.button("RERUN"):
+    # Clear Streamlit caches
     st.cache_data.clear()
     st.cache_resource.clear()
+    
+    # Clear lru_cache
     sell.cache_clear()
     buy.cache_clear()
     
+    # Clear manual price cache
     with _cache_lock:
         _price_cache.clear()
         _cache_timestamp.clear()
     
-    st.toast("🗑️ Clear ALL caches complete!", icon="🎯")
+    st.success("🗑️ Clear ALL caches complete!")
     st.rerun()
+
+
