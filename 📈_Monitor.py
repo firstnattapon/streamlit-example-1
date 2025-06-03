@@ -335,7 +335,7 @@ if Limut_Order_NVTS:
             client.update({'field5': NVTS_ASSET_LAST + u8})
             col_nvts6.write(NVTS_ASSET_LAST  + u8)
             
-    fix = 2100 ; diff = {"buy": 60,"sell": -60} ; asset = 300 ; fx = lambda fix , diff['buy' , asset : (fix + diff) / asset
+    fix = 2100 ; diff = {"buy": 60,"sell": -60} ; asset = 300 ; fx = lambda fix , diff['buy'] , asset : (fix + diff) / asset
     st.write(fx  )
 
 st.write("_____")
