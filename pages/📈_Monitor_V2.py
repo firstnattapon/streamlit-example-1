@@ -343,9 +343,9 @@ for config in trading_configs:
             }
             col_nvtsm1.write(nvts_M)
             col_nvtsm2.write(nvts_MM)
+            st.write("_____")
         except:
             col_nvtsm1.write("Calculation error")
-        st.write("_____")
         
         
 
