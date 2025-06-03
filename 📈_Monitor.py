@@ -11,31 +11,6 @@ from threading import Lock
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide")
 
-# if st.button("RERUN"):
-#     st.cache_data.clear()
-#     st.cache_resource.clear()
-#     st.rerun()
-
-# ใหม่ (clear ทุกอย่าง)
-if st.button("RERUN"):
-    # Clear Streamlit caches
-    st.cache_data.clear()
-    st.cache_resource.clear()
-    
-    # Clear lru_cache
-    sell.cache_clear()
-    buy.cache_clear()
-    
-    # Clear manual price cache
-    with _cache_lock:
-        _price_cache.clear()
-        _cache_timestamp.clear()
-    
-    st.success("🗑️ Clear ALL caches complete!")
-    st.rerun()
-
-
-
 # Global variables for caching
 _cache_lock = Lock()
 _price_cache = {}
@@ -371,5 +346,27 @@ for config in trading_configs:
             st.write("_____")
         except:
             col_nvtsm1.write("Calculation error")
-        
-        
+
+
+# if st.button("RERUN"):
+#     st.cache_data.clear()
+#     st.cache_resource.clear()
+#     st.rerun()
+
+# ใหม่ (clear ทุกอย่าง)
+if st.button("RERUN"):
+    # Clear Streamlit caches
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    
+    # Clear lru_cache
+    sell.cache_clear()
+    buy.cache_clear()
+    
+    # Clear manual price cache
+    with _cache_lock:
+        _price_cache.clear()
+        _cache_timestamp.clear()
+    
+    st.success("🗑️ Clear ALL caches complete!")
+    st.rerun()
