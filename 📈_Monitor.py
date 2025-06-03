@@ -324,7 +324,7 @@ if Limut_Order_NVTS:
             col_nvts3.write(NVTS_ASSET_LAST - p8)
 
     pv_nvts = yf.Ticker('NVTS').fast_info['lastPrice'] * x_7
-    st.write(yf.Ticker('NVTS').fast_info['lastPrice'], pv_nvts, '(', pv_nvts - 2100 , ')') # แก้
+    st.write(yf.Ticker('NVTS').fast_info['lastPrice'], pv_nvts, '(', pv_nvts - 1500  , ')') 
 
     col_nvts4, col_nvts5, col_nvts6 = st.columns(3)
     st.write('buy', '    ', 'A', u8, 'P', u7  , 'C',u9 )
