@@ -349,7 +349,25 @@ for config in trading_configs:
         
         
 
+# if st.button("RERUN"):
+#     st.cache_data.clear()
+#     st.cache_resource.clear()
+#     st.rerun()
+
+# ใหม่ (clear ทุกอย่าง)
 if st.button("RERUN"):
+    # Clear Streamlit caches
     st.cache_data.clear()
     st.cache_resource.clear()
+    
+    # Clear lru_cache
+    sell.cache_clear()
+    buy.cache_clear()
+    
+    # Clear manual price cache
+    with _cache_lock:
+        _price_cache.clear()
+        _cache_timestamp.clear()
+    
+    st.success("🗑️ Clear ALL caches complete!")
     st.rerun()
