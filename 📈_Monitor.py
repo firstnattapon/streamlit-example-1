@@ -340,7 +340,7 @@ if Limut_Order_NVTS:
     nvts_M = { 'buy' : fx(fix, diff['buy'], asset) , 'Price':  yf.Ticker('NVTS').fast_info['lastPrice']   ,  'sell' :   fx(fix, diff['sell'], asset) }
     nvts_MM =  { 'buy' : ''  , 'Price': ''   ,  'sell' :  '' }
     col_nvts1.write(nvts_M )
-    col_nvts1.write(nvts_MM)
+    col_nvts2.write(nvts_MM)
 
 st.write("_____")
 
