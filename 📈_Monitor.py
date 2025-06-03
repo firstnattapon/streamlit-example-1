@@ -334,8 +334,9 @@ if Limut_Order_NVTS:
         if GO_NVTS_Buy:
             client.update({'field5': NVTS_ASSET_LAST + u8})
             col_nvts6.write(NVTS_ASSET_LAST  + u8)
-    
-    st.write("ฟฟฟ")
+            
+    fix = 2100 ; diff = [60 , -60] ; asset = 300 ; fx = lambda fix , diff[0], x, asset : (fix + diff) / asset
+    st.write(fx  )
 st.write("_____")
 
 Limut_Order_QXO = st.checkbox('Limut_Order_QXO', np.where(Nex_day_sell == 1, toggle(df_7_5.action.values[1+nex]), df_7_5.action.values[1+nex]))
