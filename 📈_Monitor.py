@@ -336,11 +336,12 @@ if Limut_Order_NVTS:
             col_nvts6.write(NVTS_ASSET_LAST  + u8)
 
     st.write("_____")
+    col_nvtsm1, col_nvtsm2, col_nvtsm3 = st.columns(3)
     fix = 2100 ; diff = {"buy": 60,"sell": -60} ; asset = 361 ; fx = lambda fix, diff_value, asset: (fix + diff_value) / asset
     nvts_M = { 'buy' : fx(fix, diff['buy'], asset) , 'Price':  yf.Ticker('NVTS').fast_info['lastPrice']   ,  'sell' :   fx(fix, diff['sell'], asset) }
     nvts_MM =  { 'buy' : ''  , 'Price': ''   ,  'sell' :  '' }
-    col_nvts1.write(nvts_M )
-    col_nvts2.write(nvts_MM)
+    col_nvtsm1.write(nvts_M )
+    col_nvtsm3.write(nvts_MM)
 
 st.write("_____")
 
