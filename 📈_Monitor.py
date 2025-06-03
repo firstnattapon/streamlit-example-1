@@ -339,7 +339,7 @@ if Limut_Order_NVTS:
     col_nvtsm1, col_nvtsm2, col_nvtsm3 = st.columns(3)
     asset_input =  NVTS_ASSET_LAST 
     fix = 2100 ; diff = {"buy": 60,"sell": -60} ; asset = asset_input ; fx = lambda fix, diff_value, asset: (fix + diff_value) / asset  
-    nvts_M = { 'sell' :  round(fx(fix, diff['sell'], asset), 2)  , 'Price':  yf.Ticker('NVTS').fast_info['lastPrice'] ,   'buy' :  round( fx(fix, diff['buy'], asset) , 2)  }
+    nvts_M = { 'sell' :  round( fx(fix, diff['buy'], asset) , 2)  , 'Price':  yf.Ticker('NVTS').fast_info['lastPrice'] ,   'buy' : round(fx(fix, diff['sell'], asset), 2)   }
     nvts_MM =  {  'sell' :  np.floor( diff['sell'] / fx(fix, diff['sell'], asset)) , 'ASSET_LAST': asset_input   ,  'buy' :  np.floor( diff['buy'] / fx(fix, diff['buy'], asset))  }
     col_nvtsm1.write(nvts_M )
     col_nvtsm2.write(nvts_MM)
