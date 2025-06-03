@@ -352,8 +352,8 @@ for config in trading_configs:
 #     st.cache_data.clear()
 #     st.cache_resource.clear()
 #     st.rerun()
+# ใหม่ (clear ทุกอย่าง)
 
-ใหม่ (clear ทุกอย่าง)
 if st.button("RERUN"):
     # Clear Streamlit caches
     st.cache_data.clear()
