@@ -354,6 +354,24 @@ for config in trading_configs:
 #     st.rerun()
 
 # ใหม่ (clear ทุกอย่าง)
+# if st.button("RERUN"):
+#     # Clear Streamlit caches
+#     st.cache_data.clear()
+#     st.cache_resource.clear()
+    
+#     # Clear lru_cache
+#     sell.cache_clear()
+#     buy.cache_clear()
+    
+#     # Clear manual price cache
+#     with _cache_lock:
+#         _price_cache.clear()
+#         _cache_timestamp.clear()
+    
+#     st.success("🗑️ Clear ALL caches complete!")
+#     st.rerun()
+
+
 if st.button("RERUN"):
     # Clear Streamlit caches
     st.cache_data.clear()
@@ -368,5 +386,7 @@ if st.button("RERUN"):
         _price_cache.clear()
         _cache_timestamp.clear()
     
-    st.success("🗑️ Clear ALL caches complete!")
+    # 🎈 Balloons animation + Toast
+    st.balloons()
+    st.toast("🗑️ Clear ALL caches complete!", icon="🧹")
     st.rerun()
