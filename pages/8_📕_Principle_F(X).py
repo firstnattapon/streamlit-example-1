@@ -31,7 +31,7 @@ st.write('____')
 with Control:
   st.link_button("1 .หลักการและคำตอบว่า = ทำไม FIX = LN(T0/TN) ใช้ได้", "https://drive.google.com/file/d/1x_zlS7y9tTxWxHqD_yWpqrvFkGH2J2pB/view?usp=sharing")
   st.link_button("2 .เครื่องมือประมาณราคาที่ดิน", "https://monica.im/share/artifact?id=McLUV4GWRWenzAaWWx44qk" )
-  iframe(frame = "https://monica.im/share/artifact?id=kEuJ7iSugk9vb5FPuUJGwh")
+  iframe(frame = "https://monica.im/share/artifact?id=DGLpUDdFaW7n9VFcr8B9H6")
 
 with Mind:
   with st.expander("คลิป"):
