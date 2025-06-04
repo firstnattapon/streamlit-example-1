@@ -29,6 +29,7 @@ with tab4:
 st.write('____')
 
 with Control:
+  st.link_button("หลักการและคำตอบว่า = ทำไม FIX = LN(T0/TN) ใช้ได้", "https://drive.google.com/file/d/1x_zlS7y9tTxWxHqD_yWpqrvFkGH2J2pB/view?usp=sharing")
   iframe(frame = "https://monica.im/share/artifact?id=kEuJ7iSugk9vb5FPuUJGwh")
 
 with Mind:
