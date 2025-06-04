@@ -48,22 +48,51 @@ def calculate_optimized(action_list, price_list, fix=1500):
     
     return buffer, sumusd, cash, asset_value, amount, refer
 
-
+@njit
+def greedy_local_search(prices, fix=1500):
+    n = len(prices)
+    
+    # Start with all ones
+    actions = np.ones(n, dtype=np.int64)
+    
+    improved = True
+    while improved:
+        improved = False
+        _, current_sumusd, _, _, _, _ = calculate_optimized(actions, prices, fix)
+        current_fitness = current_sumusd[-1]
+        
+        # Try flipping each bit
+        for i in range(1, n):  # Skip first position
+            actions[i] = 1 - actions[i]
+            _, new_sumusd, _, _, _, _ = calculate_optimized(actions, prices, fix)
+            new_fitness = new_sumusd[-1]
+            
+            if new_fitness > current_fitness:
+                current_fitness = new_fitness
+                improved = True
+            else:
+                actions[i] = 1 - actions[i]  # Flip back
+    
+    return actions
 
 def get_max_action(prices):
-    prices = np.array(prices, dtype=np.float64)
-    n = len(prices)
-    action = np.empty(n, dtype=np.int64)
-    action[0] = 0
-    
-    if n > 2:
-        diff = np.diff(prices) 
-        action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
-    elif n == 2:
-        action[1] = -1
-    action[-1] = -1
+    # ใช้ Greedy Local Search เพราะเร็วและให้ผลดี
+    return greedy_local_search(np.array(prices, dtype=np.float64))
 
-    return action
+# def get_max_action(prices):
+#     prices = np.array(prices, dtype=np.float64)
+#     n = len(prices)
+#     action = np.empty(n, dtype=np.int64)
+#     action[0] = 0
+    
+#     if n > 2:
+#         diff = np.diff(prices) 
+#         action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
+#     elif n == 2:
+#         action[1] = -1
+#     action[-1] = -1
+
+#     return action
 
 
 def Limit_fx (Ticker = '' , act = -1 ):
