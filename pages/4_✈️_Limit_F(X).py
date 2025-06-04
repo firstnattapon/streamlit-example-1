@@ -48,34 +48,30 @@ def calculate_optimized(action_list, price_list, fix=1500):
     
     return buffer, sumusd, cash, asset_value, amount, refer
 
-# def get_max_action(prices):
-#     prices = np.array(prices, dtype=np.float64)
-#     n = len(prices)
-#     action = np.empty(n, dtype=np.int64)
-#     action[0] = 0
-    
-#     if n > 2:
-#         diff = np.diff(prices) 
-#         action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
-#     elif n == 2:
-#         action[1] = -1
-#     action[-1] = -1
-
-#     return action
 
 def get_max_action(prices):
-    """
-    เวอร์ชัน vectorized ที่เร็วกว่าสำหรับข้อมูลขนาดใหญ่
-    """
     prices = np.array(prices, dtype=np.float64)
     n = len(prices)
     
+    # ตรวจสอบ edge cases
     if n < 3:
         return np.full(n, np.nan)
     
+    # สร้าง action array
     action = np.full(n, np.nan, dtype=np.float64)
+    
+    # คำนวณ differences
     diff = np.diff(prices)
-    action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
+    
+    # คำนวณจุดเปลี่ยนทิศทางสำหรับจุดกลาง
+    for i in range(1, n-1):
+        left_diff = diff[i-1]   # P[i] - P[i-1]
+        right_diff = diff[i]    # P[i+1] - P[i]
+        
+        if left_diff * right_diff < 0:
+            action[i] = 1  # จุดเปลี่ยนทิศทาง
+        else:
+            action[i] = 0  # ไม่เปลี่ยนทิศทาง
     
     return action
 
