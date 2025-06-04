@@ -53,25 +53,12 @@ def get_max_action(prices):
     prices = np.array(prices, dtype=np.float64)
     n = len(prices)
     
-    # ตรวจสอบ edge cases
     if n < 3:
         return np.full(n, np.nan)
     
-    # สร้าง action array
     action = np.full(n, np.nan, dtype=np.float64)
-    
-    # คำนวณ differences
     diff = np.diff(prices)
-    
-    # คำนวณจุดเปลี่ยนทิศทางสำหรับจุดกลาง
-    for i in range(1, n-1):
-        left_diff = diff[i-1]   # P[i] - P[i-1]
-        right_diff = diff[i]    # P[i+1] - P[i]
-        
-        if left_diff * right_diff < 0:
-            action[i] = 1  # จุดเปลี่ยนทิศทาง
-        else:
-            action[i] = 0  # ไม่เปลี่ยนทิศทาง
+    action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
     
     return action
 
