@@ -384,6 +384,10 @@ _cache_lock = Lock()
 _price_cache = {}
 _cache_timestamp = {}
 
+# Initialize session state for checkbox control
+if 'checkbox_states' not in st.session_state:
+    st.session_state.checkbox_states = {}
+
 # Initialize clients once
 @st.cache_resource
 def get_clients():
@@ -399,9 +403,9 @@ def get_clients():
 
 client, client_2 = get_clients()
 
-# Function to clear all caches
+# Function to clear all caches and reset checkboxes
 def clear_all_caches():
-    """Clear all caches and rerun"""
+    """Clear all caches and reset checkbox states"""
     # Clear Streamlit caches
     st.cache_data.clear()
     st.cache_resource.clear()
@@ -414,6 +418,9 @@ def clear_all_caches():
     with _cache_lock:
         _price_cache.clear()
         _cache_timestamp.clear()
+    
+    # Reset all checkbox states
+    st.session_state.checkbox_states = {}
     
     st.success("🗑️ Clear ALL caches complete!")
     st.rerun()
@@ -661,7 +668,19 @@ def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, ca
     except:
         action_val = 0
     
-    limit_order = st.checkbox(f'Limut_Order_{ticker}', value=action_val)
+    # Use session state to control checkbox
+    limit_order_key = f'Limut_Order_{ticker}'
+    if limit_order_key not in st.session_state.checkbox_states:
+        st.session_state.checkbox_states[limit_order_key] = bool(action_val)
+    
+    limit_order = st.checkbox(
+        f'Limut_Order_{ticker}', 
+        value=st.session_state.checkbox_states[limit_order_key],
+        key=f'checkbox_{ticker}'
+    )
+    
+    # Update session state when checkbox changes
+    st.session_state.checkbox_states[limit_order_key] = limit_order
     
     if limit_order:
         sell_calc = calculations[calculations_key]['sell']
@@ -671,20 +690,31 @@ def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, ca
         st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
         
         col1, col2, col3 = st.columns(3)
-        sell_match = col3.checkbox(f'sell_match_{ticker}')
+        
+        # Use session state for sell_match checkbox
+        sell_match_key = f'sell_match_{ticker}'
+        if sell_match_key not in st.session_state.checkbox_states:
+            st.session_state.checkbox_states[sell_match_key] = False
+            
+        sell_match = col3.checkbox(
+            f'sell_match_{ticker}',
+            value=st.session_state.checkbox_states[sell_match_key],
+            key=f'sell_checkbox_{ticker}'
+        )
+        st.session_state.checkbox_states[sell_match_key] = sell_match
+        
         if sell_match:
-            go_sell = col3.button(f"GO!{'!' * field_num}")
+            go_sell = col3.button(f"GO!{'!' * field_num}", key=f'sell_btn_{ticker}')
             if go_sell:
                 client.update({f'field{field_num}': asset_last - buy_calc[1]})
                 col3.write(asset_last - buy_calc[1])
-                # Clear all caches after sell transaction
+                # Clear all caches and reset checkboxes after sell transaction
                 clear_all_caches()
         
         # Price info
         try:
             current_price = get_cached_price(ticker)
             pv = current_price * asset_val
-            ###################### สำหรับ NVTS ใช้ 2100 ในการคำนวณ
             fix_value = 2100 if ticker == 'NVTS' else 1500 
             st.write(current_price, pv, '(', pv - fix_value, ')')
         except:
@@ -693,13 +723,25 @@ def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, ca
         # Buy section
         col4, col5, col6 = st.columns(3)
         st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
-        buy_match = col6.checkbox(f'buy_match_{ticker}')
+        
+        # Use session state for buy_match checkbox
+        buy_match_key = f'buy_match_{ticker}'
+        if buy_match_key not in st.session_state.checkbox_states:
+            st.session_state.checkbox_states[buy_match_key] = False
+            
+        buy_match = col6.checkbox(
+            f'buy_match_{ticker}',
+            value=st.session_state.checkbox_states[buy_match_key],
+            key=f'buy_checkbox_{ticker}'
+        )
+        st.session_state.checkbox_states[buy_match_key] = buy_match
+        
         if buy_match:
-            go_buy = col6.button(f"GO!{'!' * (field_num + 3)}")
+            go_buy = col6.button(f"GO!{'!' * (field_num + 3)}", key=f'buy_btn_{ticker}')
             if go_buy:
                 client.update({f'field{field_num}': asset_last + sell_calc[1]})
                 col6.write(asset_last + sell_calc[1])
-                # Clear all caches after buy transaction
+                # Clear all caches and reset checkboxes after buy transaction
                 clear_all_caches()
 
 # Trading sections
