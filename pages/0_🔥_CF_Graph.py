@@ -69,7 +69,7 @@ with tab1:
     x_9 = st.number_input('ราคา_QXO_5.40', step=0.01 ,   value = yf.Ticker('RXRX').fast_info['lastPrice'])
 
     x_5 = st.number_input('Fixed_Asset_Value', step=0.01 ,   value = 1500. ) 
-    x_6 = st.number_input('Cash_Balan', step=0.01 ,   value = 650. ) 
+    x_6 = st.number_input('Cash_Balan', step=0.01 ,   value = 0. ) 
     st.write("_____") 
 
 with tab2:
