@@ -367,6 +367,7 @@
 
 
 #nvts
+#nvts
 import streamlit as st
 import numpy as np
 import datetime
@@ -497,9 +498,10 @@ def Monitor(Ticker='FFWM', field=2):
 # Parallel data fetching
 def fetch_monitor_data():
     """Fetch all monitor data in parallel"""
+    # เรียงลำดับ A-Z: APLS, FFWM, NEGG, NVTS, QXO, RIVN, RXRX
     tickers_fields = [
-        ('FFWM', 2), ('NEGG', 3), ('RIVN', 4), 
-        ('APLS', 5), ('NVTS', 6), ('QXO', 7), ('RXRX', 8)
+        ('APLS', 5), ('FFWM', 2), ('NEGG', 3), ('NVTS', 6), 
+        ('QXO', 7), ('RIVN', 4), ('RXRX', 8)
     ]
     
     results = {}
@@ -521,13 +523,14 @@ def fetch_monitor_data():
 
 # Fetch all monitor data
 monitor_results = fetch_monitor_data()
-df_7, fx_js = monitor_results.get('FFWM', (pd.DataFrame(), 0))
-df_7_1, fx_js_1 = monitor_results.get('NEGG', (pd.DataFrame(), 0))
-df_7_2, fx_js_2 = monitor_results.get('RIVN', (pd.DataFrame(), 0))
-df_7_3, fx_js_3 = monitor_results.get('APLS', (pd.DataFrame(), 0))
-df_7_4, fx_js_4 = monitor_results.get('NVTS', (pd.DataFrame(), 0))
-df_7_5, fx_js_5 = monitor_results.get('QXO', (pd.DataFrame(), 0))
-df_7_6, fx_js_6 = monitor_results.get('RXRX', (pd.DataFrame(), 0))
+# เรียงลำดับ A-Z
+df_7_3, fx_js_3 = monitor_results.get('APLS', (pd.DataFrame(), 0))    # APLS
+df_7, fx_js = monitor_results.get('FFWM', (pd.DataFrame(), 0))        # FFWM
+df_7_1, fx_js_1 = monitor_results.get('NEGG', (pd.DataFrame(), 0))    # NEGG
+df_7_4, fx_js_4 = monitor_results.get('NVTS', (pd.DataFrame(), 0))    # NVTS
+df_7_5, fx_js_5 = monitor_results.get('QXO', (pd.DataFrame(), 0))     # QXO
+df_7_2, fx_js_2 = monitor_results.get('RIVN', (pd.DataFrame(), 0))    # RIVN
+df_7_6, fx_js_6 = monitor_results.get('RXRX', (pd.DataFrame(), 0))    # RXRX
 
 # Cached asset fetching
 @st.cache_data(ttl=60)
@@ -557,13 +560,14 @@ def get_all_assets():
 
 # Get all assets
 all_assets = get_all_assets()
-FFWM_ASSET_LAST = all_assets.get('field1', 0.0)
-NEGG_ASSET_LAST = all_assets.get('field2', 0.0)
-RIVN_ASSET_LAST = all_assets.get('field3', 0.0)
-APLS_ASSET_LAST = all_assets.get('field4', 0.0)
-NVTS_ASSET_LAST = all_assets.get('field5', 0.0)
-QXO_ASSET_LAST = all_assets.get('field6', 0.0)
-RXRX_ASSET_LAST = all_assets.get('field7', 0.0)
+# เรียงลำดับ A-Z ตาม field mapping
+APLS_ASSET_LAST = all_assets.get('field4', 0.0)    # APLS = field4
+FFWM_ASSET_LAST = all_assets.get('field1', 0.0)    # FFWM = field1
+NEGG_ASSET_LAST = all_assets.get('field2', 0.0)    # NEGG = field2
+NVTS_ASSET_LAST = all_assets.get('field5', 0.0)    # NVTS = field5
+QXO_ASSET_LAST = all_assets.get('field6', 0.0)     # QXO = field6
+RIVN_ASSET_LAST = all_assets.get('field3', 0.0)    # RIVN = field3
+RXRX_ASSET_LAST = all_assets.get('field7', 0.0)    # RXRX = field7
 
 # Initialize variables
 nex = 0
@@ -592,16 +596,17 @@ col13, col16, col14, col15, col17, col18, col19, col20, col21 = st.columns(9)
 
 x_2 = col16.number_input('Diff', step=1, value=60)
 
-# Asset input section (optimized)
+# Asset input section (optimized) - เรียงลำดับ A-Z
 Start = col13.checkbox('start')
 if Start:
+    # เรียงลำดับ A-Z: APLS, FFWM, NEGG, NVTS, QXO, RIVN, RXRX
     asset_configs = [
+        ('APLS', 'field4', APLS_ASSET_LAST),
         ('FFWM', 'field1', FFWM_ASSET_LAST),
         ('NEGG', 'field2', NEGG_ASSET_LAST),
-        ('RIVN', 'field3', RIVN_ASSET_LAST),
-        ('APLS', 'field4', APLS_ASSET_LAST),
         ('NVTS', 'field5', NVTS_ASSET_LAST),
         ('QXO', 'field6', QXO_ASSET_LAST),
+        ('RIVN', 'field3', RIVN_ASSET_LAST),
         ('RXRX', 'field7', RXRX_ASSET_LAST)
     ]
     
@@ -618,16 +623,17 @@ if Start:
                 # Clear all caches after updating asset
                 clear_all_caches()
 
-# Input fields
-x_3 = col14.number_input('NEGG_ASSET', step=0.001, value=NEGG_ASSET_LAST)
+# Input fields - เรียงลำดับ A-Z
+x_6 = col14.number_input('APLS_ASSET', step=0.001, value=APLS_ASSET_LAST)
 x_4 = col15.number_input('FFWM_ASSET', step=0.001, value=FFWM_ASSET_LAST)
-x_5 = col17.number_input('RIVN_ASSET', step=0.001, value=RIVN_ASSET_LAST)
-x_6 = col18.number_input('APLS_ASSET', step=0.001, value=APLS_ASSET_LAST)
-x_7 = col19.number_input('NVTS_ASSET', step=0.001, value=NVTS_ASSET_LAST)
+x_3 = col17.number_input('NEGG_ASSET', step=0.001, value=NEGG_ASSET_LAST)
+x_7 = col18.number_input('NVTS_ASSET', step=0.001, value=NVTS_ASSET_LAST)
 
 QXO_OPTION = 79.
-QXO_REAL = col20.number_input('QXO (LV:79@19.0)', step=0.001, value=QXO_ASSET_LAST)
+QXO_REAL = col19.number_input('QXO (LV:79@19.0)', step=0.001, value=QXO_ASSET_LAST)
 x_8 = QXO_OPTION + QXO_REAL
+
+x_5 = col20.number_input('RIVN_ASSET', step=0.001, value=RIVN_ASSET_LAST)
 
 RXRX_OPTION = 278.
 RXRX_REAL = col21.number_input('RXRX (LV:278@5.4)', step=0.001, value=RXRX_ASSET_LAST)
@@ -635,10 +641,11 @@ x_9 = RXRX_OPTION + RXRX_REAL
 
 st.write("_____")
 
-# Pre-calculate all buy/sell values
+# Pre-calculate all buy/sell values - เรียงลำดับ A-Z
 calculations = {}
-assets = [x_3, x_4, x_5, x_6, x_7, x_8, x_9]
-asset_names = ['NEGG', 'FFWM', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
+# เรียงลำดับ A-Z: APLS, FFWM, NEGG, NVTS, QXO, RIVN, RXRX
+assets = [x_6, x_4, x_3, x_7, x_8, x_5, x_9]
+asset_names = ['APLS', 'FFWM', 'NEGG', 'NVTS', 'QXO', 'RIVN', 'RXRX']
 
 for i, (asset, name) in enumerate(zip(assets, asset_names)):
     # ใช้ fix_c=2100 สำหรับ NVTS เท่านั้น
@@ -703,14 +710,15 @@ def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, ca
                 # Clear all caches after buy transaction
                 clear_all_caches()
 
-# Trading sections
+# Trading sections - เรียงลำดับ A-Z
+# เรียงลำดับ A-Z: APLS, FFWM, NEGG, NVTS, QXO, RIVN, RXRX
 trading_configs = [
-    ('NEGG', x_3, NEGG_ASSET_LAST, df_7_1, 2, 'NEGG'),
-    ('FFWM', x_4, FFWM_ASSET_LAST, df_7, 1, 'FFWM'),
-    ('RIVN', x_5, RIVN_ASSET_LAST, df_7_2, 3, 'RIVN'),
     ('APLS', x_6, APLS_ASSET_LAST, df_7_3, 4, 'APLS'),
+    ('FFWM', x_4, FFWM_ASSET_LAST, df_7, 1, 'FFWM'),
+    ('NEGG', x_3, NEGG_ASSET_LAST, df_7_1, 2, 'NEGG'),
     ('NVTS', x_7, NVTS_ASSET_LAST, df_7_4, 5, 'NVTS'),
     ('QXO', x_8, QXO_ASSET_LAST, df_7_5, 6, 'QXO'),
+    ('RIVN', x_5, RIVN_ASSET_LAST, df_7_2, 3, 'RIVN'),
     ('RXRX', x_9, RXRX_ASSET_LAST, df_7_6, 7, 'RXRX')
 ]
 
