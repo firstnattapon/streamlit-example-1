@@ -727,4 +727,4 @@ for config in trading_configs:
     st.write("_____")
 
 if st.button("RERUN"):
-    clear_all_caches()
+    clear_all_caches() 
