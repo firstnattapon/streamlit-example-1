@@ -48,68 +48,20 @@ def calculate_optimized(action_list, price_list, fix=1500):
     
     return buffer, sumusd, cash, asset_value, amount, refer
 
-def genetic_algorithm_optimize(prices, population_size=100, generations=50, fix=1500):
-    n = len(prices)
-    
-    # Initialize population
-    population = np.random.randint(0, 2, size=(population_size, n))
-    population[:, 0] = 1  # Force first action to be 1
-    
-    for gen in range(generations):
-        # Evaluate fitness (sumusd)
-        fitness = np.zeros(population_size)
-        for i in range(population_size):
-            _, sumusd, _, _, _, _ = calculate_optimized(population[i], prices, fix)
-            fitness[i] = sumusd[-1]
-        
-        # Selection (tournament)
-        new_population = np.zeros_like(population)
-        for i in range(population_size):
-            # Tournament selection
-            idx1, idx2 = np.random.choice(population_size, 2, replace=False)
-            if fitness[idx1] > fitness[idx2]:
-                new_population[i] = population[idx1].copy()
-            else:
-                new_population[i] = population[idx2].copy()
-        
-        # Crossover
-        for i in range(0, population_size-1, 2):
-            if np.random.random() < 0.8:  # Crossover probability
-                crossover_point = np.random.randint(1, n)
-                temp = new_population[i, crossover_point:].copy()
-                new_population[i, crossover_point:] = new_population[i+1, crossover_point:]
-                new_population[i+1, crossover_point:] = temp
-        
-        # Mutation
-        mutation_mask = np.random.random((population_size, n)) < 0.01
-        mutation_mask[:, 0] = False  # Don't mutate first position
-        new_population[mutation_mask] = 1 - new_population[mutation_mask]
-        
-        population = new_population
-    
-    # Return best solution
-    best_idx = np.argmax(fitness)
-    return population[best_idx]
-
 def get_max_action(prices):
-    # ใช้ Greedy Local Search เพราะเร็วและให้ผลดี
-    return genetic_algorithm_optimize(np.array(prices, dtype=np.float64))
-
-# def get_max_action(prices):
-#     prices = np.array(prices, dtype=np.float64)
-#     n = len(prices)
-#     action = np.empty(n, dtype=np.int64)
-#     action[0] = 0
+    prices = np.array(prices, dtype=np.float64)
+    n = len(prices)
+    action = np.empty(n, dtype=np.int64)
+    action[0] = 0
     
-#     if n > 2:
-#         diff = np.diff(prices) 
-#         action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
-#     elif n == 2:
-#         action[1] = -1
-#     action[-1] = -1
+    if n > 2:
+        diff = np.diff(prices) 
+        action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
+    elif n == 2:
+        action[1] = -1
+    action[-1] = -1
 
-#     return action
-
+    return action
 
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
