@@ -399,6 +399,25 @@ def get_clients():
 
 client, client_2 = get_clients()
 
+# Function to clear all caches
+def clear_all_caches():
+    """Clear all caches and rerun"""
+    # Clear Streamlit caches
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    
+    # Clear lru_cache
+    sell.cache_clear()
+    buy.cache_clear()
+    
+    # Clear manual price cache
+    with _cache_lock:
+        _price_cache.clear()
+        _cache_timestamp.clear()
+    
+    st.success("🗑️ Clear ALL caches complete!")
+    st.rerun()
+
 # Optimized calculation functions
 @lru_cache(maxsize=128)
 def sell(asset, fix_c=1500, Diff=60):
@@ -594,7 +613,9 @@ if Start:
             asset_button = col13.button(button_key, key=f'btn_{name}')
             if asset_button:
                 client.update({field: add_val})
-                col13.write(add_val)                
+                col13.write(add_val)
+                # Clear all caches after updating asset
+                clear_all_caches()
 
 # Input fields
 x_3 = col14.number_input('NEGG_ASSET', step=0.001, value=NEGG_ASSET_LAST)
@@ -656,13 +677,15 @@ def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, ca
             if go_sell:
                 client.update({f'field{field_num}': asset_last - buy_calc[1]})
                 col3.write(asset_last - buy_calc[1])
+                # Clear all caches after sell transaction
+                clear_all_caches()
         
         # Price info
         try:
             current_price = get_cached_price(ticker)
             pv = current_price * asset_val
-            # สำหรับ NVTS ใช้ 2100 ในการคำนวณ
-            fix_value = 2100 if ticker == 'NVTS' else 1500
+            ###################### สำหรับ NVTS ใช้ 2100 ในการคำนวณ
+            fix_value = 2100 if ticker == 'NVTS' else 1500 
             st.write(current_price, pv, '(', pv - fix_value, ')')
         except:
             st.write("Price unavailable")
@@ -676,6 +699,8 @@ def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, ca
             if go_buy:
                 client.update({f'field{field_num}': asset_last + sell_calc[1]})
                 col6.write(asset_last + sell_calc[1])
+                # Clear all caches after buy transaction
+                clear_all_caches()
 
 # Trading sections
 trading_configs = [
@@ -691,48 +716,7 @@ trading_configs = [
 for config in trading_configs:
     create_trading_section(*config, nex, Nex_day_sell)
     st.write("_____")
-    
-    # Special section for NVTS
-    if config[0] == 'NVTS':
-        col_nvtsm1, col_nvtsm2, col_nvtsm3 = st.columns(3)
-        asset_input = NVTS_ASSET_LAST
-        fix = 2100  # แก้ไขจาก 2100 เป็น 2100
-        diff = {"buy": 60, "sell": -60}
-        asset = asset_input
-        fx = lambda fix, diff_value, asset: (fix + diff_value) / asset if asset != 0 else 0
-        
-        try:
-            current_price = get_cached_price('NVTS')
-            nvts_M = {
-                'sell': round(fx(fix, diff['buy'], asset), 2),
-                'Price': current_price,
-                'buy': round(fx(fix, diff['sell'], asset), 2)
-            }
-            nvts_MM = {
-                'sell': np.floor(diff['buy'] / fx(fix, diff['buy'], asset)) * -1 if fx(fix, diff['buy'], asset) != 0 else 0,
-                'ASSET_LAST': asset_input,
-                'buy': np.floor(diff['sell'] / fx(fix, diff['sell'], asset)) * -1 if fx(fix, diff['sell'], asset) != 0 else 0
-            }
-            col_nvtsm1.write(nvts_M)
-            col_nvtsm2.write(nvts_MM)
-            st.write("_____")
-        except:
-            col_nvtsm1.write("Calculation error")
 
 if st.button("RERUN"):
-    # Clear Streamlit caches
-    st.cache_data.clear()
-    st.cache_resource.clear()
-    
-    # Clear lru_cache
-    sell.cache_clear()
-    buy.cache_clear()
-    
-    # Clear manual price cache
-    with _cache_lock:
-        _price_cache.clear()
-        _cache_timestamp.clear()
-    
-    st.success("🗑️ Clear ALL caches complete!")
-    st.rerun()
+    clear_all_caches()
 
