@@ -48,20 +48,37 @@ def calculate_optimized(action_list, price_list, fix=1500):
     
     return buffer, sumusd, cash, asset_value, amount, refer
 
+# def get_max_action(prices):
+#     prices = np.array(prices, dtype=np.float64)
+#     n = len(prices)
+#     action = np.empty(n, dtype=np.int64)
+#     action[0] = 0
+    
+#     if n > 2:
+#         diff = np.diff(prices) 
+#         action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
+#     elif n == 2:
+#         action[1] = -1
+#     action[-1] = -1
+
+#     return action
+
 def get_max_action(prices):
+    """
+    เวอร์ชัน vectorized ที่เร็วกว่าสำหรับข้อมูลขนาดใหญ่
+    """
     prices = np.array(prices, dtype=np.float64)
     n = len(prices)
-    action = np.empty(n, dtype=np.int64)
-    action[0] = 0
     
-    if n > 2:
-        diff = np.diff(prices) 
-        action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
-    elif n == 2:
-        action[1] = -1
-    action[-1] = -1
-
+    if n < 3:
+        return np.full(n, np.nan)
+    
+    action = np.full(n, np.nan, dtype=np.float64)
+    diff = np.diff(prices)
+    action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
+    
     return action
+
 
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
