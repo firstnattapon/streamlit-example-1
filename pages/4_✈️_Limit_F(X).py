@@ -275,6 +275,6 @@ with cf_log:
     st.write('')
     st.write(' Rebalance   =  -fix * ln( t0 / tn )')
     
-    
+     
 
     
