@@ -394,19 +394,7 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-
-with st.expander("Max_Limit"):
-    st.write("""🎯 กฎสำคัญ \n
-     
-    P[i   ]     คือ ราคาปัจจุบัน   \n
-    [P[i-1]     คือ ราคาของอดีต (จุดก่อนหน้า)  \n
-    [P[i+1]     คือ ราคาของอนาคต (จุดถัดไป)  \n
-    Action = 1 เมื่อ   (P[i] - P[i-1])   *  (P[i+1] - P[i])  < 0  \n
-    Action = 0 เมื่อ   (P[i] - P[i-1])   *  (P[i+1] - P[i])  ≥ 0 \n
-    Action = NaN สำหรับจุดแรกและจุดสุดท้าย (คำนวณไม่ได้)""") 
-
 tab1, tab2, tab3, tab4, tab5 , tab6 , tab7 ,  Burn_Cash  , Ref_index_Log , cf_log   = st.tabs([ "FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS', 'QXO(LV)' , 'RXRX(LV)' ,  'Burn_Cash' ,  'Ref_index_Log' , 'cf_log' ])
-
 
 with Ref_index_Log:
     tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , 'QXO' , 'RXRX' ]
@@ -525,3 +513,13 @@ with cf_log:
     st.write(' Net Profit  =  sumusd - refer - sumusd[0] (ต้นทุนเริ่มต้น)')
     st.write(' Ref_index_Log = initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))')
     st.write(' Net in Ref_index_Log = (daily_sumusd - ref_log - total_initial_capital) - net_at_index_0')
+    with st.expander("Max_Limit"):
+    st.write("""🎯 กฎสำคัญ \n
+     
+    P[i   ]     คือ ราคาปัจจุบัน   \n
+    [P[i-1]     คือ ราคาของอดีต (จุดก่อนหน้า)  \n
+    [P[i+1]     คือ ราคาของอนาคต (จุดถัดไป)  \n
+    Action = 1 เมื่อ   (P[i] - P[i-1])   *  (P[i+1] - P[i])  < 0  \n
+    Action = 0 เมื่อ   (P[i] - P[i-1])   *  (P[i+1] - P[i])  ≥ 0 \n
+    Action = NaN สำหรับจุดแรกและจุดสุดท้าย (คำนวณไม่ได้)""") 
+
