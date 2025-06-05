@@ -347,7 +347,7 @@ def get_max_action_optimized(prices):
     
     action = np.full(n, np.nan, dtype=np.float64)
     
-    # คำนวณ diff ทีละขั้น
+    # คำนวณ diff ทีละขั้น 
     for i in range(1, n-1):
         diff_prev = prices[i] - prices[i-1]
         diff_next = prices[i+1] - prices[i]
