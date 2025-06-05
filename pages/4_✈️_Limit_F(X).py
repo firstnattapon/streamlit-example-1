@@ -64,25 +64,6 @@ def calculate_optimized(action_list, price_list, fix=1500):
     
 #     return action
 
-def get_max_action(prices):
-    n = len(prices)
-    actions = np.zeros(n, dtype=np.int32)
-    actions[0] = 1  # เริ่มต้นต้องซื้อ
-    
-    for i in range(1, n):
-        # ซื้อถ้าราคาพรุ่งนี้สูงกว่าวันนี้
-        if i < n-1 and prices[i+1] > prices[i]:
-            actions[i] = 1
-        # หรือถ้าเป็นวันสุดท้าย ให้ rebalance
-        elif i == n-1:
-            actions[i] = 1
-        else:
-            actions[i] = 0
-    
-    return actions
-
-
-
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = yf.Ticker(Ticker)
