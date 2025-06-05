@@ -356,7 +356,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         'cash': np.round(cash, 2),
         'asset_value': np.round(asset_value, 2),
         'amount': np.round(amount, 2),
-        'refer': np.round(refer + initial_capital , 2),
+        'refer': np.round(refer, 2),
         'net': np.round( sumusd - refer - initial_capital , 2) # ใช้ sumusd[0] แทน 3000
     })
     return df 
@@ -451,7 +451,11 @@ with Ref_index_Log:
     
     # คำนวณต้นทุนรวมจาก sumusd[0] ของแต่ละหุ้น
     total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in tickers])
-    df_sumusd_['net'] = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
+    
+    # คำนวณ net แบบใหม่: ลบต้นทุนเริ่มต้นออกเพื่อแสดงเฉพาะส่วนเกินทุน
+    net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
+    net_at_index_0 = net_raw.iloc[0]  # ค่า net ที่ index 0
+    df_sumusd_['net'] = net_raw - net_at_index_0  # ปรับให้ index 0 = 0
     
     df_sumusd_ = df_sumusd_.reset_index().set_index('index')
     st.line_chart(df_sumusd_.net)
@@ -520,3 +524,4 @@ with cf_log:
     st.write(' Rebalance   =  -fix * ln( t0 / tn )')
     st.write(' Net Profit  =  sumusd - refer - sumusd[0] (ต้นทุนเริ่มต้น)')
     st.write(' Ref_index_Log = initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))')
+    st.write(' Net in Ref_index_Log = (daily_sumusd - ref_log - total_initial_capital) - net_at_index_0')
