@@ -51,18 +51,36 @@ def calculate_optimized(action_list, price_list, fix=1500):
     return buffer, sumusd, cash, asset_value, amount, refer
 
 
+# def get_max_action(prices):
+#     prices = np.array(prices, dtype=np.float64)
+#     n = len(prices)
+    
+#     if n < 3:
+#         return np.full(n, np.nan)
+    
+#     action = np.full(n, np.nan, dtype=np.float64)
+#     diff = np.diff(prices)
+#     action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
+    
+#     return action
+
 def get_max_action(prices):
-    prices = np.array(prices, dtype=np.float64)
     n = len(prices)
+    actions = np.zeros(n, dtype=np.int32)
+    actions[0] = 1  # เริ่มต้นต้องซื้อ
     
-    if n < 3:
-        return np.full(n, np.nan)
+    for i in range(1, n):
+        # ซื้อถ้าราคาพรุ่งนี้สูงกว่าวันนี้
+        if i < n-1 and prices[i+1] > prices[i]:
+            actions[i] = 1
+        # หรือถ้าเป็นวันสุดท้าย ให้ rebalance
+        elif i == n-1:
+            actions[i] = 1
+        else:
+            actions[i] = 0
     
-    action = np.full(n, np.nan, dtype=np.float64)
-    diff = np.diff(prices)
-    action[1:-1] = np.where(diff[:-1] * diff[1:] < 0, 1, 0)
-    
-    return action
+    return actions
+
 
 
 def Limit_fx (Ticker = '' , act = -1 ):
