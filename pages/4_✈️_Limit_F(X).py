@@ -98,7 +98,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         'cash': np.round(cash, 2),
         'asset_value': np.round(asset_value, 2),
         'amount': np.round(amount, 2),
-        'refer': np.round(refer, 2),
+        'refer': np.round(refer + initial_capital, 2),
         'net': np.round( sumusd - refer - initial_capital , 2) # ใช้ sumusd[0] แทน 3000
     })
     return df 
