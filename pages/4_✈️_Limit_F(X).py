@@ -255,6 +255,7 @@
 #     st.write(' Rebalance   =  -fix * ln( t0 / tn )')
 
 
+
 import pandas as pd
 import numpy as np
 from numba import njit
@@ -428,10 +429,15 @@ with Ref_index_Log:
     int_st_list = prices_df.iloc[0][tickers]  # ราคาปิดเริ่มต้นของแต่ละ Ticker
     int_st = np.prod(int_st_list)
     
-    # คำนวณ ref_log สำหรับแต่ละแถว
+    # คำนวณ initial_capital_Ref_index_Log
+    # สมมติว่า sumusd[0] ของแต่ละหุ้นคือ 3000 (fix * 2 = 1500 * 2)
+    initial_capital_per_stock = 3000  # หรือจะใช้ Limit_fx(tickers[0], act=-1).sumusd.iloc[0] ก็ได้
+    initial_capital_Ref_index_Log = initial_capital_per_stock * len(tickers)  # 3000 * 7 = 21000
+    
+    # คำนวณ ref_log สำหรับแต่ละแถว ด้วยสูตรใหม่
     def calculate_ref_log(row):
         int_end = np.prod(row[tickers])  # ผลคูณของราคาปิดในแถวปัจจุบัน
-        ref_log = 15000 + (-1500 * np.log(int_st / int_end))
+        ref_log = initial_capital_Ref_index_Log + (-1500 * np.log(int_st / int_end))
         return ref_log
     
     prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)    
@@ -513,3 +519,4 @@ with cf_log:
     st.write('')
     st.write(' Rebalance   =  -fix * ln( t0 / tn )')
     st.write(' Net Profit  =  sumusd - refer - sumusd[0] (ต้นทุนเริ่มต้น)')
+    st.write(' Ref_index_Log = initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))')
