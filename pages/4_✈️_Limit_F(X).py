@@ -514,7 +514,7 @@ with cf_log:
     st.write(' Ref_index_Log = initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))')
     st.write(' Net in Ref_index_Log = (daily_sumusd - ref_log - total_initial_capital) - net_at_index_0')
     
-    st.expander("Max_Limit"):
+    st.write("Max_Limit"):
         st.write("""🎯 กฎสำคัญ \n
         P[i   ]     คือ ราคาปัจจุบัน   \n
         [P[i-1]     คือ ราคาของอดีต (จุดก่อนหน้า)  \n
