@@ -65,91 +65,61 @@ def calculate_optimized(action_list, price_list, fix=1500):
 #     return action
 
 
-# def get_max_action(price_list, fix=1500):
-#     """
-#     คำนวณหาลำดับ action (0, 1) ที่ให้ผลตอบแทนสูงสุดทางทฤษฎี
-#     โดยใช้ Dynamic Programming ร่วมกับการย้อนรอย (Backtracking)
-#     """
-#     prices = np.asarray(price_list, dtype=np.float64)
-#     n = len(prices)
-
-#     if n < 2:
-#         return np.ones(n, dtype=int) # ถ้ามีข้อมูลไม่พอ ก็ action ไปเลย
-
-#     # --- ส่วนที่ 1: คำนวณไปข้างหน้า (เหมือนเดิม แต่เพิ่มการเก็บ path) ---
-    
-#     dp = np.zeros(n, dtype=np.float64)
-#     # path[i] จะเก็บ index 'j' ของ action ครั้งก่อนหน้าที่ดีที่สุดสำหรับวัน 'i'
-#     path = np.zeros(n, dtype=int) 
-    
-#     initial_capital = float(fix * 2)
-#     dp[0] = initial_capital
-    
-#     for i in range(1, n):
-#         max_prev_sumusd = 0
-#         best_j = 0 # ตัวแปรสำหรับเก็บ j ที่ดีที่สุดสำหรับ i นี้
-        
-#         for j in range(i):
-#             profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1)
-#             current_sumusd = dp[j] + profit_from_j_to_i
-            
-#             if current_sumusd > max_prev_sumusd:
-#                 max_prev_sumusd = current_sumusd
-#                 best_j = j # เจอทางเลือกที่ดีกว่า ก็จำไว้ว่ามันมาจาก j ไหน
-        
-#         dp[i] = max_prev_sumusd
-#         path[i] = best_j # บันทึกเส้นทางที่ดีที่สุดสำหรับวัน i
-
-#     # --- ส่วนที่ 2: การย้อนรอย (Backtracking) เพื่อสร้าง action array ---
-
-#     actions = np.zeros(n, dtype=int)
-    
-#     # 1. หาจุดสิ้นสุดของเส้นทาง (วันที่ให้ sumusd สูงที่สุด)
-#     last_action_day = np.argmax(dp)
-    
-#     # 2. เริ่มย้อนรอยจากจุดสิ้นสุดกลับไปหาจุดเริ่มต้น
-#     current_day = last_action_day
-#     while current_day > 0:
-#         # ทุกจุดที่เราเหยียบในการย้อนรอย คือวันที่ควรมี action
-#         actions[current_day] = 1
-#         # กระโดดกลับไปยัง action ครั้งก่อนหน้า
-#         current_day = path[current_day]
-        
-#     # 3. กำหนดให้ action แรกสุดเป็น 1 เสมอ (เป็นจุดเริ่มต้นของทุกเส้นทาง)
-#     actions[0] = 1
-    
-#     return actions
-
-
 def get_max_action(price_list, fix=1500):
+    """
+    คำนวณหาลำดับ action (0, 1) ที่ให้ผลตอบแทนสูงสุดทางทฤษฎี
+    โดยใช้ Dynamic Programming ร่วมกับการย้อนรอย (Backtracking)
+    """
     prices = np.asarray(price_list, dtype=np.float64)
     n = len(prices)
 
     if n < 2:
-        return np.ones(n, dtype=int) # หรือจัดการตามความเหมาะสม
+        return np.ones(n, dtype=int) # ถ้ามีข้อมูลไม่พอ ก็ action ไปเลย
 
-    best_profit = -float('inf') # ติดลบเยอะๆ เผื่อกรณีขาดทุน
-    buy_day = 0
-    sell_day = 0
+    # --- ส่วนที่ 1: คำนวณไปข้างหน้า (เหมือนเดิม แต่เพิ่มการเก็บ path) ---
+    
+    dp = np.zeros(n, dtype=np.float64)
+    # path[i] จะเก็บ index 'j' ของ action ครั้งก่อนหน้าที่ดีที่สุดสำหรับวัน 'i'
+    path = np.zeros(n, dtype=int) 
+    
+    initial_capital = float(fix * 2)
+    dp[0] = initial_capital
+    
+    for i in range(1, n):
+        max_prev_sumusd = 0
+        best_j = 0 # ตัวแปรสำหรับเก็บ j ที่ดีที่สุดสำหรับ i นี้
+        
+        for j in range(i):
+            profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1)
+            current_sumusd = dp[j] + profit_from_j_to_i
+            
+            if current_sumusd > max_prev_sumusd:
+                max_prev_sumusd = current_sumusd
+                best_j = j # เจอทางเลือกที่ดีกว่า ก็จำไว้ว่ามันมาจาก j ไหน
+        
+        dp[i] = max_prev_sumusd
+        path[i] = best_j # บันทึกเส้นทางที่ดีที่สุดสำหรับวัน i
 
-    for i in range(n):
-        for j in range(i + 1, n):
-            # คำนวณกำไร ถ้าซื้อที่ prices[i] และขายที่ prices[j]
-            current_profit = fix * ((prices[j] / prices[i]) - 1)
-            if current_profit > best_profit:
-                best_profit = current_profit
-                buy_day = i
-                sell_day = j
+    # --- ส่วนที่ 2: การย้อนรอย (Backtracking) เพื่อสร้าง action array ---
 
     actions = np.zeros(n, dtype=int)
-    if best_profit > 0 : # ถ้ามีกำไรเกิดขึ้นจริง
-        actions[buy_day] = 1
-        actions[sell_day] = 1
-    elif n > 0: # ถ้าไม่มีกำไร ก็อาจจะกำหนด action เริ่มต้น
-        actions[0] = 1
-        if n > 1 : actions[n-1] = 1 # หรือเป็น buy and hold
-
+    
+    # 1. หาจุดสิ้นสุดของเส้นทาง (วันที่ให้ sumusd สูงที่สุด)
+    last_action_day = np.argmax(dp)
+    
+    # 2. เริ่มย้อนรอยจากจุดสิ้นสุดกลับไปหาจุดเริ่มต้น
+    current_day = last_action_day
+    while current_day > 0:
+        # ทุกจุดที่เราเหยียบในการย้อนรอย คือวันที่ควรมี action
+        actions[current_day] = 1
+        # กระโดดกลับไปยัง action ครั้งก่อนหน้า
+        current_day = path[current_day]
+        
+    # 3. กำหนดให้ action แรกสุดเป็น 1 เสมอ (เป็นจุดเริ่มต้นของทุกเส้นทาง)
+    actions[0] = 1
+    
     return actions
+
 
 def Limit_fx (Ticker = '' , act = -1 ):
     filter_date = '2023-01-01 12:00:00+07:00'
