@@ -255,7 +255,6 @@
 #     st.write(' Rebalance   =  -fix * ln( t0 / tn )')
 
 
-
 import pandas as pd
 import numpy as np
 from numba import njit
@@ -345,6 +344,9 @@ def Limit_fx (Ticker = '' , act = -1 ):
     
     buffer, sumusd, cash, asset_value, amount , refer = calculate_optimized( actions ,  prices)
     
+    # ใช้ sumusd[0] แทนค่าคงที่ 3000
+    initial_capital = sumusd[0]
+    
     df = pd.DataFrame({
         'price': prices,
         'action': actions,
@@ -354,7 +356,7 @@ def Limit_fx (Ticker = '' , act = -1 ):
         'asset_value': np.round(asset_value, 2),
         'amount': np.round(amount, 2),
         'refer': np.round(refer, 2),
-        'net': np.round( (sumusd -  refer), 2) # ลบ +1500 ออกเพื่อให้ผลลัพธ์เหมือนเดิม
+        'net': np.round( sumusd - refer - initial_capital , 2) # ใช้ sumusd[0] แทน 3000
     })
     return df 
 
@@ -440,7 +442,10 @@ with Ref_index_Log:
     df_sumusd_ = pd.DataFrame(sumusd_)
     df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
     df_sumusd_['ref_log'] = prices_df
-    df_sumusd_['net'] = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log']
+    
+    # คำนวณต้นทุนรวมจาก sumusd[0] ของแต่ละหุ้น
+    total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in tickers])
+    df_sumusd_['net'] = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
     
     df_sumusd_ = df_sumusd_.reset_index().set_index('index')
     st.line_chart(df_sumusd_.net)
@@ -507,3 +512,4 @@ with tab7:
 with cf_log: 
     st.write('')
     st.write(' Rebalance   =  -fix * ln( t0 / tn )')
+    st.write(' Net Profit  =  sumusd - refer - sumusd[0] (ต้นทุนเริ่มต้น)')
