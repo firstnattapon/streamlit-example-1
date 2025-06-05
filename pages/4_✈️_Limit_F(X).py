@@ -65,7 +65,7 @@ def calculate_optimized(action_list, price_list, fix=1500):
 #     return action
 
 
-def get_max_action(prices, fix=1500):
+def get_max_action(price_list, fix=1500):
     """
     คำนวณหาลำดับ action (0, 1) ที่ให้ผลตอบแทนสูงสุดทางทฤษฎี
     โดยใช้ Dynamic Programming ร่วมกับการย้อนรอย (Backtracking)
