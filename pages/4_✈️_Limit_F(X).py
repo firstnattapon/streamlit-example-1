@@ -5,7 +5,7 @@ import yfinance as yf
 import streamlit as st
 import thingspeak
 import json
-
+ 
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️" , layout = "wide" )
 
 @njit(fastmath=True)  # เพิ่ม fastmath=True เพื่อให้ compiler optimize มากขึ้น
