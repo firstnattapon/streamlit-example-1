@@ -319,6 +319,8 @@ with cf_log:
     st.write(' Ref_index_Log = initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))')
     st.write(' Net in Ref_index_Log = (daily_sumusd - ref_log - total_initial_capital) - net_at_index_0')
     st.write('________')
+    iframe(frame = "    https://monica.im/share/artifact?id=qpAkuKjBpuVz2cp9nNFRs3")    
+    st.write('________')
     iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")    
 
 
