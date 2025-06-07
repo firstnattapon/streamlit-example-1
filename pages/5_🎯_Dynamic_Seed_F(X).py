@@ -341,7 +341,7 @@ def main():
     
     num_seeds = st.number_input(
         "จำนวน Seeds ต่อ Window", 
-        min_value=100, max_value=5000, value=1000
+        min_value=100, max_value=10000, value=1000
     )
     
     # ปุ่มเริ่มทดสอบ
