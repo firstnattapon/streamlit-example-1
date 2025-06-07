@@ -6,7 +6,7 @@ import streamlit as st
 import thingspeak
 import json
   
-st.set_page_config(page_title="Limit_F(X)", page_icon="✈️"  )
+st.set_page_config(page_title="Limit_F(X)", page_icon="✈️" , layout = "wide" )
 
 @njit(fastmath=True)  # เพิ่ม fastmath=True เพื่อให้ compiler optimize มากขึ้น
 def calculate_optimized(action_list, price_list, fix=1500):
@@ -713,5 +713,7 @@ with cf_log:
     iframe(frame = "https://monica.im/share/artifact?id=qpAkuKjBpuVz2cp9nNFRs3")  
     st.write('________')
     iframe(frame = "https://monica.im/share/artifact?id=wEjeaMxVW6MgDDm3xAZatX")    
+    st.write('________')
+    iframe(frame = "https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK")    
     st.write('________')
     iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")    
