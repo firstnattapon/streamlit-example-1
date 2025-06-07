@@ -400,7 +400,5 @@ if Limut_Order_RXRX:
 
 st.write("_____")
 
-
-# if st.button("RERUN"):
-st.sidebar.rerun()
-# st.rerun()
+if st.button("RERUN"):
+    st.rerun()
