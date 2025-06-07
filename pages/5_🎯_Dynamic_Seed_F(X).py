@@ -105,12 +105,10 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=N
         best_seed_for_window = -1
         max_net_for_window = -np.inf
 
-        # --- ส่วนตรรกะสำคัญ: สร้างกลุ่มผู้เข้าแข่งขัน ---
         candidate_seeds = set(np.arange(num_seeds_to_try))
         if previous_best_seed >= 0:
             candidate_seeds.add(previous_best_seed)
         seeds_to_evaluate = list(candidate_seeds)
-        # --- สิ้นสุดส่วนตรรกะสำคัญ ---
 
         batch_size = max(1, len(seeds_to_evaluate) // max_workers)
         seed_batches = [seeds_to_evaluate[j:j+batch_size] for j in range(0, len(seeds_to_evaluate), batch_size)]
@@ -217,6 +215,7 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_worke
         'refer': np.round(refer + initial_capital, 2),
         'net': np.round(sumusd - refer - initial_capital, 2)})
 
+# <<< START OF MODIFICATION >>>
 def main():
     tab1, tab2, = st.tabs(["การตั้งค่า", "ทดสอบ"])
     with tab1:
@@ -247,12 +246,25 @@ def main():
                 st.write('📊 **Refer_Log Comparison**')
                 tickerData = get_ticker_data(test_ticker)
                 
-                final_active_seed = "N/A"
+                # --- ส่วนที่แก้ไข: สร้าง Label และ Caption แบบละเอียด ---
+                
+                best_seed_label = "Best Seed" # Default label
+                seed_sequence_str = "ไม่พบข้อมูล Seed" # Default caption
+                
                 if f'window_details_{test_ticker}' in st.session_state:
                     window_details = st.session_state[f'window_details_{test_ticker}']
-                    if window_details: final_active_seed = window_details[-1]['best_seed']
+                    if window_details: 
+                        # ดึง Seed ทั้งหมดมาสร้างเป็น list ของ string
+                        all_seeds = [str(w['best_seed']) for w in window_details]
+                        
+                        # สร้าง Label สำหรับกราฟ (ตัวแรก...ตัวสุดท้าย)
+                        if len(all_seeds) > 1:
+                            best_seed_label = f"Best Seed[{all_seeds[0]}...{all_seeds[-1]}]"
+                        else:
+                            best_seed_label = f"Best Seed[{all_seeds[0]}]"
 
-                best_seed_label = f"Best Seed[{final_active_seed}]"
+                        # สร้าง Caption แบบเต็ม (ตัวแรก -> ตัวที่สอง -> ...)
+                        seed_sequence_str = " -> ".join(all_seeds)
                 
                 chart_data = pd.DataFrame({
                     'min': df_min['net'],
@@ -261,6 +273,12 @@ def main():
                 })
                 chart_data.index = tickerData.index
                 st.line_chart(chart_data)
+                
+                # แสดง Caption ใต้กราฟ
+                st.caption(f"🧬 **Calculation DNA:** ลำดับ Seed ที่ใช้คำนวณเส้น '{best_seed_label}' คือ: `{seed_sequence_str}`")
+
+                # --- สิ้นสุดส่วนที่แก้ไข ---
+
 
                 st.write('💰 **Burn_Cash (จากกรณี Min)**')
                 df_min.index = tickerData.index
@@ -289,3 +307,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# <<< END OF MODIFICATION >>>
