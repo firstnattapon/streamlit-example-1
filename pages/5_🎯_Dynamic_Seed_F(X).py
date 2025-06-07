@@ -324,7 +324,7 @@ def main():
     tab1, tab2, = st.tabs([ "การตั้งค่า", "ทดสอบ" ])
     with tab1:
 
-        st.title("🎯 Best Seed Sliding Window Tester")
+        st.write("🎯 Best Seed Sliding Window Tester")
         st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด")
         
         # Sidebar สำหรับการตั้งค่า
