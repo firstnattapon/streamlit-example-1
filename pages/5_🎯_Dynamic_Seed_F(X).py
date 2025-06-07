@@ -70,7 +70,6 @@ def evaluate_seed_batch(seed_batch, prices_window, window_len):
             continue
     return results
 
-# <<< START OF MODIFIED FUNCTION >>>
 def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=None, window_size=30, num_seeds_to_try=1000, progress_bar=None, max_workers=4):
     """
     *** ตรรกะใหม่: ค้นหา Best Seed โดยนำ Seed ของ Window ก่อนหน้ามาแข่งขันด้วย ***
@@ -109,18 +108,11 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=N
         best_seed_for_window = -1
         max_net_for_window = -np.inf
 
-        # --- *** NEW LOGIC: Candidate Seed Generation *** ---
-        # 1. เริ่มต้นด้วยกลุ่ม seed ที่สุ่มขึ้นมาใหม่
         candidate_seeds = set(np.arange(num_seeds_to_try))
-        
-        # 2. ถ้ามี "ผู้ชนะ" จากรอบที่แล้ว, เพิ่มเข้ามาในกลุ่มผู้เข้าแข่งขันด้วย
         if previous_best_seed >= 0:
             candidate_seeds.add(previous_best_seed)
-            
-        # 3. แปลงกลับเป็น list เพื่อนำไปประมวลผล
         seeds_to_evaluate = list(candidate_seeds)
 
-        # --- ประเมินผลกลุ่มผู้เข้าแข่งขันทั้งหมด (Parallel Processing) ---
         batch_size = max(1, len(seeds_to_evaluate) // max_workers)
         seed_batches = [seeds_to_evaluate[j:j+batch_size] for j in range(0, len(seeds_to_evaluate), batch_size)]
         
@@ -130,7 +122,6 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=N
             for future in as_completed(future_to_batch):
                 all_results.extend(future.result())
         
-        # หาผู้ชนะจากกลุ่มผู้เข้าแข่งขันทั้งหมด
         for seed, final_net in all_results:
             if final_net > max_net_for_window:
                 max_net_for_window = final_net
@@ -158,7 +149,6 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=N
         st.write(f"**🎯 Window {i+1}/{num_windows}** | {timeline_info}")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-             # แสดงเครื่องหมายถ้า seed ที่ชนะเป็น seed เดิม
             is_retained = "👑 (Retained)" if best_seed_for_window == previous_best_seed and previous_best_seed !=-1 else ""
             st.metric("Best Seed", f"{best_seed_for_window:,} {is_retained}")
         with col2:
@@ -173,11 +163,9 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=N
         if progress_bar:
             progress_bar.progress((i + 1) / num_windows)
         
-        # อัปเดต "ผู้ชนะ" ของรอบนี้ เพื่อใช้ในรอบถัดไป
         previous_best_seed = best_seed_for_window
 
     return final_actions, window_details
-# <<< END OF MODIFIED FUNCTION >>>
 
 def get_max_action_vectorized(price_list, fix=1500):
     prices = np.asarray(price_list, dtype=np.float64)
@@ -271,6 +259,7 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_worke
     })
     return df
 
+# <<< START OF MODIFICATION >>>
 def main():
     tab1, tab2, = st.tabs(["การตั้งค่า", "ทดสอบ"])
     with tab1:
@@ -302,16 +291,30 @@ def main():
                 df_best_seed = Limit_fx(Ticker=test_ticker, act=-3, window_size=window_size, 
                                         num_seeds_to_try=num_seeds, max_workers=max_workers)
 
+                # --- ส่วนที่แก้ไข ---
                 st.write("---")
                 st.write('📊 **Refer_Log Comparison**')
                 tickerData = get_ticker_data(test_ticker)
+                
+                # ดึง Seed ตัวสุดท้ายที่ใช้
+                final_active_seed = "N/A"
+                if f'window_details_{test_ticker}' in st.session_state:
+                    window_details = st.session_state[f'window_details_{test_ticker}']
+                    if window_details: # ตรวจสอบว่า list ไม่ว่าง
+                        final_active_seed = window_details[-1]['best_seed']
+
+                # สร้างชื่อ Label แบบไดนามิก
+                best_seed_label = f"Best Seed[{final_active_seed}]"
+                
+                # สร้าง DataFrame สำหรับพล็อตกราฟด้วย Label ใหม่
                 chart_data = pd.DataFrame({
                     'min': df_min['net'],
-                    'best_seed': df_best_seed['net'],
+                    best_seed_label: df_best_seed['net'], # ใช้ Label ที่สร้างขึ้นใหม่
                     'max': df_max['net']
                 })
                 chart_data.index = tickerData.index
                 st.line_chart(chart_data)
+                # --- สิ้นสุดส่วนที่แก้ไข ---
 
                 st.write('💰 **Burn_Cash (จากกรณี Min)**')
                 df_min.index = tickerData.index
@@ -360,3 +363,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# <<< END OF MODIFICATION >>>
