@@ -402,4 +402,5 @@ st.write("_____")
 
 
 if st.button("RERUN"):
-    st.rerun()
+    st.sidebar.rerun()
+    # st.rerun()
