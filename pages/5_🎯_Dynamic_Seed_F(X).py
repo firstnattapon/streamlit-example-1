@@ -51,13 +51,29 @@ def calculate_optimized(action_list, price_list, fix=1500):
 def find_best_seed_sliding_window(price_list, ticker_data_with_dates=None, window_size=30, num_seeds_to_try=1000, progress_bar=None):
     """
     ค้นหาลำดับ action ที่ดีที่สุดโดยการหา seed ที่ให้ผลกำไรสูงสุดในแต่ละช่วงเวลา (sliding window)
+
+    Args:
+        price_list (list or np.array): รายการราคาของสินทรัพย์
+        ticker_data_with_dates: DataFrame ที่มี index เป็นวันที่สำหรับแสดง timeline
+        window_size (int): ขนาดของแต่ละช่วงเวลาที่จะค้นหา (เช่น 30 วัน)
+        num_seeds_to_try (int): จำนวน seed ที่จะลองสุ่มในแต่ละ window
+        progress_bar: (Optional) Streamlit progress bar object to update.
+
+    Returns:
+        tuple: (final_actions, window_details) 
+               - final_actions: ลำดับ action ที่ดีที่สุด
+               - window_details: รายละเอียดของแต่ละ window
     """
     prices = np.asarray(price_list)
     n = len(prices)
     final_actions = np.array([], dtype=int)
     window_details = []
     
-    num_windows = (n + window_size - 1) // window_size
+    num_windows = (n + window_size - 1) // window_size # Calculate total number of windows
+    
+    st.write("🔍 **เริ่มต้นการค้นหา Best Seed ด้วย Sliding Window**")
+    st.write(f"📊 ข้อมูลทั้งหมด: {n} วัน | ขนาด Window: {window_size} วัน | จำนวน Windows: {num_windows}")
+    st.write("---")
     
     # วนลูปตามข้อมูลราคาในแต่ละช่วง (window)
     for i, start_index in enumerate(range(0, n, window_size)):
@@ -77,9 +93,11 @@ def find_best_seed_sliding_window(price_list, ticker_data_with_dates=None, windo
             timeline_info = f"Index {start_index} ถึง {end_index-1}"
 
         best_seed_for_window = -1
+        # ใช้ -np.inf เพื่อให้แน่ใจว่าค่า net แรกที่เจอมักจะสูงกว่าเสมอ
         max_net_for_window = -np.inf  
 
         # --- ค้นหา Seed ที่ดีที่สุดสำหรับ Window ปัจจุบัน ---
+        # ใช้ np.random.randint เพื่อให้ได้ seed ที่หลากหลายมากขึ้น
         random_seeds = np.random.randint(0, 10_000_000, size=num_seeds_to_try)
 
         for seed in random_seeds:
@@ -87,14 +105,15 @@ def find_best_seed_sliding_window(price_list, ticker_data_with_dates=None, windo
             actions_window = rng.integers(0, 2, size=window_len)
             actions_window[0] = 1  # บังคับให้ action แรกของ window เป็น 1 เสมอ
 
-            # ประเมินผลเฉพาะใน window นี้
+            # ประเมินผลเฉพาะใน window นี้ (เริ่มนับ 1 ใหม่)
             if window_len < 2:
+                # ถ้าข้อมูลไม่พอคำนวณ net ให้ใช้ action ที่สร้างได้เลย
                 final_net = 0
             else:
                 _, sumusd, _, _, _, refer = calculate_optimized(actions_window.tolist(), prices_window.tolist())
                 initial_capital = sumusd[0]
                 net = sumusd - refer - initial_capital
-                final_net = net[-1]
+                final_net = net[-1] # เอาผลกำไร ณ วันสุดท้ายของ window
 
             if final_net > max_net_for_window:
                 max_net_for_window = final_net
@@ -122,6 +141,18 @@ def find_best_seed_sliding_window(price_list, ticker_data_with_dates=None, windo
         }
         window_details.append(window_detail)
 
+        # แสดงผลแต่ละ window
+        st.write(f"**🎯 Window {i+1}/{num_windows}** | {timeline_info}")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Best Seed", f"{best_seed_for_window:,}")
+        with col2:
+            st.metric("Net Profit", f"{max_net_for_window:.2f}")
+        with col3:
+            st.metric("Price Change", f"{window_detail['price_change_pct']:.2f}%")
+        with col4:
+            st.metric("Actions Count", f"{window_detail['action_count']}/{window_len}")
+
         # นำ action ที่ดีที่สุดของ window นี้ไปต่อท้าย action หลัก
         final_actions = np.concatenate((final_actions, best_actions_for_window))
         
@@ -140,9 +171,12 @@ def get_max_action(price_list, fix=1500):
     n = len(prices)
 
     if n < 2:
-        return np.ones(n, dtype=int)
+        return np.ones(n, dtype=int) # ถ้ามีข้อมูลไม่พอ ก็ action ไปเลย
 
+    # --- ส่วนที่ 1: คำนวณไปข้างหน้า (เหมือนเดิม แต่เพิ่มการเก็บ path) ---
+    
     dp = np.zeros(n, dtype=np.float64)
+    # path[i] จะเก็บ index 'j' ของ action ครั้งก่อนหน้าที่ดีที่สุดสำหรับวัน 'i'
     path = np.zeros(n, dtype=int) 
     
     initial_capital = float(fix * 2)
@@ -150,7 +184,7 @@ def get_max_action(price_list, fix=1500):
     
     for i in range(1, n):
         max_prev_sumusd = 0
-        best_j = 0
+        best_j = 0 # ตัวแปรสำหรับเก็บ j ที่ดีที่สุดสำหรับ i นี้
         
         for j in range(i):
             profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1)
@@ -158,19 +192,27 @@ def get_max_action(price_list, fix=1500):
             
             if current_sumusd > max_prev_sumusd:
                 max_prev_sumusd = current_sumusd
-                best_j = j
+                best_j = j # เจอทางเลือกที่ดีกว่า ก็จำไว้ว่ามันมาจาก j ไหน
         
         dp[i] = max_prev_sumusd
-        path[i] = best_j
+        path[i] = best_j # บันทึกเส้นทางที่ดีที่สุดสำหรับวัน i
+
+    # --- ส่วนที่ 2: การย้อนรอย (Backtracking) เพื่อสร้าง action array ---
 
     actions = np.zeros(n, dtype=int)
+    
+    # 1. หาจุดสิ้นสุดของเส้นทาง (วันที่ให้ sumusd สูงที่สุด)
     last_action_day = np.argmax(dp)
     
+    # 2. เริ่มย้อนรอยจากจุดสิ้นสุดกลับไปหาจุดเริ่มต้น
     current_day = last_action_day
     while current_day > 0:
+        # ทุกจุดที่เราเหยียบในการย้อนรอย คือวันที่ควรมี action
         actions[current_day] = 1
+        # กระโดดกลับไปยัง action ครั้งก่อนหน้า
         current_day = path[current_day]
         
+    # 3. กำหนดให้ action แรกสุดเป็น 1 เสมอ (เป็นจุดเริ่มต้นของทุกเส้นทาง)
     actions[0] = 1
     
     return actions
@@ -186,21 +228,51 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000):
 
     if act == -1:  # min
         actions = np.array(np.ones(len(prices)), dtype=np.int64)
+
     elif act == -2:  # max  
         actions = get_max_action(prices)
+    
     elif act == -3:  # best_seed sliding window
         progress_bar = st.progress(0)
         actions, window_details = find_best_seed_sliding_window(
             prices, tickerData, window_size=window_size, 
             num_seeds_to_try=num_seeds_to_try, progress_bar=progress_bar
         )
+        
+        # แสดงสรุปผลรวม
+        st.write("---")
+        st.write("📈 **สรุปผลการค้นหา Best Seed**")
+        total_windows = len(window_details)
+        total_actions = sum([w['action_count'] for w in window_details])
+        total_net = sum([w['max_net'] for w in window_details])
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Windows", total_windows)
+        with col2:
+            st.metric("Total Actions", f"{total_actions}/{len(actions)}")
+        with col3:
+            st.metric("Total Net (Sum)", f"{total_net:.2f}")
+        
+        # แสดงตารางรายละเอียด
+        st.write("📋 **รายละเอียดแต่ละ Window**")
+        df_details = pd.DataFrame(window_details)
+        df_display = df_details[['window_number', 'timeline', 'best_seed', 'max_net', 
+                               'price_change_pct', 'action_count', 'window_size']].copy()
+        df_display.columns = ['Window', 'Timeline', 'Best Seed', 'Net Profit', 
+                            'Price Change %', 'Actions', 'Window Size']
+        st.dataframe(df_display, use_container_width=True)
+        
+        # เก็บ window_details ใน session state เพื่อใช้ในการแสดงผลอื่น ๆ
         st.session_state[f'window_details_{Ticker}'] = window_details
+      
     else:
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
     
     buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
     
+    # ใช้ sumusd[0] แทนค่าคงที่ 3000
     initial_capital = sumusd[0]
     
     df = pd.DataFrame({
@@ -237,281 +309,113 @@ def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000):
     all_id.append('max')
     
     chart_data = pd.DataFrame(np.array(all).T, columns=np.array(all_id))
-    return chart_data
+    
+    st.write('📊 **Refer_Log Comparison**')
+    st.line_chart(chart_data)
+
+    df_plot = Limit_fx(Ticker, act=-1)
+    df_plot = df_plot[['buffer']].cumsum()
+    st.write('💰 **Burn_Cash**')
+    st.line_chart(df_plot)
+    st.write(Limit_fx(Ticker, act=-1))
 
 # Main Streamlit App
 def main():
     st.title("🎯 Best Seed Sliding Window Tester")
     st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด")
     
-    # สร้าง tabs
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "⚙️ การตั้งค่า", 
-        "📊 กราฟเปรียบเทียบ", 
-        "📋 รายละเอียด Windows", 
-        "🌱 Seeds ที่เลือกใช้",
-        "📈 การวิเคราะห์",
-        "📖 คำอธิบาย"
-    ])
+    # Sidebar สำหรับการตั้งค่า
+    st.sidebar.header("⚙️ การตั้งค่า")
     
-    # Tab 1: การตั้งค่า
-    with tab1:
-        st.header("⚙️ การตั้งค่าพารามิเตอร์")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            test_ticker = st.selectbox(
-                "🏢 เลือก Ticker สำหรับทดสอบ", 
-                ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'],
-                index=0
-            )
-            
-            window_size = st.number_input(
-                "📅 ขนาด Window (วัน)", 
-                min_value=10, max_value=100, value=30,
-                help="ขนาดของแต่ละช่วงเวลาที่จะค้นหา Best Seed"
-            )
-        
-        with col2:
-            num_seeds = st.number_input(
-                "🌱 จำนวน Seeds ต่อ Window", 
-                min_value=100, max_value=5000, value=1000,
-                help="จำนวน random seeds ที่จะทดสอบในแต่ละ window"
-            )
-            
-            st.write("")
-            st.write("")
-            
-            start_test = st.button("🚀 เริ่มทดสอบ Best Seed", type="primary", use_container_width=True)
-        
-        # แสดงข้อมูลการตั้งค่าปัจจุบัน
+    # เลือก ticker สำหรับทดสอบ
+    test_ticker = st.sidebar.selectbox(
+        "เลือก Ticker สำหรับทดสอบ", 
+        ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
+    )
+    
+    # ตั้งค่าพารามิเตอร์
+    window_size = st.sidebar.number_input(
+        "ขนาด Window (วัน)", 
+        min_value=10, max_value=100, value=30
+    )
+    
+    num_seeds = st.sidebar.number_input(
+        "จำนวน Seeds ต่อ Window", 
+        min_value=100, max_value=5000, value=1000
+    )
+    
+    # ปุ่มเริ่มทดสอบ
+    if st.button("🚀 เริ่มทดสอบ Best Seed", type="primary"):
+        st.write(f"กำลังทดสอบ Best Seed สำหรับ **{test_ticker}** 📊")
+        st.write(f"⚙️ พารามิเตอร์: Window Size = {window_size}, Seeds per Window = {num_seeds}")
         st.write("---")
-        st.write("📋 **ข้อมูลการตั้งค่าปัจจุบัน:**")
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Ticker", test_ticker)
-        with col2:
-            st.metric("Window Size", f"{window_size} วัน")
-        with col3:
-            st.metric("Seeds per Window", f"{num_seeds:,}")
+        # เรียกใช้ plot comparison
+        plot_comparison(Ticker=test_ticker, act=-3, window_size=window_size, num_seeds_to_try=num_seeds)
         
-        # เมื่อกดปุ่มเริ่มทดสอบ
-        if start_test:
+        # แสดงข้อมูลเพิ่มเติมถ้ามี
+        if f'window_details_{test_ticker}' in st.session_state:
             st.write("---")
-            st.write(f"🔄 **กำลังประมวลผล {test_ticker}...**")
+            st.write("🔍 **การวิเคราะห์เพิ่มเติม**")
             
-            # บันทึกการตั้งค่าใน session state
-            st.session_state['test_ticker'] = test_ticker
-            st.session_state['window_size'] = window_size
-            st.session_state['num_seeds'] = num_seeds
-            st.session_state['test_completed'] = False
+            window_details = st.session_state[f'window_details_{test_ticker}']
             
-            # รันการทดสอบ
-            try:
-                chart_data = plot_comparison(
-                    Ticker=test_ticker, 
-                    act=-3, 
-                    window_size=window_size, 
-                    num_seeds_to_try=num_seeds
-                )
-                
-                # บันทึกผลลัพธ์
-                st.session_state['chart_data'] = chart_data
-                st.session_state['test_completed'] = True
-                
-                st.success("✅ การทดสอบเสร็จสิ้น! ดูผลลัพธ์ใน tabs อื่น ๆ")
-                
-            except Exception as e:
-                st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
+            # กราฟแสดง Net Profit ของแต่ละ Window
+            df_windows = pd.DataFrame(window_details)
+            st.write("📊 **Net Profit แต่ละ Window**")
+            st.bar_chart(df_windows.set_index('window_number')['max_net'])
+            
+            # กราฟแสดง Price Change % ของแต่ละ Window
+            st.write("📈 **Price Change % แต่ละ Window**")
+            st.bar_chart(df_windows.set_index('window_number')['price_change_pct'])
+            
+            # แสดง Seeds ที่ใช้
+            st.write("🌱 **Seeds ที่เลือกใช้ในแต่ละ Window**")
+            seeds_df = df_windows[['window_number', 'timeline', 'best_seed', 'max_net']].copy()
+            seeds_df.columns = ['Window', 'Timeline', 'Selected Seed', 'Net Profit']
+            st.dataframe(seeds_df, use_container_width=True)
+            
+            # ดาวน์โหลดผลลัพธ์
+            st.write("💾 **ดาวน์โหลดผลลัพธ์**")
+            csv = df_windows.to_csv(index=False)
+            st.download_button(
+                label="📥 ดาวน์โหลด Window Details (CSV)",
+                data=csv,
+                file_name=f'best_seed_results_{test_ticker}_{window_size}w_{num_seeds}s.csv',
+                mime='text/csv'
+            )
+
+    # คำอธิบายวิธีการทำงาน
+    st.write("---")
+    st.write("## 📖 คำอธิบายวิธีการทำงาน")
     
-    # Tab 2: กราฟเปรียบเทียบ
-    with tab2:
-        st.header("📊 กราฟเปรียบเทียบ")
+    with st.expander("🔍 Best Seed Sliding Window คืออะไร?"):
+        st.write("""
+        **Best Seed Sliding Window** เป็นเทคนิคการหา action sequence ที่ดีที่สุดโดย:
         
-        if 'test_completed' in st.session_state and st.session_state['test_completed']:
-            chart_data = st.session_state.get('chart_data')
-            test_ticker = st.session_state.get('test_ticker')
-            
-            if chart_data is not None:
-                st.write(f"**📈 Refer_Log Comparison สำหรับ {test_ticker}**")
-                st.line_chart(chart_data)
-                
-                # แสดง Burn Cash
-                df_plot = Limit_fx(test_ticker, act=-1)
-                df_plot = df_plot[['buffer']].cumsum()
-                st.write("**💰 Burn_Cash**")
-                st.line_chart(df_plot)
-                
-                # แสดงตารางข้อมูลดิบ
-                st.write("**📋 ข้อมูลดิบ**")
-                raw_data = Limit_fx(test_ticker, act=-1)
-                st.dataframe(raw_data, use_container_width=True)
-            else:
-                st.warning("⚠️ ไม่พบข้อมูลกราฟ กรุณาทำการทดสอบในแท็บ 'การตั้งค่า' ก่อน")
-        else:
-            st.info("ℹ️ กรุณาทำการทดสอบในแท็บ 'การตั้งค่า' ก่อนเพื่อดูกราฟเปรียบเทียบ")
+        1. **แบ่งข้อมูล**: แบ่งข้อมูลราคาออกเป็นช่วง ๆ (windows) ตามขนาดที่กำหนด
+        2. **ค้นหา Seed**: ในแต่ละ window ทำการสุ่ม seed หลาย ๆ ตัวและคำนวณผลกำไร
+        3. **เลือก Best Seed**: เลือก seed ที่ให้ผลกำไรสูงสุดในแต่ละ window
+        4. **รวม Actions**: นำ action sequences จากแต่ละ window มาต่อกันเป็น sequence สุดท้าย
+        
+        **ข้อดี:**
+        - ปรับตัวได้ตามสภาวะตลาดในแต่ละช่วงเวลา
+        - ลดความเสี่ยงจากการใช้ seed เดียวตลอดทั้งช่วง
+        - สามารถควบคุมพารามิเตอร์ได้ (window size, จำนวน seeds)
+        """)
     
-    # Tab 3: รายละเอียด Windows
-    with tab3:
-        st.header("📋 รายละเอียดแต่ละ Window")
+    with st.expander("⚙️ การตั้งค่าพารามิเตอร์"):
+        st.write("""
+        **Window Size (ขนาด Window):**
+        - ขนาดเล็ก (10-20 วัน): ปรับตัวเร็ว แต่อาจมีความผันผวนสูง
+        - ขนาดกลาง (20-50 วัน): สมดุลระหว่างการปรับตัวและเสถียรภาพ
+        - ขนาดใหญ่ (50+ วัน): เสถียรแต่ปรับตัวช้า
         
-        if 'test_completed' in st.session_state and st.session_state['test_completed']:
-            test_ticker = st.session_state.get('test_ticker')
-            
-            if f'window_details_{test_ticker}' in st.session_state:
-                window_details = st.session_state[f'window_details_{test_ticker}']
-                
-                # แสดงสรุปผลรวม
-                st.write("📈 **สรุปผลการค้นหา Best Seed**")
-                total_windows = len(window_details)
-                total_actions = sum([w['action_count'] for w in window_details])
-                total_net = sum([w['max_net'] for w in window_details])
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Windows", total_windows)
-                with col2:
-                    st.metric("Total Actions", f"{total_actions}")
-                with col3:
-                    st.metric("Total Net (Sum)", f"{total_net:.2f}")
-                
-                st.write("---")
-                
-                # แสดงตารางรายละเอียด
-                df_details = pd.DataFrame(window_details)
-                df_display = df_details[['window_number', 'timeline', 'best_seed', 'max_net', 
-                                       'price_change_pct', 'action_count', 'window_size']].copy()
-                df_display.columns = ['Window', 'Timeline', 'Best Seed', 'Net Profit', 
-                                    'Price Change %', 'Actions', 'Window Size']
-                st.dataframe(df_display, use_container_width=True)
-                
-                # ดาวน์โหลดผลลัพธ์
-                st.write("---")
-                st.write("💾 **ดาวน์โหลดผลลัพธ์**")
-                csv = df_details.to_csv(index=False)
-                st.download_button(
-                    label="📥 ดาวน์โหลด Window Details (CSV)",
-                    data=csv,
-                    file_name=f'best_seed_results_{test_ticker}_{st.session_state.get("window_size")}w_{st.session_state.get("num_seeds")}s.csv',
-                    mime='text/csv'
-                )
-            else:
-                st.warning("⚠️ ไม่พบรายละเอียด Windows กรุณาทำการทดสอบในแท็บ 'การตั้งค่า' ก่อน")
-        else:
-            st.info("ℹ️ กรุณาทำการทดสอบในแท็บ 'การตั้งค่า' ก่อนเพื่อดูรายละเอียด Windows")
-    
-    # Tab 4: Seeds ที่เลือกใช้
-    with tab4:
-        st.header("🌱 Seeds ที่เลือกใช้ในแต่ละ Window")
-        
-        if 'test_completed' in st.session_state and st.session_state['test_completed']:
-            test_ticker = st.session_state.get('test_ticker')
-            
-            if f'window_details_{test_ticker}' in st.session_state:
-                window_details = st.session_state[f'window_details_{test_ticker}']
-                df_windows = pd.DataFrame(window_details)
-                
-                # แสดง Seeds ที่ใช้
-                seeds_df = df_windows[['window_number', 'timeline', 'best_seed', 'max_net', 'action_count']].copy()
-                seeds_df.columns = ['Window', 'Timeline', 'Selected Seed', 'Net Profit', 'Actions']
-                st.dataframe(seeds_df, use_container_width=True)
-                
-                # สถิติของ Seeds
-                st.write("---")
-                st.write("📊 **สถิติ Seeds**")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Seed ต่ำสุด", f"{df_windows['best_seed'].min():,}")
-                with col2:
-                    st.metric("Seed สูงสุด", f"{df_windows['best_seed'].max():,}")
-                with col3:
-                    st.metric("Seed เฉลี่ย", f"{df_windows['best_seed'].mean():.0f}")
-                
-                # กราฟแสดง Seeds
-                st.write("📈 **กราฟ Seeds ที่เลือกใช้**")
-                st.bar_chart(df_windows.set_index('window_number')['best_seed'])
-            else:
-                st.warning("⚠️ ไม่พบข้อมูล Seeds กรุณาทำการทดสอบในแท็บ 'การตั้งค่า' ก่อน")
-        else:
-            st.info("ℹ️ กรุณาทำการทดสอบในแท็บ 'การตั้งค่า' ก่อนเพื่อดู Seeds ที่เลือกใช้")
-    
-    # Tab 5: การวิเคราะห์
-    with tab5:
-        st.header("📈 การวิเคราะห์เพิ่มเติม")
-        
-        if 'test_completed' in st.session_state and st.session_state['test_completed']:
-            test_ticker = st.session_state.get('test_ticker')
-            
-            if f'window_details_{test_ticker}' in st.session_state:
-                window_details = st.session_state[f'window_details_{test_ticker}']
-                df_windows = pd.DataFrame(window_details)
-                
-                # กราฟแสดง Net Profit ของแต่ละ Window
-                st.write("📊 **Net Profit แต่ละ Window**")
-                st.bar_chart(df_windows.set_index('window_number')['max_net'])
-                
-                # กราฟแสดง Price Change % ของแต่ละ Window
-                st.write("📈 **Price Change % แต่ละ Window**")
-                st.bar_chart(df_windows.set_index('window_number')['price_change_pct'])
-                
-                # กราฟแสดง Action Count ของแต่ละ Window
-                st.write("🎯 **Action Count แต่ละ Window**")
-                st.bar_chart(df_windows.set_index('window_number')['action_count'])
-                
-                # สถิติเพิ่มเติม
-                st.write("---")
-                st.write("📊 **สถิติโดยรวม**")
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Net เฉลี่ย", f"{df_windows['max_net'].mean():.2f}")
-                with col2:
-                    st.metric("Net รวม", f"{df_windows['max_net'].sum():.2f}")
-                with col3:
-                    st.metric("Actions เฉลี่ย", f"{df_windows['action_count'].mean():.1f}")
-                with col4:
-                    st.metric("Price Change เฉลี่ย", f"{df_windows['price_change_pct'].mean():.2f}%")
-            else:
-                st.warning("⚠️ ไม่พบข้อมูลการวิเคราะห์ กรุณาทำการทดสอบในแท็บ 'การตั้งค่า' ก่อน")
-        else:
-            st.info("ℹ️ กรุณาทำการทดสอบในแท็บ 'การตั้งค่า' ก่อนเพื่อดูการวิเคราะห์")
-    
-    # Tab 6: คำอธิบาย
-    with tab6:
-        st.header("📖 คำอธิบายวิธีการทำงาน")
-        
-        with st.expander("🔍 Best Seed Sliding Window คืออะไร?", expanded=True):
-            st.write("""
-            **Best Seed Sliding Window** เป็นเทคนิคการหา action sequence ที่ดีที่สุดโดย:
-            
-            1. **แบ่งข้อมูล**: แบ่งข้อมูลราคาออกเป็นช่วง ๆ (windows) ตามขนาดที่กำหนด
-            2. **ค้นหา Seed**: ในแต่ละ window ทำการสุ่ม seed หลาย ๆ ตัวและคำนวณผลกำไร
-            3. **เลือก Best Seed**: เลือก seed ที่ให้ผลกำไรสูงสุดในแต่ละ window
-            4. **รวม Actions**: นำ action sequences จากแต่ละ window มาต่อกันเป็น sequence สุดท้าย
-            
-            **ข้อดี:**
-            - ปรับตัวได้ตามสภาวะตลาดในแต่ละช่วงเวลา
-            - ลดความเสี่ยงจากการใช้ seed เดียวตลอดทั้งช่วง
-            - สามารถควบคุมพารามิเตอร์ได้ (window size, จำนวน seeds)
-            """)
-        
-        with st.expander("⚙️ การตั้งค่าพารามิเตอร์"):
-            st.write("""
-            **Window Size (ขนาด Window):**
-            - ขนาดเล็ก (10-20 วัน): ปรับตัวเร็ว แต่อาจมีความผันผวนสูง
-            - ขนาดกลาง (20-50 วัน): สมดุลระหว่างการปรับตัวและเสถียรภาพ
-            - ขนาดใหญ่ (50+ วัน): เสถียรแต่ปรับตัวช้า
-            
-            **จำนวน Seeds ต่อ Window:**
-            - น้อย (100-500): เร็วแต่อาจไม่ได้ seed ที่ดีที่สุด
-            - กลาง (500-2000): สมดุลระหว่างเวลาและคุณภาพ
-            - มาก (2000+): ได้ผลลัพธ์ดีแต่ใช้เวลานาน
-            """)
-        
-        with st.expander("📊 การอ่านผลลัพธ์"):
-            st.write("""
-            **กราฟเปรียบเทียบ:**
-            - **min**: ผลลัพธ์จากการ action ทุกวัน (baseline
+        **จำนวน Seeds ต่อ Window:**
+        - น้อย (100-500): เร็วแต่อาจไม่ได้ seed ที่ดีที่สุด
+        - กลาง (500-2000): สมดุลระหว่างเวลาและคุณภาพ
+        - มาก (2000+): ได้ผลลัพธ์ดีแต่ใช้เวลานาน
+        """)
+
+if __name__ == "__main__":
+    main()
