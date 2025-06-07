@@ -356,5 +356,5 @@ for config in trading_configs:
     create_trading_section(*config, nex, Nex_day_sell)
     st.write("_____")
 
-if st.button("RERUN"):
+if st.sidebar.button("RERUN"):
     clear_all_caches() 
