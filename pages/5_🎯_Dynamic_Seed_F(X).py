@@ -393,7 +393,7 @@ def main():
         # เพิ่มการตั้งค่า parallel processing
         max_workers = st.number_input(
             "จำนวน Workers สำหรับ Parallel Processing", 
-            min_value=1, max_value=8, value=4,
+            min_value=1, max_value=16, value=4,
             help="เพิ่มจำนวน workers เพื่อความเร็วมากขึ้น (แนะนำ 4-8)"
         )
 
