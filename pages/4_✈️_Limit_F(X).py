@@ -310,7 +310,6 @@
 #     st.write('________')
 #     iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")    
 
-
 import pandas as pd
 import numpy as np
 from numba import njit
@@ -318,23 +317,24 @@ import yfinance as yf
 import streamlit as st
 import thingspeak
 import json
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️" , layout = "wide" )
 
 # =================================================================================
-# ส่วนที่ 1: โค้ดต้นฉบับ (ไม่มีการแก้ไข)
+# ส่วนที่ 1: ฟังก์ชันหลักและฟังก์ชันคำนวณ (พร้อมแก้ไข Bug)
 # =================================================================================
 
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=1500):
     action_array = np.asarray(action_list, dtype=np.int32)
     price_array = np.asarray(price_list, dtype=np.float64)
-    
-    # ตรวจสอบว่า action_array หรือ price_array ว่างเปล่าหรือไม่
+
+    # BUG FIX: Handle empty input arrays to prevent TypingError/IndexError
     if action_array.size == 0 or price_array.size == 0:
-        return (np.array([], dtype=np.float64), np.array([], dtype=np.float64), 
-                np.array([], dtype=np.float64), np.array([], dtype=np.float64), 
-                np.array([], dtype=np.float64), np.array([], dtype=np.float64))
+        empty_float = np.array([], dtype=np.float64)
+        return (empty_float, empty_float, empty_float, 
+                empty_float, empty_float, empty_float)
 
     action_array[0] = 1
     n = len(action_array)
@@ -397,17 +397,28 @@ def get_max_action(price_list, fix=1500):
     actions[0] = 1
     return actions
 
+# PERFORMANCE IMPROVEMENT: Cache data fetching to avoid repeated API calls
 @st.cache_data(ttl=3600) # Cache data for 1 hour
 def get_ticker_data(Ticker):
     filter_date = '2023-01-01 12:00:00+07:00'
-    tickerData = yf.Ticker(Ticker)
-    tickerData = tickerData.history(period='max')[['Close']]
-    tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
-    tickerData = tickerData[tickerData.index >= filter_date]
-    return tickerData
+    try:
+        tickerData = yf.Ticker(Ticker)
+        tickerData = tickerData.history(period='max')[['Close']]
+        if tickerData.empty:
+            return pd.DataFrame() # Return empty if no history
+        tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
+        tickerData = tickerData[tickerData.index >= filter_date]
+        return tickerData
+    except Exception as e:
+        st.error(f"Could not fetch data for {Ticker}: {e}")
+        return pd.DataFrame()
 
 def Limit_fx(Ticker='', act=-1):
     tickerData = get_ticker_data(Ticker)
+    if tickerData.empty:
+        st.warning(f"No data available for {Ticker} in the selected date range.")
+        return pd.DataFrame() # Return empty DataFrame if no data
+
     prices = np.array(tickerData.Close.values, dtype=np.float64)
 
     if act == -1:
@@ -420,6 +431,10 @@ def Limit_fx(Ticker='', act=-1):
     
     buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
     
+    # Check if calculation returned empty results
+    if len(sumusd) == 0:
+        return pd.DataFrame()
+        
     initial_capital = sumusd[0]
     
     df = pd.DataFrame({
@@ -436,284 +451,152 @@ def Limit_fx(Ticker='', act=-1):
     return df
 
 def plot(Ticker='', act=-1):
-    all = []
-    all_id = []
+    # Min
+    df_min = Limit_fx(Ticker, act=-1)
+    if df_min.empty:
+        return # Exit if no data
     
-    # min
-    all.append(Limit_fx(Ticker, act=-1).net)
-    all_id.append('min')
-
-    # fx
-    all.append(Limit_fx(Ticker, act=act).net)
-    all_id.append('fx_{}'.format(act))
-
-    # max
-    all.append(Limit_fx(Ticker, act=-2).net)
-    all_id.append('max')
+    # Fx
+    df_fx = Limit_fx(Ticker, act=act)
+    # Max
+    df_max = Limit_fx(Ticker, act=-2)
     
-    df_all = pd.concat(all, axis=1)
-    df_all.columns = all_id
+    all_nets = {
+        'min': df_min['net'],
+        f'fx_{act}': df_fx['net'],
+        'max': df_max['net']
+    }
+    chart_data = pd.DataFrame(all_nets)
     
     st.write('Refer_Log')
-    st.line_chart(df_all)
+    st.line_chart(chart_data)
 
-    df_min = Limit_fx(Ticker, act=-1)
     df_plot = df_min[['buffer']].cumsum()
     st.write('Burn_Cash')
     st.line_chart(df_plot)
     st.write(df_min)
 
-
 # =================================================================================
-# ส่วนที่ 2: ฟังก์ชันใหม่สำหรับ SLIDING WINDOW STRATEGY (เพิ่มเข้ามา)
-# =================================================================================
-
-@st.cache_data(ttl=3600) # Cache ผลการคำนวณที่หนักหน่วง
-def find_best_seed_sliding_window(_prices, window_size=21, num_seeds_to_try=1000):
-    prices = np.asarray(_prices)
-    n = len(prices)
-    final_actions = np.array([], dtype=int)
-    best_seeds_log = [] # สำหรับเก็บ log
-
-    # ใช้ st.session_state เพื่อจัดการ progress bar ระหว่างการ re-run
-    if 'progress' not in st.session_state:
-        st.session_state.progress = 0.0
-
-    progress_text = "กำลังค้นหา Best Seed ในแต่ละ Window..."
-    my_bar = st.progress(st.session_state.progress, text=progress_text)
-    
-    num_windows = (n + window_size - 1) // window_size
-
-    for i, start_index in enumerate(range(0, n, window_size)):
-        end_index = min(start_index + window_size, n)
-        prices_window = prices[start_index:end_index]
-        window_len = len(prices_window)
-
-        if window_len == 0:
-            continue
-
-        best_seed_for_window = -1
-        max_net_for_window = -np.inf
-        
-        random_seeds = np.random.randint(0, 10_000_000, size=num_seeds_to_try)
-
-        for seed in random_seeds:
-            rng = np.random.default_rng(seed)
-            actions_window = rng.integers(0, 2, size=window_len)
-            
-            # ในแต่ละ window ต้องเริ่มคำนวณใหม่หมดจด ไม่ต่อเนื่อง
-            # ดังนั้น action แรกของ window จึงสำคัญ
-            if actions_window.size > 0:
-                actions_window[0] = 1
-
-            if window_len < 2:
-                final_net = 0
-            else:
-                _, sumusd, _, _, _, refer = calculate_optimized(actions_window.tolist(), prices_window.tolist())
-                initial_capital = sumusd[0]
-                net = sumusd - refer - initial_capital
-                final_net = net[-1]
-
-            if final_net > max_net_for_window:
-                max_net_for_window = final_net
-                best_seed_for_window = seed
-
-        rng_best = np.random.default_rng(best_seed_for_window)
-        best_actions_for_window = rng_best.integers(0, 2, size=window_len)
-        if best_actions_for_window.size > 0:
-            best_actions_for_window[0] = 1
-
-        final_actions = np.concatenate((final_actions, best_actions_for_window))
-        best_seeds_log.append({
-            'window': f"{start_index}-{end_index}",
-            'best_seed': best_seed_for_window,
-            'max_net': round(max_net_for_window, 2)
-        })
-
-        # Update progress
-        st.session_state.progress = (i + 1) / num_windows
-        my_bar.progress(st.session_state.progress, text=f"{progress_text} ({i+1}/{num_windows})")
-
-    my_bar.empty() # ลบ progress bar เมื่อเสร็จ
-    st.session_state.progress = 0.0 # รีเซ็ตค่า
-    return final_actions, best_seeds_log
-
-def Limit_fx_sliding_window(Ticker=''):
-    tickerData = get_ticker_data(Ticker)
-    prices = np.array(tickerData.Close.values, dtype=np.float64)
-
-    # เรียกใช้ฟังก์ชันใหม่
-    actions, log = find_best_seed_sliding_window(prices)
-    
-    # คำนวณผลลัพธ์โดยใช้ action ที่ได้มา
-    buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
-    
-    initial_capital = sumusd[0]
-    
-    df = pd.DataFrame({
-        'price': prices,
-        'action': actions,
-        'buffer': np.round(buffer, 2),
-        'sumusd': np.round(sumusd, 2),
-        'cash': np.round(cash, 2),
-        'asset_value': np.round(asset_value, 2),
-        'amount': np.round(amount, 2),
-        'refer': np.round(refer + initial_capital, 2),
-        'net': np.round(sumusd - refer - initial_capital, 2)
-    })
-    return df, log
-
-
-# =================================================================================
-# ส่วนที่ 3: ส่วนการแสดงผล (ปรับปรุง)
+# ส่วนที่ 2: ส่วนการแสดงผล (UI)
 # =================================================================================
 
 channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-# เพิ่ม Tab ใหม่สำหรับ Sliding Window
-tab_list = ["FFWM", "NEGG", "RIVN" , 'APLS', 'NVTS', 'QXO(LV)' , 'RXRX(LV)' ,  'Burn_Cash' ,  'Ref_index_Log' , 'Sliding_Window', 'cf_log']
-tab1, tab2, tab3, tab4, tab5 , tab6 , tab7 ,  Burn_Cash  , Ref_index_Log, Sliding_Window, cf_log   = st.tabs(tab_list)
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, Burn_Cash, Ref_index_Log, cf_log = st.tabs([
+    "FFWM", "NEGG", "RIVN", 'APLS', 'NVTS', 'QXO(LV)', 'RXRX(LV)', 'Burn_Cash', 'Ref_index_Log', 'cf_log'
+])
 
-
-# --- โค้ดใน Tab อื่นๆ ยังเหมือนเดิม ---
 with Ref_index_Log:
-    tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , 'QXO' , 'RXRX' ]
+    tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
+    
     @st.cache_data(ttl=3600)
-    def get_prices(tickers, start_date):
-        # ... (โค้ดส่วนนี้เหมือนเดิม)
+    def get_prices(tickers):
         df_list = []
         for ticker in tickers:
             df_list.append(get_ticker_data(ticker).rename(columns={'Close': ticker}))
-        prices_df = pd.concat(df_list, axis=1)
+        # Use outer join to keep all dates, then forward-fill NaNs
+        prices_df = pd.concat(df_list, axis=1, join='outer')
+        prices_df = prices_df.ffill().dropna() # Forward-fill and then drop any remaining NaNs at the start
         return prices_df
     
-    filter_date = '2023-01-01 12:00:00+07:00'
-    prices_df_raw = get_prices(tickers, filter_date)
-    prices_df = prices_df_raw.dropna().copy()
-    
-    int_st_list = prices_df.iloc[0][tickers]
-    int_st = np.prod(int_st_list)
-    
-    initial_capital_per_stock = 3000
-    initial_capital_Ref_index_Log = initial_capital_per_stock * len(tickers)
-    
-    def calculate_ref_log(row):
-        int_end = np.prod(row[tickers])
-        return initial_capital_Ref_index_Log + (-1500 * np.log(int_st / int_end))
-    
-    prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)
-    ref_log_values = prices_df.ref_log.values
+    prices_df = get_prices(tickers)
 
-    sumusd_ = {f'sumusd_{symbol}': Limit_fx(symbol, act=-1).sumusd for symbol in tickers}
-    df_sumusd_ = pd.DataFrame(sumusd_)
-    df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
-    df_sumusd_['ref_log'] = ref_log_values
-    
-    total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in tickers])
-    
-    net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
-    net_at_index_0 = net_raw.iloc[0]
-    df_sumusd_['net'] = net_raw - net_at_index_0
-    
-    st.line_chart(df_sumusd_.net)
-    st.dataframe(df_sumusd_)
+    if not prices_df.empty:
+        int_st_list = prices_df.iloc[0][tickers]
+        int_st = np.prod(int_st_list)
+        
+        initial_capital_per_stock = 3000
+        initial_capital_Ref_index_Log = initial_capital_per_stock * len(tickers)
+        
+        def calculate_ref_log(row):
+            int_end = np.prod(row[tickers])
+            return initial_capital_Ref_index_Log + (-1500 * np.log(int_st / int_end))
+        
+        prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)
+        ref_log_values = prices_df['ref_log']
+
+        sumusd_list = []
+        for symbol in tickers:
+            df_temp = Limit_fx(symbol, act=-1)
+            if not df_temp.empty:
+                sumusd_list.append(df_temp[['sumusd']].rename(columns={'sumusd': f'sumusd_{symbol}'}))
+
+        if sumusd_list:
+            df_sumusd_ = pd.concat(sumusd_list, axis=1, join='outer').ffill().dropna()
+            
+            # Align indices before calculation
+            common_index = df_sumusd_.index.intersection(ref_log_values.index)
+            df_sumusd_ = df_sumusd_.loc[common_index]
+            ref_log_values = ref_log_values.loc[common_index]
+
+            df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
+            df_sumusd_['ref_log'] = ref_log_values
+            
+            total_initial_capital = df_sumusd_.iloc[0].filter(like='sumusd_').sum()
+            
+            net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
+            net_at_index_0 = net_raw.iloc[0]
+            df_sumusd_['net'] = net_raw - net_at_index_0
+            
+            st.line_chart(df_sumusd_['net'])
+            st.dataframe(df_sumusd_)
+    else:
+        st.warning("Could not generate combined index log due to missing data for one or more tickers.")
+
 
 with Burn_Cash:
-    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , 'QXO' , 'RXRX' ]
-    buffers = {f'buffer_{symbol}': Limit_fx(symbol, act=-1).buffer for symbol in STOCK_SYMBOLS}
-    df_burn_cash = pd.DataFrame(buffers)
-    df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
-    df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
-    st.line_chart(df_burn_cash['cumulative_burn'])
-    st.dataframe(df_burn_cash) 
-
-# --- Tab ของหุ้นแต่ละตัว (เหมือนเดิม) ---
-with tab1:
-    FFWM_act = client.get_field_last(field='2')
-    FFWM_act_js = int(json.loads(FFWM_act)["field2"])
-    plot(Ticker='FFWM', act=FFWM_act_js)
-with tab2:
-    NEGG_act = client.get_field_last(field='3')
-    NEGG_act_js = int(json.loads(NEGG_act)["field3"])
-    plot(Ticker='NEGG', act=NEGG_act_js)
-with tab3:
-    RIVN_act = client.get_field_last(field='4')
-    RIVN_act_js = int(json.loads(RIVN_act)["field4"])
-    plot(Ticker='RIVN', act=RIVN_act_js)
-with tab4:
-    APLS_act = client.get_field_last(field='5')
-    APLS_act_js = int(json.loads(APLS_act)["field5"])
-    plot(Ticker='APLS', act=APLS_act_js)
-with tab5:
-    NVTS_act = client.get_field_last(field='6')
-    NVTS_act_js = int(json.loads(NVTS_act)["field6"])
-    plot(Ticker='NVTS', act=NVTS_act_js)
-with tab6:
-    QXO_act = client.get_field_last(field='7')
-    QXO_act_js = int(json.loads(QXO_act)["field7"])
-    plot(Ticker='QXO', act=QXO_act_js)
-with tab7:
-    RXRX_act = client.get_field_last(field='8')
-    RXRX_act_js = int(json.loads(RXRX_act)["field8"])
-    plot(Ticker='RXRX', act=RXRX_act_js)
-
-# --- Tab ใหม่สำหรับ Sliding Window ---
-with Sliding_Window:
-    st.header("กลยุทธ์หา Best Seed แบบ Sliding Window")
-    st.write("""
-    กลยุทธ์นี้จะแบ่งข้อมูลทั้งหมดออกเป็นช่วงย่อยๆ (Windows) แล้วค้นหา 'Seed' ที่ให้ผลตอบแทนดีที่สุดในแต่ละช่วง 
-    จากนั้นนำ Action ที่ดีที่สุดของทุกช่วงมารวมกันเป็นกลยุทธ์สุดท้าย ซึ่งช่วยให้สามารถปรับตัวตามสภาวะตลาดที่เปลี่ยนไปได้
-    """)
+    STOCK_SYMBOLS = ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
     
-    # ให้ผู้ใช้เลือก Ticker ที่จะวิเคราะห์
-    ticker_to_analyze = st.selectbox(
-        'เลือก Ticker เพื่อวิเคราะห์ด้วย Sliding Window',
-        ('FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX')
-    )
-
-    if ticker_to_analyze:
-        # เปรียบเทียบ Sliding Window กับกลยุทธ์อื่น
-        all_nets = []
-        all_ids = []
-
-        # 1. Min Strategy
-        df_min = Limit_fx(ticker_to_analyze, act=-1)
-        all_nets.append(df_min.net)
-        all_ids.append('min (Action ทุกวัน)')
-
-        # 2. Sliding Window Strategy
-        st.info("กำลังคำนวณกลยุทธ์ Sliding Window... กรุณารอสักครู่")
-        df_sliding, log_sliding = Limit_fx_sliding_window(ticker_to_analyze)
-        all_nets.append(df_sliding.net)
-        all_ids.append('Sliding Window')
-        st.success("คำนวณ Sliding Window เสร็จสิ้น!")
-
-        # 3. Max Strategy (Theoretical Best)
-        df_max = Limit_fx(ticker_to_analyze, act=-2)
-        all_nets.append(df_max.net)
-        all_ids.append('max (ผลลัพธ์ดีที่สุดทางทฤษฎี)')
+    buffer_list = []
+    for symbol in STOCK_SYMBOLS:
+        df_temp = Limit_fx(symbol, act=-1)
+        if not df_temp.empty:
+            buffer_list.append(df_temp[['buffer']].rename(columns={'buffer': f'buffer_{symbol}'}))
+    
+    if buffer_list:
+        df_burn_cash = pd.concat(buffer_list, axis=1, join='outer').ffill().fillna(0)
+        df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
+        df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
+        st.line_chart(df_burn_cash['cumulative_burn'])
+        st.dataframe(df_burn_cash)
+    else:
+        st.warning("Could not generate burn cash data.")
         
-        # สร้าง DataFrame สำหรับพล็อตกราฟ
-        chart_data = pd.concat(all_nets, axis=1)
-        chart_data.columns = all_ids
-        
-        st.subheader("เปรียบเทียบผลกำไรสุทธิ (Net Profit)")
-        st.line_chart(chart_data)
+# --- Tabs for individual stocks ---
+@st.cache_data(ttl=600) # Cache API calls for 10 minutes
+def get_thingspeak_field(field_num):
+    return client.get_field_last(field=f'{field_num}')
 
-        st.subheader("Log การหา Best Seed ในแต่ละ Window")
-        st.dataframe(pd.DataFrame(log_sliding))
+def display_stock_tab(ticker, field_num):
+    try:
+        act_str = get_thingspeak_field(field_num)
+        act_js = int(json.loads(act_str)[f"field{field_num}"])
+        plot(Ticker=ticker, act=act_js)
+    except Exception as e:
+        st.error(f"Error fetching or processing data for {ticker} from ThingSpeak: {e}")
+        st.info("Displaying with default action seed (0).")
+        plot(Ticker=ticker, act=0)
 
-        st.subheader("ข้อมูลดิบของกลยุทธ์ Sliding Window")
-        st.dataframe(df_sliding)
+with tab1:
+    display_stock_tab('FFWM', 2)
+with tab2:
+    display_stock_tab('NEGG', 3)
+with tab3:
+    display_stock_tab('RIVN', 4)
+with tab4:
+    display_stock_tab('APLS', 5)
+with tab5:
+    display_stock_tab('NVTS', 6)
+with tab6:
+    display_stock_tab('QXO', 7)
+with tab7:
+    display_stock_tab('RXRX', 8)
 
-
-# --- Tab สุดท้าย (เหมือนเดิม) ---
-import streamlit.components.v1 as components
+# --- Final Info Tab ---
 def iframe(frame=''):
-    src = frame
-    components.iframe(src, width=1500, height=800, scrolling=True)
+    components.iframe(frame, width=1500, height=800, scrolling=True)
 
 with cf_log: 
     st.write('')
