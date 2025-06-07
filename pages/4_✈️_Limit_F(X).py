@@ -5,9 +5,9 @@ import streamlit as st
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
-  
+ 
 st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
-   
+
 @lru_cache(maxsize=1000)
 def calculate_optimized_cached(action_tuple, price_tuple, fix=1500):
     """
