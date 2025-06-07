@@ -704,8 +704,6 @@ def iframe ( frame = ''):
 
 with cf_log: 
     st.write('')
-    iframe(frame = "https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK") 
-
     st.write(' Rebalance   =  -fix * ln( t0 / tn )')
     st.write(' Net Profit  =  sumusd - refer - sumusd[0] (ต้นทุนเริ่มต้น)')
     st.write(' Ref_index_Log = initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))')
@@ -718,3 +716,4 @@ with cf_log:
     st.write('________')
     iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx") 
     st.write('________')
+    # iframe(frame = "https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK") 
