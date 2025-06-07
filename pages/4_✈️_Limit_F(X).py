@@ -714,6 +714,4 @@ with cf_log:
     st.write('________')
     iframe(frame = "https://monica.im/share/artifact?id=wEjeaMxVW6MgDDm3xAZatX")    
     st.write('________')
-    iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx") 
-    st.write('________')
-    # iframe(frame = "https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK") 
+    iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")    
