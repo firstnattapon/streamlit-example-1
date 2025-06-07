@@ -1,300 +1,504 @@
-import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
-import random
-from concurrent.futures import ThreadPoolExecutor
+import numpy as np
+import yfinance as yf
+import streamlit as st
+import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
-import warnings
-warnings.filterwarnings('ignore')
+ 
+st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
 
-def generate_sample_data(days=100, start_price=100, volatility=0.02):
+@lru_cache(maxsize=1000)
+def calculate_optimized_cached(action_tuple, price_tuple, fix=1500):
     """
-    สร้างข้อมูลราคาตัวอย่างสำหรับทดสอบ
+    ฟังก์ชันคำนวณที่ปรับปรุงแล้วพร้อม caching
     """
-    np.random.seed(42)
-    dates = pd.date_range(start='2023-01-01', periods=days, freq='D')
+    action_array = np.asarray(action_tuple, dtype=np.int32)
+    action_array[0] = 1
+    price_array = np.asarray(price_tuple, dtype=np.float64)
+    n = len(action_array)
     
-    # สร้างราคาแบบ random walk
-    returns = np.random.normal(0, volatility, days)
-    prices = [start_price]
+    # Pre-allocate arrays ด้วย dtype ที่เหมาะสม
+    amount = np.empty(n, dtype=np.float64)
+    buffer = np.zeros(n, dtype=np.float64)
+    cash = np.empty(n, dtype=np.float64)
+    asset_value = np.empty(n, dtype=np.float64)
+    sumusd = np.empty(n, dtype=np.float64)
     
-    for i in range(1, days):
-        new_price = prices[-1] * (1 + returns[i])
-        prices.append(max(new_price, 1))  # ป้องกันราคาติดลบ
+    # คำนวณค่าเริ่มต้นที่ index 0
+    initial_price = price_array[0]
+    amount[0] = fix / initial_price
+    cash[0] = fix
+    asset_value[0] = amount[0] * initial_price
+    sumusd[0] = cash[0] + asset_value[0]
     
-    df = pd.DataFrame({
-        'Date': dates,
-        'Open': prices,
-        'High': [p * (1 + abs(np.random.normal(0, 0.01))) for p in prices],
-        'Low': [p * (1 - abs(np.random.normal(0, 0.01))) for p in prices],
-        'Close': prices,
-        'Volume': np.random.randint(1000000, 10000000, days)
-    })
+    # คำนวณ refer ทั้งหมดในครั้งเดียว (แยกออกมาจาก loop หลัก)
+    # เปลี่ยนเป็นสูตรที่ 2: refer = -fix * ln(t0/tn)
+    refer = -fix * np.log(initial_price / price_array)
     
-    return df
-
-@lru_cache(maxsize=10000)
-def calculate_profit_cached(price_tuple, action_tuple):
-    """
-    คำนวณกำไรด้วย LRU Cache เพื่อเร่งความเร็ว
-    """
-    prices = list(price_tuple)
-    actions = list(action_tuple)
-    
-    if len(prices) != len(actions):
-        return 0
-    
-    cash = 1.0
-    shares = 0
-    
-    for i in range(len(prices)):
-        if actions[i] == 1 and cash > 0:  # ซื้อ
-            shares = cash / prices[i]
-            cash = 0
-        elif actions[i] == 0 and shares > 0:  # ขาย
-            cash = shares * prices[i]
-            shares = 0
-    
-    # ขายหุ้นที่เหลือในวันสุดท้าย
-    if shares > 0:
-        cash = shares * prices[-1]
-    
-    return cash
-
-def evaluate_seed_performance(seed, price_window):
-    """
-    ประเมินประสิทธิภาพของ seed ในช่วงราคาที่กำหนด
-    """
-    np.random.seed(seed)
-    actions = np.random.choice([0, 1], size=len(price_window))
-    
-    # แปลงเป็น tuple เพื่อใช้กับ cache
-    price_tuple = tuple(price_window)
-    action_tuple = tuple(actions)
-    
-    profit = calculate_profit_cached(price_tuple, action_tuple)
-    return seed, profit, actions
-
-def find_best_seed_for_window(price_window, num_seeds=1000, max_workers=4):
-    """
-    หา seed ที่ดีที่สุดสำหรับ window ราคาที่กำหนด
-    """
-    seeds_to_try = random.sample(range(1, 10000), min(num_seeds, 9999))
-    
-    best_seed = None
-    best_profit = -float('inf')
-    best_actions = None
-    
-    # ใช้ parallel processing
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(evaluate_seed_performance, seed, price_window) 
-                  for seed in seeds_to_try]
+    # Main loop with minimal operations
+    for i in range(1, n):
+        curr_price = price_array[i]
+        if action_array[i] == 0:
+            amount[i] = amount[i-1]
+            buffer[i] = 0
+        else:
+            amount[i] = fix / curr_price
+            buffer[i] = amount[i-1] * curr_price - fix
         
-        for future in futures:
-            try:
-                seed, profit, actions = future.result()
-                if profit > best_profit:
-                    best_profit = profit
-                    best_seed = seed
-                    best_actions = actions
-            except Exception as e:
-                continue
+        cash[i] = cash[i-1] + buffer[i]
+        asset_value[i] = amount[i] * curr_price
+        sumusd[i] = cash[i] + asset_value[i]
     
-    return best_seed, best_profit, best_actions
+    return buffer, sumusd, cash, asset_value, amount, refer
 
-def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=None, 
-                                          window_size=30, num_seeds_to_try=1000, 
-                                          max_workers=4, shift=0):
+def calculate_optimized(action_list, price_list, fix=1500):
     """
-    🧬 **DNA Best Seed Sliding Window พร้อม Shift Feature**
-    
-    Parameters:
-    -----------
-    price_list : list
-        รายการราคาหุ้น
-    ticker_data_with_dates : pd.DataFrame, optional
-        ข้อมูลหุ้นพร้อมวันที่ (สำหรับแสดงผล)
-    window_size : int, default=30
-        ขนาดของ sliding window
-    num_seeds_to_try : int, default=1000
-        จำนวน seeds ที่จะทดสอบในแต่ละ window
-    max_workers : int, default=4
-        จำนวน workers สำหรับ parallel processing
-    shift : int, default=0
-        จำนวนรอบที่จะเลื่อน DNA actions ลง
-    
-    Returns:
-    --------
-    tuple: (final_actions, window_details, shifted_actions)
-        - final_actions: DNA actions ต้นฉบับ
-        - window_details: รายละเอียดของแต่ละ window
-        - shifted_actions: DNA actions หลังจาก shift
+    Wrapper function สำหรับ cached version
     """
+    return calculate_optimized_cached(tuple(action_list), tuple(price_list), fix)
+
+def evaluate_seed_batch(seed_batch, prices_window, window_len):
+    """
+    ประเมิน seed หลายตัวพร้อมกัน
+    """
+    results = []
     
-    print("🔍 **เริ่มต้นการค้นหา Best Seed ด้วย Sliding Window (Optimized)**")
+    for seed in seed_batch:
+        try:
+            rng = np.random.default_rng(seed)
+            actions_window = rng.integers(0, 2, size=window_len)
+            actions_window[0] = 1  # บังคับให้ action แรกของ window เป็น 1 เสมอ
+
+            # ประเมินผลเฉพาะใน window นี้
+            if window_len < 2:
+                final_net = 0
+            else:
+                _, sumusd, _, _, _, refer = calculate_optimized(actions_window.tolist(), prices_window.tolist())
+                initial_capital = sumusd[0]
+                net = sumusd - refer - initial_capital
+                final_net = net[-1] # เอาผลกำไร ณ วันสุดท้ายของ window
+
+            results.append((seed, final_net))
+                    
+        except Exception as e:
+            # ถ้ามี error ใน seed นี้ ให้ข้ามไป
+            results.append((seed, -np.inf))
+            continue
     
-    if len(price_list) < window_size:
-        print("❌ **ข้อผิดพลาด:** ขนาดข้อมูลน้อยกว่า window_size")
-        return [], [], []
-    
-    # คำนวณจำนวน windows
-    num_windows = len(price_list) // window_size
-    if len(price_list) % window_size != 0:
-        num_windows += 1
-    
-    print(f"📊 ข้อมูลทั้งหมด: {len(price_list)} วัน | ขนาด Window: {window_size} วัน | จำนวน Windows: {num_windows}")
-    print(f"⚡ ใช้ Parallel Processing: {max_workers} workers")
-    print(f"🔄 Shift: {shift} รอบ")
-    print("---")
-    
-    final_actions = []
+    return results
+
+def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=None, window_size=30, num_seeds_to_try=1000, progress_bar=None, max_workers=4):
+    """
+    ค้นหาลำดับ action ที่ดีที่สุดโดยการหา seed ที่ให้ผลกำไรสูงสุดในแต่ละช่วงเวลา (sliding window)
+    ปรับปรุงด้วย parallel processing และ vectorization
+    """
+    prices = np.asarray(price_list)
+    n = len(prices)
+    final_actions = np.array([], dtype=int)
     window_details = []
     
-    for i in range(num_windows):
-        start_idx = i * window_size
-        end_idx = min((i + 1) * window_size, len(price_list))
-        price_window = price_list[start_idx:end_idx]
-        
-        # แสดงข้อมูล window
-        if ticker_data_with_dates is not None and len(ticker_data_with_dates) >= end_idx:
-            start_date = ticker_data_with_dates.iloc[start_idx]['Date'].strftime('%Y-%m-%d')
-            end_date = ticker_data_with_dates.iloc[end_idx-1]['Date'].strftime('%Y-%m-%d')
-            date_info = f"{start_date} ถึง {end_date}"
+    num_windows = (n + window_size - 1) // window_size
+    
+    st.write("🔍 **เริ่มต้นการค้นหา Best Seed ด้วย Sliding Window (Optimized)**")
+    st.write(f"📊 ข้อมูลทั้งหมด: {n} วัน | ขนาด Window: {window_size} วัน | จำนวน Windows: {num_windows}")
+    st.write(f"⚡ ใช้ Parallel Processing: {max_workers} workers")
+    st.write("---")
+    
+    # วนลูปตามข้อมูลราคาในแต่ละช่วง (window)
+    for i, start_index in enumerate(range(0, n, window_size)):
+        end_index = min(start_index + window_size, n)
+        prices_window = prices[start_index:end_index]
+        window_len = len(prices_window)
+
+        if window_len == 0:
+            continue
+
+        # ดึงวันที่สำหรับแสดง timeline
+        if ticker_data_with_dates is not None:
+            start_date = ticker_data_with_dates.index[start_index].strftime('%Y-%m-%d')
+            end_date = ticker_data_with_dates.index[end_index-1].strftime('%Y-%m-%d')
+            timeline_info = f"{start_date} ถึง {end_date}"
         else:
-            date_info = f"Index {start_idx} ถึง {end_idx-1}"
+            timeline_info = f"Index {start_index} ถึง {end_index-1}"
+
+        best_seed_for_window = -1
+        max_net_for_window = -np.inf
+
+        # --- ค้นหา Seed ที่ดีที่สุดสำหรับ Window ปัจจุบัน (Parallel Processing) ---
+        random_seeds = np.arange(num_seeds_to_try)
         
-        # หา best seed สำหรับ window นี้
-        best_seed, best_profit, best_actions = find_best_seed_for_window(
-            price_window, num_seeds_to_try, max_workers
+        # แบ่ง seeds เป็น batches สำหรับ parallel processing
+        batch_size = max(1, num_seeds_to_try // max_workers)
+        seed_batches = [random_seeds[i:i+batch_size] for i in range(0, len(random_seeds), batch_size)]
+        
+        # ใช้ ThreadPoolExecutor สำหรับ parallel processing
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit tasks
+            future_to_batch = {
+                executor.submit(evaluate_seed_batch, batch, prices_window, window_len): batch 
+                for batch in seed_batches
+            }
+            
+            # Collect results
+            all_results = []
+            for future in as_completed(future_to_batch):
+                batch_results = future.result()
+                all_results.extend(batch_results)
+        
+        # หา seed ที่ดีที่สุดจากผลลัพธ์ทั้งหมด
+        for seed, final_net in all_results:
+            if final_net > max_net_for_window:
+                max_net_for_window = final_net
+                best_seed_for_window = seed
+
+        # --- สร้าง Action ที่ดีที่สุดสำหรับ Window นี้จาก Seed ที่พบ ---
+        if best_seed_for_window >= 0:
+            rng_best = np.random.default_rng(best_seed_for_window)
+            best_actions_for_window = rng_best.integers(0, 2, size=window_len)
+            best_actions_for_window[0] = 1
+        else:
+            # ถ้าไม่เจอ seed ที่ดี ให้ใช้ action ทั้งหมดเป็น 1
+            best_actions_for_window = np.ones(window_len, dtype=int)
+            max_net_for_window = 0
+
+        # เก็บรายละเอียดของ window
+        window_detail = {
+            'window_number': i + 1,
+            'timeline': timeline_info,
+            'start_index': start_index,
+            'end_index': end_index - 1,
+            'window_size': window_len,
+            'best_seed': best_seed_for_window,
+            'max_net': round(max_net_for_window, 2),
+            'start_price': round(prices_window[0], 2),
+            'end_price': round(prices_window[-1], 2),
+            'price_change_pct': round(((prices_window[-1] / prices_window[0]) - 1) * 100, 2),
+            'action_count': int(np.sum(best_actions_for_window)),
+            'action_sequence': best_actions_for_window.tolist()
+        }
+        window_details.append(window_detail)
+
+        # แสดงผลแต่ละ window
+        st.write(f"**🎯 Window {i+1}/{num_windows}** | {timeline_info}")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Best Seed", f"{best_seed_for_window:,}")
+        with col2:
+            st.metric("Net Profit", f"{max_net_for_window:.2f}")
+        with col3:
+            st.metric("Price Change", f"{window_detail['price_change_pct']:.2f}%")
+        with col4:
+            st.metric("Actions Count", f"{window_detail['action_count']}/{window_len}")
+
+        # นำ action ที่ดีที่สุดของ window นี้ไปต่อท้าย action หลัก
+        final_actions = np.concatenate((final_actions, best_actions_for_window))
+        
+        # Update progress bar if provided
+        if progress_bar:
+            progress_bar.progress((i + 1) / num_windows)
+
+    return final_actions, window_details
+
+# ใช้ numpy vectorization สำหรับ get_max_action
+def get_max_action_vectorized(price_list, fix=1500):
+    """
+    คำนวณหาลำดับ action (0, 1) ที่ให้ผลตอบแทนสูงสุดทางทฤษฎี
+    ปรับปรุงด้วย vectorization
+    """
+    prices = np.asarray(price_list, dtype=np.float64)
+    n = len(prices)
+
+    if n < 2:
+        return np.ones(n, dtype=int)
+
+    # --- ส่วนที่ 1: คำนวณไปข้างหน้า (ปรับปรุงด้วย vectorization) ---
+    
+    dp = np.zeros(n, dtype=np.float64)
+    path = np.zeros(n, dtype=int) 
+    
+    initial_capital = float(fix * 2)
+    dp[0] = initial_capital
+    
+    # Vectorized computation
+    for i in range(1, n):
+        # คำนวณ profit สำหรับทุก j ที่เป็นไปได้ในครั้งเดียว
+        j_indices = np.arange(i)
+        profits = fix * ((prices[i] / prices[j_indices]) - 1)
+        current_sumusd = dp[j_indices] + profits
+        
+        # หาค่าสูงสุดและ index
+        best_idx = np.argmax(current_sumusd)
+        dp[i] = current_sumusd[best_idx]
+        path[i] = j_indices[best_idx]
+
+    # --- ส่วนที่ 2: การย้อนรอย (เหมือนเดิม) ---
+    actions = np.zeros(n, dtype=int)
+    
+    last_action_day = np.argmax(dp)
+    
+    current_day = last_action_day
+    while current_day > 0:
+        actions[current_day] = 1
+        current_day = path[current_day]
+        
+    actions[0] = 1
+    
+    return actions
+
+def get_max_action(price_list, fix=1500):
+    """
+    Wrapper function สำหรับ vectorized version
+    """
+    return get_max_action_vectorized(price_list, fix)
+
+@st.cache_data(ttl=3600)  # Cache ข้อมูล ticker เป็นเวลา 1 ชั่วโมง
+def get_ticker_data(ticker, filter_date='2023-01-01 12:00:00+07:00'):
+    """
+    ดึงข้อมูล ticker พร้อม caching
+    """
+    tickerData = yf.Ticker(ticker)
+    tickerData = tickerData.history(period='max')[['Close']]
+    tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
+    tickerData = tickerData[tickerData.index >= filter_date]
+    return tickerData
+
+def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_workers=4):
+    tickerData = get_ticker_data(Ticker)
+    prices = np.array(tickerData.Close.values, dtype=np.float64)
+
+    if act == -1:  # min
+        actions = np.array(np.ones(len(prices)), dtype=np.int64)
+
+    elif act == -2:  # max  
+        actions = get_max_action(prices)
+    
+    elif act == -3:  # best_seed sliding window
+        progress_bar = st.progress(0)
+        actions, window_details = find_best_seed_sliding_window_optimized(
+            prices, tickerData, window_size=window_size, 
+            num_seeds_to_try=num_seeds_to_try, progress_bar=progress_bar,
+            max_workers=max_workers
         )
         
-        # คำนวณสถิติ
-        price_change = ((price_window[-1] - price_window[0]) / price_window[0]) * 100
-        num_actions = np.sum(best_actions)
+        # แสดงสรุปผลรวม
+        st.write("---")
+        st.write("📈 **สรุปผลการค้นหา Best Seed**")
+        total_windows = len(window_details)
+        total_actions = sum([w['action_count'] for w in window_details])
+        total_net = sum([w['max_net'] for w in window_details])
         
-        print(f"**🎯 Window {i+1}/{num_windows}** | {date_info}")
-        print(f"Best Seed: {best_seed} | Net Profit: {best_profit:.2f} | "
-              f"Price Change: {price_change:.2f}% | Actions: {num_actions}/{len(best_actions)}")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Windows", total_windows)
+        with col2:
+            st.metric("Total Actions", f"{total_actions}/{len(actions)}")
+        with col3:
+            st.metric("Total Net (Sum)", f"{total_net:.2f}")
         
-        # เก็บข้อมูล
-        final_actions.extend(best_actions)
-        window_details.append({
-            'window': i+1,
-            'start_idx': start_idx,
-            'end_idx': end_idx,
-            'date_range': date_info,
-            'best_seed': best_seed,
-            'profit': best_profit,
-            'price_change': price_change,
-            'actions': best_actions,
-            'num_actions': num_actions
-        })
-    
-    print("---")
-    print(f"✅ **สำเร็จ!** สร้าง DNA Best Seed ขนาด {len(final_actions)} actions")
-    
-    # 🔄 **Apply Shift Feature**
-    shifted_actions = final_actions.copy()
-    if shift > 0:
-        # เลื่อน actions ลงตามจำนวน shift
-        shifted_actions = [0] * shift + final_actions[:-shift] if shift < len(final_actions) else [0] * len(final_actions)
-        print(f"🔄 **Shift Applied:** เลื่อนข้อมูล {shift} รอบ")
-    
-    # แสดงสถิติ
-    original_actions_count = np.sum(final_actions)
-    shifted_actions_count = np.sum(shifted_actions)
-    
-    print(f"📊 **Original DNA Actions:** {original_actions_count} actions จาก {len(final_actions)} วัน")
-    print(f"📊 **Shifted DNA Actions:** {shifted_actions_count} actions จาก {len(shifted_actions)} วัน")
-    
-    return final_actions, window_details, shifted_actions
-
-def analyze_dna_performance(price_list, actions, title="DNA Performance"):
-    """
-    วิเคราะห์ประสิทธิภาพของ DNA actions
-    """
-    if len(price_list) != len(actions):
-        print("❌ **ข้อผิดพลาด:** ขนาดข้อมูลราคาและ actions ไม่ตรงกัน")
-        return None
-    
-    # คำนวณกำไร
-    cash = 1.0
-    shares = 0
-    portfolio_values = []
-    
-    for i in range(len(price_list)):
-        if actions[i] == 1 and cash > 0:  # ซื้อ
-            shares = cash / price_list[i]
-            cash = 0
-        elif actions[i] == 0 and shares > 0:  # ขาย
-            cash = shares * price_list[i]
-            shares = 0
+        # แสดงตารางรายละเอียด
+        st.write("📋 **รายละเอียดแต่ละ Window**")
+        df_details = pd.DataFrame(window_details)
+        df_display = df_details[['window_number', 'timeline', 'best_seed', 'max_net', 
+                               'price_change_pct', 'action_count', 'window_size']].copy()
+        df_display.columns = ['Window', 'Timeline', 'Best Seed', 'Net Profit', 
+                            'Price Change %', 'Actions', 'Window Size']
+        st.dataframe(df_display, use_container_width=True)
         
-        # คำนวณมูลค่า portfolio
-        current_value = cash + (shares * price_list[i] if shares > 0 else 0)
-        portfolio_values.append(current_value)
+        # เก็บ window_details ใน session state เพื่อใช้ในการแสดงผลอื่น ๆ
+        st.session_state[f'window_details_{Ticker}'] = window_details
+      
+    else:
+        rng = np.random.default_rng(act)
+        actions = rng.integers(0, 2, len(prices))
     
-    # ขายหุ้นที่เหลือในวันสุดท้าย
-    if shares > 0:
-        cash = shares * price_list[-1]
-        portfolio_values[-1] = cash
+    buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
     
-    final_return = ((portfolio_values[-1] - 1.0) / 1.0) * 100
-    buy_hold_return = ((price_list[-1] - price_list[0]) / price_list[0]) * 100
+    # ใช้ sumusd[0] แทนค่าคงที่ 3000
+    initial_capital = sumusd[0]
     
-    print(f"
-📈 **{title} Analysis**")
-    print(f"🎯 Final Portfolio Value: {portfolio_values[-1]:.4f}")
-    print(f"📊 Strategy Return: {final_return:.2f}%")
-    print(f"📊 Buy & Hold Return: {buy_hold_return:.2f}%")
-    print(f"🏆 Outperformance: {final_return - buy_hold_return:.2f}%")
-    print(f"🔢 Total Actions: {np.sum(actions)}/{len(actions)} ({np.sum(actions)/len(actions)*100:.1f}%)")
-    
-    return {
-        'final_value': portfolio_values[-1],
-        'strategy_return': final_return,
-        'buy_hold_return': buy_hold_return,
-        'outperformance': final_return - buy_hold_return,
-        'total_actions': np.sum(actions),
-        'action_rate': np.sum(actions)/len(actions)*100,
-        'portfolio_values': portfolio_values
-    }
+    df = pd.DataFrame({
+        'price': prices,
+        'action': actions,
+        'buffer': np.round(buffer, 2),
+        'sumusd': np.round(sumusd, 2),
+        'cash': np.round(cash, 2),
+        'asset_value': np.round(asset_value, 2),
+        'amount': np.round(amount, 2),
+        'refer': np.round(refer + initial_capital, 2),
+        'net': np.round(sumusd - refer - initial_capital, 2)
+    })
+    return df
 
-# 🎯 **ตัวอย่างการใช้งาน**
-def demo_dna_best_seed_with_shift():
-    """
-    สาธิตการใช้งาน DNA Best Seed พร้อม Shift
-    """
-    print("🚀 **DEMO: DNA Best Seed with Shift Feature**")
-    print("=" * 60)
+def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_workers=4):
+    all = []
+    all_id = []
     
-    # สร้างข้อมูลตัวอย่าง
-    sample_data = generate_sample_data(days=50, start_price=100, volatility=0.02)
-    price_list = sample_data['Close'].tolist()
-    
-    print(f"📊 **ข้อมูลตัวอย่าง:** {len(price_list)} วัน")
-    print(f"💰 ราคาเริ่มต้น: ${price_list[0]:.2f}")
-    print(f"💰 ราคาสิ้นสุด: ${price_list[-1]:.2f}")
-    print(f"📈 การเปลี่ยนแปลง: {((price_list[-1]-price_list[0])/price_list[0]*100):+.2f}%")
-    
-    # ทดสอบ DNA Best Seed พร้อม Shift
-    final_actions, window_details, shifted_actions = find_best_seed_sliding_window_optimized(
-        price_list=price_list,
-        ticker_data_with_dates=sample_data,
-        window_size=15,
-        num_seeds_to_try=200,
-        max_workers=2,
-        shift=1  # เลื่อน 1 รอบ
-    )
-    
-    # วิเคราะห์ประสิทธิภาพ
-    print("
-" + "="*60)
-    analyze_dna_performance(price_list, final_actions, "Original DNA")
-    analyze_dna_performance(price_list, shifted_actions, "Shifted DNA")
-    
-    return final_actions, shifted_actions, sample_data
+    # min
+    all.append(Limit_fx(Ticker, act=-1).net)
+    all_id.append('min')
 
-# เรียกใช้ demo
+    # fx (best_seed or other)
+    if act == -3:  # best_seed
+        all.append(Limit_fx(Ticker, act=act, window_size=window_size, 
+                           num_seeds_to_try=num_seeds_to_try, max_workers=max_workers).net)
+        all_id.append('best_seed')
+    else:
+        all.append(Limit_fx(Ticker, act=act).net)
+        all_id.append('fx_{}'.format(act))
+
+    # max
+    all.append(Limit_fx(Ticker, act=-2).net)
+    all_id.append('max')
+    
+    chart_data = pd.DataFrame(np.array(all).T, columns=np.array(all_id))
+    
+    st.write('📊 **Refer_Log Comparison**')
+    st.line_chart(chart_data)
+
+    df_plot = Limit_fx(Ticker, act=-1)
+    df_plot = df_plot[['buffer']].cumsum()
+    st.write('💰 **Burn_Cash**')
+    st.line_chart(df_plot)
+    st.write(Limit_fx(Ticker, act=-1))
+
+# Main Streamlit App
+def main():
+    tab1, tab2, = st.tabs([ "การตั้งค่า", "ทดสอบ" ])
+    with tab1:
+
+        st.write("🎯 Best Seed Sliding Window Tester (Optimized)")
+        st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด (ปรับปรุงความเร็ว)")
+        
+        # Sidebar สำหรับการตั้งค่า
+        st.write("⚙️ การตั้งค่า")
+        
+        # เลือก ticker สำหรับทดสอบ
+        test_ticker = st.selectbox(
+            "เลือก Ticker สำหรับทดสอบ", 
+            ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
+        )
+        
+        # ตั้งค่าพารามิเตอร์
+        window_size = st.number_input(
+            "ขนาด Window (วัน)", 
+            min_value=2, max_value=100, value=30
+        )
+        
+        num_seeds = st.number_input(
+            "จำนวน Seeds ต่อ Window", 
+            min_value=100, max_value=10000, value=1000
+        )
+        
+        # เพิ่มการตั้งค่า parallel processing
+        max_workers = st.number_input(
+            "จำนวน Workers สำหรับ Parallel Processing", 
+            min_value=1, max_value=16, value=4,
+            help="เพิ่มจำนวน workers เพื่อความเร็วมากขึ้น (แนะนำ 4-8)"
+        )
+
+    with tab2:
+        # ปุ่มเริ่มทดสอบ
+        st.write("---")
+        if st.button("🚀 เริ่มทดสอบ Best Seed (Optimized)", type="primary"):
+            st.write(f"กำลังทดสอบ Best Seed สำหรับ **{test_ticker}** 📊")
+            st.write(f"⚙️ พารามิเตอร์: Window Size = {window_size}, Seeds per Window = {num_seeds}, Workers = {max_workers}")
+            st.write("---")
+            
+            try:
+                # เรียกใช้ plot comparison
+                plot_comparison(Ticker=test_ticker, act=-3, window_size=window_size, 
+                              num_seeds_to_try=num_seeds, max_workers=max_workers)
+                
+                # แสดงข้อมูลเพิ่มเติมถ้ามี
+                if f'window_details_{test_ticker}' in st.session_state:
+                    st.write("---")
+                    st.write("🔍 **การวิเคราะห์เพิ่มเติม**")
+                    
+                    window_details = st.session_state[f'window_details_{test_ticker}']
+                    
+                    # กราฟแสดง Net Profit ของแต่ละ Window
+                    df_windows = pd.DataFrame(window_details)
+                    st.write("📊 **Net Profit แต่ละ Window**")
+                    st.bar_chart(df_windows.set_index('window_number')['max_net'])
+                    
+                    # กราฟแสดง Price Change % ของแต่ละ Window
+                    st.write("📈 **Price Change % แต่ละ Window**")
+                    st.bar_chart(df_windows.set_index('window_number')['price_change_pct'])
+                    
+                    # แสดง Seeds ที่ใช้
+                    st.write("🌱 **Seeds ที่เลือกใช้ในแต่ละ Window**")
+                    seeds_df = df_windows[['window_number', 'timeline', 'best_seed', 'max_net']].copy()
+                    seeds_df.columns = ['Window', 'Timeline', 'Selected Seed', 'Net Profit']
+                    st.dataframe(seeds_df, use_container_width=True)
+                    
+                    # ดาวน์โหลดผลลัพธ์
+                    st.write("💾 **ดาวน์โหลดผลลัพธ์**")
+                    csv = df_windows.to_csv(index=False)
+                    st.download_button(
+                        label="📥 ดาวน์โหลด Window Details (CSV)",
+                        data=csv,
+                        file_name=f'best_seed_results_{test_ticker}_{window_size}w_{num_seeds}s.csv',
+                        mime='text/csv'
+                    )
+                    
+            except Exception as e:
+                st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
+                st.write("กรุณาลองปรับพารามิเตอร์หรือเลือก ticker อื่น")
+
+    # คำอธิบายวิธีการทำงาน
+    st.write("---")
+    st.write("📖 คำอธิบายวิธีการทำงาน")
+
+    
+    with st.expander("🔍 Best Seed Sliding Window คืออะไร?"):
+        st.write("""
+        **Best Seed Sliding Window** เป็นเทคนิคการหา action sequence ที่ดีที่สุดโดย:
+        
+        1. **แบ่งข้อมูล**: แบ่งข้อมูลราคาออกเป็นช่วง ๆ (windows) ตามขนาดที่กำหนด
+        2. **ค้นหา Seed**: ในแต่ละ window ทำการสุ่ม seed หลาย ๆ ตัวและคำนวณผลกำไร
+        3. **เลือก Best Seed**: เลือก seed ที่ให้ผลกำไรสูงสุดในแต่ละ window
+        4. **รวม Actions**: นำ action sequences จากแต่ละ window มาต่อกันเป็น sequence สุดท้าย
+        
+        **ข้อดี:**
+        - ปรับตัวได้ตามสภาวะตลาดในแต่ละช่วงเวลา
+        - ลดความเสี่ยงจากการใช้ seed เดียวตลอดทั้งช่วง
+        - สามารถควบคุมพารามิเตอร์ได้ (window size, จำนวน seeds)
+        """)
+    
+    with st.expander("⚙️ การตั้งค่าพารามิเตอร์"):
+        st.write("""
+        **Window Size (ขนาด Window):**
+        - ขนาดเล็ก (10-20 วัน): ปรับตัวเร็ว แต่อาจมีความผันผวนสูง
+        - ขนาดกลาง (20-50 วัน): สมดุลระหว่างการปรับตัวและเสถียรภาพ
+        - ขนาดใหญ่ (50+ วัน): เสถียรแต่ปรับตัวช้า
+        
+        **จำนวน Seeds ต่อ Window:**
+        - น้อย (100-500): เร็วแต่อาจไม่ได้ seed ที่ดีที่สุด
+        - กลาง (500-2000): สมดุลระหว่างเวลาและคุณภาพ
+        - มาก (2000+): ได้ผลลัพธ์ดีแต่ใช้เวลานาน
+        
+        **จำนวน Workers:**
+        - 1-2: สำหรับเครื่องที่มี CPU น้อย
+        - 4: เหมาะสำหรับเครื่องทั่วไป
+        - 6-8: สำหรับเครื่องที่มี CPU หลายคอร์
+        """)
+    
+    with st.expander("⚡ การปรับปรุงความเร็ว"):
+        st.write("""
+        **การปรับปรุงที่ทำ:**
+        
+        1. **Parallel Processing**: ใช้ ThreadPoolExecutor เพื่อประเมิน seeds หลายตัวพร้อมกัน
+        2. **Caching**: ใช้ @lru_cache สำหรับฟังก์ชันคำนวณและ @st.cache_data สำหรับข้อมูล ticker
+        3. **Vectorization**: ใช้ NumPy operations แทน Python loops ในส่วนที่เป็นไปได้
+        4. **Batch Processing**: แบ่ง seeds เป็น batches เพื่อลด overhead ของ threading
+        5. **Memory Optimization**: ใช้ dtype ที่เหมาะสมและ pre-allocate arrays
+        
+        **ผลลัพธ์ที่คาดหวัง:**
+        - เร็วขึ้น 2-4 เท่า (ขึ้นอยู่กับจำนวน CPU cores)
+        - ใช้ memory มีประสิทธิภาพมากขึ้น
+        - ผลลัพธ์เหมือนเดิมทุกประการ
+        """)
+
 if __name__ == "__main__":
-    demo_dna_best_seed_with_shift()
+    main()
