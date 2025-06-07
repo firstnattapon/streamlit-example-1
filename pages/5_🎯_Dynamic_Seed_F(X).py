@@ -5,7 +5,7 @@ import yfinance as yf
 import streamlit as st
 
 st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
-
+ 
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=1500):
     # แปลงเป็น numpy array และกำหนด dtype ให้ชัดเจน
