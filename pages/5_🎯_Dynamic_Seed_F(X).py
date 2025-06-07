@@ -349,6 +349,7 @@ def main():
 
     with tab2:
         # ปุ่มเริ่มทดสอบ
+        st.write("---")
         if st.button("🚀 เริ่มทดสอบ Best Seed", type="primary"):
             st.write(f"กำลังทดสอบ Best Seed สำหรับ **{test_ticker}** 📊")
             st.write(f"⚙️ พารามิเตอร์: Window Size = {window_size}, Seeds per Window = {num_seeds}")
