@@ -321,7 +321,7 @@ def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000):
 
 # Main Streamlit App
 def main():
-    tab1, tab2, = st.tabs([ "การตั้งค่า", "ทดสอบ", "tab3" , 'tab4' ])
+    tab1, tab2, = st.tabs([ "การตั้งค่า", "ทดสอบ" ])
     with tab1:
 
         st.title("🎯 Best Seed Sliding Window Tester")
