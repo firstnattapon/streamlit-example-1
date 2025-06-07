@@ -325,21 +325,21 @@ def main():
     st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด")
     
     # Sidebar สำหรับการตั้งค่า
-    st.sidebar.header("⚙️ การตั้งค่า")
+    st.header("⚙️ การตั้งค่า")
     
     # เลือก ticker สำหรับทดสอบ
-    test_ticker = st.sidebar.selectbox(
+    test_ticker = st.selectbox(
         "เลือก Ticker สำหรับทดสอบ", 
         ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
     )
     
     # ตั้งค่าพารามิเตอร์
-    window_size = st.sidebar.number_input(
+    window_size = st.number_input(
         "ขนาด Window (วัน)", 
         min_value=10, max_value=100, value=30
     )
     
-    num_seeds = st.sidebar.number_input(
+    num_seeds = st.number_input(
         "จำนวน Seeds ต่อ Window", 
         min_value=100, max_value=5000, value=1000
     )
