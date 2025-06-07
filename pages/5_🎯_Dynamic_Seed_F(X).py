@@ -321,69 +321,74 @@ def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000):
 
 # Main Streamlit App
 def main():
-    st.title("🎯 Best Seed Sliding Window Tester")
-    st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด")
+    tab1, tab2, tab3, tab4, = st.tabs([ "tab1", "tab2", "tab3" , 'tab4' ])
+    with tab1:
     
-    # Sidebar สำหรับการตั้งค่า
-    st.header("⚙️ การตั้งค่า")
-    
-    # เลือก ticker สำหรับทดสอบ
-    test_ticker = st.selectbox(
-        "เลือก Ticker สำหรับทดสอบ", 
-        ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
-    )
-    
-    # ตั้งค่าพารามิเตอร์
-    window_size = st.number_input(
-        "ขนาด Window (วัน)", 
-        min_value=10, max_value=100, value=30
-    )
-    
-    num_seeds = st.number_input(
-        "จำนวน Seeds ต่อ Window", 
-        min_value=100, max_value=10000, value=1000
-    )
-    
-    # ปุ่มเริ่มทดสอบ
-    if st.button("🚀 เริ่มทดสอบ Best Seed", type="primary"):
-        st.write(f"กำลังทดสอบ Best Seed สำหรับ **{test_ticker}** 📊")
-        st.write(f"⚙️ พารามิเตอร์: Window Size = {window_size}, Seeds per Window = {num_seeds}")
-        st.write("---")
         
-        # เรียกใช้ plot comparison
-        plot_comparison(Ticker=test_ticker, act=-3, window_size=window_size, num_seeds_to_try=num_seeds)
+        st.title("🎯 Best Seed Sliding Window Tester")
+        st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด")
         
-        # แสดงข้อมูลเพิ่มเติมถ้ามี
-        if f'window_details_{test_ticker}' in st.session_state:
+        # Sidebar สำหรับการตั้งค่า
+        st.header("⚙️ การตั้งค่า")
+        
+        # เลือก ticker สำหรับทดสอบ
+        test_ticker = st.selectbox(
+            "เลือก Ticker สำหรับทดสอบ", 
+            ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
+        )
+        
+        # ตั้งค่าพารามิเตอร์
+        window_size = st.number_input(
+            "ขนาด Window (วัน)", 
+            min_value=10, max_value=100, value=30
+        )
+        
+        num_seeds = st.number_input(
+            "จำนวน Seeds ต่อ Window", 
+            min_value=100, max_value=10000, value=1000
+        )
+
+    with tab2:
+        # ปุ่มเริ่มทดสอบ
+        if st.button("🚀 เริ่มทดสอบ Best Seed", type="primary"):
+            st.write(f"กำลังทดสอบ Best Seed สำหรับ **{test_ticker}** 📊")
+            st.write(f"⚙️ พารามิเตอร์: Window Size = {window_size}, Seeds per Window = {num_seeds}")
             st.write("---")
-            st.write("🔍 **การวิเคราะห์เพิ่มเติม**")
             
-            window_details = st.session_state[f'window_details_{test_ticker}']
+            # เรียกใช้ plot comparison
+            plot_comparison(Ticker=test_ticker, act=-3, window_size=window_size, num_seeds_to_try=num_seeds)
             
-            # กราฟแสดง Net Profit ของแต่ละ Window
-            df_windows = pd.DataFrame(window_details)
-            st.write("📊 **Net Profit แต่ละ Window**")
-            st.bar_chart(df_windows.set_index('window_number')['max_net'])
-            
-            # กราฟแสดง Price Change % ของแต่ละ Window
-            st.write("📈 **Price Change % แต่ละ Window**")
-            st.bar_chart(df_windows.set_index('window_number')['price_change_pct'])
-            
-            # แสดง Seeds ที่ใช้
-            st.write("🌱 **Seeds ที่เลือกใช้ในแต่ละ Window**")
-            seeds_df = df_windows[['window_number', 'timeline', 'best_seed', 'max_net']].copy()
-            seeds_df.columns = ['Window', 'Timeline', 'Selected Seed', 'Net Profit']
-            st.dataframe(seeds_df, use_container_width=True)
-            
-            # ดาวน์โหลดผลลัพธ์
-            st.write("💾 **ดาวน์โหลดผลลัพธ์**")
-            csv = df_windows.to_csv(index=False)
-            st.download_button(
-                label="📥 ดาวน์โหลด Window Details (CSV)",
-                data=csv,
-                file_name=f'best_seed_results_{test_ticker}_{window_size}w_{num_seeds}s.csv',
-                mime='text/csv'
-            )
+            # แสดงข้อมูลเพิ่มเติมถ้ามี
+            if f'window_details_{test_ticker}' in st.session_state:
+                st.write("---")
+                st.write("🔍 **การวิเคราะห์เพิ่มเติม**")
+                
+                window_details = st.session_state[f'window_details_{test_ticker}']
+                
+                # กราฟแสดง Net Profit ของแต่ละ Window
+                df_windows = pd.DataFrame(window_details)
+                st.write("📊 **Net Profit แต่ละ Window**")
+                st.bar_chart(df_windows.set_index('window_number')['max_net'])
+                
+                # กราฟแสดง Price Change % ของแต่ละ Window
+                st.write("📈 **Price Change % แต่ละ Window**")
+                st.bar_chart(df_windows.set_index('window_number')['price_change_pct'])
+                
+                # แสดง Seeds ที่ใช้
+                st.write("🌱 **Seeds ที่เลือกใช้ในแต่ละ Window**")
+                seeds_df = df_windows[['window_number', 'timeline', 'best_seed', 'max_net']].copy()
+                seeds_df.columns = ['Window', 'Timeline', 'Selected Seed', 'Net Profit']
+                st.dataframe(seeds_df, use_container_width=True)
+                
+                # ดาวน์โหลดผลลัพธ์
+                st.write("💾 **ดาวน์โหลดผลลัพธ์**")
+                csv = df_windows.to_csv(index=False)
+                st.download_button(
+                    label="📥 ดาวน์โหลด Window Details (CSV)",
+                    data=csv,
+                    file_name=f'best_seed_results_{test_ticker}_{window_size}w_{num_seeds}s.csv',
+                    mime='text/csv'
+                )
 
     # คำอธิบายวิธีการทำงาน
     st.write("---")
