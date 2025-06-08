@@ -284,31 +284,18 @@ with tab_generator:
 with tab_analyzer:
     st.header("2. วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
 
-    # เพิ่ม radio ให้เลือกแหล่งข้อมูล
-    source_option = st.radio(
-        "เลือกแหล่งข้อมูลเพื่อการวิเคราะห์:",
-        ["ใช้ผลลัพธ์จากการ Backtest ล่าสุด", "อัปโหลดไฟล์ CSV"],
-        horizontal=True, key='data_source'
+    # ลบ radio เหลือแค่อัปโหลดไฟล์ CSV
+    uploaded_file = st.file_uploader(
+        "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv']
     )
-
     df_to_analyze = None
-    if source_option == "ใช้ผลลัพธ์จากการ Backtest ล่าสุด":
-        if st.session_state.analysis_df is not None:
-            df_to_analyze = st.session_state.analysis_df
-            st.success("โหลดข้อมูลจากการ Backtest ล่าสุดเรียบร้อยแล้ว")
-        else:
-            st.info("ยังไม่มีผลการ Backtest ใน Session นี้ กรุณากลับไปที่แท็บแรกเพื่อรัน Backtest หรือเลือกอัปโหลดไฟล์ CSV")
-    else:
-        uploaded_file = st.file_uploader(
-            "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv']
-        )
-        if uploaded_file:
-            try:
-                df_to_analyze = pd.read_csv(uploaded_file)
-                st.success(f"ไฟล์ '{uploaded_file.name}' ถูกประมวลผลเรียบร้อยแล้ว")
-            except Exception as e:
-                st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
-                df_to_analyze = None
+    if uploaded_file:
+        try:
+            df_to_analyze = pd.read_csv(uploaded_file)
+            st.success(f"ไฟล์ '{uploaded_file.name}' ถูกประมวลผลเรียบร้อยแล้ว")
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
+            df_to_analyze = None
 
     if df_to_analyze is not None:
         try:
@@ -321,6 +308,7 @@ with tab_analyzer:
             if 'result' not in df.columns:
                 df['result'] = np.where(df['max_net'] > 0, 'Win', 'Loss')
 
+            # --- UI Tabs for Analysis ---
             overview_tab, stitched_dna_tab = st.tabs([
                 "🔬 ภาพรวมและสำรวจราย Window",
                 "🧬 Stitched DNA Analysis"
