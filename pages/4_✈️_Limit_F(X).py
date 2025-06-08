@@ -264,13 +264,30 @@ def decode_length_prefix(encoded_str):
     numbers = []
     i = 0
     while i < len(encoded_str):
-        length = int(encoded_str[i])
-        i += 1
-        num_str = encoded_str[i : i + length]
-        numbers.append(int(num_str))
-        i += length
+        try:
+            # ตรวจสอบว่าเป็นตัวเลขและมีความยาวพอ
+            if not encoded_str[i].isdigit():
+                raise ValueError(f"Invalid prefix at position {i}")
+            
+            length = int(encoded_str[i])
+            i += 1
+            
+            if i + length > len(encoded_str):
+                raise ValueError(f"Incomplete data at position {i}")
+                
+            num_str = encoded_str[i:i+length]
+            
+            if not num_str.isdigit():
+                raise ValueError(f"Invalid number at position {i}")
+                
+            numbers.append(int(num_str))
+            i += length
+            
+        except ValueError as e:
+            st.error(f"Error decoding: {str(e)}")
+            break
+            
     return numbers
-
 with tab1:
     Dna_seed_ffwm = st.text_input("Dna_seed_ffwm" , "Decode")
     Dna_seed_ffwm = decode_length_prefix(Dna_seed_ffwm)
