@@ -382,7 +382,7 @@ def main():
         # ตั้งค่าพารามิเตอร์
         window_size = st.number_input(
             "ขนาด Window (วัน)", 
-            min_value=2, max_value=100, value=30
+            min_value=2, max_value=730, value=30
         )
         
         num_seeds = st.number_input(
