@@ -398,13 +398,17 @@ with tab_analyzer:
                 มา 'เย็บ' ต่อกันโดยตรง และเปรียบเทียบกับ Benchmark
                 """)
             
-                # --- แปลง action_sequence จาก string เป็น list ---
                 def safe_literal_eval(val):
-                    try:
-                        return ast.literal_eval(val)
-                    except Exception:
-                        st.warning(f"Could not parse action_sequence: {val}")
+                    if pd.isna(val):
                         return []
+                    if isinstance(val, list):
+                        return val
+                    if isinstance(val, str) and val.strip().startswith('[') and val.strip().endswith(']'):
+                        try:
+                            return ast.literal_eval(val)
+                        except Exception:
+                            return []
+                    return []
             
                 df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
             
