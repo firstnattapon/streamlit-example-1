@@ -389,35 +389,33 @@ with tab_analyzer:
                     st.markdown(f"**Action Sequence:**")
                     st.code(window_data['action_sequence'], language='json')
 
+            import ast
+            
             with stitched_dna_tab:
                 st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
                 st.markdown("""
                 จำลองการเทรดจริงโดยนำ **`action_sequence`** ที่ได้จากแต่ละ Window (ซึ่งเป็นผลจาก `best_seed`) 
                 มา 'เย็บ' ต่อกันโดยตรง และเปรียบเทียบกับ Benchmark
                 """)
-
-                # --- การดึง Seed List และ Action List มาจาก DataFrame ---
-                stitched_actions_from_file = []
-                if 'best_seed' in df.columns and 'action_sequence' in df.columns:
-                    # แปลงคอลัมน์ action_sequence จาก string '[1, 0, ...]' เป็น list of ints
-                    def safe_literal_eval(val):
-                        try:
-                            return ast.literal_eval(val)
-                        except (ValueError, SyntaxError):
-                            st.warning(f"Could not parse action_sequence: {val}")
-                            return []
-                    
-                    df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
-
-                    # เรียงข้อมูลตาม window number เพื่อให้ลำดับถูกต้อง
-                    df_sorted = df.sort_values('window_number')
-                    
-                    extracted_seeds = df_sorted['best_seed'].tolist()
-                    st.session_state.seed_list_from_file = str(extracted_seeds)
-                    
-                    # --- CRITICAL CHANGE: สร้าง final_actions โดยการต่อ list ของ action_sequence ---
-                    stitched_actions_from_file = [action for sublist in df_sorted['action_sequence_list'] for action in sublist]
-
+            
+                # --- แปลง action_sequence จาก string เป็น list ---
+                def safe_literal_eval(val):
+                    try:
+                        return ast.literal_eval(val)
+                    except Exception:
+                        st.warning(f"Could not parse action_sequence: {val}")
+                        return []
+            
+                df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
+            
+                # --- ต่อ action_sequence ของแต่ละ window ---
+                df_sorted = df.sort_values('window_number')
+                stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
+            
+                # --- แสดง seed list (สำหรับอ้างอิง) ---
+                extracted_seeds = df_sorted['best_seed'].tolist()
+                st.session_state.seed_list_from_file = str(extracted_seeds)
+            
                 st.text_area(
                     "DNA Seed List (เพื่ออ้างอิง):",
                     value=st.session_state.seed_list_from_file,
@@ -425,14 +423,14 @@ with tab_analyzer:
                     help="รายการ seed ที่ดึงมาจากข้อมูลที่โหลด (การจำลองด้านล่างจะใช้ Action Sequence ที่สอดคล้องกัน)",
                     disabled=True
                 )
-
+            
                 dna_cols = st.columns(2)
                 stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.gen_ticker)
                 stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=st.session_state.gen_start)
-
+            
                 if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", use_container_width=True):
-                    if not stitched_actions_from_file:
-                         st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้ กรุณาตรวจสอบคอลัมน์ 'action_sequence' ในไฟล์ CSV")
+                    if not stitched_actions:
+                        st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้ กรุณาตรวจสอบคอลัมน์ 'action_sequence' ในไฟล์ CSV")
                     else:
                         with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker} และคำนวณ Benchmark..."):
                             sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now()))
@@ -441,27 +439,25 @@ with tab_analyzer:
                             else:
                                 prices = sim_data['Close'].tolist()
                                 n_total = len(prices)
-                                
-                                # a) Stitched DNA Strategy (ใช้ action ที่ต่อกันมาโดยตรง)
-                                # ตัด final_actions ให้มีความยาวไม่เกินจำนวนวันที่มีราคา
-                                final_actions_dna = stitched_actions_from_file[:n_total]
+                                # --- ตัด action sequence ให้เท่ากับจำนวนวันราคา ---
+                                final_actions_dna = stitched_actions[:n_total]
                                 st.info(f"ℹ️ การจำลองใช้ Action Sequence ที่ 'เย็บ' ต่อกันโดยตรงจากไฟล์ ความยาว {len(final_actions_dna)} วัน")
                                 
+                                # a) Stitched DNA Strategy
                                 _, sumusd_dna, _, _, _, refer_dna = calculate_optimized(final_actions_dna, prices[:len(final_actions_dna)])
                                 stitched_net = sumusd_dna - refer_dna - sumusd_dna[0]
-
+            
                                 # b) Max Performance (Perfect Foresight)
                                 max_actions = get_max_action(prices)
                                 _, sumusd_max, _, _, _, refer_max = calculate_optimized(max_actions, prices)
                                 max_net = sumusd_max - refer_max - sumusd_max[0]
-
-                                # c) Min Performance (Rebalance every day, as per original logic)
+            
+                                # c) Min Performance (Rebalance every day)
                                 min_actions = np.ones(n_total, dtype=int).tolist()
                                 _, sumusd_min, _, _, _, refer_min = calculate_optimized(min_actions, prices)
                                 min_net = sumusd_min - refer_min - sumusd_min[0]
                                 
                                 # --- Plotting ---
-                                # สร้าง DataFrame ให้มีความยาวเท่ากับข้อมูลที่สั้นที่สุด (DNA) เพื่อไม่ให้เกิด error
                                 plot_len = len(stitched_net)
                                 plot_df = pd.DataFrame({
                                     'Max Performance (Perfect)': max_net[:plot_len],
@@ -471,14 +467,12 @@ with tab_analyzer:
                                 
                                 st.subheader("Performance Comparison (Net Profit)")
                                 st.line_chart(plot_df)
-
+            
                                 st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
                                 metric_cols = st.columns(3)
-                                # แสดงผลลัพธ์สุดท้ายของแต่ละเส้น ณ วันสุดท้ายของการจำลอง DNA
                                 metric_cols[0].metric("Max Performance (at DNA End)", f"${max_net[plot_len-1]:,.2f}", help=f"ผลตอบแทนสูงสุดตามทฤษฎี ณ วันที่ {plot_len}")
                                 metric_cols[1].metric("Stitched DNA Strategy", f"${stitched_net[-1]:,.2f}", delta=f"{stitched_net[-1] - min_net[plot_len-1]:,.2f} vs Min", delta_color="normal")
                                 metric_cols[2].metric("Min Performance (at DNA End)", f"${min_net[plot_len-1]:,.2f}", help=f"ผลตอบแทนของกลยุทธ์ Rebalance ทุกวัน ณ วันที่ {plot_len}")
-            
             with insights_tab:
                 st.subheader("ค้นหา Insights และความสัมพันธ์")
                 
