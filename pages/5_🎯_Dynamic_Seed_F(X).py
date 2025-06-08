@@ -5,6 +5,7 @@ import streamlit as st
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
+from datetime import datetime, timedelta
   
 st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
 
@@ -253,18 +254,52 @@ def get_max_action(price_list, fix=1500):
     return get_max_action_vectorized(price_list, fix)
 
 @st.cache_data(ttl=3600)  # Cache ข้อมูล ticker เป็นเวลา 1 ชั่วโมง
-def get_ticker_data(ticker, filter_date='2023-01-01 12:00:00+07:00'):
+def get_ticker_data(ticker, start_date=None, end_date=None):
     """
-    ดึงข้อมูล ticker พร้อม caching
+    ดึงข้อมูล ticker พร้อม caching และการเลือกช่วงวันที่
+    
+    Parameters:
+    - ticker: รหัสหุ้น
+    - start_date: วันที่เริ่มต้น (string หรือ datetime) เช่น '2023-01-01'
+    - end_date: วันที่สิ้นสุด (string หรือ datetime) เช่น '2024-12-31'
     """
-    tickerData = yf.Ticker(ticker)
-    tickerData = tickerData.history(period='max')[['Close']]
-    tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
-    tickerData = tickerData[tickerData.index >= filter_date]
-    return tickerData
+    try:
+        # ดึงข้อมูลทั้งหมดก่อน
+        tickerData = yf.Ticker(ticker)
+        tickerData = tickerData.history(period='max')[['Close']]
+        
+        # แปลง timezone เป็น Asia/Bangkok
+        tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
+        
+        # กรองข้อมูลตามช่วงวันที่ที่กำหนด
+        if start_date is not None:
+            if isinstance(start_date, str):
+                start_date = pd.to_datetime(start_date).tz_localize('Asia/Bangkok')
+            tickerData = tickerData[tickerData.index >= start_date]
+        
+        if end_date is not None:
+            if isinstance(end_date, str):
+                end_date = pd.to_datetime(end_date).tz_localize('Asia/Bangkok')
+            tickerData = tickerData[tickerData.index <= end_date]
+        
+        # ถ้าไม่มีการกำหนดวันที่ ให้ใช้ค่าเริ่มต้นเป็น 2023-01-01
+        if start_date is None and end_date is None:
+            default_start = pd.to_datetime('2023-01-01 12:00:00').tz_localize('Asia/Bangkok')
+            tickerData = tickerData[tickerData.index >= default_start]
+        
+        return tickerData
+        
+    except Exception as e:
+        st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {str(e)}")
+        return pd.DataFrame()
 
-def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_workers=4):
-    tickerData = get_ticker_data(Ticker)
+def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_workers=4, start_date=None, end_date=None):
+    tickerData = get_ticker_data(Ticker, start_date=start_date, end_date=end_date)
+    
+    if tickerData.empty:
+        st.error("❌ ไม่มีข้อมูลในช่วงวันที่ที่เลือก")
+        return pd.DataFrame()
+    
     prices = np.array(tickerData.Close.values, dtype=np.float64)
 
     if act == -1:  # min
@@ -330,25 +365,26 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_worke
     })
     return df
 
-def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_workers=4):
+def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_workers=4, start_date=None, end_date=None):
     all = []
     all_id = []
     
     # min
-    all.append(Limit_fx(Ticker, act=-1).net)
+    all.append(Limit_fx(Ticker, act=-1, start_date=start_date, end_date=end_date).net)
     all_id.append('min')
 
     # fx (best_seed or other)
     if act == -3:  # best_seed
         all.append(Limit_fx(Ticker, act=act, window_size=window_size, 
-                           num_seeds_to_try=num_seeds_to_try, max_workers=max_workers).net)
+                           num_seeds_to_try=num_seeds_to_try, max_workers=max_workers,
+                           start_date=start_date, end_date=end_date).net)
         all_id.append('best_seed')
     else:
-        all.append(Limit_fx(Ticker, act=act).net)
+        all.append(Limit_fx(Ticker, act=act, start_date=start_date, end_date=end_date).net)
         all_id.append('fx_{}'.format(act))
 
     # max
-    all.append(Limit_fx(Ticker, act=-2).net)
+    all.append(Limit_fx(Ticker, act=-2, start_date=start_date, end_date=end_date).net)
     all_id.append('max')
     
     chart_data = pd.DataFrame(np.array(all).T, columns=np.array(all_id))
@@ -356,66 +392,121 @@ def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, ma
     st.write('📊 **Refer_Log Comparison**')
     st.line_chart(chart_data)
 
-    df_plot = Limit_fx(Ticker, act=-1)
-    df_plot = df_plot[['buffer']].cumsum()
-    st.write('💰 **Burn_Cash**')
-    st.line_chart(df_plot)
-    st.write(Limit_fx(Ticker, act=-1))
+    df_plot = Limit_fx(Ticker, act=-1, start_date=start_date, end_date=end_date)
+    if not df_plot.empty:
+        df_plot = df_plot[['buffer']].cumsum()
+        st.write('💰 **Burn_Cash**')
+        st.line_chart(df_plot)
+        st.write(Limit_fx(Ticker, act=-1, start_date=start_date, end_date=end_date))
+
+# Initialize session state variables
+if 'test_ticker' not in st.session_state:
+    st.session_state.test_ticker = 'FFWM'
+if 'start_date' not in st.session_state:
+    st.session_state.start_date = datetime(2023, 1, 1)
+if 'end_date' not in st.session_state:
+    st.session_state.end_date = datetime.now()
+if 'window_size' not in st.session_state:
+    st.session_state.window_size = 30
+if 'num_seeds' not in st.session_state:
+    st.session_state.num_seeds = 1000
+if 'max_workers' not in st.session_state:
+    st.session_state.max_workers = 4
 
 # Main Streamlit App
-def main():
-    tab1, tab2, = st.tabs([ "การตั้งค่า", "ทดสอบ" ])
-    with tab1:
+st.write("🎯 Best Seed Sliding Window Tester (Optimized)")
+st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด (ปรับปรุงความเร็ว)")
 
-        st.write("🎯 Best Seed Sliding Window Tester (Optimized)")
-        st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด (ปรับปรุงความเร็ว)")
-        
-        # Sidebar สำหรับการตั้งค่า
-        st.write("⚙️ การตั้งค่า")
-        
-        # เลือก ticker สำหรับทดสอบ
-        test_ticker = st.selectbox(
-            "เลือก Ticker สำหรับทดสอบ", 
-            ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
-        )
-        
-        # ตั้งค่าพารามิเตอร์
-        window_size = st.number_input(
-            "ขนาด Window (วัน)", 
-            min_value=2, max_value=730, value=30
-        )
-        
-        num_seeds = st.number_input(
-            "จำนวน Seeds ต่อ Window", 
-            min_value=100, max_value=1000000, value=1000
-        )
-        
-        # เพิ่มการตั้งค่า parallel processing
-        max_workers = st.number_input(
-            "จำนวน Workers สำหรับ Parallel Processing", 
-            min_value=1, max_value=16, value=4,
-            help="เพิ่มจำนวน workers เพื่อความเร็วมากขึ้น (แนะนำ 4-8)"
-        )
+tab1, tab2 = st.tabs(["การตั้งค่า", "ทดสอบ"])
 
-    with tab2:
-        # ปุ่มเริ่มทดสอบ
-        st.write("---")
-        if st.button("🚀 เริ่มทดสอบ Best Seed (Optimized)", type="primary"):
-            st.write(f"กำลังทดสอบ Best Seed สำหรับ **{test_ticker}** 📊")
-            st.write(f"⚙️ พารามิเตอร์: Window Size = {window_size}, Seeds per Window = {num_seeds}, Workers = {max_workers}")
+with tab1:
+    st.write("⚙️ การตั้งค่า")
+    
+    # เลือก ticker สำหรับทดสอบ
+    st.session_state.test_ticker = st.selectbox(
+        "เลือก Ticker สำหรับทดสอบ", 
+        ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'],
+        index=['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'].index(st.session_state.test_ticker)
+    )
+    
+    # ตั้งค่าช่วงวันที่
+    st.write("📅 **ช่วงวันที่สำหรับการวิเคราะห์**")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.session_state.start_date = st.date_input(
+            "วันที่เริ่มต้น",
+            value=st.session_state.start_date,
+            min_value=datetime(2020, 1, 1),
+            max_value=datetime.now()
+        )
+    
+    with col2:
+        st.session_state.end_date = st.date_input(
+            "วันที่สิ้นสุด",
+            value=st.session_state.end_date,
+            min_value=datetime(2020, 1, 1),
+            max_value=datetime.now()
+        )
+    
+    # ตรวจสอบช่วงวันที่
+    if st.session_state.start_date >= st.session_state.end_date:
+        st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
+    else:
+        # แสดงจำนวนวันที่เลือก
+        date_diff = (st.session_state.end_date - st.session_state.start_date).days
+        st.info(f"📊 ช่วงวันที่ที่เลือก: {date_diff} วัน ({st.session_state.start_date.strftime('%Y-%m-%d')} ถึง {st.session_state.end_date.strftime('%Y-%m-%d')})")
+    
+    # ตั้งค่าพารามิเตอร์
+    st.session_state.window_size = st.number_input(
+        "ขนาด Window (วัน)", 
+        min_value=2, max_value=730, value=st.session_state.window_size
+    )
+    
+    st.session_state.num_seeds = st.number_input(
+        "จำนวน Seeds ต่อ Window", 
+        min_value=100, max_value=1000000, value=st.session_state.num_seeds
+    )
+    
+    # เพิ่มการตั้งค่า parallel processing
+    st.session_state.max_workers = st.number_input(
+        "จำนวน Workers สำหรับ Parallel Processing", 
+        min_value=1, max_value=16, value=st.session_state.max_workers,
+        help="เพิ่มจำนวน workers เพื่อความเร็วมากขึ้น (แนะนำ 4-8)"
+    )
+
+with tab2:
+    # ปุ่มเริ่มทดสอบ
+    st.write("---")
+    if st.button("🚀 เริ่มทดสอบ Best Seed (Optimized)", type="primary"):
+        # ตรวจสอบช่วงวันที่อีกครั้ง
+        if st.session_state.start_date >= st.session_state.end_date:
+            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'")
+        else:
+            st.write(f"กำลังทดสอบ Best Seed สำหรับ **{st.session_state.test_ticker}** 📊")
+            st.write(f"📅 ช่วงวันที่: {st.session_state.start_date.strftime('%Y-%m-%d')} ถึง {st.session_state.end_date.strftime('%Y-%m-%d')}")
+            st.write(f"⚙️ พารามิเตอร์: Window Size = {st.session_state.window_size}, Seeds per Window = {st.session_state.num_seeds}, Workers = {st.session_state.max_workers}")
             st.write("---")
             
             try:
+                # แปลงวันที่เป็น string สำหรับส่งไปยังฟังก์ชัน
+                start_date_str = st.session_state.start_date.strftime('%Y-%m-%d')
+                end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
+                
                 # เรียกใช้ plot comparison
-                plot_comparison(Ticker=test_ticker, act=-3, window_size=window_size, 
-                              num_seeds_to_try=num_seeds, max_workers=max_workers)
+                plot_comparison(Ticker=st.session_state.test_ticker, act=-3, 
+                              window_size=st.session_state.window_size, 
+                              num_seeds_to_try=st.session_state.num_seeds, 
+                              max_workers=st.session_state.max_workers,
+                              start_date=start_date_str, end_date=end_date_str)
                 
                 # แสดงข้อมูลเพิ่มเติมถ้ามี
-                if f'window_details_{test_ticker}' in st.session_state:
+                if f'window_details_{st.session_state.test_ticker}' in st.session_state:
                     st.write("---")
                     st.write("🔍 **การวิเคราะห์เพิ่มเติม**")
                     
-                    window_details = st.session_state[f'window_details_{test_ticker}']
+                    window_details = st.session_state[f'window_details_{st.session_state.test_ticker}']
+
                     
                     # กราฟแสดง Net Profit ของแต่ละ Window
                     df_windows = pd.DataFrame(window_details)
