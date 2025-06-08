@@ -252,8 +252,30 @@ with Burn_Cash:
     df_burn_cash = df_burn_cash.reset_index(drop=True)
     # แสดงตารางข้อมูลแบบ expandable
     st.dataframe(df_burn_cash) 
-        
+
+def encode_length_prefix(numbers):
+    encoded_str = ""
+    for num in numbers:
+        s_num = str(num)
+        encoded_str += str(len(s_num)) + s_num
+    return encoded_str
+
+def decode_length_prefix(encoded_str):
+    numbers = []
+    i = 0
+    while i < len(encoded_str):
+        # อ่านความยาว (ตัวเลข 1 หลัก)
+        length = int(encoded_str[i])
+        i += 1
+        # อ่านตัวเลขตามความยาวที่ได้มา
+        num_str = encoded_str[i : i + length]
+        numbers.append(int(num_str))
+        i += length
+    return numbers
+
 with tab1:
+    Dna_seed_ffwm = st.number_input("Dna_seed_ffwm",value = 0 )
+    
     FFWM_act = client.get_field_last(field='{}'.format(2))
     FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
     plot( Ticker = 'FFWM'  , act =  FFWM_act_js  )
