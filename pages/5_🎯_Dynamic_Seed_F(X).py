@@ -278,9 +278,9 @@ if 'end_date' not in st.session_state:
 if 'window_size' not in st.session_state:
     st.session_state.window_size = 30
 if 'num_seeds' not in st.session_state:
-    st.session_state.num_seeds = 1000
+    st.session_state.num_seeds = 30000
 if 'max_workers' not in st.session_state:
-    st.session_state.max_workers = 4
+    st.session_state.max_workers = 16
 
 st.write("🎯 Best Seed Sliding Window Tester (Optimized)")
 st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด (ปรับปรุงความเร็ว)")
