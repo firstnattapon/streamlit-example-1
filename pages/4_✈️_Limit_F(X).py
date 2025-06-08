@@ -309,3 +309,78 @@ with cf_log:
     iframe(frame = "https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK")    
     st.write('________')
     iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")    
+
+
+
+# ===================================================================
+# โค้ดสำหรับแท็บ DNA Analysis (วางส่วนนี้ต่อท้ายไฟล์)
+# ===================================================================
+with dna_tab:
+    st.header("DNA Sequence Performance Analysis")
+
+    # เลือก Ticker ที่จะทดสอบ
+    ticker_to_test = st.selectbox(
+        "Select Ticker for DNA Analysis",
+        ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
+    )
+
+    # Input area สำหรับใส่ DNA seeds
+    st.subheader(f"Input DNA seeds for {ticker_to_test}")
+    default_seeds = "28834\n1408\n9009\n21238\n25558\n2396\n24599\n21590\n15176\n19030\n5252\n16872\n21590\n23566\n25802\n14998\n18548\n29470\n15035\n17303\n3754"
+    dna_seeds_input = st.text_area(
+        "Enter DNA Seeds (one seed per line):",
+        value=default_seeds,
+        height=300
+    )
+
+    # ปุ่มสำหรับเริ่มการคำนวณ
+    if st.button("Run Analysis"):
+        with st.spinner(f"Analyzing {ticker_to_test}... This may take a moment."):
+            try:
+                # 1. เตรียมข้อมูลราคา (ทำครั้งเดียว)
+                filter_date = '2023-01-01 12:00:00+07:00'
+                tickerData = yf.Ticker(ticker_to_test)
+                tickerHist = tickerData.history(period='max')[['Close']]
+                tickerHist.index = tickerHist.index.tz_convert(tz='Asia/Bangkok')
+                tickerHist = tickerHist[tickerHist.index >= filter_date]
+                prices = np.array(tickerHist.Close.values, dtype=np.float64)
+                
+                # ตรวจสอบว่ามีข้อมูลหรือไม่
+                if len(prices) == 0:
+                    st.error(f"Could not retrieve price data for {ticker_to_test}. Please check the ticker symbol.")
+                else:
+                    # 2. แปลง Input จาก text area เป็น list ของตัวเลข (seeds)
+                    dna_seeds = [int(s.strip()) for s in dna_seeds_input.split('\n') if s.strip()]
+
+                    # 3. วนลูปเพื่อคำนวณผลลัพธ์ของแต่ละ DNA
+                    all_nets = {}
+                    for seed in dna_seeds:
+                        # สร้าง action sequence จาก seed
+                        rng = np.random.default_rng(seed)
+                        actions = rng.integers(0, 2, len(prices))
+                        
+                        # เรียกใช้ฟังก์ชันคำนวณหลักโดยตรง
+                        buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
+                        
+                        # คำนวณ Net Profit
+                        initial_capital = sumusd[0]
+                        net_profit = sumusd - refer - initial_capital
+                        
+                        # เก็บผลลัพธ์ net ของ seed นี้ไว้ใน dictionary
+                        all_nets[f'DNA_{seed}'] = net_profit
+
+                    # 4. สร้าง DataFrame จากผลลัพธ์ทั้งหมดเพื่อนำไปพล็อต
+                    if all_nets:
+                        chart_df = pd.DataFrame(all_nets)
+                        chart_df.index = tickerHist.index # ตั้ง index เป็นวันที่เพื่อให้แกน x ถูกต้อง
+
+                        st.subheader("Performance Comparison (Net Profit)")
+                        st.line_chart(chart_df)
+                        
+                        st.subheader("Result Data")
+                        st.dataframe(chart_df.round(2))
+                    else:
+                        st.warning("No valid seeds entered. Please enter at least one seed.")
+
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
