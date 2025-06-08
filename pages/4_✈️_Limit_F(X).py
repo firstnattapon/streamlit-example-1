@@ -309,39 +309,43 @@ with cf_log:
     st.write('________')
     iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")    
 
+import ast # Import a'st' for safe evaluation of strings
+
 with stitched_dna_tab:
-    st.header("Stitched DNA Performance Analysis (from Seed List)")
-    st.info("กลยุทธ์นี้สร้างขึ้นจากการนำ 'Action Sequence' ที่สร้างจาก Seed ที่ดีที่สุดของแต่ละช่วงเวลา (Window) มาต่อกัน")
+    st.header("Stitched DNA Performance Analysis (from User Input)")
+    st.info("ป้อน Ticker, ขนาด Window, และ Seed List ในรูปแบบ `[seed1, seed2, ...]` เพื่อสร้างกลยุทธ์")
 
     # --- Input Section ---
     ticker_for_stitching = st.selectbox(
         "Select Ticker for Stitched DNA",
         ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'],
-        key='stitched_ticker' # ใช้ key เพื่อไม่ให้ชนกับ selectbox อื่น
+        key='stitched_ticker_input'
     )
     
-    # Seeds สำหรับ FFWM (สามารถปรับแก้สำหรับ Ticker อื่นได้)
-    input_dna_seed = {
-        'FFWM': [
-            28834, 1408, 9009, 21238, 25558, 2396, 24599, 21590, 15176, 19030,
-            5252, 16872, 21590, 23566, 25802, 14998, 18548, 29470, 15035, 17303, 3754
-        ],
-        # คุณสามารถเพิ่ม Ticker อื่นๆ และ seed list ของมันได้ที่นี่
-        'NEGG': [1, 2, 3, 4, 5], # ตัวอย่าง
-    }
+    window_size = st.number_input("Window Size", min_value=1, max_value=100, value=30, key='window_size_input')
     
-    window_size = st.number_input("Window Size", min_value=1, max_value=100, value=30)
+    # Text input สำหรับรับ seed list
+    default_ffwm_seeds = str([
+        28834, 1408, 9009, 21238, 25558, 2396, 24599, 21590, 15176, 19030,
+        5252, 16872, 21590, 23566, 25802, 14998, 18548, 29470, 15035, 17303, 3754
+    ])
+    seed_list_input = st.text_area(
+        "Input DNA Seed List (in Python list format):",
+        value=default_ffwm_seeds,
+        height=150
+    )
 
     if st.button(f"Analyze Stitched DNA for {ticker_for_stitching}"):
         
-        # เลือก seed list ที่ตรงกับ Ticker
-        if ticker_for_stitching not in input_dna_seed:
-            st.error(f"No DNA seed list defined for {ticker_for_stitching}. Please add it to the 'input_dna_seed' dictionary.")
-        else:
-            seeds_for_ticker = input_dna_seed[ticker_for_stitching]
-
-            with st.spinner(f"Analyzing {ticker_for_stitching}..."):
-                try:
+        try:
+            # ใช้ ast.literal_eval เพื่อแปลง string เป็น list อย่างปลอดภัย
+            seeds_for_ticker = ast.literal_eval(seed_list_input)
+            
+            # ตรวจสอบว่าเป็น list จริงๆ
+            if not isinstance(seeds_for_ticker, list):
+                st.error("Invalid input format. Please provide the seeds in a Python list format, e.g., `[1, 2, 3]`")
+            else:
+                with st.spinner(f"Analyzing {ticker_for_stitching}..."):
                     # 1. ดึงข้อมูลราคาหุ้นทั้งหมด
                     full_data_df = Limit_fx(Ticker=ticker_for_stitching, act=-1)
                     prices = full_data_df['price'].values
@@ -355,25 +359,20 @@ with stitched_dna_tab:
                         seed_index = 0
                         
                         for i in range(0, n_total, window_size):
-                            # กำหนดขนาดของ window ปัจจุบัน
-                            # ป้องกันไม่ให้ index เกินขนาดของข้อมูลราคา
                             current_window_size = min(window_size, n_total - i)
                             
-                            # ตรวจสอบว่ายังมี seed เหลือให้ใช้หรือไม่
                             if seed_index >= len(seeds_for_ticker):
-                                st.warning(f"Ran out of seeds at window {seed_index + 1}. Using last available seed.")
-                                current_seed = seeds_for_ticker[-1] # ใช้ seed ตัวสุดท้ายถ้าหมด
+                                st.warning(f"Ran out of seeds at window {seed_index + 1}. Using the last available seed: {seeds_for_ticker[-1]}")
+                                current_seed = seeds_for_ticker[-1]
                             else:
                                 current_seed = seeds_for_ticker[seed_index]
 
-                            # สร้าง action sequence สำหรับ window นี้
                             rng = np.random.default_rng(current_seed)
                             actions_for_window = rng.integers(0, 2, current_window_size)
-                            actions_for_window[0] = 1 # บังคับให้ action แรกของทุก window เป็น 1 (ตามหลักการเดิม)
+                            if len(actions_for_window) > 0:
+                                actions_for_window[0] = 1
                             
-                            # นำไปต่อท้าย list หลัก
                             final_actions.extend(actions_for_window)
-                            
                             seed_index += 1
 
                         stitched_actions = np.array(final_actions, dtype=np.int32)
@@ -402,11 +401,12 @@ with stitched_dna_tab:
                         
                         with st.expander("Stitched Sequence Details"):
                             st.write(f"Total data points: {n_total}")
-                            st.write(f"Number of windows: {seed_index}")
+                            st.write(f"Number of windows generated: {seed_index}")
                             st.write(f"Total actions in stitched sequence: {stitched_actions.sum()}")
                             st.write("First 100 actions:", stitched_actions[:100])
-
-
-                except Exception as e:
-                    st.error(f"An error occurred: {e}")
-                    st.exception(e) # แสดง traceback เพื่อ debug
+        
+        except (ValueError, SyntaxError):
+            st.error("Invalid input format. Please ensure the input is a valid Python list of numbers, e.g., `[28834, 1408, 9009]`")
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {e}")
+            st.exception(e)
