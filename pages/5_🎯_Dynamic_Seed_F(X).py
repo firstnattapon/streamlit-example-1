@@ -182,7 +182,7 @@ def get_ticker_data(ticker, start_date=None, end_date=None):
                 end_date = pd.to_datetime(end_date).tz_localize('Asia/Bangkok')
             tickerData = tickerData[tickerData.index <= end_date]
         if start_date is None and end_date is None:
-            default_start = pd.to_datetime('2023-01-01 12:00:00').tz_localize('Asia/Bangkok')
+            default_start = pd.to_datetime('2024-01-01 12:00:00').tz_localize('Asia/Bangkok')
             tickerData = tickerData[tickerData.index >= default_start]
         return tickerData
     except Exception as e:
@@ -300,14 +300,14 @@ with tab1:
         st.session_state.start_date = st.date_input(
             "วันที่เริ่มต้น",
             value=st.session_state.start_date,
-            min_value=datetime(2025, 1, 1),
+            min_value=datetime(2024, 1, 1),
             max_value=datetime.now()
         )
     with col2:
         st.session_state.end_date = st.date_input(
             "วันที่สิ้นสุด",
             value=st.session_state.end_date,
-            min_value=datetime(2025, 1, 1),
+            min_value=datetime(2024, 1, 1),
             max_value=datetime.now()
         )
     if st.session_state.start_date >= st.session_state.end_date:
