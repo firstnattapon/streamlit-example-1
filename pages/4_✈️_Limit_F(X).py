@@ -383,4 +383,4 @@ with dna_tab:
                         st.warning("No valid seeds entered. Please enter at least one seed.")
 
             except Exception as e:
-                st.error(f"An error occurred: {e}")
+                st.error(f"An error occurred: {e}") 
