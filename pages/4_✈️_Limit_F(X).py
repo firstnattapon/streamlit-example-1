@@ -264,10 +264,8 @@ def decode_length_prefix(encoded_str):
     numbers = []
     i = 0
     while i < len(encoded_str):
-        # อ่านความยาว (ตัวเลข 1 หลัก)
         length = int(encoded_str[i])
         i += 1
-        # อ่านตัวเลขตามความยาวที่ได้มา
         num_str = encoded_str[i : i + length]
         numbers.append(int(num_str))
         i += length
