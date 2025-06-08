@@ -272,7 +272,7 @@ def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, ma
 if 'test_ticker' not in st.session_state:
     st.session_state.test_ticker = 'FFWM'
 if 'start_date' not in st.session_state:
-    st. = datetime(2025, 1 , 1 )
+    st. = datetime(2023, 1 , 1 )
 if 'end_date' not in st.session_state:
     st.session_state.end_date = datetime.now()
 if 'window_size' not in st.session_state:
@@ -300,7 +300,7 @@ with tab1:
         st.session_state.start_date = st.date_input(
             "วันที่เริ่มต้น",
             value=st.session_state.start_date,
-            min_value=datetime(2020, 1, 1),
+            min_value=datetime(2023, 1, 1),
             max_value=datetime.now()
         )
     with col2:
