@@ -379,34 +379,17 @@ with tab2:
 with tab3:
     st.header("2. วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
 
-    # ให้ผู้ใช้เลือกแหล่งข้อมูล (CSV หรือจาก Session)
-    source_option = st.radio(
-        "เลือกแหล่งข้อมูลเพื่อการวิเคราะห์:",
-        ["ใช้ผลลัพธ์จากการ Backtest ล่าสุด", "อัปโหลดไฟล์ CSV"],
-        horizontal=True, key='data_source_analytics'
+    uploaded_file = st.file_uploader(
+        "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv']
     )
-
     df_to_analyze = None
-    if source_option == "ใช้ผลลัพธ์จากการ Backtest ล่าสุด":
-        # ใช้ window_details ล่าสุดจาก session_state ที่ v1 สร้างไว้
-        last_ticker = st.session_state.test_ticker if 'test_ticker' in st.session_state else None
-        window_details_key = f'window_details_{last_ticker}'
-        if last_ticker and window_details_key in st.session_state:
-            df_to_analyze = pd.DataFrame(st.session_state[window_details_key])
-            st.success("โหลดข้อมูลจากการ Backtest ล่าสุดเรียบร้อยแล้ว")
-        else:
-            st.info("ยังไม่มีผลการ Backtest ใน Session นี้ กรุณากลับไปที่แท็บ 'ทดสอบ' เพื่อรัน Backtest หรือเลือกอัปโหลดไฟล์ CSV")
-    else:
-        uploaded_file = st.file_uploader(
-            "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv']
-        )
-        if uploaded_file:
-            try:
-                df_to_analyze = pd.read_csv(uploaded_file)
-                st.success(f"ไฟล์ '{uploaded_file.name}' ถูกประมวลผลเรียบร้อยแล้ว")
-            except Exception as e:
-                st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
-                df_to_analyze = None
+    if uploaded_file:
+        try:
+            df_to_analyze = pd.read_csv(uploaded_file)
+            st.success(f"ไฟล์ '{uploaded_file.name}' ถูกประมวลผลเรียบร้อยแล้ว")
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
+            df_to_analyze = None
 
     if df_to_analyze is not None:
         try:
@@ -428,7 +411,7 @@ with tab3:
                 st.subheader("ภาพรวมประสิทธิภาพ (Overall Performance)")
                 gross_profit = df[df['max_net'] > 0]['max_net'].sum()
                 gross_loss = abs(df[df['max_net'] < 0]['max_net'].sum())
-                profit_factor = gross_profit / gross_loss if gross_loss > 0 else np.inf
+                profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
                 win_rate = (df['result'] == 'Win').mean() * 100
 
                 kpi_cols = st.columns(4)
@@ -489,14 +472,15 @@ with tab3:
                 )
 
                 dna_cols = st.columns(2)
-                stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.test_ticker)
-                stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=st.session_state.start_date)
+                stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value='NEGG')
+                stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime(2023, 1, 1))
 
                 if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", key='stitch_dna_btn'):
                     if not stitched_actions:
                         st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้ กรุณาตรวจสอบคอลัมน์ 'action_sequence' ในไฟล์ CSV")
                     else:
                         with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker} และคำนวณ Benchmark..."):
+                            # ใช้ฟังก์ชัน get_ticker_data แบบ v2 (ต้องมีในไฟล์หลัก)
                             sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now()))
                             if sim_data.empty:
                                 st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
