@@ -8,7 +8,7 @@ from functools import lru_cache
 from datetime import datetime, timedelta
  
 st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
-
+ 
 @lru_cache(maxsize=1000)
 def calculate_optimized_cached(action_tuple, price_tuple, fix=1500):
     action_array = np.asarray(action_tuple, dtype=np.int32)
