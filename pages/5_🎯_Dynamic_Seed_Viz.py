@@ -56,9 +56,9 @@ def advanced_analytics_dashboard():
 
     st.success(f"ไฟล์ '{uploaded_file.name}' ถูกประมวลผลเรียบร้อยแล้ว มีข้อมูลทั้งหมด {total_windows} windows")
 
-    tab4 = st.tabs(["🔬 สำรวจราย Window (Explorer)"])
-
-    with tab4:
+    tab1 = st.tabs(["🔬 สำรวจราย Window (Explorer)"])
+    
+    with tab1:
         # (โค้ดส่วนที่เหลือเหมือนเดิม)
         st.header("🔬 สำรวจข้อมูลราย Window")
         selected_window = st.selectbox(
