@@ -253,48 +253,45 @@ with Burn_Cash:
     # แสดงตารางข้อมูลแบบ expandable
     st.dataframe(df_burn_cash) 
 
-def encode_length_prefix(numbers):
-    encoded_str = ""
-    for num in numbers:
-        s_num = str(num)
-        encoded_str += str(len(s_num)) + s_num
-    return encoded_str
+# def encode_length_prefix(numbers):
+#     encoded_str = ""
+#     for num in numbers:
+#         s_num = str(num)
+#         encoded_str += str(len(s_num)) + s_num
+#     return encoded_str
 
-def decode_length_prefix(encoded_str):
-    numbers = []
-    i = 0
-    while i < len(encoded_str):
-        try:
-            # ตรวจสอบว่าเป็นตัวเลขและมีความยาวพอ
-            if not encoded_str[i].isdigit():
-                raise ValueError(f"Invalid prefix at position {i}")
+# def decode_length_prefix(encoded_str):
+#     numbers = []
+#     i = 0
+#     while i < len(encoded_str):
+#         try:
+#             # ตรวจสอบว่าเป็นตัวเลขและมีความยาวพอ
+#             if not encoded_str[i].isdigit():
+#                 raise ValueError(f"Invalid prefix at position {i}")
             
-            length = int(encoded_str[i])
-            i += 1
+#             length = int(encoded_str[i])
+#             i += 1
             
-            if i + length > len(encoded_str):
-                raise ValueError(f"Incomplete data at position {i}")
+#             if i + length > len(encoded_str):
+#                 raise ValueError(f"Incomplete data at position {i}")
                 
-            num_str = encoded_str[i:i+length]
+#             num_str = encoded_str[i:i+length]
             
-            if not num_str.isdigit():
-                raise ValueError(f"Invalid number at position {i}")
+#             if not num_str.isdigit():
+#                 raise ValueError(f"Invalid number at position {i}")
                 
-            numbers.append(int(num_str))
-            i += length
+#             numbers.append(int(num_str))
+#             i += length
             
-        except ValueError as e:
-            st.error(f"Error decoding: {str(e)}")
-            break
+#         except ValueError as e:
+#             st.error(f"Error decoding: {str(e)}")
+#             break
             
-    return numbers
+#     return numbers
 with tab1:
     Dna_seed_ffwm  = st.text_input("Dna_seed_ffwm" , "encode")
     list_from_string = eval(Dna_seed_ffwm)
 
-    
-    # Dna_seed_ffwm = st.text_input("Dna_seed_ffwm" , "Decode")
-    # Dna_seed_ffwm = decode_length_prefix(Dna_seed_ffwm)
     st.write( list_from_string ) 
     
     FFWM_act = client.get_field_last(field='{}'.format(2))
