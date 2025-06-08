@@ -24,7 +24,6 @@ def professional_dashboard():
 
     if uploaded_file is not None:
         # อ่านข้อมูลจากไฟล์ที่อัปโหลด
-        # ใช้ io.StringIO เพื่อให้ pandas อ่านไฟล์ในหน่วยความจำได้
         df = pd.read_csv(uploaded_file)
 
         # --- ส่วนแสดงผลเมื่อมีไฟล์ ---
@@ -50,7 +49,6 @@ def professional_dashboard():
         # 3. กราฟหลัก: เปรียบเทียบ Net Profit กับ Price Change
         st.header("💰 กำไรสุทธิ (Net Profit) vs. การเปลี่ยนแปลงราคา (%)")
         
-        # สร้าง Figure ด้วย Plotly Graph Objects เพื่อทำกราฟ 2 แกน
         fig_main = go.Figure()
 
         # เพิ่มกราฟแท่งสำหรับ Net Profit (แกน Y1 - ซ้าย)
@@ -58,7 +56,7 @@ def professional_dashboard():
             x=df['timeline'],
             y=df['max_net'],
             name='Net Profit',
-            marker_color=['#2ca02c' if val > 0 else '#d62728' for val in df['max_net']], # เขียวสำหรับบวก, แดงสำหรับลบ
+            marker_color=['#2ca02c' if val > 0 else '#d62728' for val in df['max_net']],
             yaxis='y1',
             hovertemplate='<b>Window %{customdata[0]}</b><br>' +
                           'Timeline: %{x}<br>' +
@@ -81,9 +79,13 @@ def professional_dashboard():
             customdata=df[['window_number']]
         ))
 
-        # ตั้งค่า Layout ของกราฟ
+        # --- จุดที่แก้ไข ---
+        # ตั้งค่า Layout ของกราฟให้มีความชัดเจนและเป็นมาตรฐาน
         fig_main.update_layout(
-            xaxis_title='Timeline Window',
+            # เปลี่ยน xaxis_title='...' มาเป็น dict เต็มรูปแบบ
+            xaxis=dict(
+                title='Timeline Window'
+            ),
             yaxis=dict(
                 title='Net Profit',
                 titlefont=dict(color='#2ca02c'),
@@ -96,10 +98,13 @@ def professional_dashboard():
                 overlaying='y',
                 side='right'
             ),
-            legend=dict(x=0, y=1.1, orientation='h'),
+            legend=dict(x=0, y=1.1, orientation='h', yanchor='bottom', xanchor='left'),
             hovermode='x unified',
-            height=500
+            height=500,
+            margin=dict(l=50, r=50, t=100, b=50) # เพิ่ม margin เพื่อความสวยงาม
         )
+        # --- สิ้นสุดจุดที่แก้ไข ---
+        
         st.plotly_chart(fig_main, use_container_width=True)
 
 
@@ -138,7 +143,6 @@ def professional_dashboard():
         # 5. การวิเคราะห์ราย Window (Drill-Down)
         st.header("🔬 วิเคราะห์ราย Window (Detailed Window Analysis)")
         
-        # สร้าง selectbox ให้ผู้ใช้เลือก
         options = df['window_number'].unique()
         selected_window = st.selectbox(
             'เลือก Window ที่ต้องการดูรายละเอียด:',
@@ -146,12 +150,10 @@ def professional_dashboard():
         )
 
         if selected_window:
-            # กรองข้อมูลเฉพาะ window ที่เลือก
             window_data = df[df['window_number'] == selected_window].iloc[0]
 
             st.subheader(f"รายละเอียดของ Window #{selected_window}")
             
-            # แสดงข้อมูลในรูปแบบคอลัมน์
             w_col1, w_col2, w_col3 = st.columns(3)
             with w_col1:
                 st.metric("Net Profit", f"{window_data['max_net']:.2f}")
@@ -163,19 +165,15 @@ def professional_dashboard():
                 st.metric("Best Seed", f"{window_data['best_seed']}")
                 st.metric("Action Count", f"{window_data['action_count']}")
 
-            # แสดง Action Sequence
             st.markdown(f"**Timeline:** `{window_data['timeline']}`")
             st.markdown("**Action Sequence:**")
             st.code(window_data['action_sequence'], language='json')
             
-            # แสดงตารางข้อมูลของแถวที่เลือก
             st.dataframe(window_data.to_frame().T.set_index('window_number'))
 
     else:
-        # --- ส่วนแสดงผลเมื่อยังไม่มีไฟล์ ---
         st.info("กรุณาอัปโหลดไฟล์ CSV เพื่อเริ่มต้นการวิเคราะห์")
         st.markdown("### ตัวอย่างข้อมูลในไฟล์ CSV ที่ต้องการ:")
-        # สร้างข้อมูลตัวอย่างเพื่อแสดงให้ผู้ใช้ดู
         sample_data = {
             'window_number': [1, 2],
             'timeline': ['2023-01-03 ถึง 2023-02-14', '2023-02-15 ถึง 2023-03-29'],
@@ -194,4 +192,3 @@ def professional_dashboard():
 
 
 if __name__ == "__main__":
-    professional_dashboard()
