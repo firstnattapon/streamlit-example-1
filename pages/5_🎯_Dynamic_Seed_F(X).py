@@ -182,7 +182,7 @@ def get_ticker_data(ticker, start_date=None, end_date=None):
                 end_date = pd.to_datetime(end_date).tz_localize('Asia/Bangkok')
             tickerData = tickerData[tickerData.index <= end_date]
         if start_date is None and end_date is None:
-            default_start = pd.to_datetime('2024-01-01 12:00:00').tz_localize('Asia/Bangkok')
+            default_start = pd.to_datetime('2023-01-01 12:00:00').tz_localize('Asia/Bangkok')
             tickerData = tickerData[tickerData.index >= default_start]
         return tickerData
     except Exception as e:
