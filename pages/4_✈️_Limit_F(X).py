@@ -7,7 +7,7 @@ import thingspeak
 import json
 
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️" , layout = "wide" )
-
+.
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=1500):
     action_array = np.asarray(action_list, dtype=np.int32)
