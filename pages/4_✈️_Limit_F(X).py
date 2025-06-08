@@ -289,9 +289,13 @@ def decode_length_prefix(encoded_str):
             
     return numbers
 with tab1:
-    Dna_seed_ffwm = st.text_input("Dna_seed_ffwm" , "Decode")
-    Dna_seed_ffwm = decode_length_prefix(Dna_seed_ffwm)
-    st.write( Dna_seed_ffwm ) 
+    Dna_seed_ffwm  = st.text_input("Dna_seed_ffwm" , "encode")
+    list_from_string = eval(Dna_seed_ffwm)
+
+    
+    # Dna_seed_ffwm = st.text_input("Dna_seed_ffwm" , "Decode")
+    # Dna_seed_ffwm = decode_length_prefix(Dna_seed_ffwm)
+    st.write( list_from_string ) 
     
     FFWM_act = client.get_field_last(field='{}'.format(2))
     FFWM_act_js = int(json.loads(FFWM_act)["field{}".format(2) ])
