@@ -127,7 +127,7 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=N
         st.write(f"**🎯 Window {i+1}/{num_windows}** | {timeline_info}")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Best Seed", f"{best_seed_for_window:,}")
+            st.metric("Best Seed", f"{best_seed_for_window:}")
         with col2:
             st.metric("Net Profit", f"{max_net_for_window:.2f}")
         with col3:
