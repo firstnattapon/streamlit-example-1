@@ -309,43 +309,84 @@ with cf_log:
     st.write('________')
     iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")    
 
-import ast # Import a'st' for safe evaluation of strings
+# ===================================================================
+# โค้ดสำหรับแท็บ Stitched DNA (เวอร์ชันอัปโหลดไฟล์และประมวลผลอัตโนมัติ)
+# ===================================================================
+import ast
+import io
 
 with stitched_dna_tab:
-    st.header("Stitched DNA Performance Analysis (from User Input)")
-    st.info("ป้อน Ticker, ขนาด Window, และ Seed List ในรูปแบบ `[seed1, seed2, ...]` เพื่อสร้างกลยุทธ์")
+    st.header("Stitched DNA Analysis (from File Upload)")
+    st.markdown("อัปโหลดไฟล์ CSV ผลการวิเคราะห์ `best_seed` เพื่อสร้างกลยุทธ์โดยอัตโนมัติ")
 
     # --- Input Section ---
-    ticker_for_stitching = st.selectbox(
-        "Select Ticker for Stitched DNA",
-        ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'],
-        key='stitched_ticker_input'
-    )
-    
-    window_size = st.number_input("Window Size", min_value=1, max_value=100, value=30, key='window_size_input')
-    
-    # Text input สำหรับรับ seed list
-    default_ffwm_seeds = str([
-        28834, 1408, 9009, 21238, 25558, 2396, 24599, 21590, 15176, 19030,
-        5252, 16872, 21590, 23566, 25802, 14998, 18548, 29470, 15035, 17303, 3754
-    ])
-    seed_list_input = st.text_area(
-        "Input DNA Seed List (in Python list format):",
-        value=default_ffwm_seeds,
-        height=150
+    col1, col2 = st.columns(2)
+    with col1:
+        ticker_for_stitching = st.selectbox(
+            "1. Select Target Ticker",
+            ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'],
+            key='stitched_ticker_upload'
+        )
+    with col2:
+        window_size_from_file = st.number_input("2. Window Size (used in analysis)", value=30, key='window_upload')
+
+    # File uploader
+    uploaded_file = st.file_uploader(
+        "3. Upload your 'best_seed' CSV results file",
+        type=['csv']
     )
 
-    if st.button(f"Analyze Stitched DNA for {ticker_for_stitching}"):
+    # Text area สำหรับแสดง/แก้ไข seed list
+    # เราจะใช้ st.session_state เพื่อเก็บค่า seed list ไว้ แม้จะมีการ re-run
+    if 'seed_list_from_file' not in st.session_state:
+        st.session_state.seed_list_from_file = str([
+            28834, 1408, 9009, 21238, 25558, 2396, 24599, 21590, 15176, 19030,
+            5252, 16872, 21590, 23566, 25802, 14998, 18548, 29470, 15035, 17303, 3754
+        ])
+
+    # Logic การประมวลผลไฟล์
+    if uploaded_file is not None:
+        try:
+            # อ่านไฟล์ CSV ที่อัปโหลดด้วย Pandas
+            df_uploaded = pd.read_csv(uploaded_file)
+            
+            # ตรวจสอบว่ามีคอลัมน์ 'best_seed' หรือไม่
+            if 'best_seed' in df_uploaded.columns:
+                # ดึงข้อมูลจากคอลัมน์ 'best_seed' และแปลงเป็น List
+                extracted_seeds = df_uploaded['best_seed'].tolist()
+                
+                # อัปเดตค่าใน text area และ session_state
+                st.session_state.seed_list_from_file = str(extracted_seeds)
+                
+                st.success(f"Successfully extracted {len(extracted_seeds)} seeds from '{uploaded_file.name}'!")
+            else:
+                st.error("The uploaded CSV file does not contain a 'best_seed' column.")
+        except Exception as e:
+            st.error(f"Failed to process the uploaded file: {e}")
+        
+        # ตั้งค่า uploaded_file เป็น None เพื่อไม่ให้รันซ้ำโดยไม่จำเป็น
+        # ถ้าไม่ทำแบบนี้ ทุกครั้งที่กดปุ่มอื่น ไฟล์จะถูกประมวลผลใหม่
+        # อย่างไรก็ตาม Streamlit จัดการเรื่องนี้ได้ดีระดับหนึ่ง การปล่อยไว้ก็ไม่เป็นไร
+
+    seed_list_input = st.text_area(
+        "4. Verify or edit the extracted DNA Seed List:",
+        value=st.session_state.seed_list_from_file,
+        height=150,
+        key='seed_list_area'
+    )
+
+    if st.button(f"5. Analyze Stitched DNA for {ticker_for_stitching}"):
         
         try:
-            # ใช้ ast.literal_eval เพื่อแปลง string เป็น list อย่างปลอดภัย
+            # ใช้ ast.literal_eval เพื่อแปลง string จาก text area เป็น list
             seeds_for_ticker = ast.literal_eval(seed_list_input)
             
-            # ตรวจสอบว่าเป็น list จริงๆ
             if not isinstance(seeds_for_ticker, list):
-                st.error("Invalid input format. Please provide the seeds in a Python list format, e.g., `[1, 2, 3]`")
+                st.error("Invalid input format in the text area. Please provide the seeds in a Python list format, e.g., `[1, 2, 3]`")
             else:
                 with st.spinner(f"Analyzing {ticker_for_stitching}..."):
+                    # ----- ส่วนที่เหลือของโค้ดเหมือนเดิมทุกประการ -----
+                    
                     # 1. ดึงข้อมูลราคาหุ้นทั้งหมด
                     full_data_df = Limit_fx(Ticker=ticker_for_stitching, act=-1)
                     prices = full_data_df['price'].values
@@ -358,8 +399,9 @@ with stitched_dna_tab:
                         final_actions = []
                         seed_index = 0
                         
-                        for i in range(0, n_total, window_size):
-                            current_window_size = min(window_size, n_total - i)
+                        # ใช้ window_size_from_file ที่ผู้ใช้กำหนด
+                        for i in range(0, n_total, window_size_from_file):
+                            current_window_size = min(window_size_from_file, n_total - i)
                             
                             if seed_index >= len(seeds_for_ticker):
                                 st.warning(f"Ran out of seeds at window {seed_index + 1}. Using the last available seed: {seeds_for_ticker[-1]}")
@@ -377,10 +419,9 @@ with stitched_dna_tab:
 
                         stitched_actions = np.array(final_actions, dtype=np.int32)
 
-                        # 3. คำนวณผลลัพธ์ของกลยุทธ์ต่างๆ
+                        # 3. คำนวณผลลัพธ์
                         min_net = full_data_df['net']
                         max_net = Limit_fx(Ticker=ticker_for_stitching, act=-2)['net']
-
                         buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(stitched_actions, prices)
                         initial_capital = sumusd[0]
                         stitched_net = np.round(sumusd - refer - initial_capital, 2)
@@ -395,18 +436,14 @@ with stitched_dna_tab:
                         # 5. แสดงผล
                         st.subheader("Performance Comparison (Net Profit)")
                         st.line_chart(plot_df)
-
+                        # ... ส่วน expander เหมือนเดิม ...
                         with st.expander("Show Result Data"):
                             st.dataframe(plot_df.round(2))
-                        
                         with st.expander("Stitched Sequence Details"):
-                            st.write(f"Total data points: {n_total}")
-                            st.write(f"Number of windows generated: {seed_index}")
-                            st.write(f"Total actions in stitched sequence: {stitched_actions.sum()}")
-                            st.write("First 100 actions:", stitched_actions[:100])
+                            st.dataframe({'used_seeds': seeds_for_ticker})
         
         except (ValueError, SyntaxError):
-            st.error("Invalid input format. Please ensure the input is a valid Python list of numbers, e.g., `[28834, 1408, 9009]`")
+            st.error("Invalid format in the text area. Please ensure the input is a valid Python list of numbers, e.g., `[28834, 1408, 9009]`")
         except Exception as e:
             st.error(f"An unexpected error occurred: {e}")
             st.exception(e)
