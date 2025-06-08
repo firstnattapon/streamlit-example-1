@@ -300,14 +300,14 @@ with tab1:
         st.session_state.start_date = st.date_input(
             "วันที่เริ่มต้น",
             value=st.session_state.start_date,
-            min_value=datetime(2025, 1, 1),
+            min_value=datetime(2020, 1, 1),
             max_value=datetime.now()
         )
     with col2:
         st.session_state.end_date = st.date_input(
             "วันที่สิ้นสุด",
             value=st.session_state.end_date,
-            min_value=datetime(2025, 1, 1),
+            min_value=datetime(2020, 1, 1),
             max_value=datetime.now()
         )
     if st.session_state.start_date >= st.session_state.end_date:
@@ -321,7 +321,7 @@ with tab1:
     )
     st.session_state.num_seeds = st.number_input(
         "จำนวน Seeds ต่อ Window", 
-        min_value=100, max_value=10000, value=st.session_state.num_seeds
+        min_value=100, max_value=1000000, value=st.session_state.num_seeds
     )
     st.session_state.max_workers = st.number_input(
         "จำนวน Workers สำหรับ Parallel Processing", 
