@@ -177,8 +177,7 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, Burn_Cash, Ref_index_Log, cf_log, dna_tab = st.tabs(["FFWM", "NEGG", "RIVN", 'APLS', 'NVTS', 'QXO(LV)', 'RXRX(LV)', 'Burn_Cash', 'Ref_index_Log', 'cf_log', 'DNA Analysis'])
-
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, Burn_Cash, Ref_index_Log, cf_log, dna_tab, stitched_dna_tab = st.tabs(["FFWM", "NEGG", "RIVN", 'APLS', 'NVTS', 'QXO(LV)', 'RXRX(LV)', 'Burn_Cash', 'Ref_index_Log', 'cf_log', 'DNA Analysis', 'Stitched DNA'])
 with Ref_index_Log:
     tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , 'QXO' , 'RXRX' ]
     def get_prices(tickers, start_date):
@@ -311,76 +310,103 @@ with cf_log:
     iframe(frame = "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")    
 
 
-
 # ===================================================================
-# โค้ดสำหรับแท็บ DNA Analysis (วางส่วนนี้ต่อท้ายไฟล์)
+# โค้ดสำหรับแท็บ Stitched DNA Analysis (วางส่วนนี้ต่อท้ายไฟล์)
 # ===================================================================
-with dna_tab:
-    st.header("DNA Sequence Performance Analysis")
+import io
 
-    # เลือก Ticker ที่จะทดสอบ
-    ticker_to_test = st.selectbox(
-        "Select Ticker for DNA Analysis",
-        ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX']
-    )
+@st.cache_data # Cache ผลลัพธ์เพื่อความรวดเร็วในการรันครั้งต่อไป
+def build_stitched_sequence_from_csv(csv_data):
+    """
+    อ่านข้อมูล CSV, แปลง action_sequence ที่เป็น string,
+    และประกอบร่างเป็น action sequence สุดท้าย
+    """
+    # ใช้ io.StringIO เพื่อให้ pandas อ่าน string ได้เหมือนไฟล์
+    df = pd.read_csv(io.StringIO(csv_data))
+    
+    final_actions = []
+    # วนลูปเพื่อนำ action จากแต่ละ window มาต่อกัน
+    for index, row in df.iterrows():
+        # คอลัมน์ action_sequence เป็น string -> แปลงเป็น list ของ int
+        # ใช้ json.loads ซึ่งปลอดภัยและจัดการกับ string format นี้ได้ดี
+        action_list_for_window = json.loads(row['action_sequence'])
+        final_actions.extend(action_list_for_window)
+        
+    return np.array(final_actions, dtype=np.int32), df
 
-    # Input area สำหรับใส่ DNA seeds
-    st.subheader(f"Input DNA seeds for {ticker_to_test}")
-    default_seeds = "28834\n1408\n9009\n21238\n25558\n2396\n24599\n21590\n15176\n19030\n5252\n16872\n21590\n23566\n25802\n14998\n18548\n29470\n15035\n17303\n3754"
-    dna_seeds_input = st.text_area(
-        "Enter DNA Seeds (one seed per line):",
-        value=default_seeds,
-        height=300
-    )
+with stitched_dna_tab:
+    st.header("Stitched DNA Performance Analysis (Window-based Optimization)")
+    st.info("กลยุทธ์นี้สร้างขึ้นจากการนำ 'Action Sequence' ที่ดีที่สุดจากแต่ละช่วงเวลา (Window) มาต่อกัน")
 
-    # ปุ่มสำหรับเริ่มการคำนวณ
-    if st.button("Run Analysis"):
-        with st.spinner(f"Analyzing {ticker_to_test}... This may take a moment."):
-            try:
-                # 1. เตรียมข้อมูลราคา (ทำครั้งเดียว)
-                filter_date = '2023-01-01 12:00:00+07:00'
-                tickerData = yf.Ticker(ticker_to_test)
-                tickerHist = tickerData.history(period='max')[['Close']]
-                tickerHist.index = tickerHist.index.tz_convert(tz='Asia/Bangkok')
-                tickerHist = tickerHist[tickerHist.index >= filter_date]
-                prices = np.array(tickerHist.Close.values, dtype=np.float64)
+    # ข้อมูล CSV จากไฟล์ best_seed_results_FFWM_30w_30000s.csv
+    csv_data_ffwm = """window_number,timeline,start_index,end_index,window_size,best_seed,max_net,start_price,end_price,price_change_pct,action_count,action_sequence
+1,2023-01-03 ถึง 2023-02-14,0,29,30,28834,12.55,14.04,15.3,8.98,17,"[1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1]"
+2,2023-02-15 ถึง 2023-03-29,30,59,30,1408,382.37,15.58,7.85,-49.59,6,"[1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]"
+3,2023-03-30 ถึง 2023-05-11,60,89,30,9009,207.97,7.34,4.03,-45.1,8,"[1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
+4,2023-05-12 ถึง 2023-06-26,90,119,30,21238,187.14,3.85,4.22,9.54,14,"[1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0]"
+5,2023-06-27 ถึง 2023-08-08,120,149,30,25558,353.46,4.12,7.41,80.02,11,"[1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]"
+6,2023-08-09 ถึง 2023-09-20,150,179,30,2396,38.18,7.21,7.44,3.17,16,"[1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1]"
+7,2023-09-21 ถึง 2023-11-01,180,209,30,24599,88.19,6.9,4.6,-33.33,10,"[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1]"
+8,2023-11-02 ถึง 2023-12-14,210,239,30,21590,251.56,5.22,8.99,72.14,11,"[1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]"
+9,2023-12-15 ถึง 2024-01-30,240,269,30,15176,40.75,8.82,10.23,15.93,10,"[1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0]"
+10,2024-01-31 ถึง 2024-03-13,270,299,30,19030,60.14,9.49,7.89,-16.92,10,"[1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0]"
+11,2024-03-14 ถึง 2024-04-25,300,329,30,5252,52.19,7.31,6.69,-8.47,15,"[1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0]"
+12,2024-04-26 ถึง 2024-06-07,330,359,30,16872,60.81,6.07,5.69,-6.24,14,"[1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 1]"
+13,2024-06-10 ถึง 2024-07-23,360,389,30,21590,186.0,5.69,6.95,22.14,11,"[1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]"
+14,2024-07-24 ถึง 2024-09-04,390,419,30,23566,47.62,6.71,6.93,3.28,10,"[1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0]"
+15,2024-09-05 ถึง 2024-10-16,420,449,30,25802,79.68,6.9,7.69,11.45,8,"[1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]"
+16,2024-10-17 ถึง 2024-11-27,450,479,30,14998,85.98,7.71,8.08,4.8,12,"[1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0]"
+17,2024-11-29 ถึง 2025-01-14,480,509,30,18548,70.37,7.95,6.0,-24.53,11,"[1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0]"
+18,2025-01-15 ถึง 2025-02-27,510,539,30,29470,57.0,6.21,4.98,-19.81,19,"[1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1]"
+19,2025-02-28 ถึง 2025-04-10,540,569,30,15035,42.83,5.09,4.61,-9.43,11,"[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1]"
+20,2025-04-11 ถึง 2025-05-23,570,599,30,17303,20.19,4.64,5.17,11.42,8,"[1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0]"
+21,2025-05-27 ถึง 2025-06-06,600,608,9,3754,5.59,5.39,5.3,-1.67,2,"[1, 0, 0, 0, 1, 0, 0, 0, 0]"
+"""
+
+    if st.button("Analyze Stitched DNA for FFWM"):
+        try:
+            # 1. สร้าง 'action_sequence' ทั้งหมดจากข้อมูล CSV
+            stitched_actions, details_df = build_stitched_sequence_from_csv(csv_data_ffwm)
+            
+            # 2. ดึงข้อมูลราคาหุ้น FFWM ทั้งหมด (ใช้ฟังก์ชัน Limit_fx เพื่อความสะดวก)
+            # เราจะดึงข้อมูลมาแค่ครั้งเดียวแล้วใช้ซ้ำ
+            full_data_df = Limit_fx(Ticker='FFWM', act=-1) # act=-1 แค่เพื่อให้ได้ข้อมูลมา
+            prices = full_data_df['price'].values
+            
+            # 3. ตรวจสอบความสอดคล้องของข้อมูล
+            if len(stitched_actions) != len(prices):
+                st.error(f"Data Mismatch! Length of stitched actions ({len(stitched_actions)}) does not match length of price data ({len(prices)}). Please check the date range and CSV file.")
+            else:
+                st.success(f"Data check passed. Analyzing {len(prices)} data points.")
                 
-                # ตรวจสอบว่ามีข้อมูลหรือไม่
-                if len(prices) == 0:
-                    st.error(f"Could not retrieve price data for {ticker_to_test}. Please check the ticker symbol.")
-                else:
-                    # 2. แปลง Input จาก text area เป็น list ของตัวเลข (seeds)
-                    dna_seeds = [int(s.strip()) for s in dna_seeds_input.split('\n') if s.strip()]
+                # 4. คำนวณผลลัพธ์ของกลยุทธ์ต่างๆ
+                # 'min' และ 'max' สามารถดึงมาจาก DataFrame ที่โหลดมาได้เลย
+                min_net = full_data_df['net']
+                max_net = Limit_fx(Ticker='FFWM', act=-2)['net']
 
-                    # 3. วนลูปเพื่อคำนวณผลลัพธ์ของแต่ละ DNA
-                    all_nets = {}
-                    for seed in dna_seeds:
-                        # สร้าง action sequence จาก seed
-                        rng = np.random.default_rng(seed)
-                        actions = rng.integers(0, 2, len(prices))
-                        
-                        # เรียกใช้ฟังก์ชันคำนวณหลักโดยตรง
-                        buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
-                        
-                        # คำนวณ Net Profit
-                        initial_capital = sumusd[0]
-                        net_profit = sumusd - refer - initial_capital
-                        
-                        # เก็บผลลัพธ์ net ของ seed นี้ไว้ใน dictionary
-                        all_nets[f'DNA_{seed}'] = net_profit
+                # คำนวณผลลัพธ์ของ Stitched DNA
+                buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(stitched_actions, prices)
+                initial_capital = sumusd[0]
+                stitched_net = np.round(sumusd - refer - initial_capital, 2)
+                
+                # 5. สร้าง DataFrame สำหรับพล็อตกราฟ
+                plot_df = pd.DataFrame({
+                    'min': min_net.values,
+                    'max': max_net.values,
+                    'stitched_dna': stitched_net
+                }, index=full_data_df.index)
 
-                    # 4. สร้าง DataFrame จากผลลัพธ์ทั้งหมดเพื่อนำไปพล็อต
-                    if all_nets:
-                        chart_df = pd.DataFrame(all_nets)
-                        chart_df.index = tickerHist.index # ตั้ง index เป็นวันที่เพื่อให้แกน x ถูกต้อง
+                # 6. แสดงผล
+                st.subheader("Performance Comparison (Net Profit)")
+                st.line_chart(plot_df)
 
-                        st.subheader("Performance Comparison (Net Profit)")
-                        st.line_chart(chart_df)
-                        
-                        st.subheader("Result Data")
-                        st.dataframe(chart_df.round(2))
-                    else:
-                        st.warning("No valid seeds entered. Please enter at least one seed.")
+                with st.expander("Show Result Data"):
+                    st.dataframe(plot_df)
 
-            except Exception as e:
-                st.error(f"An error occurred: {e}") 
+                with st.expander("Show Details of Stitched Sequence"):
+                    st.write("ตารางสรุปผลลัพธ์ที่ดีที่สุดในแต่ละ Window:")
+                    st.dataframe(details_df)
+                    st.write(f"Total actions in stitched sequence: {stitched_actions.sum()} out of {len(stitched_actions)}")
+
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
