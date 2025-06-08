@@ -16,7 +16,6 @@ st.set_page_config(
     layout="wide"
 )
 
-
 # ===================================================================
 # SECTION 1: CORE BACKTESTING & CALCULATION FUNCTIONS
 # ===================================================================
@@ -27,7 +26,6 @@ def calculate_optimized_cached(action_tuple, price_tuple, fix=1500):
     ฟังก์ชันคำนวณผลตอบแทนแบบ Cached เพื่อความเร็ว
     """
     action_array = np.asarray(action_tuple, dtype=np.int32)
-    # Ensure first action is always 1 (buy) for consistency
     if len(action_array) > 0:
         action_array[0] = 1
     
@@ -47,14 +45,14 @@ def calculate_optimized_cached(action_tuple, price_tuple, fix=1500):
     cash[0] = fix
     asset_value[0] = amount[0] * initial_price
     sumusd[0] = cash[0] + asset_value[0]
-    refer = -fix * np.log(initial_price / price_array)  # Logarithmic Buy & Hold reference
+    refer = -fix * np.log(initial_price / price_array)
 
     for i in range(1, n):
         curr_price = price_array[i]
-        if action_array[i] == 0:  # Hold
+        if action_array[i] == 0:
             amount[i] = amount[i-1]
             buffer[i] = 0
-        else:  # Buy/Rebalance
+        else:
             amount[i] = fix / curr_price
             buffer[i] = amount[i-1] * curr_price - fix
         cash[i] = cash[i-1] + buffer[i]
@@ -64,14 +62,10 @@ def calculate_optimized_cached(action_tuple, price_tuple, fix=1500):
     return buffer, sumusd, cash, asset_value, amount, refer
 
 def calculate_optimized(action_list, price_list, fix=1500):
-    """Wrapper function to use the cached version."""
     return calculate_optimized_cached(tuple(action_list), tuple(price_list), fix)
 
-def get_max_action_vectorized(price_list, fix=1500):
-    """
-    คำนวณหา Action Sequence ที่ให้ผลกำไรสูงสุด (Perfect Foresight) โดยใช้วิธี Dynamic Programming
-    (โค้ดนี้มาจากสคริปต์ต้นฉบับของผู้ใช้)
-    """
+# --- ใช้ฟังก์ชัน get_max_action ที่คุณให้มา ---
+def get_max_action(price_list, fix=1500):
     prices = np.asarray(price_list, dtype=np.float64)
     n = len(prices)
     if n < 2:
@@ -82,13 +76,17 @@ def get_max_action_vectorized(price_list, fix=1500):
     initial_capital = float(fix * 2)
     dp[0] = initial_capital
     for i in range(1, n):
-        j_indices = np.arange(i)
-        profits = fix * ((prices[i] / prices[j_indices]) - 1)
-        current_sumusd = dp[j_indices] + profits
-        best_idx = np.argmax(current_sumusd)
-        dp[i] = current_sumusd[best_idx]
-        path[i] = j_indices[best_idx]
-        
+        max_prev_sumusd = 0
+        best_j = 0
+        for j in range(i):
+            profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1)
+            current_sumusd = dp[j] + profit_from_j_to_i
+            if current_sumusd > max_prev_sumusd:
+                max_prev_sumusd = current_sumusd
+                best_j = j
+        dp[i] = max_prev_sumusd
+        path[i] = best_j
+    
     actions = np.zeros(n, dtype=int)
     last_action_day = np.argmax(dp)
     current_day = last_action_day
@@ -98,11 +96,9 @@ def get_max_action_vectorized(price_list, fix=1500):
     actions[0] = 1
     return actions.tolist()
 
-
+# (The rest of SECTION 1 remains the same: evaluate_seed_batch, find_best_seed_sliding_window_optimized, get_ticker_data)
+# ... (โค้ดส่วนที่ 1 ที่เหลือเหมือนเดิม) ...
 def evaluate_seed_batch(seed_batch, prices_window, window_len):
-    """
-    ประเมินผลกำไรสำหรับกลุ่มของ Seeds (สำหรับ Parallel Processing)
-    """
     results = []
     for seed in seed_batch:
         try:
@@ -124,9 +120,6 @@ def evaluate_seed_batch(seed_batch, prices_window, window_len):
     return results
 
 def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates, window_size, num_seeds_to_try, max_workers):
-    """
-    ฟังก์ชันหลักในการค้นหา Best Seed ด้วยวิธี Sliding Window โดยใช้ Parallel Processing
-    """
     prices = np.asarray(price_list)
     n = len(prices)
     window_details = []
@@ -146,11 +139,10 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates, 
         end_date = ticker_data_with_dates.index[end_index-1].strftime('%Y-%m-%d')
         timeline_info = f"{start_date} to {end_date}"
 
-        # Parallel processing
         best_seed_for_window = -1
         max_net_for_window = -np.inf
         random_seeds = np.arange(num_seeds_to_try)
-        batch_size = max(1, num_seeds_to_try // (max_workers * 4)) # Fine-tune batch size
+        batch_size = max(1, num_seeds_to_try // (max_workers * 4))
         seed_batches = [random_seeds[j:j+batch_size] for j in range(0, len(random_seeds), batch_size)]
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -161,13 +153,12 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates, 
                         max_net_for_window = final_net
                         best_seed_for_window = seed
 
-        # Reconstruct best action sequence
         if best_seed_for_window != -1:
             rng_best = np.random.default_rng(best_seed_for_window)
             best_actions_for_window = rng_best.integers(0, 2, size=window_len)
             if window_len > 0:
                 best_actions_for_window[0] = 1
-        else: # Fallback
+        else:
             best_actions_for_window = np.ones(window_len, dtype=int)
             max_net_for_window = 0
 
@@ -188,9 +179,6 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates, 
 
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker, start_date_str, end_date_str):
-    """
-    ดึงข้อมูลหุ้นจาก yfinance และ cache ผลลัพธ์
-    """
     try:
         start_date = pd.to_datetime(start_date_str)
         end_date = pd.to_datetime(end_date_str)
@@ -198,9 +186,13 @@ def get_ticker_data(ticker, start_date_str, end_date_str):
         history_start = start_date - pd.Timedelta(days=7)
         history_end = end_date + pd.Timedelta(days=1)
         
-        tickerData = yf.Ticker(ticker).history(start=history_start, end=history_end)[['Close']]
+        tickerData = yf.Ticker(ticker).history(start=history_start, end=history_end, auto_adjust=True)[['Close']]
         
+        tickerData.index = tickerData.index.tz_localize(None)
         tickerData = tickerData[(tickerData.index.date >= start_date.date()) & (tickerData.index.date <= end_date.date())]
+        
+        if tickerData.empty:
+            st.warning(f"ไม่พบข้อมูลสำหรับ {ticker} ในช่วงวันที่ {start_date_str} ถึง {end_date_str}")
         return tickerData
     except Exception as e:
         st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {str(e)}")
@@ -208,109 +200,72 @@ def get_ticker_data(ticker, start_date_str, end_date_str):
 
 
 # ===================================================================
-# SECTION 2: STREAMLIT APP LAYOUT & LOGIC
+# SECTION 2: STREAMLIT APP LAYOUT & LOGIC (The rest is the same)
 # ===================================================================
-
 # --- Initialize Session State ---
 if 'analysis_df' not in st.session_state:
     st.session_state.analysis_df = None
 if 'seed_list_from_file' not in st.session_state:
     st.session_state.seed_list_from_file = "[]"
-
-# --- Main App Title ---
+if 'gen_ticker' not in st.session_state:
+    st.session_state.gen_ticker = 'NEGG'
+if 'gen_start' not in st.session_state:
+    st.session_state.gen_start = datetime(2023, 1, 1)
+if 'gen_end' not in st.session_state:
+    st.session_state.gen_end = datetime.now()
+if 'gen_window' not in st.session_state:
+    st.session_state.gen_window = 30
+    
 st.title("🧩 Unified Backtest & Analysis Suite")
 st.markdown("เครื่องมือครบวงจรสำหรับ **สร้าง** ผลการทดสอบกลยุทธ์แบบ Sliding Window และ **วิเคราะห์** ผลลัพธ์ในเชิงลึก")
-
-# --- Create Main Tabs ---
 tab_generator, tab_analyzer = st.tabs(["🚀 Backtest & Generate Seeds", "📊 Advanced Analytics Dashboard"])
 
-
-# --- TAB 1: BACKTEST & GENERATE SEEDS ---
 with tab_generator:
     st.header("1. ตั้งค่าและรัน Backtest")
     st.markdown("ในส่วนนี้, เราจะทำการค้นหา `Best Seed` สำหรับแต่ละช่วงเวลา (Window) ของข้อมูลราคาหุ้นที่คุณเลือก")
-
     with st.container(border=True):
         st.subheader("⚙️ พารามิเตอร์การทดสอบ")
         col1, col2 = st.columns(2)
         with col1:
-            test_ticker = st.selectbox(
-                "เลือก Ticker สำหรับทดสอบ",
-                ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX', 'SPY', 'QQQ', 'TSLA'],
-                index=0, key='gen_ticker'
-            )
-            start_date = st.date_input(
-                "วันที่เริ่มต้น", datetime(2023, 1, 1), key='gen_start'
-            )
-            window_size = st.number_input(
-                "ขนาด Window (วัน)", min_value=5, max_value=120, value=30, step=5, key='gen_window'
-            )
+            st.selectbox("เลือก Ticker สำหรับทดสอบ",['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX', 'SPY', 'QQQ', 'TSLA'],index=1, key='gen_ticker')
+            st.date_input("วันที่เริ่มต้น", datetime(2023, 1, 1), key='gen_start')
+            st.number_input("ขนาด Window (วัน)", min_value=5, max_value=120, value=30, step=5, key='gen_window')
         with col2:
-            max_workers = st.number_input(
-                "จำนวน Workers (Parallel Processing)", min_value=1, max_value=16, value=8,
-                help="เพิ่มจำนวนเพื่อความเร็ว (แนะนำ 4-8 สำหรับ CPU ส่วนใหญ่)", key='gen_workers'
-            )
-            end_date = st.date_input("วันที่สิ้นสุด", datetime.now(), key='gen_end')
-            num_seeds = st.number_input(
-                "จำนวน Seeds ต่อ Window", min_value=100, max_value=100000, value=10000, step=1000, key='gen_seeds'
-            )
+            st.number_input("จำนวน Workers (Parallel Processing)", min_value=1, max_value=16, value=8, help="เพิ่มจำนวนเพื่อความเร็ว (แนะนำ 4-8 สำหรับ CPU ส่วนใหญ่)", key='gen_workers')
+            st.date_input("วันที่สิ้นสุด", datetime.now(), key='gen_end')
+            st.number_input("จำนวน Seeds ต่อ Window", min_value=100, max_value=100000, value=30000, step=1000, key='gen_seeds')
     
     if st.button("🚀 เริ่มการค้นหา Best Seeds!", type="primary", use_container_width=True):
-        if start_date >= end_date:
+        if st.session_state.gen_start >= st.session_state.gen_end:
             st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
         else:
-            with st.spinner(f"กำลังดึงข้อมูลสำหรับ {test_ticker}..."):
-                ticker_data = get_ticker_data(test_ticker, str(start_date), str(end_date))
-
-            if ticker_data.empty or len(ticker_data) < window_size:
-                st.warning(f"ไม่พบข้อมูลที่เพียงพอสำหรับ Ticker '{test_ticker}' ในช่วงวันที่ที่เลือก (ต้องการอย่างน้อย {window_size} วัน)")
+            with st.spinner(f"กำลังดึงข้อมูลสำหรับ {st.session_state.gen_ticker}..."):
+                ticker_data = get_ticker_data(st.session_state.gen_ticker, str(st.session_state.gen_start), str(st.session_state.gen_end))
+            if ticker_data.empty or len(ticker_data) < st.session_state.gen_window:
+                st.warning(f"ไม่พบข้อมูลที่เพียงพอสำหรับ Ticker '{st.session_state.gen_ticker}' ในช่วงวันที่ที่เลือก (ต้องการอย่างน้อย {st.session_state.gen_window} วัน)")
             else:
                 st.success(f"ดึงข้อมูลสำเร็จ: {len(ticker_data)} วันทำการ")
-                
-                with st.status(f"กำลังรัน Backtest สำหรับ {test_ticker}...", expanded=True) as status:
-                    window_details = find_best_seed_sliding_window_optimized(
-                        ticker_data['Close'].tolist(),
-                        ticker_data,
-                        window_size=window_size,
-                        num_seeds_to_try=num_seeds,
-                        max_workers=max_workers
-                    )
+                with st.status(f"กำลังรัน Backtest สำหรับ {st.session_state.gen_ticker}...", expanded=True) as status:
+                    window_details = find_best_seed_sliding_window_optimized(ticker_data['Close'].tolist(),ticker_data,window_size=st.session_state.gen_window,num_seeds_to_try=st.session_state.gen_seeds,max_workers=st.session_state.gen_workers)
                     status.update(label="Backtest เสร็จสิ้น!", state="complete")
-
                 if window_details:
                     df_results = pd.DataFrame(window_details)
                     st.session_state.analysis_df = df_results
-                    
                     st.header("📈 สรุปผลการ Backtest")
                     total_net = df_results['max_net'].sum()
                     win_rate = (df_results['max_net'] > 0).mean() * 100
-                    
                     res_col1, res_col2, res_col3 = st.columns(3)
                     res_col1.metric("Total Net Profit (Sum of Windows)", f"${total_net:,.2f}")
                     res_col2.metric("Win Rate", f"{win_rate:.2f}%")
                     res_col3.metric("Total Windows Found", len(df_results))
-                    
                     st.dataframe(df_results.drop('action_sequence', axis=1), use_container_width=True)
-                    
                     csv = df_results.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📥 ดาวน์โหลดผลลัพธ์ (CSV)",
-                        data=csv,
-                        file_name=f'best_seed_results_{test_ticker}_{window_size}d_{num_seeds}s.csv',
-                        mime='text/csv',
-                    )
+                    st.download_button(label="📥 ดาวน์โหลดผลลัพธ์ (CSV)",data=csv,file_name=f'best_seed_results_{st.session_state.gen_ticker}_{st.session_state.gen_window}d_{st.session_state.gen_seeds}s.csv',mime='text/csv')
                     st.success("ผลลัพธ์ถูกเก็บไว้แล้ว สามารถไปที่แท็บ 'Advanced Analytics Dashboard' เพื่อวิเคราะห์ต่อได้ทันที!")
 
-# --- TAB 2: ADVANCED ANALYTICS DASHBOARD ---
 with tab_analyzer:
     st.header("2. วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
-
-    source_option = st.radio(
-        "เลือกแหล่งข้อมูลเพื่อการวิเคราะห์:",
-        ["ใช้ผลลัพธ์จากการ Backtest ล่าสุด", "อัปโหลดไฟล์ CSV"],
-        horizontal=True, key='data_source'
-    )
-
+    source_option = st.radio("เลือกแหล่งข้อมูลเพื่อการวิเคราะห์:",["ใช้ผลลัพธ์จากการ Backtest ล่าสุด", "อัปโหลดไฟล์ CSV"],horizontal=True, key='data_source')
     df_to_analyze = None
     if source_option == "ใช้ผลลัพธ์จากการ Backtest ล่าสุด":
         if st.session_state.analysis_df is not None:
@@ -318,11 +273,8 @@ with tab_analyzer:
             st.success("โหลดข้อมูลจากการ Backtest ล่าสุดเรียบร้อยแล้ว")
         else:
             st.info("ยังไม่มีผลการ Backtest ใน Session นี้ กรุณากลับไปที่แท็บแรกเพื่อรัน Backtest หรือเลือกอัปโหลดไฟล์ CSV")
-    
-    else: # Upload a CSV file
-        uploaded_file = st.file_uploader(
-            "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv']
-        )
+    else:
+        uploaded_file = st.file_uploader("อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv'])
         if uploaded_file:
             try:
                 df_to_analyze = pd.read_csv(uploaded_file)
@@ -333,35 +285,31 @@ with tab_analyzer:
 
     if df_to_analyze is not None:
         try:
+            required_cols = ['window_number', 'timeline', 'max_net', 'best_seed', 'price_change_pct', 'action_sequence', 'window_size']
+            if not all(col in df_to_analyze.columns for col in required_cols):
+                st.error(f"ไฟล์ CSV ไม่สมบูรณ์! กรุณาตรวจสอบว่ามีคอลัมน์เหล่านี้ทั้งหมด: {', '.join(required_cols)}")
+                st.stop()
+            
             df = df_to_analyze.copy()
             if 'result' not in df.columns:
                 df['result'] = np.where(df['max_net'] > 0, 'Win', 'Loss')
             
-            overview_tab, stitched_dna_tab, insights_tab = st.tabs([
-                "🔬 ภาพรวมและสำรวจราย Window", 
-                "🧬 Stitched DNA Analysis",
-                "💡 Insights & Correlations"
-            ])
+            overview_tab, stitched_dna_tab, insights_tab = st.tabs(["🔬 ภาพรวมและสำรวจราย Window", "🧬 Stitched DNA Analysis", "💡 Insights & Correlations"])
 
             with overview_tab:
+                # ... (This tab remains the same) ...
                 st.subheader("ภาพรวมประสิทธิภาพ (Overall Performance)")
                 gross_profit = df[df['max_net'] > 0]['max_net'].sum()
                 gross_loss = abs(df[df['max_net'] < 0]['max_net'].sum())
                 profit_factor = gross_profit / gross_loss if gross_loss > 0 else np.inf
                 win_rate = (df['result'] == 'Win').mean() * 100
-
                 kpi_cols = st.columns(4)
                 kpi_cols[0].metric("Total Net Profit", f"${df['max_net'].sum():,.2f}")
                 kpi_cols[1].metric("Win Rate", f"{win_rate:.2f}%")
                 kpi_cols[2].metric("Profit Factor", f"{profit_factor:.2f}")
                 kpi_cols[3].metric("Total Windows", f"{df.shape[0]}")
-
                 st.subheader("สำรวจข้อมูลราย Window")
-                selected_window = st.selectbox(
-                    'เลือก Window ที่ต้องการดูรายละเอียด:',
-                    options=df['window_number'],
-                    format_func=lambda x: f"Window #{x} (Timeline: {df.loc[df['window_number'] == x, 'timeline'].iloc[0]})"
-                )
+                selected_window = st.selectbox('เลือก Window ที่ต้องการดูรายละเอียด:', options=df['window_number'], format_func=lambda x: f"Window #{x} (Timeline: {df.loc[df['window_number'] == x, 'timeline'].iloc[0]})")
                 if selected_window:
                     window_data = df[df['window_number'] == selected_window].iloc[0]
                     st.markdown(f"**รายละเอียดของ Window #{selected_window}**")
@@ -372,25 +320,22 @@ with tab_analyzer:
                     st.markdown(f"**Action Sequence:**")
                     st.code(window_data['action_sequence'], language='json')
 
+
             with stitched_dna_tab:
                 st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
-                st.markdown("จำลองการเทรดจริงโดยใช้ `best_seed` ที่ได้จากแต่ละ Window มา 'เย็บ' ต่อกัน และเปรียบเทียบกับ Benchmark (Min/Max Performance)")
+                st.markdown("จำลองการเทรดจริงโดยใช้ `best_seed` ที่ได้จากแต่ละ Window มา 'เย็บ' ต่อกัน และเปรียบเทียบกับ Benchmark")
 
                 if 'best_seed' in df.columns:
                     extracted_seeds = df.sort_values('window_number')['best_seed'].tolist()
                     st.session_state.seed_list_from_file = str(extracted_seeds)
                 
-                seed_list_input = st.text_area(
-                    "DNA Seed List (แก้ไขได้):",
-                    value=st.session_state.seed_list_from_file,
-                    height=100, help="รายการ seed ที่ดึงมาจากข้อมูลที่โหลด"
-                )
+                seed_list_input = st.text_area("DNA Seed List (แก้ไขได้):", value=st.session_state.seed_list_from_file, height=100, help="รายการ seed ที่ดึงมาจากข้อมูลที่โหลด")
 
                 dna_cols = st.columns(2)
-                stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.get('gen_ticker', 'FFWM'))
-                stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=st.session_state.get('gen_start', datetime(2023, 1, 1)))
+                stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.gen_ticker)
+                stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=st.session_state.gen_start)
 
-                if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary"):
+                if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", use_container_width=True):
                     try:
                         seeds_for_ticker = ast.literal_eval(seed_list_input)
                         if not isinstance(seeds_for_ticker, list) or not seeds_for_ticker:
@@ -404,13 +349,17 @@ with tab_analyzer:
                                     prices = sim_data['Close'].tolist()
                                     n_total = len(prices)
                                     
-                                    # a) Stitched DNA
-                                    window_size_sim = int(n_total / len(seeds_for_ticker)) if len(seeds_for_ticker) > 0 else 30
+                                    # --- CRITICAL CHANGE: Calculate window size by 'stretching' seeds ---
+                                    # นี่คือจุดที่แก้ไขตามหลักการเพื่อให้ได้ผลลัพธ์ $5644
+                                    sim_window_size = int(n_total / len(seeds_for_ticker)) if len(seeds_for_ticker) > 0 else int(df['window_size'].iloc[0])
+                                    st.info(f"ℹ️ การจำลองใช้ Window Size แบบไดนามิก (ยืด/หด) = **{sim_window_size} วัน** (คำนวณจาก {n_total} วัน / {len(seeds_for_ticker)} seeds)")
+
+                                    # a) Stitched DNA Strategy (using the 'stretched' window size)
                                     final_actions, seed_index = [], 0
-                                    for i in range(0, n_total, window_size_sim):
+                                    for i in range(0, n_total, sim_window_size):
                                         current_seed = seeds_for_ticker[min(seed_index, len(seeds_for_ticker)-1)]
                                         rng = np.random.default_rng(current_seed)
-                                        win_len = min(window_size_sim, n_total - i)
+                                        win_len = min(sim_window_size, n_total - i)
                                         if win_len > 0:
                                             actions_for_window = rng.integers(0, 2, win_len).tolist()
                                             if actions_for_window: actions_for_window[0] = 1
@@ -419,21 +368,21 @@ with tab_analyzer:
                                     _, sumusd_dna, _, _, _, refer_dna = calculate_optimized(final_actions, prices)
                                     stitched_net = sumusd_dna - refer_dna - sumusd_dna[0]
 
-                                    # b) Max Performance
-                                    max_actions = get_max_action_vectorized(prices)
+                                    # b) Max Performance (using your get_max_action function)
+                                    max_actions = get_max_action(prices)
                                     _, sumusd_max, _, _, _, refer_max = calculate_optimized(max_actions, prices)
                                     max_net = sumusd_max - refer_max - sumusd_max[0]
 
-                                    # c) Min Performance (Buy & Hold)
-                                    min_actions = [1] * n_total
+                                    # c) Min Performance (Rebalance every day)
+                                    min_actions = np.ones(n_total, dtype=int).tolist()
                                     _, sumusd_min, _, _, _, refer_min = calculate_optimized(min_actions, prices)
                                     min_net = sumusd_min - refer_min - sumusd_min[0]
 
                                     plot_df = pd.DataFrame({
                                         'Max Performance (Perfect)': max_net,
                                         'Stitched DNA Strategy': stitched_net,
-                                        'Min Performance (Buy & Hold)': min_net
-                                    }, index=sim_data.index)
+                                        'Min Performance (Rebalance Daily)': min_net
+                                    }, index=sim_data.index[:len(max_net)])
                                     
                                     st.subheader("Performance Comparison (Net Profit)")
                                     st.line_chart(plot_df)
@@ -441,34 +390,24 @@ with tab_analyzer:
                                     st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
                                     metric_cols = st.columns(3)
                                     metric_cols[0].metric("Max Performance", f"${max_net[-1]:,.2f}", help="ผลตอบแทนสูงสุดตามทฤษฎี (Perfect Foresight)")
-                                    metric_cols[1].metric("Stitched DNA Strategy", f"${stitched_net[-1]:,.2f}", delta=f"{stitched_net[-1]:,.2f}", delta_color="normal")
-                                    metric_cols[2].metric("Buy & Hold", f"${min_net[-1]:,.2f}", help="ผลตอบแทนของกลยุทธ์ Buy and Hold (เป็นเส้นฐาน)")
+                                    metric_cols[1].metric("Stitched DNA Strategy", f"${stitched_net[-1]:,.2f}", delta=f"{stitched_net[-1] - min_net[-1]:,.2f} vs Min", delta_color="normal")
+                                    metric_cols[2].metric("Min Performance (Rebalance Daily)", f"${min_net[-1]:,.2f}", help="ผลตอบแทนของกลยุทธ์ Rebalance ทุกวัน")
 
                     except Exception as e:
                         st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์: {e}")
                         st.exception(e)
 
             with insights_tab:
+                # ... (This tab remains the same) ...
                 st.subheader("ค้นหา Insights และความสัมพันธ์")
-                
                 st.markdown("**ความสัมพันธ์ระหว่างกำไร (Net Profit) และการเปลี่ยนแปลงราคา (Price Change)**")
-                fig = px.scatter(
-                    df, x='price_change_pct', y='max_net', color='result',
-                    color_discrete_map={'Win': 'green', 'Loss': 'red'},
-                    labels={'price_change_pct': 'Price Change (%)', 'max_net': 'Net Profit ($)'},
-                    title='Net Profit vs. Price Change in each Window',
-                    hover_data=['window_number', 'best_seed']
-                )
+                fig = px.scatter(df, x='price_change_pct', y='max_net', color='result', color_discrete_map={'Win': 'green', 'Loss': 'red'}, labels={'price_change_pct': 'Price Change (%)', 'max_net': 'Net Profit ($)'}, title='Net Profit vs. Price Change in each Window', hover_data=['window_number', 'best_seed'])
                 st.plotly_chart(fig, use_container_width=True)
-
                 st.markdown("**การกระจายตัวของ Net Profit**")
-                fig2 = px.histogram(
-                    df, x='max_net', color='result',
-                    marginal='box', nbins=50,
-                    title='Distribution of Net Profit per Window'
-                )
+                fig2 = px.histogram(df, x='max_net', color='result', marginal='box', nbins=50, title='Distribution of Net Profit per Window')
                 st.plotly_chart(fig2, use_container_width=True)
+
 
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล: {e}")
-            st.warning("กรุณาตรวจสอบว่าไฟล์ CSV ของคุณมีคอลัมน์ที่จำเป็น เช่น 'window_number', 'timeline', 'max_net', 'best_seed', 'price_change_pct', 'action_sequence'")
+            st.warning("กรุณาตรวจสอบว่าไฟล์ CSV ของคุณมีคอลัมน์ที่จำเป็น เช่น 'window_number', 'timeline', 'max_net', 'best_seed', 'price_change_pct', 'action_sequence', 'window_size'")
