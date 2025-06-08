@@ -6,6 +6,8 @@ import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from datetime import datetime, timedelta
+import ast
+import plotly.express as px
  
 st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
 
@@ -285,7 +287,7 @@ if 'max_workers' not in st.session_state:
 st.write("🎯 Best Seed Sliding Window Tester (Optimized)")
 st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด (ปรับปรุงความเร็ว)")
 
-tab1, tab2 = st.tabs(["การตั้งค่า", "ทดสอบ"])
+tab1, tab2, tab3 = st.tabs(["การตั้งค่า", "ทดสอบ", "📊 Advanced Analytics Dashboard"])
 
 with tab1:
     st.write("⚙️ การตั้งค่า")
@@ -373,6 +375,168 @@ with tab2:
             except Exception as e:
                 st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
                 st.write("กรุณาลองปรับพารามิเตอร์หรือเลือก ticker อื่น")
+
+with tab3:
+    st.header("2. วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
+
+    # ให้ผู้ใช้เลือกแหล่งข้อมูล (CSV หรือจาก Session)
+    source_option = st.radio(
+        "เลือกแหล่งข้อมูลเพื่อการวิเคราะห์:",
+        ["ใช้ผลลัพธ์จากการ Backtest ล่าสุด", "อัปโหลดไฟล์ CSV"],
+        horizontal=True, key='data_source_analytics'
+    )
+
+    df_to_analyze = None
+    if source_option == "ใช้ผลลัพธ์จากการ Backtest ล่าสุด":
+        # ใช้ window_details ล่าสุดจาก session_state ที่ v1 สร้างไว้
+        last_ticker = st.session_state.test_ticker if 'test_ticker' in st.session_state else None
+        window_details_key = f'window_details_{last_ticker}'
+        if last_ticker and window_details_key in st.session_state:
+            df_to_analyze = pd.DataFrame(st.session_state[window_details_key])
+            st.success("โหลดข้อมูลจากการ Backtest ล่าสุดเรียบร้อยแล้ว")
+        else:
+            st.info("ยังไม่มีผลการ Backtest ใน Session นี้ กรุณากลับไปที่แท็บ 'ทดสอบ' เพื่อรัน Backtest หรือเลือกอัปโหลดไฟล์ CSV")
+    else:
+        uploaded_file = st.file_uploader(
+            "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv']
+        )
+        if uploaded_file:
+            try:
+                df_to_analyze = pd.read_csv(uploaded_file)
+                st.success(f"ไฟล์ '{uploaded_file.name}' ถูกประมวลผลเรียบร้อยแล้ว")
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
+                df_to_analyze = None
+
+    if df_to_analyze is not None:
+        try:
+            required_cols = ['window_number', 'timeline', 'max_net', 'best_seed', 'price_change_pct', 'action_sequence', 'window_size']
+            if not all(col in df_to_analyze.columns for col in required_cols):
+                st.error(f"ไฟล์ CSV ไม่สมบูรณ์! กรุณาตรวจสอบว่ามีคอลัมน์เหล่านี้ทั้งหมด: {', '.join(required_cols)}")
+                st.stop()
+
+            df = df_to_analyze.copy()
+            if 'result' not in df.columns:
+                df['result'] = np.where(df['max_net'] > 0, 'Win', 'Loss')
+
+            overview_tab, stitched_dna_tab = st.tabs([
+                "🔬 ภาพรวมและสำรวจราย Window",
+                "🧬 Stitched DNA Analysis"
+            ])
+
+            with overview_tab:
+                st.subheader("ภาพรวมประสิทธิภาพ (Overall Performance)")
+                gross_profit = df[df['max_net'] > 0]['max_net'].sum()
+                gross_loss = abs(df[df['max_net'] < 0]['max_net'].sum())
+                profit_factor = gross_profit / gross_loss if gross_loss > 0 else np.inf
+                win_rate = (df['result'] == 'Win').mean() * 100
+
+                kpi_cols = st.columns(4)
+                kpi_cols[0].metric("Total Net Profit", f"${df['max_net'].sum():,.2f}")
+                kpi_cols[1].metric("Win Rate", f"{win_rate:.2f}%")
+                kpi_cols[2].metric("Profit Factor", f"{profit_factor:.2f}")
+                kpi_cols[3].metric("Total Windows", f"{df.shape[0]}")
+
+                st.subheader("สำรวจข้อมูลราย Window")
+                selected_window = st.selectbox(
+                    'เลือก Window ที่ต้องการดูรายละเอียด:',
+                    options=df['window_number'],
+                    format_func=lambda x: f"Window #{x} (Timeline: {df.loc[df['window_number'] == x, 'timeline'].iloc[0]})"
+                )
+                if selected_window:
+                    window_data = df[df['window_number'] == selected_window].iloc[0]
+                    st.markdown(f"**รายละเอียดของ Window #{selected_window}**")
+                    w_cols = st.columns(3)
+                    w_cols[0].metric("Net Profit", f"${window_data['max_net']:.2f}")
+                    w_cols[1].metric("Best Seed", f"{window_data['best_seed']}")
+                    w_cols[2].metric("Price Change", f"{window_data['price_change_pct']:.2f}%")
+                    st.markdown(f"**Action Sequence:**")
+                    st.code(window_data['action_sequence'], language='json')
+
+            def safe_literal_eval(val):
+                if pd.isna(val):
+                    return []
+                if isinstance(val, list):
+                    return val
+                if isinstance(val, str) and val.strip().startswith('[') and val.strip().endswith(']'):
+                    try:
+                        return ast.literal_eval(val)
+                    except Exception:
+                        return []
+                return []
+
+            with stitched_dna_tab:
+                st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
+                st.markdown("""
+                จำลองการเทรดจริงโดยนำ **`action_sequence`** ที่ได้จากแต่ละ Window (ซึ่งเป็นผลจาก `best_seed`) 
+                มา 'เย็บ' ต่อกันโดยตรง และเปรียบเทียบกับ Benchmark
+                """)
+
+                df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
+
+                df_sorted = df.sort_values('window_number')
+                stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
+
+                extracted_seeds = df_sorted['best_seed'].tolist()
+                st.session_state.seed_list_from_file = str(extracted_seeds)
+
+                st.text_area(
+                    "DNA Seed List (เพื่ออ้างอิง):",
+                    value=st.session_state.seed_list_from_file,
+                    height=100,
+                    help="รายการ seed ที่ดึงมาจากข้อมูลที่โหลด (การจำลองด้านล่างจะใช้ Action Sequence ที่สอดคล้องกัน)",
+                    disabled=True
+                )
+
+                dna_cols = st.columns(2)
+                stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.test_ticker)
+                stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=st.session_state.start_date)
+
+                if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", key='stitch_dna_btn'):
+                    if not stitched_actions:
+                        st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้ กรุณาตรวจสอบคอลัมน์ 'action_sequence' ในไฟล์ CSV")
+                    else:
+                        with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker} และคำนวณ Benchmark..."):
+                            sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now()))
+                            if sim_data.empty:
+                                st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
+                            else:
+                                prices = sim_data['Close'].tolist()
+                                n_total = len(prices)
+                                final_actions_dna = stitched_actions[:n_total]
+                                st.info(f"ℹ️ การจำลองใช้ Action Sequence ที่ 'เย็บ' ต่อกันโดยตรงจากไฟล์ ความยาว {len(final_actions_dna)} วัน")
+
+                                _, sumusd_dna, _, _, _, refer_dna = calculate_optimized(final_actions_dna, prices[:len(final_actions_dna)])
+                                stitched_net = sumusd_dna - refer_dna - sumusd_dna[0]
+
+                                max_actions = get_max_action(prices)
+                                _, sumusd_max, _, _, _, refer_max = calculate_optimized(max_actions, prices)
+                                max_net = sumusd_max - refer_max - sumusd_max[0]
+
+                                min_actions = np.ones(n_total, dtype=int).tolist()
+                                _, sumusd_min, _, _, _, refer_min = calculate_optimized(min_actions, prices)
+                                min_net = sumusd_min - refer_min - sumusd_min[0]
+
+                                plot_len = len(stitched_net)
+                                plot_df = pd.DataFrame({
+                                    'Max Performance (Perfect)': max_net[:plot_len],
+                                    'Stitched DNA Strategy': stitched_net,
+                                    'Min Performance (Rebalance Daily)': min_net[:plot_len]
+                                }, index=sim_data.index[:plot_len])
+
+                                st.subheader("Performance Comparison (Net Profit)")
+                                st.line_chart(plot_df)
+
+                                st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
+                                metric_cols = st.columns(3)
+                                metric_cols[0].metric("Max Performance (at DNA End)", f"${max_net[plot_len-1]:,.2f}", help=f"ผลตอบแทนสูงสุดตามทฤษฎี ณ วันที่ {plot_len}")
+                                metric_cols[1].metric("Stitched DNA Strategy", f"${stitched_net[-1]:,.2f}", delta=f"{stitched_net[-1] - min_net[plot_len-1]:,.2f} vs Min", delta_color="normal")
+                                metric_cols[2].metric("Min Performance (at DNA End)", f"${min_net[plot_len-1]:,.2f}", help=f"ผลตอบแทนของกลยุทธ์ Rebalance ทุกวัน ณ วันที่ {plot_len}")
+
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล: {e}")
+            st.exception(e)
+ 
     st.write("---")
     st.write("📖 คำอธิบายวิธีการทำงาน")
     with st.expander("🔍 Best Seed Sliding Window คืออะไร?"):
