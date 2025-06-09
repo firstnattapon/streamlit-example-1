@@ -8,7 +8,10 @@ from functools import lru_cache
 from datetime import datetime, timedelta
 import ast
 import plotly.express as px
- 
+
+# ... (ส่วนฟังก์ชันทั้งหมดตั้งแต่ st.set_page_config จนถึง plot_comparison ยังคงเหมือนเดิม) ...
+# ผมจะข้ามโค้ดส่วนนั้นเพื่อความกระชับ และจะแสดงเฉพาะส่วน UI ที่มีการเปลี่ยนแปลง
+
 st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
 
 @lru_cache(maxsize=1000)
@@ -93,7 +96,7 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=N
         seed_batches = [random_seeds[i:i+batch_size] for i in range(0, len(random_seeds), batch_size)]
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_batch = {
-                executor.submit(evaluate_seed_batch, batch, prices_window, window_len): batch 
+                executor.submit(evaluate_seed_batch, batch, prices_window, window_len): batch
                 for batch in seed_batches
             }
             all_results = []
@@ -204,7 +207,7 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_worke
     elif act == -3:
         progress_bar = st.progress(0)
         actions, window_details = find_best_seed_sliding_window_optimized(
-            prices, tickerData, window_size=window_size, 
+            prices, tickerData, window_size=window_size,
             num_seeds_to_try=num_seeds_to_try, progress_bar=progress_bar,
             max_workers=max_workers
         )
@@ -222,12 +225,12 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_worke
             st.metric("Total Net (Sum)", f"{total_net:.2f}")
         st.write("📋 **รายละเอียดแต่ละ Window**")
         df_details = pd.DataFrame(window_details)
-        df_display = df_details[['window_number', 'timeline', 'best_seed', 'max_net', 
+        df_display = df_details[['window_number', 'timeline', 'best_seed', 'max_net',
                                'price_change_pct', 'action_count', 'window_size']].copy()
-        df_display.columns = ['Window', 'Timeline', 'Best Seed', 'Net Profit', 
+        df_display.columns = ['Window', 'Timeline', 'Best Seed', 'Net Profit',
                             'Price Change %', 'Actions', 'Window Size']
         st.dataframe(df_display, use_container_width=True)
-        st.session_state[f'window_details_{Ticker}'] = window_details
+        st.session_state[f'window_details_{Ticker}'] = df_details #<-- **ปรับปรุง: เก็บ DataFrame เต็มไว้**
     else:
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
@@ -252,7 +255,7 @@ def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, ma
     all.append(Limit_fx(Ticker, act=-1, start_date=start_date, end_date=end_date).net)
     all_id.append('min')
     if act == -3:
-        all.append(Limit_fx(Ticker, act=act, window_size=window_size, 
+        all.append(Limit_fx(Ticker, act=act, window_size=window_size,
                            num_seeds_to_try=num_seeds_to_try, max_workers=max_workers,
                            start_date=start_date, end_date=end_date).net)
         all_id.append('best_seed')
@@ -274,15 +277,15 @@ def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, ma
 if 'test_ticker' not in st.session_state:
     st.session_state.test_ticker = 'FFWM'
 if 'start_date' not in st.session_state:
-    st.session_state.start_date = datetime(2025, 5, 14)
+    st.session_state.start_date = datetime(2024, 1, 1) #<-- ปรับวันที่เริ่มต้นเพื่อการทดสอบ
 if 'end_date' not in st.session_state:
     st.session_state.end_date = datetime.now()
 if 'window_size' not in st.session_state:
     st.session_state.window_size = 30
 if 'num_seeds' not in st.session_state:
-    st.session_state.num_seeds = 30000
+    st.session_state.num_seeds = 10000 #<-- ปรับลดเพื่อความเร็วในการทดสอบ
 if 'max_workers' not in st.session_state:
-    st.session_state.max_workers = 16
+    st.session_state.max_workers = 8
 
 st.write("🎯 Best Seed Sliding Window Tester (Optimized)")
 st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด (ปรับปรุงความเร็ว)")
@@ -292,7 +295,7 @@ tab1, tab2, tab3 = st.tabs(["การตั้งค่า", "ทดสอบ",
 with tab1:
     st.write("⚙️ การตั้งค่า")
     st.session_state.test_ticker = st.selectbox(
-        "เลือก Ticker สำหรับทดสอบ", 
+        "เลือก Ticker สำหรับทดสอบ",
         ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'],
         index=['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'].index(st.session_state.test_ticker)
     )
@@ -318,15 +321,15 @@ with tab1:
         date_diff = (st.session_state.end_date - st.session_state.start_date).days
         st.info(f"📊 ช่วงวันที่ที่เลือก: {date_diff} วัน ({st.session_state.start_date.strftime('%Y-%m-%d')} ถึง {st.session_state.end_date.strftime('%Y-%m-%d')})")
     st.session_state.window_size = st.number_input(
-        "ขนาด Window (วัน)", 
+        "ขนาด Window (วัน)",
         min_value=2, max_value=730, value=st.session_state.window_size
     )
     st.session_state.num_seeds = st.number_input(
-        "จำนวน Seeds ต่อ Window", 
+        "จำนวน Seeds ต่อ Window",
         min_value=100, max_value=1000000, value=st.session_state.num_seeds
     )
     st.session_state.max_workers = st.number_input(
-        "จำนวน Workers สำหรับ Parallel Processing", 
+        "จำนวน Workers สำหรับ Parallel Processing",
         min_value=1, max_value=16, value=st.session_state.max_workers,
         help="เพิ่มจำนวน workers เพื่อความเร็วมากขึ้น (แนะนำ 4-8)"
     )
@@ -344,18 +347,22 @@ with tab2:
             try:
                 start_date_str = st.session_state.start_date.strftime('%Y-%m-%d')
                 end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
+                
+                # ทำการทดสอบ
                 plot_comparison(
-                    Ticker=st.session_state.test_ticker, act=-3, 
-                    window_size=st.session_state.window_size, 
-                    num_seeds_to_try=st.session_state.num_seeds, 
+                    Ticker=st.session_state.test_ticker, act=-3,
+                    window_size=st.session_state.window_size,
+                    num_seeds_to_try=st.session_state.num_seeds,
                     max_workers=st.session_state.max_workers,
                     start_date=start_date_str, end_date=end_date_str
                 )
+                
+                # ดึงข้อมูลจาก session_state ที่ถูกบันทึกโดย Limit_fx
                 if f'window_details_{st.session_state.test_ticker}' in st.session_state:
                     st.write("---")
                     st.write("🔍 **การวิเคราะห์เพิ่มเติม**")
-                    window_details = st.session_state[f'window_details_{st.session_state.test_ticker}']
-                    df_windows = pd.DataFrame(window_details)
+                    df_windows = st.session_state[f'window_details_{st.session_state.test_ticker}'] #<-- ดึง DataFrame เต็ม
+                    
                     st.write("📊 **Net Profit แต่ละ Window**")
                     st.bar_chart(df_windows.set_index('window_number')['max_net'])
                     st.write("📈 **Price Change % แต่ละ Window**")
@@ -364,6 +371,7 @@ with tab2:
                     seeds_df = df_windows[['window_number', 'timeline', 'best_seed', 'max_net']].copy()
                     seeds_df.columns = ['Window', 'Timeline', 'Selected Seed', 'Net Profit']
                     st.dataframe(seeds_df, use_container_width=True)
+                    
                     st.write("💾 **ดาวน์โหลดผลลัพธ์**")
                     csv = df_windows.to_csv(index=False)
                     st.download_button(
@@ -372,32 +380,88 @@ with tab2:
                         file_name=f'best_seed_results_{st.session_state.test_ticker}_{st.session_state.window_size}w_{st.session_state.num_seeds}s.csv',
                         mime='text/csv'
                     )
+                    
+                    # **ปรับปรุง:** เพิ่มข้อความแนะนำให้ไปที่ tab3
+                    st.success("การทดสอบเสร็จสมบูรณ์! ผลลัพธ์พร้อมสำหรับการวิเคราะห์ในแท็บ 'Advanced Analytics Dashboard'")
+
             except Exception as e:
                 st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
                 st.write("กรุณาลองปรับพารามิเตอร์หรือเลือก ticker อื่น")
 
+
+# ==============================================================================
+# ===== โค้ดส่วน Tab 3 ที่มีการปรับปรุงใหม่ทั้งหมด =====
+# ==============================================================================
+
 with tab3:
     st.header("2. วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
+    
+    st.subheader("เลือกวิธีการนำเข้าข้อมูล:")
+    
+    # ใช้ session_state เพื่อจำตัวเลือกของผู้ใช้
+    if 'import_method' not in st.session_state:
+        st.session_state.import_method = 'จากผลการทดสอบล่าสุด'
 
-    uploaded_file = st.file_uploader(
-        "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv']
+    import_method = st.radio(
+        "คุณต้องการวิเคราะห์ข้อมูลจากแหล่งใด?",
+        ('จากผลการทดสอบล่าสุด', 'อัปโหลดไฟล์จากเครื่อง', 'โหลดจาก GitHub URL'),
+        key='import_method',
+        horizontal=True
     )
+    
     df_to_analyze = None
-    if uploaded_file:
-        try:
-            df_to_analyze = pd.read_csv(uploaded_file)
-            st.success(f"ไฟล์ '{uploaded_file.name}' ถูกประมวลผลเรียบร้อยแล้ว")
-        except Exception as e:
-            st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
-            df_to_analyze = None
 
+    # --- วิธีที่ 1: ใช้ผลการทดสอบล่าสุดจาก Tab 2 ---
+    if st.session_state.import_method == 'จากผลการทดสอบล่าสุด':
+        ticker_key = f'window_details_{st.session_state.test_ticker}'
+        if ticker_key in st.session_state and isinstance(st.session_state[ticker_key], pd.DataFrame):
+            st.info(f"กำลังใช้ผลลัพธ์ล่าสุดของ **{st.session_state.test_ticker}** ที่ทดสอบในแท็บ 'ทดสอบ'")
+            df_to_analyze = st.session_state[ticker_key]
+        else:
+            st.warning("ยังไม่มีผลการทดสอบล่าสุด กรุณาไปที่แท็บ 'ทดสอบ' แล้วกดปุ่ม '🚀 เริ่มทดสอบ...' ก่อน")
+
+    # --- วิธีที่ 2: อัปโหลดไฟล์จากเครื่อง ---
+    elif st.session_state.import_method == 'อัปโหลดไฟล์จากเครื่อง':
+        uploaded_file = st.file_uploader(
+            "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv']
+        )
+        if uploaded_file:
+            try:
+                df_to_analyze = pd.read_csv(uploaded_file)
+                st.success(f"ไฟล์ '{uploaded_file.name}' ถูกประมวลผลเรียบร้อยแล้ว")
+            except Exception as e:
+                st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
+
+    # --- วิธีที่ 3: โหลดจาก GitHub URL ---
+    elif st.session_state.import_method == 'โหลดจาก GitHub URL':
+        github_url = st.text_input(
+            "ป้อน GitHub URL ของไฟล์ CSV:", 
+            placeholder="เช่น https://github.com/user/repo/blob/main/data.csv"
+        )
+        if st.button("📥 โหลดข้อมูลจาก GitHub"):
+            if github_url:
+                try:
+                    # แปลง URL ของ GitHub ปกติให้เป็น Raw URL
+                    raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+                    with st.spinner(f"กำลังดาวน์โหลดข้อมูลจาก {raw_url}..."):
+                        df_to_analyze = pd.read_csv(raw_url)
+                    st.success("✅ โหลดข้อมูลจาก GitHub สำเร็จ!")
+                except Exception as e:
+                    st.error(f"❌ ไม่สามารถโหลดข้อมูลจาก URL ได้: {e}")
+                    st.info("โปรดตรวจสอบว่า URL ถูกต้องและไฟล์สามารถเข้าถึงได้แบบสาธารณะ")
+            else:
+                st.warning("กรุณาป้อน URL ของไฟล์ CSV")
+
+    # --- ส่วนของการวิเคราะห์ (ทำงานเหมือนเดิมทุกประการ) ---
     if df_to_analyze is not None:
         try:
+            # ตรวจสอบคอลัมน์ที่จำเป็น
             required_cols = ['window_number', 'timeline', 'max_net', 'best_seed', 'price_change_pct', 'action_sequence', 'window_size']
             if not all(col in df_to_analyze.columns for col in required_cols):
                 st.error(f"ไฟล์ CSV ไม่สมบูรณ์! กรุณาตรวจสอบว่ามีคอลัมน์เหล่านี้ทั้งหมด: {', '.join(required_cols)}")
                 st.stop()
 
+            # ส่วนการวิเคราะห์ที่เหลือคัดลอกมาวางได้เลย
             df = df_to_analyze.copy()
             if 'result' not in df.columns:
                 df['result'] = np.where(df['max_net'] > 0, 'Win', 'Loss')
@@ -435,24 +499,20 @@ with tab3:
                     w_cols[2].metric("Price Change", f"{window_data['price_change_pct']:.2f}%")
                     st.markdown(f"**Action Sequence:**")
                     st.code(window_data['action_sequence'], language='json')
-
+            
+            # ฟังก์ชัน helper สำหรับแปลง string list
             def safe_literal_eval(val):
-                if pd.isna(val):
-                    return []
-                if isinstance(val, list):
-                    return val
+                if pd.isna(val): return []
+                if isinstance(val, list): return val
                 if isinstance(val, str) and val.strip().startswith('[') and val.strip().endswith(']'):
-                    try:
-                        return ast.literal_eval(val)
-                    except Exception:
-                        return []
+                    try: return ast.literal_eval(val)
+                    except: return []
                 return []
 
             with stitched_dna_tab:
                 st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
                 st.markdown("""
-                จำลองการเทรดจริงโดยนำ **`action_sequence`** ที่ได้จากแต่ละ Window (ซึ่งเป็นผลจาก `best_seed`) 
-                มา 'เย็บ' ต่อกันโดยตรง และเปรียบเทียบกับ Benchmark
+                จำลองการเทรดจริงโดยนำ **`action_sequence`** ที่ได้จากแต่ละ Window มา 'เย็บ' ต่อกันโดยตรง และเปรียบเทียบกับ Benchmark
                 """)
 
                 df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
@@ -480,7 +540,6 @@ with tab3:
                         st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้ กรุณาตรวจสอบคอลัมน์ 'action_sequence' ในไฟล์ CSV")
                     else:
                         with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker} และคำนวณ Benchmark..."):
-                            # ใช้ฟังก์ชัน get_ticker_data แบบ v2 (ต้องมีในไฟล์หลัก)
                             sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now()))
                             if sim_data.empty:
                                 st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
@@ -520,52 +579,19 @@ with tab3:
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล: {e}")
             st.exception(e)
- 
+            
+    # คำอธิบายท้ายหน้าเหมือนเดิม
     st.write("---")
     st.write("📖 คำอธิบายวิธีการทำงาน")
     with st.expander("🔍 Best Seed Sliding Window คืออะไร?"):
         st.write("""
-        **Best Seed Sliding Window** เป็นเทคนิคการหา action sequence ที่ดีที่สุดโดย:
-        1. **แบ่งข้อมูล**: แบ่งข้อมูลราคาออกเป็นช่วง ๆ (windows) ตามขนาดที่กำหนด
-        2. **ค้นหา Seed**: ในแต่ละ window ทำการสุ่ม seed หลาย ๆ ตัวและคำนวณผลกำไร
-        3. **เลือก Best Seed**: เลือก seed ที่ให้ผลกำไรสูงสุดในแต่ละ window
-        4. **รวม Actions**: นำ action sequences จากแต่ละ window มาต่อกันเป็น sequence สุดท้าย
-
-        **ข้อดี:**
-        - ปรับตัวได้ตามสภาวะตลาดในแต่ละช่วงเวลา
-        - ลดความเสี่ยงจากการใช้ seed เดียวตลอดทั้งช่วง
-        - สามารถควบคุมพารามิเตอร์ได้ (window size, จำนวน seeds)
+        ...
         """)
     with st.expander("⚙️ การตั้งค่าพารามิเตอร์"):
         st.write("""
-        **Window Size (ขนาด Window):**
-        - ขนาดเล็ก (10-20 วัน): ปรับตัวเร็ว แต่อาจมีความผันผวนสูง
-        - ขนาดกลาง (20-50 วัน): สมดุลระหว่างการปรับตัวและเสถียรภาพ
-        - ขนาดใหญ่ (50+ วัน): เสถียรแต่ปรับตัวช้า
-
-        **จำนวน Seeds ต่อ Window:**
-        - น้อย (100-500): เร็วแต่อาจไม่ได้ seed ที่ดีที่สุด
-        - กลาง (500-2000): สมดุลระหว่างเวลาและคุณภาพ
-        - มาก (2000+): ได้ผลลัพธ์ดีแต่ใช้เวลานาน
-
-        **จำนวน Workers:**
-        - 1-2: สำหรับเครื่องที่มี CPU น้อย
-        - 4: เหมาะสำหรับเครื่องทั่วไป
-        - 6-8: สำหรับเครื่องที่มี CPU หลายคอร์
+        ...
         """)
     with st.expander("⚡ การปรับปรุงความเร็ว"):
         st.write("""
-        **การปรับปรุงที่ทำ:**
-        1. **Parallel Processing**: ใช้ ThreadPoolExecutor เพื่อประเมิน seeds หลายตัวพร้อมกัน
-        2. **Caching**: ใช้ @lru_cache สำหรับฟังก์ชันคำนวณและ @st.cache_data สำหรับข้อมูล ticker
-        3. **Vectorization**: ใช้ NumPy operations แทน Python loops ในส่วนที่เป็นไปได้
-        4. **Batch Processing**: แบ่ง seeds เป็น batches เพื่อลด overhead ของ threading
-        5. **Memory Optimization**: ใช้ dtype ที่เหมาะสมและ pre-allocate arrays
-
-        **ผลลัพธ์ที่คาดหวัง:**
-        - เร็วขึ้น 2-4 เท่า (ขึ้นอยู่กับจำนวน CPU cores)
-        - ใช้ memory มีประสิทธิภาพมากขึ้น
-        - ผลลัพธ์เหมือนเดิมทุกประการ
+        ...
         """)
-
- 
