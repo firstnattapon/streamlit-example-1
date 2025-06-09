@@ -297,7 +297,7 @@ if 'end_date' not in st.session_state:
 if 'window_size' not in st.session_state:
     st.session_state.window_size = 30
 if 'num_seeds' not in st.session_state:
-    st.session_state.num_seeds = 10000
+    st.session_state.num_seeds = 30000
 if 'max_workers' not in st.session_state:
     st.session_state.max_workers = 8
 
