@@ -490,7 +490,7 @@ with tab3:
                     
                     dna_cols = st.columns(2)
                     stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value='NEGG', key='stitch_ticker_input')
-                    stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime(2023, 1, 1), key='stitch_date_input')
+                    stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime(2024, 1, 1), key='stitch_date_input')
 
                     if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", key='stitch_dna_btn'):
                         if not stitched_actions:
