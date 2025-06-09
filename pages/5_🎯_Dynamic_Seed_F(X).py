@@ -8,7 +8,7 @@ from functools import lru_cache
 from datetime import datetime, timedelta
 import ast
 import plotly.express as px
- 
+
 # ... (ส่วนฟังก์ชันทั้งหมดตั้งแต่ st.set_page_config จนถึง plot_comparison ยังคงเหมือนเดิม) ...
 # ผมจะข้ามโค้ดส่วนนั้นเพื่อความกระชับ และจะแสดงเฉพาะส่วน UI ที่มีการเปลี่ยนแปลง
 
