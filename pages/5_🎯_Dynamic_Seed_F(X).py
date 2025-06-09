@@ -399,54 +399,68 @@ with tab2:
                 st.exception(e)
                 st.write("กรุณาลองปรับพารามิเตอร์หรือเลือก ticker อื่น")
 
-# --- Tab 3: Advanced Analytics Dashboard (ฉบับแก้ไข) ---
+# --- Tab 3: Advanced Analytics Dashboard (ฉบับแก้ไขสมบูรณ์) ---
 with tab3:
     st.header("2. วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
     st.subheader("เลือกวิธีการนำเข้าข้อมูล:")
     
+    # --- เริ่มต้น State สำหรับ Tab 3 ---
     if 'import_method' not in st.session_state:
         st.session_state.import_method = 'อัปโหลดไฟล์จากเครื่อง'
+    if 'df_to_analyze' not in st.session_state:
+        st.session_state.df_to_analyze = None
 
+    # ฟังก์ชันสำหรับรีเซ็ต DataFrame เมื่อผู้ใช้เปลี่ยนวิธีการนำเข้า
+    def clear_df_on_change():
+        st.session_state.df_to_analyze = None
+        
     import_method = st.radio(
         "คุณต้องการวิเคราะห์ข้อมูลจากแหล่งใด?",
         ('อัปโหลดไฟล์จากเครื่อง', 'โหลดจาก GitHub URL'),
         key='import_method',
-        horizontal=True
+        horizontal=True,
+        on_change=clear_df_on_change
     )
     
-    df_to_analyze = None
-
-    if st.session_state.import_method == 'อัปโหลดไฟล์จากเครื่อง':
-        uploaded_file = st.file_uploader(
-            "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv'], key="local_upload"
-        )
-        if uploaded_file:
-            try:
-                df_to_analyze = pd.read_csv(uploaded_file)
-                st.success(f"ไฟล์ '{uploaded_file.name}' ถูกประมวลผลเรียบร้อยแล้ว")
-            except Exception as e:
-                st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
-
-    elif st.session_state.import_method == 'โหลดจาก GitHub URL':
-        github_url = st.text_input(
-            "ป้อน GitHub URL ของไฟล์ CSV:", 
-            placeholder="เช่น https://github.com/user/repo/blob/main/data.csv",
-            key="github_url_input"
-        )
-        if st.button("📥 โหลดข้อมูลจาก GitHub"):
-            if github_url:
+    # --- Logic การโหลดและจำข้อมูล ---
+    # ส่วนนี้จะทำงานเฉพาะเมื่อยังไม่มี DataFrame ใน state
+    if st.session_state.df_to_analyze is None:
+        if st.session_state.import_method == 'อัปโหลดไฟล์จากเครื่อง':
+            uploaded_file = st.file_uploader(
+                "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv'], key="local_uploader"
+            )
+            if uploaded_file is not None:
                 try:
-                    raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
-                    with st.spinner(f"กำลังดาวน์โหลดข้อมูลจาก {raw_url}..."):
-                        df_to_analyze = pd.read_csv(raw_url)
-                    st.success("✅ โหลดข้อมูลจาก GitHub สำเร็จ!")
+                    st.session_state.df_to_analyze = pd.read_csv(uploaded_file)
+                    st.rerun() 
                 except Exception as e:
-                    st.error(f"❌ ไม่สามารถโหลดข้อมูลจาก URL ได้: {e}")
-            else:
-                st.warning("กรุณาป้อน URL ของไฟล์ CSV")
+                    st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
+                    st.session_state.df_to_analyze = None
 
-    # --- ส่วนของการวิเคราะห์ ---
-    if df_to_analyze is not None:
+        elif st.session_state.import_method == 'โหลดจาก GitHub URL':
+            github_url = st.text_input(
+                "ป้อน GitHub URL ของไฟล์ CSV:", 
+                placeholder="เช่น https://github.com/user/repo/blob/main/data.csv",
+                key="github_url_input"
+            )
+            if st.button("📥 โหลดข้อมูลจาก GitHub"):
+                if github_url:
+                    try:
+                        raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+                        with st.spinner(f"กำลังดาวน์โหลดข้อมูลจาก {raw_url}..."):
+                            st.session_state.df_to_analyze = pd.read_csv(raw_url)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ ไม่สามารถโหลดข้อมูลจาก URL ได้: {e}")
+                        st.session_state.df_to_analyze = None
+                else:
+                    st.warning("กรุณาป้อน URL ของไฟล์ CSV")
+
+    # --- ส่วนของการวิเคราะห์ (จะทำงานเมื่อมีข้อมูลใน state เท่านั้น) ---
+    if st.session_state.df_to_analyze is not None:
+        st.success("ข้อมูลพร้อมสำหรับการวิเคราะห์แล้ว!")
+        df_to_analyze = st.session_state.df_to_analyze
+
         try:
             required_cols = ['window_number', 'timeline', 'max_net', 'best_seed', 'price_change_pct', 'action_sequence', 'window_size']
             if not all(col in df_to_analyze.columns for col in required_cols):
@@ -500,25 +514,13 @@ with tab3:
 
                 with stitched_dna_tab:
                     st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
-                    st.markdown("""
-                    จำลองการเทรดจริงโดยนำ **`action_sequence`** ที่ได้จากแต่ละ Window มา 'เย็บ' ต่อกันโดยตรง และเปรียบเทียบกับ Benchmark
-                    """)
+                    st.markdown("จำลองการเทรดจริงโดยนำ **`action_sequence`** จากแต่ละ Window มา 'เย็บ' ต่อกัน และเปรียบเทียบกับ Benchmark")
 
                     df['action_sequence_list'] = [safe_literal_eval(val) for val in df['action_sequence']]
                     
                     df_sorted = df.sort_values('window_number')
                     stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
-                    extracted_seeds = df_sorted['best_seed'].tolist()
-                    st.session_state.seed_list_from_file = str(extracted_seeds)
-
-                    st.text_area(
-                        "DNA Seed List (เพื่ออ้างอิง):",
-                        value=st.session_state.seed_list_from_file,
-                        height=100,
-                        help="รายการ seed ที่ดึงมาจากข้อมูลที่โหลด",
-                        disabled=True
-                    )
-
+                    
                     dna_cols = st.columns(2)
                     stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value='NEGG')
                     stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime(2023, 1, 1))
