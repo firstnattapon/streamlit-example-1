@@ -14,6 +14,7 @@ st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layo
 
 # ==============================================================================
 # ===== ส่วนของฟังก์ชันคำนวณหลัก (Core Calculation Functions) =====
+# (ส่วนนี้เหมือนเดิมทุกประการ)
 # ==============================================================================
 
 @lru_cache(maxsize=1000)
@@ -193,10 +194,6 @@ def get_ticker_data(ticker, start_date=None, end_date=None):
         st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {str(e)}")
         return pd.DataFrame()
 
-# ==============================================================================
-# ===== ส่วนควบคุมและแสดงผลหลัก (Control and Display Functions) =====
-# ==============================================================================
-
 def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_workers=4, start_date=None, end_date=None):
     tickerData = get_ticker_data(Ticker, start_date=start_date, end_date=end_date)
     if tickerData.empty:
@@ -291,7 +288,6 @@ def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, ma
 # ===== ส่วนของ UI (User Interface) =====
 # ==============================================================================
 
-# --- ค่าเริ่มต้นใน Session State ---
 if 'test_ticker' not in st.session_state:
     st.session_state.test_ticker = 'FFWM'
 if 'start_date' not in st.session_state:
@@ -310,8 +306,8 @@ st.write("เครื่องมือทดสอบการหา Best Seed
 
 tab1, tab2, tab3 = st.tabs(["การตั้งค่า", "ทดสอบ", "📊 Advanced Analytics Dashboard"])
 
-# --- Tab 1: การตั้งค่า ---
 with tab1:
+    # ... (ส่วน Tab 1 เหมือนเดิมทุกประการ) ...
     st.write("⚙️ การตั้งค่า")
     st.session_state.test_ticker = st.selectbox(
         "เลือก Ticker สำหรับทดสอบ",
@@ -321,40 +317,20 @@ with tab1:
     st.write("📅 **ช่วงวันที่สำหรับการวิเคราะห์**")
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.start_date = st.date_input(
-            "วันที่เริ่มต้น",
-            value=st.session_state.start_date,
-            min_value=datetime(2020, 1, 1),
-            max_value=datetime.now()
-        )
+        st.session_state.start_date = st.date_input("วันที่เริ่มต้น", value=st.session_state.start_date, min_value=datetime(2020, 1, 1), max_value=datetime.now())
     with col2:
-        st.session_state.end_date = st.date_input(
-            "วันที่สิ้นสุด",
-            value=st.session_state.end_date,
-            min_value=datetime(2020, 1, 1),
-            max_value=datetime.now()
-        )
+        st.session_state.end_date = st.date_input("วันที่สิ้นสุด", value=st.session_state.end_date, min_value=datetime(2020, 1, 1), max_value=datetime.now())
     if st.session_state.start_date >= st.session_state.end_date:
         st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
     else:
         date_diff = (pd.to_datetime(st.session_state.end_date) - pd.to_datetime(st.session_state.start_date)).days
         st.info(f"📊 ช่วงวันที่ที่เลือก: {date_diff} วัน ({st.session_state.start_date.strftime('%Y-%m-%d')} ถึง {st.session_state.end_date.strftime('%Y-%m-%d')})")
-    st.session_state.window_size = st.number_input(
-        "ขนาด Window (วัน)",
-        min_value=2, max_value=730, value=st.session_state.window_size
-    )
-    st.session_state.num_seeds = st.number_input(
-        "จำนวน Seeds ต่อ Window",
-        min_value=100, max_value=1000000, value=st.session_state.num_seeds, format="%d"
-    )
-    st.session_state.max_workers = st.number_input(
-        "จำนวน Workers สำหรับ Parallel Processing",
-        min_value=1, max_value=16, value=st.session_state.max_workers,
-        help="เพิ่มจำนวน workers เพื่อความเร็วมากขึ้น (แนะนำ 4-8)"
-    )
+    st.session_state.window_size = st.number_input("ขนาด Window (วัน)", min_value=2, max_value=730, value=st.session_state.window_size)
+    st.session_state.num_seeds = st.number_input("จำนวน Seeds ต่อ Window", min_value=100, max_value=1000000, value=st.session_state.num_seeds, format="%d")
+    st.session_state.max_workers = st.number_input("จำนวน Workers สำหรับ Parallel Processing", min_value=1, max_value=16, value=st.session_state.max_workers, help="เพิ่มจำนวน workers เพื่อความเร็วมากขึ้น (แนะนำ 4-8)")
 
-# --- Tab 2: ทดสอบ ---
 with tab2:
+    # ... (ส่วน Tab 2 เหมือนเดิมทุกประการ) ...
     st.write("---")
     if st.button("🚀 เริ่มทดสอบ Best Seed (Optimized)", type="primary"):
         if st.session_state.start_date >= st.session_state.end_date:
@@ -397,69 +373,65 @@ with tab2:
             except Exception as e:
                 st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
                 st.exception(e)
-                st.write("กรุณาลองปรับพารามิเตอร์หรือเลือก ticker อื่น")
 
-# --- Tab 3: Advanced Analytics Dashboard (ฉบับแก้ไขสมบูรณ์) ---
+# ==============================================================================
+# ===== Tab 3: Advanced Analytics Dashboard (ฉบับแก้ไขสมบูรณ์ที่สุด) =====
+# ==============================================================================
 with tab3:
     st.header("2. วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
-    st.subheader("เลือกวิธีการนำเข้าข้อมูล:")
     
-    # --- เริ่มต้น State สำหรับ Tab 3 ---
-    if 'import_method' not in st.session_state:
-        st.session_state.import_method = 'อัปโหลดไฟล์จากเครื่อง'
-    if 'df_to_analyze' not in st.session_state:
-        st.session_state.df_to_analyze = None
-
-    # ฟังก์ชันสำหรับรีเซ็ต DataFrame เมื่อผู้ใช้เปลี่ยนวิธีการนำเข้า
-    def clear_df_on_change():
-        st.session_state.df_to_analyze = None
+    # --- ใช้ Container เพื่อจัดกลุ่ม UI ของการโหลดข้อมูล ---
+    with st.container():
+        st.subheader("เลือกวิธีการนำเข้าข้อมูล:")
         
-    import_method = st.radio(
-        "คุณต้องการวิเคราะห์ข้อมูลจากแหล่งใด?",
-        ('อัปโหลดไฟล์จากเครื่อง', 'โหลดจาก GitHub URL'),
-        key='import_method',
-        horizontal=True,
-        on_change=clear_df_on_change
-    )
-    
-    # --- Logic การโหลดและจำข้อมูล ---
-    # ส่วนนี้จะทำงานเฉพาะเมื่อยังไม่มี DataFrame ใน state
-    if st.session_state.df_to_analyze is None:
-        if st.session_state.import_method == 'อัปโหลดไฟล์จากเครื่อง':
+        # --- เริ่มต้น State สำหรับ Tab 3 ---
+        if 'df_for_analysis' not in st.session_state:
+            st.session_state.df_for_analysis = None
+
+        # ส่วนสำหรับโหลดข้อมูล
+        col1, col2 = st.columns(2)
+        with col1:
+            # --- อัปโหลดจากเครื่อง ---
+            st.markdown("##### 1. อัปโหลดไฟล์จากเครื่อง")
             uploaded_file = st.file_uploader(
-                "อัปโหลดไฟล์ CSV ผลลัพธ์ 'best_seed' ของคุณ", type=['csv'], key="local_uploader"
+                "อัปโหลดไฟล์ CSV ของคุณ", type=['csv'], key="local_uploader"
             )
             if uploaded_file is not None:
                 try:
-                    st.session_state.df_to_analyze = pd.read_csv(uploaded_file)
-                    st.rerun() 
+                    st.session_state.df_for_analysis = pd.read_csv(uploaded_file)
+                    st.success("✅ โหลดไฟล์สำเร็จ!")
+                    # ไม่ต้อง rerun, ให้ script ทำงานต่อไป
                 except Exception as e:
                     st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
-                    st.session_state.df_to_analyze = None
-
-        elif st.session_state.import_method == 'โหลดจาก GitHub URL':
+                    st.session_state.df_for_analysis = None
+        
+        with col2:
+            # --- โหลดจาก GitHub ---
+            st.markdown("##### 2. หรือ โหลดจาก GitHub URL")
             github_url = st.text_input(
                 "ป้อน GitHub URL ของไฟล์ CSV:", 
-                placeholder="เช่น https://github.com/user/repo/blob/main/data.csv",
+                placeholder="https://github.com/.../file.csv",
                 key="github_url_input"
             )
             if st.button("📥 โหลดข้อมูลจาก GitHub"):
                 if github_url:
                     try:
                         raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
-                        with st.spinner(f"กำลังดาวน์โหลดข้อมูลจาก {raw_url}..."):
-                            st.session_state.df_to_analyze = pd.read_csv(raw_url)
-                        st.rerun()
+                        with st.spinner(f"กำลังดาวน์โหลดข้อมูล..."):
+                            st.session_state.df_for_analysis = pd.read_csv(raw_url)
+                        st.success("✅ โหลดข้อมูลจาก GitHub สำเร็จ!")
                     except Exception as e:
                         st.error(f"❌ ไม่สามารถโหลดข้อมูลจาก URL ได้: {e}")
-                        st.session_state.df_to_analyze = None
+                        st.session_state.df_for_analysis = None
                 else:
                     st.warning("กรุณาป้อน URL ของไฟล์ CSV")
+    
+    st.divider() # เส้นคั่น
 
     # --- ส่วนของการวิเคราะห์ (จะทำงานเมื่อมีข้อมูลใน state เท่านั้น) ---
-    if st.session_state.df_to_analyze is not None:
-        st.success("ข้อมูลพร้อมสำหรับการวิเคราะห์แล้ว!")
-        df_to_analyze = st.session_state.df_to_analyze
+    if st.session_state.df_for_analysis is not None:
+        st.subheader("ผลการวิเคราะห์")
+        df_to_analyze = st.session_state.df_for_analysis
 
         try:
             required_cols = ['window_number', 'timeline', 'max_net', 'best_seed', 'price_change_pct', 'action_sequence', 'window_size']
@@ -476,24 +448,19 @@ with tab3:
                 ])
 
                 with overview_tab:
+                    #... (ส่วนนี้เหมือนเดิม) ...
                     st.subheader("ภาพรวมประสิทธิภาพ (Overall Performance)")
                     gross_profit = df[df['max_net'] > 0]['max_net'].sum()
                     gross_loss = abs(df[df['max_net'] < 0]['max_net'].sum())
                     profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
                     win_rate = (df['result'] == 'Win').mean() * 100
-
                     kpi_cols = st.columns(4)
                     kpi_cols[0].metric("Total Net Profit", f"${df['max_net'].sum():,.2f}")
                     kpi_cols[1].metric("Win Rate", f"{win_rate:.2f}%")
                     kpi_cols[2].metric("Profit Factor", f"{profit_factor:.2f}")
                     kpi_cols[3].metric("Total Windows", f"{df.shape[0]}")
-
                     st.subheader("สำรวจข้อมูลราย Window")
-                    selected_window = st.selectbox(
-                        'เลือก Window ที่ต้องการดูรายละเอียด:',
-                        options=df['window_number'],
-                        format_func=lambda x: f"Window #{x} (Timeline: {df.loc[df['window_number'] == x, 'timeline'].iloc[0]})"
-                    )
+                    selected_window = st.selectbox('เลือก Window ที่ต้องการดูรายละเอียด:', options=df['window_number'], format_func=lambda x: f"Window #{x} (Timeline: {df.loc[df['window_number'] == x, 'timeline'].iloc[0]})")
                     if selected_window:
                         window_data = df[df['window_number'] == selected_window].iloc[0]
                         st.markdown(f"**รายละเอียดของ Window #{selected_window}**")
@@ -522,14 +489,15 @@ with tab3:
                     stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
                     
                     dna_cols = st.columns(2)
-                    stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value='NEGG')
-                    stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime(2023, 1, 1))
+                    stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value='NEGG', key='stitch_ticker_input')
+                    stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime(2023, 1, 1), key='stitch_date_input')
 
                     if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", key='stitch_dna_btn'):
                         if not stitched_actions:
                             st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้")
                         else:
                             with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker}..."):
+                                # ... (ส่วนการคำนวณ DNA เหมือนเดิมทุกประการ) ...
                                 sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now()))
                                 if sim_data.empty:
                                     st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
@@ -537,28 +505,22 @@ with tab3:
                                     prices = sim_data['Close'].tolist()
                                     n_total = len(prices)
                                     final_actions_dna = stitched_actions[:n_total]
-                                    
                                     _, sumusd_dna, _, _, _, refer_dna = calculate_optimized(final_actions_dna, prices[:len(final_actions_dna)])
                                     stitched_net = sumusd_dna - refer_dna - sumusd_dna[0]
-
                                     max_actions = get_max_action(prices)
                                     _, sumusd_max, _, _, _, refer_max = calculate_optimized(max_actions, prices)
                                     max_net = sumusd_max - refer_max - sumusd_max[0]
-
                                     min_actions = np.ones(n_total, dtype=int).tolist()
                                     _, sumusd_min, _, _, _, refer_min = calculate_optimized(min_actions, prices)
                                     min_net = sumusd_min - refer_min - sumusd_min[0]
-
                                     plot_len = len(stitched_net)
                                     plot_df = pd.DataFrame({
                                         'Max Performance (Perfect)': max_net[:plot_len],
                                         'Stitched DNA Strategy': stitched_net,
                                         'Min Performance (Rebalance Daily)': min_net[:plot_len]
                                     }, index=sim_data.index[:plot_len])
-
                                     st.subheader("Performance Comparison (Net Profit)")
                                     st.line_chart(plot_df)
-
                                     st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
                                     metric_cols = st.columns(3)
                                     metric_cols[0].metric("Max Performance (at DNA End)", f"${max_net[plot_len-1]:,.2f}")
@@ -568,7 +530,7 @@ with tab3:
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล: {e}")
             st.exception(e)
-            
+           
 # --- ส่วนคำอธิบายท้ายหน้า ---
 st.write("---")
 st.write("📖 คำอธิบายวิธีการทำงาน")
