@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from datetime import datetime, timedelta
 import ast
+import plotly.express as px
 
 # การตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
@@ -145,101 +146,6 @@ def find_best_seed_sliding_window_optimized(price_list, ticker_data_with_dates=N
             progress_bar.progress((i + 1) / num_windows)
     return final_actions, window_details
 
-# ==============================================================================
-# ===== ส่วนของฟังก์ชัน Rolling Window (ใหม่สำหรับ Tab 4) =====
-# ==============================================================================
-
-def find_best_seed_rolling_window_optimized(price_list, ticker_data_with_dates=None, window_size=30, num_seeds_to_try=1000, progress_bar=None, max_workers=4):
-    prices = np.asarray(price_list)
-    n = len(prices)
-    if n < window_size:
-        st.error(f"ข้อมูลไม่เพียงพอ! ต้องการอย่างน้อย {window_size} วัน แต่มีเพียง {n} วัน")
-        return np.ones(n, dtype=int), []
-    final_actions = np.zeros(n, dtype=int)
-    final_actions[0] = 1  # วันแรกต้อง action
-    window_details = []
-    num_windows = n - window_size + 1
-    st.write("🔄 **เริ่มต้นการค้นหา Best Seed ด้วย Rolling Window (Optimized)**")
-    st.write(f"📊 ข้อมูลทั้งหมด: {n} วัน | ขนาด Window: {window_size} วัน | จำนวน Windows: {num_windows}")
-    st.write(f"⚡ ใช้ Parallel Processing: {max_workers} workers")
-    st.write("---")
-    for i in range(num_windows):
-        start_index = i
-        end_index = i + window_size
-        prices_window = prices[start_index:end_index]
-        window_len = len(prices_window)
-        if ticker_data_with_dates is not None:
-            start_date = ticker_data_with_dates.index[start_index].strftime('%Y-%m-%d')
-            end_date = ticker_data_with_dates.index[end_index-1].strftime('%Y-%m-%d')
-            timeline_info = f"{start_date} ถึง {end_date}"
-        else:
-            timeline_info = f"Index {start_index} ถึง {end_index-1}"
-        best_seed_for_window = -1
-        max_net_for_window = -np.inf
-        random_seeds = np.arange(num_seeds_to_try)
-        batch_size = max(1, num_seeds_to_try // max_workers)
-        seed_batches = [random_seeds[j:j+batch_size] for j in range(0, len(random_seeds), batch_size)]
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_batch = {
-                executor.submit(evaluate_seed_batch, batch, prices_window, window_len): batch
-                for batch in seed_batches
-            }
-            all_results = []
-            for future in as_completed(future_to_batch):
-                batch_results = future.result()
-                all_results.extend(batch_results)
-        for seed, final_net in all_results:
-            if final_net > max_net_for_window:
-                max_net_for_window = final_net
-                best_seed_for_window = seed
-        if best_seed_for_window >= 0:
-            rng_best = np.random.default_rng(best_seed_for_window)
-            best_actions_for_window = rng_best.integers(0, 2, size=window_len)
-            best_actions_for_window[0] = 1
-        else:
-            best_actions_for_window = np.ones(window_len, dtype=int)
-            max_net_for_window = 0
-        # สำหรับ Rolling Window เราจะใช้เฉพาะ action ของวันสุดท้ายใน window
-        if i == 0:
-            for j in range(window_len):
-                final_actions[start_index + j] = best_actions_for_window[j]
-        else:
-            final_actions[end_index - 1] = best_actions_for_window[-1]
-        window_detail = {
-            'window_number': i + 1,
-            'timeline': timeline_info,
-            'start_index': start_index,
-            'end_index': end_index - 1,
-            'window_size': window_len,
-            'best_seed': best_seed_for_window,
-            'max_net': round(max_net_for_window, 2),
-            'start_price': round(prices_window[0], 2),
-            'end_price': round(prices_window[-1], 2),
-            'price_change_pct': round(((prices_window[-1] / prices_window[0]) - 1) * 100, 2),
-            'action_count': int(np.sum(best_actions_for_window)),
-            'action_sequence': best_actions_for_window.tolist(),
-            'selected_action': int(best_actions_for_window[-1])
-        }
-        window_details.append(window_detail)
-        if (i + 1) % 10 == 0 or i == num_windows - 1:
-            st.write(f"**🔄 Window {i+1}/{num_windows}** | {timeline_info}")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Best Seed", f"{best_seed_for_window:}")
-            with col2:
-                st.metric("Net Profit", f"{max_net_for_window:.2f}")
-            with col3:
-                st.metric("Price Change", f"{window_detail['price_change_pct']:.2f}%")
-            with col4:
-                st.metric("Selected Action", f"{window_detail['selected_action']}")
-        if progress_bar:
-            progress_bar.progress((i + 1) / num_windows)
-    return final_actions, window_details
-
-# ==============================================================================
-# ===== ส่วนของฟังก์ชันคำนวณอื่นๆ (เหมือนเดิม) =====
-# ==============================================================================
-
 def get_max_action_vectorized(price_list, fix=1500):
     prices = np.asarray(price_list, dtype=np.float64)
     n = len(prices)
@@ -299,7 +205,7 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_worke
         actions = np.array(np.ones(len(prices)), dtype=np.int64)
     elif act == -2:
         actions = get_max_action(prices)
-    elif act == -3:  # Sliding Window
+    elif act == -3:
         progress_bar = st.progress(0)
         actions, window_details = find_best_seed_sliding_window_optimized(
             prices, tickerData, window_size=window_size,
@@ -307,7 +213,7 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_worke
             max_workers=max_workers
         )
         st.write("---")
-        st.write("📈 **สรุปผลการค้นหา Best Seed (Sliding Window)**")
+        st.write("📈 **สรุปผลการค้นหา Best Seed**")
         total_windows = len(window_details)
         total_actions = sum([w['action_count'] for w in window_details])
         total_net = sum([w['max_net'] for w in window_details])
@@ -326,40 +232,6 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_worke
         df_display.columns = ['Window', 'Timeline', 'Best Seed', 'Net Profit',
                             'Price Change %', 'Actions', 'Window Size']
         st.dataframe(df_display, use_container_width=True)
-    elif act == -4:  # Rolling Window (ใหม่)
-        progress_bar = st.progress(0)
-        actions, window_details = find_best_seed_rolling_window_optimized(
-            prices, tickerData, window_size=window_size,
-            num_seeds_to_try=num_seeds_to_try, progress_bar=progress_bar,
-            max_workers=max_workers
-        )
-        st.write("---")
-        st.write("🔄 **สรุปผลการค้นหา Best Seed (Rolling Window)**")
-        total_windows = len(window_details)
-        total_actions = np.sum(actions)
-        total_net = sum([w['max_net'] for w in window_details])
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Windows", total_windows)
-        with col2:
-            st.metric("Total Actions", f"{total_actions}/{len(actions)}")
-        with col3:
-            st.metric("Total Net (Sum)", f"{total_net:.2f}")
-        st.write("📋 **รายละเอียดแต่ละ Window (แสดง 10 รายการแรกและสุดท้าย)**")
-        df_details = pd.DataFrame(window_details)
-        df_details_output = df_details.copy()
-        df_display = df_details[['window_number', 'timeline', 'best_seed', 'max_net',
-                               'price_change_pct', 'selected_action', 'window_size']].copy()
-        df_display.columns = ['Window', 'Timeline', 'Best Seed', 'Net Profit',
-                            'Price Change %', 'Selected Action', 'Window Size']
-        if len(df_display) > 20:
-            st.write("**10 Windows แรก:**")
-            st.dataframe(df_display.head(10), use_container_width=True)
-            st.write("**10 Windows สุดท้าย:**")
-            st.dataframe(df_display.tail(10), use_container_width=True)
-            st.write(f"*(ซ่อน {len(df_display)-20} windows ตรงกลาง)*")
-        else:
-            st.dataframe(df_display, use_container_width=True)
     else:
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
@@ -381,33 +253,34 @@ def Limit_fx(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_worke
 
 def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, max_workers=4, start_date=None, end_date=None):
     df_min, _ = Limit_fx(Ticker, act=-1, start_date=start_date, end_date=end_date)
+    
     if act == -3:
         df_strategy, df_details = Limit_fx(Ticker, act=act, window_size=window_size,
                                num_seeds_to_try=num_seeds_to_try, max_workers=max_workers,
                                start_date=start_date, end_date=end_date)
-        strategy_name = 'best_seed_sliding'
-    elif act == -4:  # Rolling Window
-        df_strategy, df_details = Limit_fx(Ticker, act=act, window_size=window_size,
-                               num_seeds_to_try=num_seeds_to_try, max_workers=max_workers,
-                               start_date=start_date, end_date=end_date)
-        strategy_name = 'best_seed_rolling'
+        strategy_name = 'best_seed'
     else:
         df_strategy, _ = Limit_fx(Ticker, act=act, start_date=start_date, end_date=end_date)
         strategy_name = f'fx_{act}'
         df_details = None
+
     df_max, _ = Limit_fx(Ticker, act=-2, start_date=start_date, end_date=end_date)
+    
     chart_data_list = []
     if not df_min.empty: chart_data_list.append(df_min[['net']].rename(columns={'net':'min'}))
     if not df_strategy.empty: chart_data_list.append(df_strategy[['net']].rename(columns={'net':strategy_name}))
     if not df_max.empty: chart_data_list.append(df_max[['net']].rename(columns={'net':'max'}))
+
     if chart_data_list:
         chart_data = pd.concat(chart_data_list, axis=1)
         st.write('📊 **Refer_Log Comparison**')
         st.line_chart(chart_data)
+    
     if not df_min.empty:
         df_plot = df_min[['buffer']].cumsum()
         st.write('💰 **Burn_Cash (Strategy: Rebalance Daily)**')
         st.line_chart(df_plot)
+    
     return df_details
 
 # ==============================================================================
@@ -428,9 +301,9 @@ if 'max_workers' not in st.session_state:
     st.session_state.max_workers = 8
 
 st.write("🎯 Best Seed Sliding Window Tester (Optimized)")
-st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window และ Rolling Window สำหรับการเทรด (ปรับปรุงความเร็ว)")
+st.write("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window สำหรับการเทรด (ปรับปรุงความเร็ว)")
 
-tab1, tab2, tab3, tab4 = st.tabs(["การตั้งค่า", "ทดสอบ Sliding", "📊 Advanced Analytics Dashboard", "🔄 ทดสอบ Rolling"])
+tab1, tab2, tab3 = st.tabs(["การตั้งค่า", "ทดสอบ", "📊 Advanced Analytics Dashboard"])
 
 with tab1:
     st.write("⚙️ การตั้งค่า")
@@ -456,17 +329,18 @@ with tab1:
 
 with tab2:
     st.write("---")
-    if st.button("🚀 เริ่มทดสอบ Best Seed (Sliding Window)", type="primary"):
+    if st.button("🚀 เริ่มทดสอบ Best Seed (Optimized)", type="primary"):
         if st.session_state.start_date >= st.session_state.end_date:
             st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'")
         else:
-            st.write(f"กำลังทดสอบ Best Seed (Sliding Window) สำหรับ **{st.session_state.test_ticker}** 📊")
+            st.write(f"กำลังทดสอบ Best Seed สำหรับ **{st.session_state.test_ticker}** 📊")
             st.write(f"📅 ช่วงวันที่: {st.session_state.start_date.strftime('%Y-%m-%d')} ถึง {st.session_state.end_date.strftime('%Y-%m-%d')}")
             st.write(f"⚙️ พารามิเตอร์: Window Size = {st.session_state.window_size}, Seeds per Window = {st.session_state.num_seeds}, Workers = {st.session_state.max_workers}")
             st.write("---")
             try:
                 start_date_str = st.session_state.start_date.strftime('%Y-%m-%d')
                 end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
+                
                 df_windows = plot_comparison(
                     Ticker=st.session_state.test_ticker, act=-3,
                     window_size=st.session_state.window_size,
@@ -474,6 +348,7 @@ with tab2:
                     max_workers=st.session_state.max_workers,
                     start_date=start_date_str, end_date=end_date_str
                 )
+                
                 if df_windows is not None:
                     st.write("---")
                     st.write("🔍 **การวิเคราะห์เพิ่มเติม**")
@@ -481,19 +356,21 @@ with tab2:
                     st.bar_chart(df_windows.set_index('window_number')['max_net'])
                     st.write("📈 **Price Change % แต่ละ Window**")
                     st.bar_chart(df_windows.set_index('window_number')['price_change_pct'])
+                    
                     st.write("💾 **ดาวน์โหลดผลลัพธ์**")
                     csv = df_windows.to_csv(index=False)
                     st.download_button(
                         label="📥 ดาวน์โหลด Window Details (CSV)",
                         data=csv,
-                        file_name=f'best_seed_sliding_{st.session_state.test_ticker}_{st.session_state.window_size}w_{st.session_state.num_seeds}s.csv',
+                        file_name=f'best_seed_results_{st.session_state.test_ticker}_{st.session_state.window_size}w_{st.session_state.num_seeds}s.csv',
                         mime='text/csv'
                     )
                     st.success("การทดสอบเสร็จสมบูรณ์!")
+
             except Exception as e:
                 st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
                 st.exception(e)
-                
+
 # ==============================================================================
 # ===== Tab 3: Advanced Analytics Dashboard (ฉบับแก้ไขตามหลักการ) =====
 # ==============================================================================
@@ -658,53 +535,8 @@ with tab3:
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล: {e}")
             st.exception(e)
-            
-with tab4:
-    st.write("---")
-    st.header("🔄 ทดสอบ Best Seed แบบ Rolling Window (ใหม่)")
-    st.write("**Rolling Window:** เลื่อนหน้าต่างทีละ 1 วัน เพื่อค้นหา Best Seed ที่เหมาะสมในแต่ละช่วง")
-    if st.button("🚀 เริ่มทดสอบ Best Seed (Rolling Window)", type="primary", key="rolling_btn"):
-        if st.session_state.start_date >= st.session_state.end_date:
-            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'")
-        else:
-            st.write(f"กำลังทดสอบ Best Seed (Rolling Window) สำหรับ **{st.session_state.test_ticker}** 📊")
-            st.write(f"📅 ช่วงวันที่: {st.session_state.start_date.strftime('%Y-%m-%d')} ถึง {st.session_state.end_date.strftime('%Y-%m-%d')}")
-            st.write(f"⚙️ พารามิเตอร์: Window Size = {st.session_state.window_size}, Seeds per Window = {st.session_state.num_seeds}, Workers = {st.session_state.max_workers}")
-            st.write("---")
-            try:
-                start_date_str = st.session_state.start_date.strftime('%Y-%m-%d')
-                end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
-                df_windows = plot_comparison(
-                    Ticker=st.session_state.test_ticker, act=-4,
-                    window_size=st.session_state.window_size,
-                    num_seeds_to_try=st.session_state.num_seeds,
-                    max_workers=st.session_state.max_workers,
-                    start_date=start_date_str, end_date=end_date_str
-                )
-                if df_windows is not None:
-                    st.write("---")
-                    st.write("🔍 **การวิเคราะห์เพิ่มเติม (Rolling Window)**")
-                    st.write("📊 **Net Profit แต่ละ Window**")
-                    st.bar_chart(df_windows.set_index('window_number')['max_net'])
-                    st.write("📈 **Price Change % แต่ละ Window**")
-                    st.bar_chart(df_windows.set_index('window_number')['price_change_pct'])
-                    st.write("💾 **ดาวน์โหลดผลลัพธ์**")
-                    csv = df_windows.to_csv(index=False)
-                    st.download_button(
-                        label="📥 ดาวน์โหลด Window Details (CSV)",
-                        data=csv,
-                        file_name=f'best_seed_rolling_{st.session_state.test_ticker}_{st.session_state.window_size}w_{st.session_state.num_seeds}s.csv',
-                        mime='text/csv'
-                    )
-                    st.success("การทดสอบเสร็จสมบูรณ์!")
-            except Exception as e:
-                st.error(f"❌ เกิดข้อผิดพลาด: {str(e)}")
-                st.exception(e)
-
-# ==============================================================================
-# ===== ส่วนคำอธิบายท้ายหน้า (เพิ่มเติม Rolling Window) =====
-# ==============================================================================
-
+           
+# --- ส่วนคำอธิบายท้ายหน้า ---
 st.write("---")
 st.write("📖 คำอธิบายวิธีการทำงาน")
 with st.expander("🔍 Best Seed Sliding Window คืออะไร?"):
@@ -715,14 +547,6 @@ with st.expander("🔍 Best Seed Sliding Window คืออะไร?"):
     3. **เลือก Best Seed**: เลือก seed ที่ให้ผลกำไรสูงสุดในแต่ละ window
     4. **รวม Actions**: นำ action sequences จากแต่ละ window มาต่อกันเป็น sequence สุดท้าย
     """)
-
-with st.expander("🔄 Rolling Window ต่างจาก Sliding อย่างไร?"):
-    st.write("""
-    **Rolling Window** จะเลื่อนหน้าต่างทีละ 1 วัน (overlap กัน) ขณะที่ **Sliding Window** จะกระโดดทีละ window size
-    - Rolling Window เหมาะกับการจับสัญญาณเปลี่ยนแปลงที่เกิดขึ้นต่อเนื่อง
-    - ผลลัพธ์จะละเอียดกว่าและสะท้อนสัญญาณในแต่ละวันมากขึ้น
-    """)
-
 with st.expander("⚙️ การตั้งค่าพารามิเตอร์"):
     st.write("""
     **Window Size (ขนาด Window):**
@@ -732,7 +556,6 @@ with st.expander("⚙️ การตั้งค่าพารามิเต�
     - น้อย (100-500): เร็วแต่อาจไม่ได้ seed ที่ดีที่สุด
     - มาก (2000+): ได้ผลลัพธ์ดีแต่ใช้เวลานาน
     """)
-
 with st.expander("⚡ การปรับปรุงความเร็ว"):
     st.write("""
     **การปรับปรุงที่ทำ:**
