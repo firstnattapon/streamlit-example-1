@@ -246,8 +246,8 @@ x_8 = QXO_OPTION + QXO_REAL
 
 x_5 = col20.number_input('RIVN_ASSET', step=0.001, value=RIVN_ASSET_LAST)
 
-RXRX_OPTION = 278.
-RXRX_REAL = col21.number_input('RXRX (LV:278@5.4)', step=0.001, value=RXRX_ASSET_LAST)
+RXRX_OPTION = 200.
+RXRX_REAL = col21.number_input('RXRX (LV:200@5.4)', step=0.001, value=RXRX_ASSET_LAST)
 x_9 = RXRX_OPTION + RXRX_REAL
 
 st.write("_____")
