@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from datetime import datetime, timedelta
 import ast
-import plotly.express as px
+import plotly.express as px 
 
 # การตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
