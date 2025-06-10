@@ -235,7 +235,7 @@ def Gen_fx (Ticker =  'FFWM' ,  field = 2 ):
 
 
 
-tab1, tab2, tab3, tab4, tab5 , tab6 , tab7  = st.tabs(["FFWM", "NEGG", "RIVN", "APLS", "NVTS" , 'QXO' ,  'RXRX'])
+tab1, tab2, tab3, tab4, tab5 , tab6 , tab7  , tab8= st.tabs(["FFWM", "NEGG", "RIVN", "APLS", "NVTS" , 'QXO' ,  'RXRX' , 'AGL'])
 
 with tab1:
     # FFWM_Check_Gen = st.checkbox('FFWM_Add_Gen')
