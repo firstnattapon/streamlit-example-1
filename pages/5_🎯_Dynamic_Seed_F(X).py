@@ -309,8 +309,8 @@ with tab1:
     st.write("⚙️ การตั้งค่า")
     st.session_state.test_ticker = st.selectbox(
         "เลือก Ticker สำหรับทดสอบ",
-        ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'],
-        index=['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'].index(st.session_state.test_ticker)
+        ['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX' , 'AGL'],
+        index=['FFWM', 'NEGG', 'RIVN', 'APLS', 'NVTS', 'QXO', 'RXRX'  , 'AGL'].index(st.session_state.test_ticker)
     )
     st.write("📅 **ช่วงวันที่สำหรับการวิเคราะห์**")
     col1, col2 = st.columns(2)
