@@ -11,12 +11,10 @@ from threading import Lock
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide")
 
-# Global variables for caching
 _cache_lock = Lock()
 _price_cache = {}
 _cache_timestamp = {}
 
-# Initialize clients once
 @st.cache_resource
 def get_clients():
     channel_id = 2528199
@@ -31,18 +29,13 @@ def get_clients():
 
 client, client_2 = get_clients()
 
-# Function to clear all caches
 def clear_all_caches():
-    """Clear all caches and rerun"""
-    # Clear Streamlit caches
     st.cache_data.clear()
     st.cache_resource.clear()
     
-    # Clear lru_cache
     sell.cache_clear()
     buy.cache_clear()
     
-    # Clear manual price cache
     with _cache_lock:
         _price_cache.clear()
         _cache_timestamp.clear()
@@ -50,7 +43,6 @@ def clear_all_caches():
     st.success("🗑️ Clear ALL caches complete!")
     st.rerun()
 
-# Optimized calculation functions
 @lru_cache(maxsize=128)
 def sell(asset, fix_c=1500, Diff=60):
     if asset == 0:
@@ -77,9 +69,7 @@ def buy(asset, fix_c=1500, Diff=60):
     b7 = (asset * b2) - b6
     return b2, b5, round(b7, 2)
 
-# Cached price fetching
 def get_cached_price(ticker, max_age=30):
-    """Get cached price with expiration"""
     current_time = datetime.datetime.now()
     
     with _cache_lock:
@@ -97,8 +87,7 @@ def get_cached_price(ticker, max_age=30):
     except:
         return 0.0
 
-# Optimized Monitor function with caching
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300)
 def Monitor(Ticker='FFWM', field=2):
     try:
         tickerData = yf.Ticker(Ticker)
@@ -125,17 +114,14 @@ def Monitor(Ticker='FFWM', field=2):
         st.error(f"Error in Monitor function for {Ticker}: {str(e)}")
         return pd.DataFrame(), 0
 
-# Parallel data fetching
 def fetch_monitor_data():
-    """Fetch all monitor data in parallel"""
-    # เรียงลำดับ A-Z: APLS, FFWM, NEGG, NVTS, QXO, RIVN, RXRX
     tickers_fields = [
-        ('APLS', 5), ('FFWM', 2), ('NEGG', 3), ('NVTS', 6), 
+        ('AGL', 1), ('APLS', 5), ('FFWM', 2), ('NEGG', 3), ('NVTS', 6), 
         ('QXO', 7), ('RIVN', 4), ('RXRX', 8)
     ]
     
     results = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(tickers_fields)) as executor:
         future_to_ticker = {
             executor.submit(Monitor, ticker, field): ticker 
             for ticker, field in tickers_fields
@@ -151,22 +137,19 @@ def fetch_monitor_data():
     
     return results
 
-# Fetch all monitor data
 monitor_results = fetch_monitor_data()
-# เรียงลำดับ A-Z
-df_7_3, fx_js_3 = monitor_results.get('APLS', (pd.DataFrame(), 0))    # APLS
-df_7, fx_js = monitor_results.get('FFWM', (pd.DataFrame(), 0))        # FFWM
-df_7_1, fx_js_1 = monitor_results.get('NEGG', (pd.DataFrame(), 0))    # NEGG
-df_7_4, fx_js_4 = monitor_results.get('NVTS', (pd.DataFrame(), 0))    # NVTS
-df_7_5, fx_js_5 = monitor_results.get('QXO', (pd.DataFrame(), 0))     # QXO
-df_7_2, fx_js_2 = monitor_results.get('RIVN', (pd.DataFrame(), 0))    # RIVN
-df_7_6, fx_js_6 = monitor_results.get('RXRX', (pd.DataFrame(), 0))    # RXRX
+df_AGL, fx_js_AGL = monitor_results.get('AGL', (pd.DataFrame(), 0))
+df_7_3, fx_js_3 = monitor_results.get('APLS', (pd.DataFrame(), 0))
+df_7, fx_js = monitor_results.get('FFWM', (pd.DataFrame(), 0))
+df_7_1, fx_js_1 = monitor_results.get('NEGG', (pd.DataFrame(), 0))
+df_7_4, fx_js_4 = monitor_results.get('NVTS', (pd.DataFrame(), 0))
+df_7_5, fx_js_5 = monitor_results.get('QXO', (pd.DataFrame(), 0))
+df_7_2, fx_js_2 = monitor_results.get('RIVN', (pd.DataFrame(), 0))
+df_7_6, fx_js_6 = monitor_results.get('RXRX', (pd.DataFrame(), 0))
 
-# Cached asset fetching
 @st.cache_data(ttl=60)
 def get_all_assets():
-    """Fetch all assets in parallel"""
-    fields = ['field1', 'field2', 'field3', 'field4', 'field5', 'field6', 'field7']
+    fields = ['field1', 'field2', 'field3', 'field4', 'field5', 'field6', 'field7', 'field8']
     assets = {}
     
     def fetch_asset(field):
@@ -176,7 +159,7 @@ def get_all_assets():
         except:
             return 0.0
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(fields)) as executor:
         future_to_field = {executor.submit(fetch_asset, field): field for field in fields}
         
         for future in concurrent.futures.as_completed(future_to_field):
@@ -188,23 +171,20 @@ def get_all_assets():
     
     return assets
 
-# Get all assets
 all_assets = get_all_assets()
-# เรียงลำดับ A-Z ตาม field mapping
-APLS_ASSET_LAST = all_assets.get('field4', 0.0)    # APLS = field4
-FFWM_ASSET_LAST = all_assets.get('field1', 0.0)    # FFWM = field1
-NEGG_ASSET_LAST = all_assets.get('field2', 0.0)    # NEGG = field2
-NVTS_ASSET_LAST = all_assets.get('field5', 0.0)    # NVTS = field5
-QXO_ASSET_LAST = all_assets.get('field6', 0.0)     # QXO = field6
-RIVN_ASSET_LAST = all_assets.get('field3', 0.0)    # RIVN = field3
-RXRX_ASSET_LAST = all_assets.get('field7', 0.0)    # RXRX = field7
+AGL_ASSET_LAST = all_assets.get('field8', 0.0)
+APLS_ASSET_LAST = all_assets.get('field4', 0.0)
+FFWM_ASSET_LAST = all_assets.get('field1', 0.0)
+NEGG_ASSET_LAST = all_assets.get('field2', 0.0)
+NVTS_ASSET_LAST = all_assets.get('field5', 0.0)
+QXO_ASSET_LAST = all_assets.get('field6', 0.0)
+RIVN_ASSET_LAST = all_assets.get('field3', 0.0)
+RXRX_ASSET_LAST = all_assets.get('field7', 0.0)
 
-# Initialize variables
 nex = 0
 Nex_day_sell = 0
 toggle = lambda x: 1 - x
 
-# UI Components
 Nex_day_ = st.checkbox('nex_day')
 if Nex_day_:
     st.write("value = ", nex)
@@ -222,15 +202,14 @@ if Nex_day_:
 
 st.write("_____")
 
-col13, col16, col14, col15, col17, col18, col19, col20, col21 = st.columns(9)
+col13, col16, col22, col14, col15, col17, col18, col19, col20, col21 = st.columns(10)
 
 x_2 = col16.number_input('Diff', step=1, value=60)
 
-# Asset input section (optimized) - เรียงลำดับ A-Z
 Start = col13.checkbox('start')
 if Start:
-    # เรียงลำดับ A-Z: APLS, FFWM, NEGG, NVTS, QXO, RIVN, RXRX
     asset_configs = [
+        ('AGL', 'field8', AGL_ASSET_LAST),
         ('APLS', 'field4', APLS_ASSET_LAST),
         ('FFWM', 'field1', FFWM_ASSET_LAST),
         ('NEGG', 'field2', NEGG_ASSET_LAST),
@@ -245,15 +224,17 @@ if Start:
         thingspeak_checkbox = col13.checkbox(checkbox_key)
         if thingspeak_checkbox:
             add_val = col13.number_input(checkbox_key, step=0.001, value=0., key=f'input_{name}')
-            button_key = f"GO{'!' * (i+1)}"
+            button_key = f"GO_{name}"
             asset_button = col13.button(button_key, key=f'btn_{name}')
             if asset_button:
                 client.update({field: add_val})
                 col13.write(add_val)
-                # Clear all caches after updating asset
                 clear_all_caches()
 
-# Input fields - เรียงลำดับ A-Z
+AGL_OPTION = 500.
+AGL_REAL = col22.number_input('AGL (LV:500@3.0)', step=0.001, value=AGL_ASSET_LAST)
+x_10 = AGL_OPTION + AGL_REAL
+
 x_6 = col14.number_input('APLS_ASSET', step=0.001, value=APLS_ASSET_LAST)
 x_4 = col15.number_input('FFWM_ASSET', step=0.001, value=FFWM_ASSET_LAST)
 x_3 = col17.number_input('NEGG_ASSET', step=0.001, value=NEGG_ASSET_LAST)
@@ -271,25 +252,18 @@ x_9 = RXRX_OPTION + RXRX_REAL
 
 st.write("_____")
 
-# Pre-calculate all buy/sell values - เรียงลำดับ A-Z
 calculations = {}
-# เรียงลำดับ A-Z: APLS, FFWM, NEGG, NVTS, QXO, RIVN, RXRX
-assets = [x_6, x_4, x_3, x_7, x_8, x_5, x_9]
-asset_names = ['APLS', 'FFWM', 'NEGG', 'NVTS', 'QXO', 'RIVN', 'RXRX']
+assets = [x_10, x_6, x_4, x_3, x_7, x_8, x_5, x_9]
+asset_names = ['AGL', 'APLS', 'FFWM', 'NEGG', 'NVTS', 'QXO', 'RIVN', 'RXRX']
 
 for i, (asset, name) in enumerate(zip(assets, asset_names)):
-    # ใช้ fix_c=2100 สำหรับ NVTS เท่านั้น
     fix_c = 2100 if name == 'NVTS' else 1500
     calculations[name] = {
         'sell': sell(asset, fix_c=fix_c, Diff=x_2),
         'buy': buy(asset, fix_c=fix_c, Diff=x_2)
     }
 
-# Helper function for trading sections
 def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, calculations_key, nex, Nex_day_sell):
-    """Create standardized trading section"""
-    
-    # Get action value safely
     try:
         action_val = np.where(
             Nex_day_sell == 1,
@@ -299,50 +273,43 @@ def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, ca
     except:
         action_val = 0
     
-    limit_order = st.checkbox(f'Limut_Order_{ticker}', value=action_val)
+    limit_order = st.checkbox(f'Limut_Order_{ticker}', value=bool(action_val), key=f'limit_order_{ticker}')
     
     if limit_order:
         sell_calc = calculations[calculations_key]['sell']
         buy_calc = calculations[calculations_key]['buy']
         
-        # Sell section
         st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
         
         col1, col2, col3 = st.columns(3)
         sell_match = col3.checkbox(f'sell_match_{ticker}')
         if sell_match:
-            go_sell = col3.button(f"GO!{'!' * field_num}")
+            go_sell = col3.button(f"GO_SELL_{ticker}")
             if go_sell:
                 client.update({f'field{field_num}': asset_last - buy_calc[1]})
                 col3.write(asset_last - buy_calc[1])
-                # Clear all caches after sell transaction
                 clear_all_caches()
         
-        # Price info
         try:
             current_price = get_cached_price(ticker)
             pv = current_price * asset_val
-            ###################### สำหรับ NVTS ใช้ 2100 ในการคำนวณ
             fix_value = 2100 if ticker == 'NVTS' else 1500 
             st.write(current_price, pv, '(', pv - fix_value, ')')
         except:
             st.write("Price unavailable")
         
-        # Buy section
         col4, col5, col6 = st.columns(3)
         st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
         buy_match = col6.checkbox(f'buy_match_{ticker}')
         if buy_match:
-            go_buy = col6.button(f"GO!{'!' * (field_num + 3)}")
+            go_buy = col6.button(f"GO_BUY_{ticker}")
             if go_buy:
                 client.update({f'field{field_num}': asset_last + sell_calc[1]})
                 col6.write(asset_last + sell_calc[1])
-                # Clear all caches after buy transaction
                 clear_all_caches()
 
-# Trading sections - เรียงลำดับ A-Z
-# เรียงลำดับ A-Z: APLS, FFWM, NEGG, NVTS, QXO, RIVN, RXRX
 trading_configs = [
+    ('AGL', x_10, AGL_ASSET_LAST, df_AGL, 8, 'AGL'),
     ('APLS', x_6, APLS_ASSET_LAST, df_7_3, 4, 'APLS'),
     ('FFWM', x_4, FFWM_ASSET_LAST, df_7, 1, 'FFWM'),
     ('NEGG', x_3, NEGG_ASSET_LAST, df_7_1, 2, 'NEGG'),
@@ -357,4 +324,4 @@ for config in trading_configs:
     st.write("_____")
 
 if st.sidebar.button("RERUN"):
-    clear_all_caches() 
+    clear_all_caches()
