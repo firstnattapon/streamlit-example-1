@@ -395,3 +395,21 @@ with tab7:
             client.update(  {'field8': ix } )
             st.write(ix)     
     st.write("_____")
+
+with tab8:
+    AGL_Check_Gen_M = st.checkbox('AGL_Add_Gen_M')
+    if AGL_Check_Gen_M :    
+        input = st.number_input('Insert a number{}'.format(1),step=1 ,  key=1 )
+        re_ = st.button("Rerun_Gen_M_tab8")
+        if re_ :
+            client.update(  {'field1': input } )
+            st.write(input)  
+
+    AGL_njit = st.checkbox('AGL_njit')
+    if AGL_njit : 
+        AGL_njit_ = st.button("AGL_njit_")
+        if AGL_njit_ :
+            ix =  feed_data(data= 'AGL')
+            client.update(  {'field1': ix } )
+            st.write(ix)     
+    st.write("_____")
