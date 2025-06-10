@@ -177,6 +177,7 @@ channel_id = 2385118
 write_api_key = 'IPSG3MMMBJEB9DY8'
 client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
 
+
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 , Burn_Cash, Ref_index_Log, cf_log = st.tabs(["FFWM", "NEGG", "RIVN", 'APLS', 'NVTS', 'QXO(LV)', 'RXRX(LV)', 'AGL(LV)' ,'Burn_Cash', 'Ref_index_Log', 'cf_log'])
 with Ref_index_Log:
     tickers = ['FFWM', 'NEGG', 'RIVN', 'APLS' , 'NVTS' , 'QXO' , 'RXRX' , 'AGL' ]
@@ -298,6 +299,7 @@ import streamlit.components.v1 as components
 def iframe ( frame = ''):
   src = frame
   st.components.v1.iframe(src, width=1500 , height=800  , scrolling=0)
+
 
 with cf_log: 
     st.write('')
