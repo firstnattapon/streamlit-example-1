@@ -1,143 +1,163 @@
-import pandas as pd
-import numpy as np
-from numba import njit
-import yfinance as yf
 import streamlit as st
+import numpy as np
+import yfinance as yf
 import thingspeak
 import json
-import streamlit.components.v1 as components 
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Add_CF_V2", page_icon="🔥")
 
- 
-channel_id_log = 2329127
-write_api_key_log = 'V10DE0HKR4JKB014'
-client_log = thingspeak.Channel(channel_id_log, write_api_key_log)
-    
-channel_id = 2394198
-write_api_key = 'OVZNYQBL57GJW5JF'
-client = thingspeak.Channel(channel_id, write_api_key)
+# --- การตั้งค่าและเชื่อมต่อ THING SPEAK ---
+try:
+    # Channel สำหรับบันทึกข้อมูลหลัก
+    channel_id = 2394198
+    write_api_key = 'OVZNYQBL57GJW5JF'
+    client = thingspeak.Channel(channel_id, write_api_key)
 
-channel_id_2 = 2528199
-write_api_key_2 = '2E65V8XEIPH9B2VV'
-client_2 = thingspeak.Channel(channel_id_2, write_api_key_2 , fmt='json')
-
-FFWM_ASSET_LAST = client_2.get_field_last(field='field1')
-FFWM_ASSET_LAST =  eval(json.loads(FFWM_ASSET_LAST)['field1'])
-
-NEGG_ASSET_LAST = client_2.get_field_last(field='field2')
-NEGG_ASSET_LAST = eval(json.loads(NEGG_ASSET_LAST)['field2'])
-
-RIVN_ASSET_LAST = client_2.get_field_last(field='field3')
-RIVN_ASSET_LAST = eval(json.loads(RIVN_ASSET_LAST)['field3'])
-
-APLS_ASSET_LAST = client_2.get_field_last(field='field4')
-APLS_ASSET_LAST = eval(json.loads(APLS_ASSET_LAST)['field4'])
-
-NVTS_ASSET_LAST = client_2.get_field_last(field='field5')
-NVTS_ASSET_LAST = eval(json.loads(NVTS_ASSET_LAST)['field5'])
-
-QXO_ASSET_LAST = client_2.get_field_last(field='field6')
-QXO_ASSET_LAST = eval(json.loads(QXO_ASSET_LAST)['field6'])
-
-RXRX_ASSET_LAST = client_2.get_field_last(field='field7')
-RXRX_ASSET_LAST = eval(json.loads(RXRX_ASSET_LAST)['field7'])
-
-AGL_ASSET_LAST = client_2.get_field_last(field='field8')
-AGL_ASSET_LAST = eval(json.loads(AGL_ASSET_LAST)['field8'])
-
-x_1 = st.number_input('ราคา_NEGG_1.26 , 25.20' , step=0.01 ,  value =  yf.Ticker('NEGG').fast_info['lastPrice']   ) 
-x_2 = st.number_input('ราคา_FFWM_6.88', step=0.01  ,  value = yf.Ticker('FFWM').fast_info['lastPrice']   ) 
-x_3 = st.number_input('ราคา_RIVN_10.07', step=0.01 ,   value = yf.Ticker('RIVN').fast_info['lastPrice'] ) 
-x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] ) 
-x_5 = st.number_input('ราคา_NVTS_3.05', step=0.01, value=yf.Ticker('NVTS').fast_info['lastPrice'])
-x_6 = st.number_input('ราคา_QXO_19.00', step=0.01, value=yf.Ticker('QXO').fast_info['lastPrice'])
-x_7 = st.number_input('ราคา_RXRX_5.40', step=0.01, value=yf.Ticker('RXRX').fast_info['lastPrice'])
-x_8 = st.number_input('ราคา_AGL_3.00', step=0.01, value=yf.Ticker('AGL').fast_info['lastPrice'])
-
-st.write("_____") 
-
-y_1 = st.number_input('FFWM_asset', step=0.01 , value = FFWM_ASSET_LAST ) 
-y_1 = y_1*x_2
-st.write(y_1) 
-
-y_2 = st.number_input('NEGG_asset', step=0.01 , value = NEGG_ASSET_LAST  ) 
-y_2 = y_2*x_1
-st.write(y_2) 
-
-y_3 = st.number_input('RIVN_asset', step=0.01 , value = RIVN_ASSET_LAST  ) 
-y_3 = y_3*x_3
-st.write(y_3)
-
-y_4 = st.number_input('APLS_asset', step=0.01 , value = APLS_ASSET_LAST ) 
-y_4 = y_4*x_4
-st.write(y_4) 
-
-y_5 = st.number_input('NVTS_asset', step=0.01, value= NVTS_ASSET_LAST)
-y_5 = y_5 * x_5
-st.write(y_5)
-
-y_6 = st.number_input('QXO_asset', step=0.01, value= QXO_ASSET_LAST ) # LV
-y_6 = y_6 * x_6
-st.write(y_6)
-
-y_7 = st.number_input('RXRX_asset', step=0.01, value= RXRX_ASSET_LAST ) # LV
-y_7 = y_7 * x_7
-st.write(y_7)
-
-y_8 = st.number_input('AGL_asset', step=0.01, value= AGL_ASSET_LAST ) # LV
-y_8 = y_8 * x_8
-st.write(y_8)
-
-st.write("_____")
-
-Product_cost = st.number_input('Product_cost', step=0.01 , value = 10750. )
-j_1 = st.number_input('Portfolio_cash', step=0.01 , value = 0.00 )
-number = (y_1 + y_2 + y_3 + y_4 + y_5 + y_6 + y_7 + y_8 ) + j_1 # แก้
-st.write('now_pv:' , number) 
-
-st.write("_____")
+    # Channel สำหรับดึงข้อมูล Asset ล่าสุด
+    channel_id_2 = 2528199
+    write_api_key_2 = '2E65V8XEIPH9B2VV'
+    client_2 = thingspeak.Channel(channel_id_2, write_api_key_2, fmt='json')
+except Exception as e:
+    st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ ThingSpeak: {e}")
+    st.stop()
 
 
-t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00 * 5.40 * 3.00  # แก้
+# --- ตั้งค่าข้อมูลหุ้น (จัดการง่ายในที่เดียว) ---
+STOCKS_CONFIG = {
+    'FFWM': {'field': 'field1', 'initial_price': 6.88},
+    'NEGG': {'field': 'field2', 'initial_price': 25.20},
+    'RIVN': {'field': 'field3', 'initial_price': 10.07},
+    'APLS': {'field': 'field4', 'initial_price': 39.61},
+    'NVTS': {'field': 'field5', 'initial_price': 3.05},
+    'QXO':  {'field': 'field6', 'initial_price': 19.00},
+    'RXRX': {'field': 'field7', 'initial_price': 5.40},
+    'AGL':  {'field': 'field8', 'initial_price': 3.00}
+}
+TICKERS = list(STOCKS_CONFIG.keys())
 
-t_n =  yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice'] * yf.Ticker('QXO').info['currentPrice'] * yf.Ticker('RXRX').info['currentPrice'] * yf.Ticker('AGL').info['currentPrice']                      
-ln =  -1500 * np.log ( t_0 / t_n)
-
-st.write ('t_0' , t_0)
-st.write ('t_n' , t_n)
-st.write ('fix' , ln)
-st.write ('log_pv' , Product_cost + ln) ### แก้
-st.write ('now_pv' , number)
-st.write ('____')
-net_cf = number - (Product_cost + ln)
-st.write ( 'net_cf' , net_cf ) ##แก้
-st.write ('____')
-
-if st.button("rerun"):
-    st.rerun()
-st.write("_____") 
-    
-Check_ADD = st.checkbox('ADD_CF ')
-if Check_ADD :
-    button_ADD = st.button("ADD_CF")
-    if button_ADD:    
+# --- ฟังก์ชันดึงข้อมูลหุ้น (มี Cache เพื่อประสิทธิภาพ) ---
+@st.cache_data(ttl=60) # Cache data for 60 seconds
+def get_stock_data(tickers):
+    """ดึงข้อมูลราคาล่าสุดของหุ้นทั้งหมดในครั้งเดียว"""
+    data = {}
+    for ticker in tickers:
         try:
-            client.update(  {'field1': net_cf , 'field2': net_cf / Product_cost , 'field3': j_1 , 'field4': Product_cost - net_cf }  )
-            st.write({'Cashflow': net_cf , 'Pure_Alpha': net_cf / Product_cost ,  'ฺBuffer': j_1  }) 
-        except:pass
+            # fast_info เร็วกว่า .info มาก
+            price = yf.Ticker(ticker).fast_info.get('lastPrice', 0)
+            data[ticker] = price
+        except Exception as e:
+            st.warning(f"ไม่สามารถดึงข้อมูลราคาของ {ticker} ได้: {e}")
+            data[ticker] = 0
+    return data
 
-st.write("_____")
-st.write("Cashflow") 
-components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-st.write("_____")
-st.write("Pure_Alpha")
-components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-st.write("Product_cost")
-components.iframe('https://thingspeak.mathworks.com/channels/2394198/charts/4?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
+# --- ฟังก์ชันดึง Asset จาก ThingSpeak (ใช้ Loop) ---
+@st.cache_data(ttl=300) # Cache data for 5 minutes
+def get_last_assets():
+    """ดึงข้อมูล Asset ล่าสุดจาก ThingSpeak ทั้งหมด"""
+    last_assets = {}
+    for ticker, config in STOCKS_CONFIG.items():
+        try:
+            # แก้ไขการใช้ eval() เป็น float() ที่ปลอดภัยกว่า
+            response = client_2.get_field_last(field=config['field'])
+            # ใช้ float() แทน eval()
+            asset_value = float(json.loads(response)[config['field']])
+            last_assets[ticker] = asset_value
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
+            st.warning(f"ไม่สามารถดึง Asset ของ {ticker} ได้: {e}")
+            last_assets[ticker] = 0.0
+    return last_assets
 
-st.write("_____") 
-st.write("ฺBuffer")
-components.iframe('https://thingspeak.com/channels/2394198/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15' , width=800, height=200)
-st.write("_____") 
-        
+# --- ดึงข้อมูล ---
+stock_prices = get_stock_data(TICKERS)
+last_assets = get_last_assets()
+
+# --- ส่วนแสดงผลของ STREAMLIT ---
+st.header("Stock Prices (Live)")
+prices_col = st.columns(4)
+current_prices = {}
+i = 0
+for ticker in TICKERS:
+    with prices_col[i % 4]:
+        # ใช้ข้อมูลที่ดึงมาแล้ว ไม่ต้องเรียก API ซ้ำ
+        price_label = f"ราคา_{ticker}_{STOCKS_CONFIG[ticker]['initial_price']}"
+        current_prices[ticker] = st.number_input(price_label, step=0.01, value=stock_prices.get(ticker, 0.0), key=f"price_{ticker}")
+    i += 1
+
+st.write("---")
+
+st.header("Asset Values")
+assets_col = st.columns(4)
+asset_values = {}
+total_asset_value = 0
+i = 0
+for ticker in TICKERS:
+    with assets_col[i % 4]:
+        # ใช้ Loop ทำให้โค้ดสั้นลง
+        asset_label = f"{ticker}_asset"
+        shares = st.number_input(asset_label, step=0.01, value=last_assets.get(ticker, 0.0), key=f"asset_{ticker}")
+        value = shares * current_prices[ticker]
+        asset_values[ticker] = value
+        st.write(f"Value: ${value:,.2f}")
+        total_asset_value += value
+    i += 1
+
+st.write("---")
+
+# --- การคำนวณ Portfolio ---
+Product_cost = st.number_input('Product_cost', step=0.01, value=10750.0)
+j_1 = st.number_input('Portfolio_cash', step=0.01, value=0.00)
+
+now_pv = total_asset_value + j_1
+st.metric("Current Portfolio Value (now_pv)", f"${now_pv:,.2f}")
+
+st.write("---")
+
+# --- การคำนวณ Log (Hedge/Fix) ---
+# แก้ไขการคำนวณให้ถูกต้องและมีประสิทธิภาพ
+t_0 = np.prod([config['initial_price'] for config in STOCKS_CONFIG.values()])
+t_n = np.prod(list(current_prices.values()))
+
+# ป้องกันการหารด้วยศูนย์
+if t_n > 0:
+    ln = -1500 * np.log(t_0 / t_n)
+else:
+    ln = 0
+    st.warning("t_n เป็นศูนย์, ไม่สามารถคำนวณ log ได้")
+
+st.metric("Log Adjustment (fix)", f"{ln:,.2f}")
+log_pv = Product_cost + ln
+st.metric("Adjusted Portfolio Value (log_pv)", f"${log_pv:,.2f}")
+
+st.write("---")
+net_cf = now_pv - log_pv
+st.metric("Net Cash Flow (net_cf)", f"${net_cf:,.2f}", delta=f"{net_cf:,.2f}")
+st.write("---")
+
+# --- ปุ่มดำเนินการ ---
+if st.button("Rerun Page"):
+    st.rerun()
+
+if st.checkbox('Confirm to ADD Cashflow'):
+    if st.button("ADD_CF"):
+        try:
+            payload = {
+                'field1': net_cf,
+                'field2': net_cf / Product_cost if Product_cost != 0 else 0,
+                'field3': j_1,
+                'field4': Product_cost - net_cf
+            }
+            client.update(payload)
+            st.success("ส่งข้อมูลไปที่ ThingSpeak สำเร็จ!")
+            st.write(payload)
+        except Exception as e:
+            # แสดงข้อผิดพลาดให้ผู้ใช้เห็น ไม่ใช่ pass เฉยๆ
+            st.error(f"ส่งข้อมูลไม่สำเร็จ: {e}")
+
+# --- แสดงผลกราฟ ---
+st.write("---")
+st.header("ThingSpeak Charts")
+components.iframe('https://thingspeak.com/channels/2394198/charts/1?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15', width=800, height=250)
+components.iframe('https://thingspeak.com/channels/2394198/charts/2?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15', width=800, height=250)
+components.iframe('https://thingspeak.mathworks.com/channels/2394198/charts/4?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15', width=800, height=250)
+components.iframe('https://thingspeak.com/channels/2394198/charts/3?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15', width=800, height=250)
