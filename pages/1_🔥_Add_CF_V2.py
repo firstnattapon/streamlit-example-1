@@ -85,8 +85,6 @@ y_7 = st.number_input('RXRX_asset', step=0.01, value= RXRX_ASSET_LAST ) # LV
 y_7 = y_7 * x_7
 st.write(y_7)
 
-st.write("_____")
-
 y_8 = st.number_input('AGL_asset', step=0.01, value= AGL_ASSET_LAST ) # LV
 y_8 = y_8 * x_8
 st.write(y_8)
