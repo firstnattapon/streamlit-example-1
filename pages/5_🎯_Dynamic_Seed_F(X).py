@@ -1,7 +1,3 @@
-ไม่เหมือนเดิม ใช้งานไม่ได้  นี้คือโค๊ดต้นฉบับที่ใข้งานได้
-หลักการคือ เพิ่มแค่  tap 4   window Rolling
-tap 1 tap 2  tap  3 ทุกอย่างยังเหมือนเดิมมั้ย
-
 import pandas as pd
 import numpy as np
 import yfinance as yf
