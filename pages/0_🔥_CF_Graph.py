@@ -66,7 +66,7 @@ with tab1:
     x_4 = st.number_input('ราคา_APLS_39.61', step=0.01 ,   value = yf.Ticker('APLS').fast_info['lastPrice'] )
     x_7 = st.number_input('ราคา_NVTS_3.05', step=0.01 ,   value = yf.Ticker('NVTS').fast_info['lastPrice'])
     x_8 = st.number_input('ราคา_QXO_19.00', step=0.01 ,   value = yf.Ticker('QXO').fast_info['lastPrice'])
-    x_9 = st.number_input('ราคา_QXO_5.40', step=0.01 ,   value = yf.Ticker('RXRX').fast_info['lastPrice'])
+    x_9 = st.number_input('ราคา_RXRX_5.40', step=0.01 ,   value = yf.Ticker('RXRX').fast_info['lastPrice'])
     x_10 = st.number_input('ราคา_AGL_3.00', step=0.01 ,   value = yf.Ticker('AGL').fast_info['lastPrice'])
 
     x_5 = st.number_input('Fixed_Asset_Value', step=0.01 ,   value = 1500. ) 
