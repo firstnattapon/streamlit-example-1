@@ -85,7 +85,7 @@ def Monitor (Ticker = 'FFWM' , field = 2 ):
     tickerData = yf.Ticker( Ticker)
     tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
     tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-    filter_date = '2023-01-01 12:00:00+07:00'
+    filter_date = '2025-04-28 12:00:00+07:00'
     tickerData = tickerData[tickerData.index >= filter_date]
     
     fx = client.get_field_last(field='{}'.format(field))
