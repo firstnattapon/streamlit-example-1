@@ -290,7 +290,7 @@ def plot_comparison(Ticker='', act=-1, window_size=30, num_seeds_to_try=1000, ma
 if 'test_ticker' not in st.session_state:
     st.session_state.test_ticker = 'FFWM'
 if 'start_date' not in st.session_state:
-    st.session_state.start_date = datetime(2024, 1, 1)
+    st.session_state.start_date = datetime(2024, 4, 28)
 if 'end_date' not in st.session_state:
     st.session_state.end_date = datetime.now()
 if 'window_size' not in st.session_state:
