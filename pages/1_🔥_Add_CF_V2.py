@@ -103,7 +103,7 @@ st.write("_____")
 
 t_0 = 25.20 * 6.88 * 10.07 * 39.61 * 3.05 * 19.00 * 5.40 * 3.00  # แก้
 
-t_n =  yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice'] * yf.Ticker('QXO').info['currentPrice'] * yf.Ticker('RXRX').info['currentPrice] * yf.Ticker('AGL').info['currentPrice']                      
+t_n =  yf.Ticker('NEGG').info['currentPrice'] * yf.Ticker('FFWM').info['currentPrice'] *yf.Ticker('RIVN').info['currentPrice'] * yf.Ticker('APLS').info['currentPrice'] * yf.Ticker('NVTS').info['currentPrice'] * yf.Ticker('QXO').info['currentPrice'] * yf.Ticker('RXRX').info['currentPrice'] * yf.Ticker('AGL').info['currentPrice']                      
 ln =  -1500 * np.log ( t_0 / t_n)
 
 st.write ('t_0' , t_0)
