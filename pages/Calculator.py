@@ -145,6 +145,12 @@ st.write("f(x): {}".format(fx_js_6) ," , " , "Production: {}".format(    np.arou
 st.table(df_7_6)
 st.write("_____") 
 
+df_7_7 , fx_js_7  = Monitor(Ticker = 'AGL', field = 1)
+st.write( 'AGL')
+st.write("f(x): {}".format(fx_js_7) ," , " , "Production: {}".format(    np.around(Production('AGL'), 2) ))
+st.table(df_7_7)
+st.write("_____") 
+
 
 st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
 st.write("***RE > 60 USD")
