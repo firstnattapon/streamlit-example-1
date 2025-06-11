@@ -14,7 +14,7 @@ st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide")
 
 # --- START: CONFIGURATION LOADING ---
 @st.cache_data
-def load_config(file_path='monitor_config'):
+def load_config(file_path='monitor_config.json'):
     """Loads asset configuration from a JSON file."""
     if not os.path.exists(file_path):
         st.error(f"Configuration file not found: {file_path}")
