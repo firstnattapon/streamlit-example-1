@@ -190,8 +190,8 @@ if Nex_day_:
 st.write("_____")
 
 # --- DYNAMIC ASSET INPUTS based on config ---
-control_cols = st.columns(4) 
-x_2 = control_cols[0].number_input('Diff', step=1, value=60)
+control_cols = st.columns(5) 
+x_2 = control_cols[1].number_input('Diff', step=1, value=60)
 Start = control_cols[0].checkbox('start')
 
 if Start:
