@@ -1,0 +1,70 @@
+[
+  {
+    "ticker": "AGL",
+    "monitor_field": 1,
+    "asset_field": "field8",
+    "fix_c": 1500,
+    "option_config": {
+      "base_value": 500.0,
+      "label": "AGL (LV:500@3.0)"
+    }
+  },
+  {
+    "ticker": "APLS",
+    "monitor_field": 5,
+    "asset_field": "field4",
+    "fix_c": 1500,
+    "option_config": null
+  },
+  {
+    "ticker": "FFWM",
+    "monitor_field": 2,
+    "asset_field": "field1",
+    "fix_c": 1500,
+    "option_config": {
+      "base_value": 200.0,
+      "label": "FFWM (LV:200@6.88)"
+    }
+  },
+  {
+    "ticker": "NEGG",
+    "monitor_field": 3,
+    "asset_field": "field2",
+    "fix_c": 1500,
+    "option_config": null
+  },
+  {
+    "ticker": "NVTS",
+    "monitor_field": 6,
+    "asset_field": "field5",
+    "fix_c": 2100,
+    "option_config": null
+  },
+  {
+    "ticker": "QXO",
+    "monitor_field": 7,
+    "asset_field": "field6",
+    "fix_c": 1500,
+    "option_config": {
+      "base_value": 79.0,
+      "label": "QXO (LV:79@19.0)"
+    }
+  },
+  {
+    "ticker": "RIVN",
+    "monitor_field": 4,
+    "asset_field": "field3",
+    "fix_c": 1500,
+    "option_config": null
+  },
+  {
+    "ticker": "RXRX",
+    "monitor_field": 8,
+    "asset_field": "field7",
+    "fix_c": 1500,
+    "option_config": {
+      "base_value": 200.0,
+      "label": "RXRX (LV:200@5.4)"
+    }
+  }
+]
