@@ -277,7 +277,7 @@ def create_trading_section(config, asset_val, asset_last, df_data, calculations_
                 fix_value = config['fix_c']
                 pl_value = pv - fix_value
                 
-                pl_color = "white" if pl_value >= 0 else "white"
+                pl_color = "blue" if pl_value >= 0 else "blue"
 
                 st.markdown(
                     f"Price: **{current_price:,.3f}**  |  Portfolio Value: **{pv:,.2f}**  |  P/L (vs {fix_value:,}) :  <span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>",
