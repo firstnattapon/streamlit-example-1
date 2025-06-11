@@ -191,7 +191,7 @@ st.write("_____")
 
 # --- DYNAMIC ASSET INPUTS based on config ---
 control_cols = st.columns(8) 
-x_2 = control_cols[8].number_input('Diff', step=1, value=60)
+x_2 = control_cols[7].number_input('Diff', step=1, value=60)
 Start = control_cols[0].checkbox('start')
 
 if Start:
