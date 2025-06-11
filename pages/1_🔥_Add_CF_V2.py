@@ -135,13 +135,23 @@ if st.button("rerun"):
     st.rerun()
 st.write("_____")
 
-Check_ADD = st.checkbox('ADD_CF ')
-if Check_ADD:
-    button_ADD = st.button("ADD_CF  ")
-    if button_ADD:
+with st.expander("⚠️ Confirm to Add Cashflow"):
+    st.write("Click the button below to confirm and send data to Thingspeak.")
+    
+    if st.button("Confirm and Send"):
         try:
-            client.update({'field1': net_cf, 'field2': net_cf / Product_cost, 'field3': j_1, 'field4': Product_cost - net_cf})
-            st.write({'Cashflow': net_cf, 'Pure_Alpha': net_cf / Product_cost, 'ฺBuffer': j_1})
+            if Product_cost == 0:
+                st.error("Product_cost cannot be zero.")
+            else:
+                client.update({
+                    'field1': net_cf,
+                    'field2': net_cf / Product_cost,
+                    'field3': j_1,
+                    'field4': Product_cost - net_cf
+                })
+                st.success("Successfully updated Thingspeak!")
+                st.write({'Cashflow': net_cf, 'Pure_Alpha': net_cf / Product_cost, 'Buffer': j_1})
+
         except Exception as e:
             st.error(f"Failed to update Thingspeak: {e}")
 
