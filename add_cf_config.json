@@ -9,7 +9,7 @@
         {
             "ticker": "NEGG",
             "thingspeak_field": "field2",
-            "reference_price": 1.26
+            "reference_price": 25.20
         },
         {
             "ticker": "RIVN",
