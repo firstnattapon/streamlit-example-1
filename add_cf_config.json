@@ -1,4 +1,5 @@
 {
+    "product_cost_default": 10750.00,
     "assets": [
         {
             "ticker": "FFWM",
