@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Add_CF_V2", page_icon="🔥")
 
 # --- Function to load configuration ---
-@st.cache_data
+# @st.cache_data
 def load_config(filename="add_cf_config.json"):
     """Loads asset configuration from a JSON file."""
     try:
