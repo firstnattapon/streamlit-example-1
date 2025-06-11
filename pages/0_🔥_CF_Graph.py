@@ -6,7 +6,7 @@ import json
 import plotly.express as px
 
 # ตั้งค่าหน้าเว็บ
-st.set_page_config(page_title="CF_Graph", page_icon="🔥", layout="wide")
+st.set_page_config(page_title="CF_Graph", page_icon="🔥")
 
 # --- ฟังก์ชันหลักในการคำนวณ (เหมือนเดิมทุกประการ) ---
 def CF_Graph(entry=1.26, ref=1.26, Fixed_Asset_Value=1500., Cash_Balan=650.):
@@ -63,9 +63,10 @@ def CF_Graph(entry=1.26, ref=1.26, Fixed_Asset_Value=1500., Cash_Balan=650.):
         df_final = pd.concat([df_top, df_down], axis=0)
         df_final['net_pv'] = df_final['Fixed_Asset_Value'] + df_final['Cash_Balan']
         
-        # ค้นหาราคาที่ใกล้เคียงที่สุดแทนการหาแบบตรงๆ เพื่อแก้ปัญหา float precision
-        closest_price_index = (df_final['Asset_Price'] - ref).abs().idxmin()
-        result_pv = df_final.loc[closest_price_index, 'net_pv']
+        df_2 = df_final[df_final['Asset_Price'] == np.around(ref, 2)]['net_pv'].values
+        
+        # คืนค่า default ถ้าไม่เจอราคาที่ตรงกัน
+        result_pv = df_2[-1] if len(df_2) > 0 else 0.0
         
         return df_final[['Asset_Price', 'Cash_Balan', 'net_pv', 'Fixed_Asset_Value']], result_pv
     except Exception as e:
@@ -140,26 +141,33 @@ for i, asset in enumerate(assets_config):
         if not df.empty:
             # พล็อตกราฟ
             as_1 = df.set_index('Asset_Price')
-            as_1_py = px.line(as_1)
-            # แก้ไขเส้น vline ให้เหมือนต้นฉบับ
-            as_1_py.add_vline(x=ref_price, line_width=1, line_dash="dash")
-            as_1_py.add_vline(x=entry_price, line_width=0.1)
+            as_1_py = px.line(as_1, title=f"Analysis for {ticker}")
+            as_1_py.add_vline(x=ref_price, line_width=2, line_dash="dash", line_color="red", annotation_text=f"Current: {ref_price:.2f}")
+            as_1_py.add_vline(x=entry_price, line_width=1, line_dash="solid", line_color="green", annotation_text=f"Entry: {entry_price:.2f}")
             st.plotly_chart(as_1_py, use_container_width=True)
             
-            st.write(f'rf: {df_rf_value}')
-            st.write("_____") 
-
+            st.metric(label=f"Net PV at current price ({ref_price:.2f})", value=f"${df_rf_value:,.2f}")
+            
+            with st.expander("ดูข้อมูลตาราง"):
+                st.dataframe(df)
         else:
             st.warning("ไม่สามารถสร้างกราฟได้เนื่องจากไม่มีข้อมูล")
 
-# 5. แสดงผลสรุปรวม (คำนวณจาก Dictionary) ที่ท้ายหน้าหลัก
-st.write("---") 
+# 5. แสดงผลสรุปรวม (คำนวณจาก Dictionary)
+st.sidebar.header("สรุปผลรวมพอร์ต")
 
 total_rf = sum(results_rf.values())
 num_assets = len(assets_config)
 total_fixed_asset_value = x_5 * num_assets
 total_initial_cash = x_6 * num_assets
 
-# สร้าง string สำหรับแสดงผลให้เหมือนต้นฉบับ
-st.write(f"sum_rf: {total_rf}", f"asset: {total_fixed_asset_value}", f"Cash: {total_initial_cash}", "Lv_Cash: -0")
-st.write(f"real_rf: {total_rf - 0}")
+st.metric("จำนวน Asset ทั้งหมด", f"{num_assets} ตัว")
+st.metric("มูลค่า Fixed Asset รวม", f"${total_fixed_asset_value:,.2f}")
+st.metric("เงินสดเริ่มต้นรวม", f"${total_initial_cash:,.2f}")
+st.metric("✅ SUM Net PV (ตามราคาอ้างอิง)", f"${total_rf:,.2f}")
+# st.sidebar.metric("✅ Real RF (ตัวอย่าง)", f"${total_rf - 0:,.2f}") # หากมีค่าอื่นมาลบ
+
+# แสดงค่าแต่ละตัวใน sidebar เพื่อตรวจสอบ
+with st.expander("ดู Net PV ของแต่ละตัว"):
+    for ticker, value in results_rf.items():
+        st.write(f"{ticker}: ${value:,.2f}")
