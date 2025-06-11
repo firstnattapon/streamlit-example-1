@@ -125,6 +125,7 @@ for i, asset in enumerate(assets_config):
         # ดึงราคาอ้างอิงจาก Dictionary ที่เราเก็บไว้
         ref_price = current_prices[ticker]
 
+        st.write('')
         st.write(f"กราฟแสดงความสัมพันธ์ของ {ticker}")
         
         # เรียกใช้ฟังก์ชันคำนวณ
