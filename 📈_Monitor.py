@@ -236,7 +236,11 @@ AGL_REAL = col22.number_input('AGL (LV:500@3.0)', step=0.001, value=AGL_ASSET_LA
 x_10 = AGL_OPTION + AGL_REAL
 
 x_6 = col14.number_input('APLS_ASSET', step=0.001, value=APLS_ASSET_LAST)
-x_4 = col15.number_input('FFWM_ASSET', step=0.001, value=FFWM_ASSET_LAST)
+
+FFWM_OPTION = 200.
+FFWM_REAL = col15.number_input('FFWM (LV:200@6.88)', step=0.001, value=FFWM_ASSET_LAST)
+x_4 = FFWM_OPTION + FFWM_REAL
+
 x_3 = col17.number_input('NEGG_ASSET', step=0.001, value=NEGG_ASSET_LAST)
 x_7 = col18.number_input('NVTS_ASSET', step=0.001, value=NVTS_ASSET_LAST)
 
