@@ -8,8 +8,25 @@ import json
 from functools import lru_cache
 import concurrent.futures
 from threading import Lock
+import os
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide")
+
+# --- START: CONFIGURATION LOADING ---
+@st.cache_data
+def load_config(file_path='config.json'):
+    """Loads asset configuration from a JSON file."""
+    if not os.path.exists(file_path):
+        st.error(f"Configuration file not found: {file_path}")
+        return []
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+# Load configuration at the beginning
+ASSET_CONFIGS = load_config()
+if not ASSET_CONFIGS:
+    st.stop()
+# --- END: CONFIGURATION LOADING ---
 
 _cache_lock = Lock()
 _price_cache = {}
@@ -17,6 +34,7 @@ _cache_timestamp = {}
 
 @st.cache_resource
 def get_clients():
+    # These should ideally be in st.secrets, but keeping as is for now.
     channel_id = 2528199
     write_api_key = '2E65V8XEIPH9B2VV'
     client = thingspeak.Channel(channel_id, write_api_key, fmt='json')
@@ -32,21 +50,17 @@ client, client_2 = get_clients()
 def clear_all_caches():
     st.cache_data.clear()
     st.cache_resource.clear()
-    
     sell.cache_clear()
     buy.cache_clear()
-    
     with _cache_lock:
         _price_cache.clear()
         _cache_timestamp.clear()
-    
     st.success("🗑️ Clear ALL caches complete!")
     st.rerun()
 
 @lru_cache(maxsize=128)
 def sell(asset, fix_c=1500, Diff=60):
-    if asset == 0:
-        return 0, 0, 0
+    if asset == 0: return 0, 0, 0
     s1 = (fix_c - Diff) / asset
     s2 = round(s1, 2)
     s3 = s2 * asset
@@ -58,8 +72,7 @@ def sell(asset, fix_c=1500, Diff=60):
 
 @lru_cache(maxsize=128)
 def buy(asset, fix_c=1500, Diff=60):
-    if asset == 0:
-        return 0, 0, 0
+    if asset == 0: return 0, 0, 0
     b1 = (fix_c + Diff) / asset
     b2 = round(b1, 2)
     b3 = b2 * asset
@@ -71,13 +84,11 @@ def buy(asset, fix_c=1500, Diff=60):
 
 def get_cached_price(ticker, max_age=30):
     current_time = datetime.datetime.now()
-    
     with _cache_lock:
         if (ticker in _price_cache and 
             ticker in _cache_timestamp and 
             (current_time - _cache_timestamp[ticker]).seconds < max_age):
             return _price_cache[ticker]
-    
     try:
         price = yf.Ticker(ticker).fast_info['lastPrice']
         with _cache_lock:
@@ -114,43 +125,28 @@ def Monitor(Ticker='FFWM', field=2):
         st.error(f"Error in Monitor function for {Ticker}: {str(e)}")
         return pd.DataFrame(), 0
 
-def fetch_monitor_data():
-    tickers_fields = [
-        ('AGL', 1), ('APLS', 5), ('FFWM', 2), ('NEGG', 3), ('NVTS', 6), 
-        ('QXO', 7), ('RIVN', 4), ('RXRX', 8)
-    ]
-    
+# --- DYNAMIC DATA FETCHING based on config ---
+@st.cache_data(ttl=300)
+def fetch_all_monitor_data(configs):
     results = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(tickers_fields)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
         future_to_ticker = {
-            executor.submit(Monitor, ticker, field): ticker 
-            for ticker, field in tickers_fields
+            executor.submit(Monitor, asset['ticker'], asset['monitor_field']): asset['ticker']
+            for asset in configs
         }
-        
         for future in concurrent.futures.as_completed(future_to_ticker):
             ticker = future_to_ticker[future]
             try:
                 results[ticker] = future.result()
             except Exception as e:
-                st.error(f"Error fetching data for {ticker}: {str(e)}")
+                st.error(f"Error fetching monitor data for {ticker}: {str(e)}")
                 results[ticker] = (pd.DataFrame(), 0)
-    
     return results
 
-monitor_results = fetch_monitor_data()
-df_AGL, fx_js_AGL = monitor_results.get('AGL', (pd.DataFrame(), 0))
-df_7_3, fx_js_3 = monitor_results.get('APLS', (pd.DataFrame(), 0))
-df_7, fx_js = monitor_results.get('FFWM', (pd.DataFrame(), 0))
-df_7_1, fx_js_1 = monitor_results.get('NEGG', (pd.DataFrame(), 0))
-df_7_4, fx_js_4 = monitor_results.get('NVTS', (pd.DataFrame(), 0))
-df_7_5, fx_js_5 = monitor_results.get('QXO', (pd.DataFrame(), 0))
-df_7_2, fx_js_2 = monitor_results.get('RIVN', (pd.DataFrame(), 0))
-df_7_6, fx_js_6 = monitor_results.get('RXRX', (pd.DataFrame(), 0))
-
 @st.cache_data(ttl=60)
-def get_all_assets():
-    fields = ['field1', 'field2', 'field3', 'field4', 'field5', 'field6', 'field7', 'field8']
+def get_all_assets_from_thingspeak(configs):
     assets = {}
+    asset_fields = [asset['asset_field'] for asset in configs]
     
     def fetch_asset(field):
         try:
@@ -158,29 +154,25 @@ def get_all_assets():
             return eval(json.loads(data)[field])
         except:
             return 0.0
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(fields)) as executor:
-        future_to_field = {executor.submit(fetch_asset, field): field for field in fields}
-        
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(asset_fields)) as executor:
+        future_to_field = {executor.submit(fetch_asset, field): field for field in asset_fields}
         for future in concurrent.futures.as_completed(future_to_field):
             field = future_to_field[future]
             try:
-                assets[field] = future.result()
-            except:
-                assets[field] = 0.0
-    
+                # Find the ticker associated with this field
+                ticker = next((c['ticker'] for c in configs if c['asset_field'] == field), None)
+                if ticker:
+                    assets[ticker] = future.result()
+            except Exception as e:
+                st.error(f"Error fetching asset for field {field}: {str(e)}")
     return assets
 
-all_assets = get_all_assets()
-AGL_ASSET_LAST = all_assets.get('field8', 0.0)
-APLS_ASSET_LAST = all_assets.get('field4', 0.0)
-FFWM_ASSET_LAST = all_assets.get('field1', 0.0)
-NEGG_ASSET_LAST = all_assets.get('field2', 0.0)
-NVTS_ASSET_LAST = all_assets.get('field5', 0.0)
-QXO_ASSET_LAST = all_assets.get('field6', 0.0)
-RIVN_ASSET_LAST = all_assets.get('field3', 0.0)
-RXRX_ASSET_LAST = all_assets.get('field7', 0.0)
+# Execute data fetching
+monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS)
+last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS)
 
+# --- UI SECTION ---
 nex = 0
 Nex_day_sell = 0
 toggle = lambda x: 1 - x
@@ -189,85 +181,73 @@ Nex_day_ = st.checkbox('nex_day')
 if Nex_day_:
     st.write("value = ", nex)
     nex_col, Nex_day_sell_col, _, _, _ = st.columns(5)
-
-    if nex_col.button("Nex_day"):
-        nex = 1
-        st.write("value = ", nex)
-
+    if nex_col.button("Nex_day"): nex = 1
     if Nex_day_sell_col.button("Nex_day_sell"):
         nex = 1
         Nex_day_sell = 1
-        st.write("value = ", nex)
-        st.write("Nex_day_sell = ", Nex_day_sell)
+    st.write("value = ", nex)
+    if Nex_day_sell: st.write("Nex_day_sell = ", Nex_day_sell)
 
 st.write("_____")
 
-col13, col16, col22, col14, col15, col17, col18, col19, col20, col21 = st.columns(10)
+# --- DYNAMIC ASSET INPUTS based on config ---
+# Create columns for controls and asset inputs
+control_cols = st.columns(3) # For Start, Diff
+x_2 = control_cols[1].number_input('Diff', step=1, value=60)
+Start = control_cols[0].checkbox('start')
 
-x_2 = col16.number_input('Diff', step=1, value=60)
-
-Start = col13.checkbox('start')
 if Start:
-    asset_configs = [
-        ('AGL', 'field8', AGL_ASSET_LAST),
-        ('APLS', 'field4', APLS_ASSET_LAST),
-        ('FFWM', 'field1', FFWM_ASSET_LAST),
-        ('NEGG', 'field2', NEGG_ASSET_LAST),
-        ('NVTS', 'field5', NVTS_ASSET_LAST),
-        ('QXO', 'field6', QXO_ASSET_LAST),
-        ('RIVN', 'field3', RIVN_ASSET_LAST),
-        ('RXRX', 'field7', RXRX_ASSET_LAST)
-    ]
-    
-    for i, (name, field, default_val) in enumerate(asset_configs):
-        checkbox_key = f'@_{name}_ASSET'
-        thingspeak_checkbox = col13.checkbox(checkbox_key)
-        if thingspeak_checkbox:
-            add_val = col13.number_input(checkbox_key, step=0.001, value=0., key=f'input_{name}')
-            button_key = f"GO_{name}"
-            asset_button = col13.button(button_key, key=f'btn_{name}')
-            if asset_button:
-                client.update({field: add_val})
-                col13.write(add_val)
-                clear_all_caches()
+    with control_cols[0].expander("Update Assets on ThingSpeak"):
+        for config in ASSET_CONFIGS:
+            ticker = config['ticker']
+            field = config['asset_field']
+            
+            checkbox_key = f'@_{ticker}_ASSET'
+            if st.checkbox(checkbox_key, key=f'check_{ticker}'):
+                add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
+                if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
+                    client.update({field: add_val})
+                    st.write(f"Updated {ticker} to: {add_val}")
+                    clear_all_caches()
 
-AGL_OPTION = 500.
-AGL_REAL = col22.number_input('AGL (LV:500@3.0)', step=0.001, value=AGL_ASSET_LAST)
-x_10 = AGL_OPTION + AGL_REAL
+# Create columns for each asset input field
+asset_input_cols = st.columns(len(ASSET_CONFIGS))
+asset_inputs = {} # To store the final asset values from user input
 
-x_6 = col14.number_input('APLS_ASSET', step=0.001, value=APLS_ASSET_LAST)
-
-FFWM_OPTION = 200. 
-FFWM_REAL = col15.number_input('FFWM (LV:200@6.88)', step=0.001, value=FFWM_ASSET_LAST)
-x_4 = FFWM_OPTION + FFWM_REAL
-
-x_3 = col17.number_input('NEGG_ASSET', step=0.001, value=NEGG_ASSET_LAST)
-x_7 = col18.number_input('NVTS_ASSET', step=0.001, value=NVTS_ASSET_LAST)
-
-QXO_OPTION = 79.
-QXO_REAL = col19.number_input('QXO (LV:79@19.0)', step=0.001, value=QXO_ASSET_LAST)
-x_8 = QXO_OPTION + QXO_REAL
-
-x_5 = col20.number_input('RIVN_ASSET', step=0.001, value=RIVN_ASSET_LAST)
-
-RXRX_OPTION = 200.
-RXRX_REAL = col21.number_input('RXRX (LV:200@5.4)', step=0.001, value=RXRX_ASSET_LAST)
-x_9 = RXRX_OPTION + RXRX_REAL
-
+for i, config in enumerate(ASSET_CONFIGS):
+    with asset_input_cols[i]:
+        ticker = config['ticker']
+        last_asset_val = last_assets_all.get(ticker, 0.0)
+        
+        if config['option_config']:
+            option_val = config['option_config']['base_value']
+            label = config['option_config']['label']
+            real_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_real")
+            asset_inputs[ticker] = option_val + real_val
+        else:
+            label = f'{ticker}_ASSET'
+            asset_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_asset")
+            asset_inputs[ticker] = asset_val
+            
 st.write("_____")
 
+# --- DYNAMIC CALCULATIONS based on config ---
 calculations = {}
-assets = [x_10, x_6, x_4, x_3, x_7, x_8, x_5, x_9]
-asset_names = ['AGL', 'APLS', 'FFWM', 'NEGG', 'NVTS', 'QXO', 'RIVN', 'RXRX']
-
-for i, (asset, name) in enumerate(zip(assets, asset_names)):
-    fix_c = 2100 if name == 'NVTS' else 1500
-    calculations[name] = {
-        'sell': sell(asset, fix_c=fix_c, Diff=x_2),
-        'buy': buy(asset, fix_c=fix_c, Diff=x_2)
+for config in ASSET_CONFIGS:
+    ticker = config['ticker']
+    asset_value = asset_inputs.get(ticker, 0.0)
+    fix_c = config['fix_c']
+    calculations[ticker] = {
+        'sell': sell(asset_value, fix_c=fix_c, Diff=x_2),
+        'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
     }
 
-def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, calculations_key, nex, Nex_day_sell):
+# --- DYNAMIC TRADING SECTIONS based on config ---
+def create_trading_section(config, asset_val, asset_last, df_data, calculations_data, nex, Nex_day_sell):
+    ticker = config['ticker']
+    asset_field = config['asset_field']
+    field_num_for_update = int(asset_field.replace('field', ''))
+
     try:
         action_val = np.where(
             Nex_day_sell == 1,
@@ -277,54 +257,46 @@ def create_trading_section(ticker, asset_val, asset_last, df_data, field_num, ca
     except:
         action_val = 0
     
-    limit_order = st.checkbox(f'Limut_Order_{ticker}', value=bool(action_val), key=f'limit_order_{ticker}')
+    limit_order = st.checkbox(f'Limit_Order_{ticker}', value=bool(action_val), key=f'limit_order_{ticker}')
     
     if limit_order:
-        sell_calc = calculations[calculations_key]['sell']
-        buy_calc = calculations[calculations_key]['buy']
+        sell_calc = calculations_data['sell']
+        buy_calc = calculations_data['buy']
         
         st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
         
         col1, col2, col3 = st.columns(3)
-        sell_match = col3.checkbox(f'sell_match_{ticker}')
-        if sell_match:
-            go_sell = col3.button(f"GO_SELL_{ticker}")
-            if go_sell:
-                client.update({f'field{field_num}': asset_last - buy_calc[1]})
+        if col3.checkbox(f'sell_match_{ticker}'):
+            if col3.button(f"GO_SELL_{ticker}"):
+                client.update({f'field{field_num_for_update}': asset_last - buy_calc[1]})
                 col3.write(asset_last - buy_calc[1])
                 clear_all_caches()
         
         try:
             current_price = get_cached_price(ticker)
             pv = current_price * asset_val
-            fix_value = 2100 if ticker == 'NVTS' else 1500 
-            st.write(current_price, pv, '(', pv - fix_value, ')')
+            fix_value = config['fix_c']
+            st.write(f"{current_price:.3f}", f"{pv:,.2f}", f"({pv - fix_value:,.2f})")
         except:
             st.write("Price unavailable")
         
         col4, col5, col6 = st.columns(3)
         st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
-        buy_match = col6.checkbox(f'buy_match_{ticker}')
-        if buy_match:
-            go_buy = col6.button(f"GO_BUY_{ticker}")
-            if go_buy:
-                client.update({f'field{field_num}': asset_last + sell_calc[1]})
+        if col6.checkbox(f'buy_match_{ticker}'):
+            if col6.button(f"GO_BUY_{ticker}"):
+                client.update({f'field{field_num_for_update}': asset_last + sell_calc[1]})
                 col6.write(asset_last + sell_calc[1])
                 clear_all_caches()
 
-trading_configs = [
-    ('AGL', x_10, AGL_ASSET_LAST, df_AGL, 8, 'AGL'),
-    ('APLS', x_6, APLS_ASSET_LAST, df_7_3, 4, 'APLS'),
-    ('FFWM', x_4, FFWM_ASSET_LAST, df_7, 1, 'FFWM'),
-    ('NEGG', x_3, NEGG_ASSET_LAST, df_7_1, 2, 'NEGG'),
-    ('NVTS', x_7, NVTS_ASSET_LAST, df_7_4, 5, 'NVTS'),
-    ('QXO', x_8, QXO_ASSET_LAST, df_7_5, 6, 'QXO'),
-    ('RIVN', x_5, RIVN_ASSET_LAST, df_7_2, 3, 'RIVN'),
-    ('RXRX', x_9, RXRX_ASSET_LAST, df_7_6, 7, 'RXRX')
-]
+# Loop to create each trading section
+for config in ASSET_CONFIGS:
+    ticker = config['ticker']
+    df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), 0))
+    asset_last = last_assets_all.get(ticker, 0.0)
+    asset_val = asset_inputs.get(ticker, 0.0)
+    calculations_data = calculations.get(ticker, {})
 
-for config in trading_configs:
-    create_trading_section(*config, nex, Nex_day_sell)
+    create_trading_section(config, asset_val, asset_last, df_data, calculations_data, nex, Nex_day_sell)
     st.write("_____")
 
 if st.sidebar.button("RERUN"):
