@@ -137,7 +137,7 @@ st.write("_____")
 
 Check_ADD = st.checkbox('ADD_CF ')
 if Check_ADD:
-    button_ADD = st.button("ADD_CF")
+    button_ADD = st.button("ADD_CF  ")
     if button_ADD:
         try:
             client.update({'field1': net_cf, 'field2': net_cf / Product_cost, 'field3': j_1, 'field4': Product_cost - net_cf})
