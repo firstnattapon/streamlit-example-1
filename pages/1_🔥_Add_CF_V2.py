@@ -135,15 +135,35 @@ if st.button("rerun"):
     st.rerun()
 st.write("_____")
 
-Check_ADD = st.checkbox('ADD_CF ')
+# แบบใหม่ที่ดีกว่า
 if Check_ADD:
     button_ADD = st.button("ADD_CF")
     if button_ADD:
-        try:
-            client.update({'field1': net_cf, 'field2': net_cf / Product_cost, 'field3': j_1, 'field4': Product_cost - net_cf})
-            st.write({'Cashflow': net_cf, 'Pure_Alpha': net_cf / Product_cost, 'ฺBuffer': j_1})
-        except Exception as e:
-            st.error(f"Failed to update Thingspeak: {e}")
+        # ตรวจสอบปัญหาการหารด้วย 0 ก่อน
+        if Product_cost == 0:
+            st.error("ไม่สามารถอัปเดตได้: Product_cost เป็น 0 ทำให้หารไม่ได้")
+        else:
+            try:
+                # เตรียมข้อมูลที่จะส่ง
+                pure_alpha = net_cf / Product_cost
+                data_to_send = {
+                    'field1': net_cf,
+                    'field2': pure_alpha,
+                    'field3': j_1,
+                    'field4': Product_cost - net_cf
+                }
+
+                # ส่งข้อมูล
+                client.update(data_to_send)
+
+                # แจ้งผู้ใช้ว่าสำเร็จ
+                st.success("อัปเดตข้อมูลไปที่ Thingspeak สำเร็จ!")
+                st.write(data_to_send)
+
+            except Exception as e:
+                # ถ้ามีข้อผิดพลาดอื่น ๆ ให้แสดงออกมาทั้งหมด
+                st.error("เกิดข้อผิดพลาดในการอัปเดต Thingspeak:")
+                st.exception(e) # แสดงรายละเอียดของ error ทั้งหมด
 
 # --- Chart Display Section ---
 # (ส่วนนี้ยังคงเหมือนเดิมทุกประการ)
