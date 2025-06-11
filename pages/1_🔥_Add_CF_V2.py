@@ -137,7 +137,7 @@ st.write("_____")
 
 # แบบใหม่ที่ดีกว่า
 if Check_ADD:
-    button_ADD = st.button("ADD_CF___")
+    button_ADD = st.button("ADD_CF")
     if button_ADD:
         # ตรวจสอบปัญหาการหารด้วย 0 ก่อน
         if Product_cost == 0:
