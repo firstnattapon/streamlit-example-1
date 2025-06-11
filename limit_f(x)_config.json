@@ -1,68 +1,36 @@
 {
-  "settings": {
-    "filter_date": "2023-01-01 12:00:00+07:00",
-    "fix_value": 1500,
-    "thingspeak_channel_id": 2385118,
-    "thingspeak_write_api_key": "IPSG3MMMBJEB9DY8"
-  },
   "assets": [
     {
-      "ticker": "FFWM",
-      "tab_name": "FFWM",
-      "thingspeak_field": 2
+      "symbol": "FFWM",
+      "field": 2
     },
     {
-      "ticker": "NEGG",
-      "tab_name": "NEGG",
-      "thingspeak_field": 3
+      "symbol": "NEGG",
+      "field": 3
     },
     {
-      "ticker": "RIVN",
-      "tab_name": "RIVN",
-      "thingspeak_field": 4
+      "symbol": "RIVN",
+      "field": 4
     },
     {
-      "ticker": "APLS",
-      "tab_name": "APLS",
-      "thingspeak_field": 5
+      "symbol": "APLS",
+      "field": 5
     },
     {
-      "ticker": "NVTS",
-      "tab_name": "NVTS",
-      "thingspeak_field": 6
+      "symbol": "NVTS",
+      "field": 6
     },
     {
-      "ticker": "QXO",
-      "tab_name": "QXO(LV)",
-      "thingspeak_field": 7
+      "symbol": "QXO",
+      "field": 7
     },
     {
-      "ticker": "RXRX",
-      "tab_name": "RXRX(LV)",
-      "thingspeak_field": 8
+      "symbol": "RXRX",
+      "field": 8
     },
     {
-      "ticker": "AGL",
-      "tab_name": "AGL(LV)",
-      "thingspeak_field": 1
-    }
-  ],
-  "iframes": [
-    {
-      "id": "monica_1",
-      "src": "https://monica.im/share/artifact?id=qpAkuKjBpuVz2cp9nNFRs3"
-    },
-    {
-      "id": "monica_2",
-      "src": "https://monica.im/share/artifact?id=wEjeaMxVW6MgDDm3xAZatX"
-    },
-    {
-      "id": "monica_3",
-      "src": "https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK"
-    },
-    {
-      "id": "monica_4",
-      "src": "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx"
+      "symbol": "AGL",
+      "field": 1
     }
   ]
 }
