@@ -187,11 +187,11 @@ num_assets = len(assets_config)
 total_fixed_asset_value = x_5 * num_assets
 total_initial_cash = x_6 * num_assets
 
-st.write("จำนวน Asset ทั้งหมด", f"{num_assets} ตัว")
-st.write("มูลค่า Fixed Asset รวม", f"${total_fixed_asset_value:,.2f}")
-st.write("เงินสดเริ่มต้นรวม", f"${total_initial_cash:,.2f}")
-st.write("✅ SUM Net PV (ตามราคาอ้างอิง)", f"${total_rf:,.2f}")
-# st.sidebar.metric("✅ Real RF (ตัวอย่าง)", f"${total_rf - 0:,.2f}") # หากมีค่าอื่นมาลบ
+st.write("จำนวน Asset ทั้งหมด | ", f"{num_assets} ตัว")
+st.write("มูลค่า Fixed Asset รวม | ", f"${total_fixed_asset_value:,.2f}")
+st.write("เงินสดเริ่มต้นรวม | ", f"${total_initial_cash:,.2f}")
+st.write("✅ SUM Net PV (ตามราคาอ้างอิง) | ", f"${total_rf:,.2f}")
+# st.sidebar.metric("✅ Real RF (ตัวอย่าง) | ", f"${total_rf - 0:,.2f}") # หากมีค่าอื่นมาลบ
 
 # แสดงค่าแต่ละตัวใน sidebar เพื่อตรวจสอบ
 with st.expander("ดู Net PV ของแต่ละตัว"):
