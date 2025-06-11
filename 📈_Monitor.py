@@ -248,6 +248,8 @@ def create_trading_section(config, asset_val, asset_last, df_data, calculations_
     asset_field = config['asset_field']
     field_num_for_update = int(asset_field.replace('field', ''))
 
+    st.subheader(f"Trading Section: {ticker}") # Added a subheader for clarity
+
     try:
         action_val = np.where(
             Nex_day_sell == 1,
@@ -263,30 +265,64 @@ def create_trading_section(config, asset_val, asset_last, df_data, calculations_
         sell_calc = calculations_data['sell']
         buy_calc = calculations_data['buy']
         
-        st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
-        
-        col1, col2, col3 = st.columns(3)
-        if col3.checkbox(f'sell_match_{ticker}'):
-            if col3.button(f"GO_SELL_{ticker}"):
-                client.update({f'field{field_num_for_update}': asset_last - buy_calc[1]})
-                col3.write(asset_last - buy_calc[1])
-                clear_all_caches()
-        
+        # --- START: Improved display section ---
         try:
             current_price = get_cached_price(ticker)
-            pv = current_price * asset_val
-            fix_value = config['fix_c']
-            st.write(f"{current_price:.3f}", f"{pv:,.2f}", f"({pv - fix_value:,.2f})")
-        except:
-            st.write("Price unavailable")
+            if current_price > 0:
+                pv = current_price * asset_val
+                fix_value = config['fix_c']
+                pl_value = pv - fix_value
+                
+                # Determine color for P/L
+                pl_color = "green" if pl_value >= 0 else "red"
+                
+                # Use columns for a clear layout
+                price_col, value_col, pl_col = st.columns(3)
+                
+                with price_col:
+                    st.markdown(f"**Price**")
+                    st.markdown(f"<p style='font-size: 1.2rem; font-weight: bold;'>{current_price:,.3f}</p>", unsafe_allow_html=True)
+
+                with value_col:
+                    st.markdown(f"**Portfolio Value**")
+                    st.markdown(f"<p style='font-size: 1.2rem; font-weight: bold;'>{pv:,.2f}</p>", unsafe_allow_html=True)
+
+                with pl_col:
+                    st.markdown(f"**P/L (vs {fix_value:,})**")
+                    st.markdown(f"<p style='font-size: 1.2rem; font-weight: bold; color:{pl_color};'>{pl_value:,.2f}</p>", unsafe_allow_html=True)
+            else:
+                st.info(f"Price data for {ticker} is currently unavailable.")
+        except Exception as e:
+            st.warning(f"Could not retrieve price data for {ticker}.")
+        # --- END: Improved display section ---
+
+        st.markdown("---") # Visual separator
+
+        # Sell side
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write('**Sell Order Suggestion**')
+            st.write(f"Amount: `{buy_calc[1]}` | Price: `{buy_calc[0]}` | Cost: `{buy_calc[2]}`")
+        with col2:
+            if st.checkbox(f'Execute Sell', key=f'sell_match_{ticker}'):
+                if st.button(f"GO SELL", key=f'go_sell_{ticker}'):
+                    new_asset_value = asset_last - buy_calc[1]
+                    client.update({f'field{field_num_for_update}': new_asset_value})
+                    st.success(f"Sell order sent! New asset value: {new_asset_value}")
+                    clear_all_caches()
         
-        col4, col5, col6 = st.columns(3)
-        st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
-        if col6.checkbox(f'buy_match_{ticker}'):
-            if col6.button(f"GO_BUY_{ticker}"):
-                client.update({f'field{field_num_for_update}': asset_last + sell_calc[1]})
-                col6.write(asset_last + sell_calc[1])
-                clear_all_caches()
+        # Buy side
+        col3, col4 = st.columns([3, 1])
+        with col3:
+            st.write('**Buy Order Suggestion**')
+            st.write(f"Amount: `{sell_calc[1]}` | Price: `{sell_calc[0]}` | Cost: `{sell_calc[2]}`")
+        with col4:
+            if st.checkbox(f'Execute Buy', key=f'buy_match_{ticker}'):
+                if st.button(f"GO BUY", key=f'go_buy_{ticker}'):
+                    new_asset_value = asset_last + sell_calc[1]
+                    client.update({f'field{field_num_for_update}': new_asset_value})
+                    st.success(f"Buy order sent! New asset value: {new_asset_value}")
+                    clear_all_caches()
 
 # Loop to create each trading section
 for config in ASSET_CONFIGS:
@@ -297,7 +333,7 @@ for config in ASSET_CONFIGS:
     calculations_data = calculations.get(ticker, {})
 
     create_trading_section(config, asset_val, asset_last, df_data, calculations_data, nex, Nex_day_sell)
-    st.write("_____")
+    st.write("_____") # This is a separator between each asset section
 
 if st.sidebar.button("RERUN"):
     clear_all_caches()
