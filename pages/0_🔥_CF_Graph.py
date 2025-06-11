@@ -93,7 +93,7 @@ results_rf = {}
 
 # 3. สร้าง Tab "DATA" สำหรับรับ Input
 with tabs[0]:
-    st.header("⚙️ ตั้งค่าทั่วไปและราคาอ้างอิง")
+    st.write("⚙️ ตั้งค่าทั่วไปและราคาอ้างอิง")
     
     # Input ส่วนกลาง
     x_5 = st.number_input('Fixed_Asset_Value (ต่อตัว)', step=1.0, value=1500.)
@@ -101,7 +101,7 @@ with tabs[0]:
     st.write("---")
     
     # สร้าง input สำหรับราคาแต่ละตัวแบบวนลูป
-    st.subheader("ราคาปัจจุบัน (อ้างอิง)")
+    st.write("ราคาปัจจุบัน (อ้างอิง)")
     for asset in assets_config:
         ticker = asset['ticker']
         entry_price = asset['entry_price']
