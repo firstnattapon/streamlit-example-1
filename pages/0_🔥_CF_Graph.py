@@ -115,8 +115,8 @@ with tabs[0]:
         label = f"ราคา_{ticker} (Entry: {entry_price})"
         # เก็บราคาปัจจุบันที่ผู้ใช้กรอกลงใน Dictionary
         current_prices[ticker] = st.number_input(label, step=0.01, value=float(last_price), key=f"price_{ticker}")
-
-# 4. สร้าง Tab ของแต่ละ Asset และแสดงกราฟแบบวนลูป
+        
+# 4. สร้าง Tab ของแต่ละ Asset และแสดงกราฟแบบวนลูป        
 for i, asset in enumerate(assets_config):
     with tabs[i + 1]: # เริ่มจาก tab ที่ 1 (ถัดจาก DATA)
         ticker = asset['ticker']
@@ -125,7 +125,7 @@ for i, asset in enumerate(assets_config):
         # ดึงราคาอ้างอิงจาก Dictionary ที่เราเก็บไว้
         ref_price = current_prices[ticker]
 
-        st.write(f"กราฟแสดงความสัมพันธ์ของ {ticker}")
+        st.subheader(f"กราฟแสดงความสัมพันธ์ของ {ticker}")
         
         # เรียกใช้ฟังก์ชันคำนวณ
         df, df_rf_value = CF_Graph(
@@ -142,14 +142,39 @@ for i, asset in enumerate(assets_config):
             # พล็อตกราฟ
             as_1 = df.set_index('Asset_Price')
             as_1_py = px.line(as_1, title=f"Analysis for {ticker}")
-            as_1_py.add_vline(x=ref_price, line_width=2, line_dash="dash", line_color="red", annotation_text=f"Current: {ref_price:.2f}")
-            as_1_py.add_vline(x=entry_price, line_width=1, line_dash="solid", line_color="green", annotation_text=f"Entry: {entry_price:.2f}")
+
+            # --- ส่วนที่แก้ไข ---
+            # 1. เพิ่มเส้นแนวตั้ง (โดยไม่ใส่ข้อความในคำสั่งนี้)
+            as_1_py.add_vline(x=ref_price, line_width=1.5, line_dash="dash", line_color="red")
+            as_1_py.add_vline(x=entry_price, line_width=1.5, line_dash="solid", line_color="green", opacity=0.6)
+
+            # 2. คำนวณหาตำแหน่งกึ่งกลางของแกน Y เพื่อวางข้อความ
+            y_position = df['net_pv'].median() 
+
+            # 3. เพิ่มข้อความ (Annotation) เองเพื่อควบคุมตำแหน่ง
+            as_1_py.add_annotation(
+                x=ref_price, y=y_position,
+                text=f"Current: {ref_price:.2f}",
+                showarrow=False,
+                yshift=15, # ขยับข้อความขึ้นเล็กน้อย
+                font=dict(color="red", size=12),
+                bgcolor="rgba(255, 255, 255, 0.6)" # เพิ่มพื้นหลังสีขาวโปร่งแสง
+            )
+            as_1_py.add_annotation(
+                x=entry_price, y=y_position,
+                text=f"Entry: {entry_price:.2f}",
+                showarrow=False,
+                yshift=-15, # ขยับข้อความลงเล็กน้อย
+                font=dict(color="green", size=12),
+                bgcolor="rgba(255, 255, 255, 0.6)" # เพิ่มพื้นหลังสีขาวโปร่งแสง
+            )
+            # --- จบส่วนที่แก้ไข ---
+
             st.plotly_chart(as_1_py, use_container_width=True)
             
-            st.metric(label=f"Net PV at current price ({ref_price:.2f})", value=f"${df_rf_value:,.2f}")
-            
-            with st.expander("ดูข้อมูลตาราง"):
-                st.dataframe(df)
+            st.write(f'rf: {df_rf_value}')
+            st.write("_____") 
+
         else:
             st.warning("ไม่สามารถสร้างกราฟได้เนื่องจากไม่มีข้อมูล")
 
