@@ -1,0 +1,42 @@
+[
+    {
+        "ticker": "FFWM",
+        "tab_name": "FFWM",
+        "thingspeak_field": 2
+    },
+    {
+        "ticker": "NEGG",
+        "tab_name": "NEGG",
+        "thingspeak_field": 3
+    },
+    {
+        "ticker": "RIVN",
+        "tab_name": "RIVN",
+        "thingspeak_field": 4
+    },
+    {
+        "ticker": "APLS",
+        "tab_name": "APLS",
+        "thingspeak_field": 5
+    },
+    {
+        "ticker": "NVTS",
+        "tab_name": "NVTS",
+        "thingspeak_field": 6
+    },
+    {
+        "ticker": "QXO",
+        "tab_name": "QXO",
+        "thingspeak_field": 7
+    },
+    {
+        "ticker": "RXRX",
+        "tab_name": "RXRX",
+        "thingspeak_field": 8
+    },
+    {
+        "ticker": "AGL",
+        "tab_name": "AGL",
+        "thingspeak_field": 1
+    }
+]
