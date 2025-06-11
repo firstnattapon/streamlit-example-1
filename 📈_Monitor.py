@@ -237,7 +237,7 @@ x_10 = AGL_OPTION + AGL_REAL
 
 x_6 = col14.number_input('APLS_ASSET', step=0.001, value=APLS_ASSET_LAST)
 
-FFWM_OPTION = 200.
+FFWM_OPTION = 200. 
 FFWM_REAL = col15.number_input('FFWM (LV:200@6.88)', step=0.001, value=FFWM_ASSET_LAST)
 x_4 = FFWM_OPTION + FFWM_REAL
 
