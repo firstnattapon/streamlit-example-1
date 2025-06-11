@@ -1,4 +1,3 @@
-#เริ่ม
 import pandas as pd
 import numpy as np
 from numba import njit
@@ -6,13 +5,12 @@ import yfinance as yf
 import streamlit as st
 import thingspeak
 import json
-import sys # Import sys เพื่อจัดการข้อผิดพลาด
 
 # --- การตั้งค่าและโหลด Configuration ---
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️" , layout = "wide" )
 
 @st.cache_data
-def load_config(filename="limit_f(x)_config.json"):
+def load_config(filename="add_gen_config.json"):
     """
     โหลดการตั้งค่าจากไฟล์ JSON
     ใช้ cache เพื่อให้โหลดไฟล์แค่ครั้งเดียว
@@ -222,48 +220,74 @@ with all_tabs[len(ASSETS) + 1]:
     def get_ref_index_data(tickers, start_date):
         df_list = []
         for ticker in tickers:
-            tickerData = yf.Ticker(ticker)
-            tickerHist = tickerData.history(period='max')[['Close']]
-            tickerHist.index = tickerHist.index.tz_convert(tz='Asia/Bangkok')
-            tickerHist = tickerHist[tickerHist.index >= start_date]
-            tickerHist = tickerHist.rename(columns={'Close': ticker})
-            df_list.append(tickerHist)
+            try:
+                tickerData = yf.Ticker(ticker)
+                tickerHist = tickerData.history(period='max')[['Close']]
+                if tickerHist.empty:
+                    st.warning(f"ไม่พบข้อมูลสำหรับ Ticker: {ticker}")
+                    continue
+                tickerHist.index = tickerHist.index.tz_convert(tz='Asia/Bangkok')
+                tickerHist = tickerHist[tickerHist.index >= start_date]
+                tickerHist = tickerHist.rename(columns={'Close': ticker})
+                df_list.append(tickerHist)
+            except Exception as e:
+                st.error(f"ไม่สามารถดาวน์โหลดข้อมูลสำหรับ {ticker}: {e}")
+        
+        if not df_list:
+            return pd.Series(dtype=float)
+
         prices_df = pd.concat(df_list, axis=1).dropna()
         
-        int_st_list = prices_df.iloc[0][tickers]
+        # Check if prices_df is empty after operations
+        if prices_df.empty:
+            st.warning("ไม่มีข้อมูลราคาร่วมกันในช่วงเวลาที่กำหนด")
+            return pd.Series(dtype=float)
+
+        valid_tickers = prices_df.columns.tolist() # Use only tickers that had data
+        int_st_list = prices_df.iloc[0][valid_tickers]
         int_st = np.prod(int_st_list)
         
         initial_capital_per_stock = FIX_VALUE * 2
-        initial_capital_ref_index_log = initial_capital_per_stock * len(tickers)
+        initial_capital_ref_index_log = initial_capital_per_stock * len(valid_tickers)
         
         def calculate_ref_log(row):
-            int_end = np.prod(row[tickers])
+            int_end = np.prod(row[valid_tickers])
+            # Avoid division by zero or log of zero
+            if int_st <= 0 or int_end <= 0:
+                return np.nan
             return initial_capital_ref_index_log + (-FIX_VALUE * np.log(int_st / int_end))
         
         prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)
-        return prices_df['ref_log']
+        return prices_df['ref_log'].dropna()
 
     ref_log_series = get_ref_index_data(ALL_TICKERS, FILTER_DATE)
     
-    sumusd_data = {
-        f"sumusd_{symbol}": get_limit_fx_data(symbol, act=-1).sumusd 
-        for symbol in ALL_TICKERS
-    }
-    df_sumusd_ = pd.DataFrame(sumusd_data)
-    df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
-    df_sumusd_['ref_log'] = ref_log_series
-    
-    total_initial_capital = sum(
-        get_limit_fx_data(symbol, act=-1).sumusd.iloc[0] for symbol in ALL_TICKERS
-    )
-    
-    net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
-    net_at_index_0 = net_raw.iloc[0]
-    df_sumusd_['net'] = net_raw - net_at_index_0
-    
-    st.line_chart(df_sumusd_.net)
-    with st.expander("ดูข้อมูลดิบ"):
-        st.dataframe(df_sumusd_.reset_index())
+    if not ref_log_series.empty:
+        sumusd_data = {
+            f"sumusd_{symbol}": get_limit_fx_data(symbol, act=-1).sumusd 
+            for symbol in ref_log_series.index.get_level_values(0).unique() if symbol in ALL_TICKERS
+        }
+        df_sumusd_ = pd.DataFrame(sumusd_data)
+        df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
+        
+        # Align indices before calculation
+        df_sumusd_, ref_log_series = df_sumusd_.align(ref_log_series, axis=0, join='inner')
+        df_sumusd_['ref_log'] = ref_log_series
+        
+        total_initial_capital = sum(
+            get_limit_fx_data(symbol, act=-1).sumusd.iloc[0] for symbol in df_sumusd_.columns if symbol.startswith('sumusd_')
+        )
+        
+        net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
+        if not net_raw.empty:
+            net_at_index_0 = net_raw.iloc[0]
+            df_sumusd_['net'] = net_raw - net_at_index_0
+            st.line_chart(df_sumusd_.net)
+            with st.expander("ดูข้อมูลดิบ"):
+                st.dataframe(df_sumusd_.reset_index())
+    else:
+        st.warning("ไม่สามารถสร้างกราฟ Ref_index_Log ได้ เนื่องจากไม่มีข้อมูล")
+
 
 # --- Tab: cf_log ---
 with all_tabs[len(ASSETS) + 2]:
@@ -279,5 +303,7 @@ with all_tabs[len(ASSETS) + 2]:
         st.components.v1.iframe(src, width=width, height=height, scrolling=scrolling)
 
     for frame in IFRAMES:
-        iframe(frame=frame['src'])
+        # ----- จุดที่แก้ไข -----
+        # เปลี่ยนจาก `frame=` เป็น `src=` เพื่อให้ตรงกับนิยามของฟังก์ชัน
+        iframe(src=frame['src'])
         st.write('---')
