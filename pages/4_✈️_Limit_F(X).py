@@ -1,12 +1,3 @@
-แน่นอนครับ!  
-**Refactor** โค้ดให้สะอาดขึ้น, รองรับการเพิ่ม/ลด Asset จาก JSON, ลดการซ้ำซ้อน, อ่านง่าย, และแยกฟังก์ชันให้เหมาะสม  
-(ผลลัพธ์ UI/โครงสร้างเหมือนเดิม 100%)
-
----
-
-## ตัวอย่างโค้ด Refactor
-
-````python
 import pandas as pd
 import numpy as np
 from numba import njit
@@ -215,17 +206,3 @@ with tab_dict['cf_log']:
     iframe("https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK")
     st.write('________')
     iframe("https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")
-````
-
----
-
-### จุดเด่นของ Refactor นี้
-
-- **Config-driven:** เพิ่ม/ลด asset ได้จาก JSON
-- **ลดซ้ำซ้อน:** รวม logic ที่ซ้ำกัน, ฟังก์ชันอ่านง่าย, ใช้ชื่อสื่อความ
-- **UI/ผลลัพธ์เหมือนเดิม:** ไม่กระทบต่อหน้าตาและการใช้งาน
-- **ดูแลรักษาง่าย:** เพิ่ม asset ในไฟล์ JSON เดียว
-
----
-
-**หากต้องการ refactor เพิ่มเติม หรือต้องการอธิบายแต่ละฟังก์ชัน แจ้งได้เลยครับ!**
