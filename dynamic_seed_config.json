@@ -1,0 +1,21 @@
+{
+  "assets": [
+    "FFWM",
+    "NEGG",
+    "RIVN",
+    "APLS",
+    "NVTS",
+    "QXO",
+    "RXRX",
+    "AGL",
+    "TSLA", 
+    "AAPL"
+  ],
+  "default_settings": {
+    "selected_ticker": "FFWM",
+    "start_date": "2025-04-28",
+    "window_size": 30,
+    "num_seeds": 30000,
+    "max_workers": 8
+  }
+}
