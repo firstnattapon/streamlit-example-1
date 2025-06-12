@@ -1,0 +1,66 @@
+{
+  "FFWM": {
+    "Ticker": "FFWM",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
+  },
+  "NEGG": {
+    "Ticker": "NEGG",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
+  },
+  "RIVN": {
+    "Ticker": "RIVN",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
+  },
+  "APLS": {
+    "Ticker": "APLS",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
+  },
+  "NVTS": {
+    "Ticker": "NVTS",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
+  },
+  "QXO": {
+    "Ticker": "QXO",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
+  },
+  "RXRX": {
+    "Ticker": "RXRX",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
+  },
+  "AGL": {
+    "Ticker": "AGL",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
+  }
+}
