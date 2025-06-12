@@ -18,13 +18,25 @@
       { "seed": 1111, "size": 60, "tail": 30 },
       { "seed": 7777, "size": 45, "tail": 20 }
     ],
-    "TSLA": [
-      { "seed": 2024, "size": 100, "tail": 50 },
-      { "seed": 88, "size": 22, "tail": 11 },
-      { "seed": 42, "size": 80, "tail": 40 }
+    "NEGG": [
+      { "seed": 1111, "size": 60, "tail": 30 },
+      { "seed": 7777, "size": 45, "tail": 20 }
     ],
-    "GOOGL": [
-      { "seed": 12345, "size": 90, "tail": 30 }
+    "APLS": [
+      { "seed": 1111, "size": 60, "tail": 30 },
+      { "seed": 7777, "size": 45, "tail": 20 }
+    ],
+    "QXO": [
+      { "seed": 1111, "size": 60, "tail": 30 },
+      { "seed": 7777, "size": 45, "tail": 20 }
+    ],
+    "RXRX": [
+      { "seed": 1111, "size": 60, "tail": 30 },
+      { "seed": 7777, "size": 45, "tail": 20 }
+    ],
+    "AGL": [
+      { "seed": 1111, "size": 60, "tail": 30 },
+      { "seed": 7777, "size": 45, "tail": 20 }
     ]
   }
 }
