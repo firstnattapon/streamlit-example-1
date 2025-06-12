@@ -506,7 +506,7 @@ def render_manual_seed_tab(config: Dict[str, Any]):
 
         with col2:
             c1, c2 = st.columns(2)
-            manual_start_date = c1.date_input("วันที่เริ่มต้น (Start Date)", value=datetime(2025, 4, 28).date(), key="manual_start_compare_tail")
+            manual_start_date = c1.date_input("วันที่เริ่มต้น (Start Date)", value= st.session_state.start_date , key="manual_start_compare_tail")
             manual_end_date = c2.date_input("วันที่สิ้นสุด (End Date)", value=datetime(2025, 7, 24).date(), key="manual_end_compare_tail")
 
         if manual_start_date >= manual_end_date:
