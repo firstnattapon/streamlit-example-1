@@ -551,7 +551,7 @@ def render_analytics_tab():
 # ==============================================================================
 def main():
     st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
-    st.title("🎯 Best Seed Sliding Window Tester (Optimized)")
+    st.markdown("🎯 Best Seed Sliding Window Tester (Optimized)")
     st.caption("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window (Refactored Version)")
 
     config = load_config()
