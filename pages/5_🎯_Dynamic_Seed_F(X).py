@@ -416,7 +416,7 @@ def render_analytics_tab():
         
         with col2:
             st.markdown("##### 2. หรือ โหลดจาก GitHub URL")
-            default_github_url = f"https://raw.githubusercontent.com/firstnattapon/streamlit-example-1/main/Seed_Sliding_Window/{st.session_state.test_ticker}.csv"
+            default_github_url = f"https://raw.githubusercontent.com/firstnattapon/streamlit-example-1/refs/heads/master/Seed_Sliding_Window/{st.session_state.test_ticker}.csv"
             github_url = st.text_input("ป้อน GitHub URL ของไฟล์ CSV:", value=default_github_url, key="github_url_input")
             
             if st.button("📥 โหลดข้อมูลจาก GitHub"):
