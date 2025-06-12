@@ -216,7 +216,7 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
             fix_value = config['fix_c']
             pl_value = pv - fix_value
             st.markdown(
-                f"Price: **{current_price:,.3f}**  |  Portfolio Value: **{pv:,.2f}**      |  P/L (vs {fix_value:,}) :  <span style='color:alpha; font-weight:bold;'>{pl_value:,.2f}</span>",
+                f"Price: **{current_price:,.3f}**  |  Portfolio Value: **{pv:,.2f}**\n    |  P/L (vs {fix_value:,}) :  <span style='color:alpha; font-weight:bold;'>{pl_value:,.2f}</span>",
                 unsafe_allow_html=True
             )
         else: 
