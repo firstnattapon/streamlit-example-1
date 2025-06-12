@@ -197,7 +197,7 @@ def display_dashboard(selected_ticker, config, asset_configs, net_pv_df, buffer_
     """
     ฟังก์ชันสำหรับวาดส่วนแสดงผลหลักทั้งหมด
     """
-    st.header(f"Dashboard for: {selected_ticker}")
+    st.write(f"Dashboard for: {selected_ticker}")
 
     # --- ส่วนแสดงผลหลัก ---
     checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %', value=True)
@@ -285,7 +285,7 @@ def main():
     ฟังก์ชันหลักในการรัน Streamlit Application
     """
     st.set_page_config(page_title="Benchmark_F(X)", page_icon="🛰️", layout="wide")
-    st.title("🛰️ Benchmark F(X) Analysis")
+    st.write("🛰️ Benchmark F(X) Analysis")
     
     config = load_config(CONFIG_FILEPATH)
     if not config:
