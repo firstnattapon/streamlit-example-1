@@ -399,7 +399,7 @@ def render_test_tab():
 
 def render_analytics_tab():
     """แสดงผล UI สำหรับ Tab 'Advanced Analytics Dashboard'"""
-    st.header("วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
+    st.markdown("วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
 
     with st.container(border=True):
         st.subheader("เลือกวิธีการนำเข้าข้อมูล:")
