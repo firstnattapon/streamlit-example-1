@@ -464,7 +464,7 @@ def render_analytics_tab():
                 kpi_cols[2].metric("Profit Factor", f"{profit_factor:.2f}")
                 kpi_cols[3].metric("Total Windows", f"{df.shape[0]}")
 
-                st.subheader("สำรวจข้อมูลราย Window")
+                st.markdown("สำรวจข้อมูลราย Window")
                 format_func = lambda x: f"Window #{x} (Timeline: {df.loc[df['window_number'] == x, 'timeline'].iloc[0]})"
                 selected_window = st.selectbox('เลือก Window:', options=df['window_number'], format_func=format_func)
                 
@@ -480,7 +480,7 @@ def render_analytics_tab():
 
 
             with stitched_dna_tab:
-                st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
+                st.markdown("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
                 st.markdown("จำลองการเทรดจริงโดยนำ `action_sequence` จากแต่ละ Window มา 'เย็บ' ต่อกัน และเปรียบเทียบกับ Benchmark")
 
                 def safe_literal_eval(val):
