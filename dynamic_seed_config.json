@@ -1,15 +1,6 @@
 {
   "assets": [
-    "FFWM",
-    "NEGG",
-    "RIVN",
-    "APLS",
-    "NVTS",
-    "QXO",
-    "RXRX",
-    "AGL",
-    "TSLA", 
-    "APLS"
+    "FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL"
   ],
   "default_settings": {
     "selected_ticker": "FFWM",
@@ -17,5 +8,23 @@
     "window_size": 30,
     "num_seeds": 30000,
     "max_workers": 8
+  },
+  "manual_seed_by_asset": {
+    "default": [
+      { "seed": 999, "size": 50, "tail": 15 },
+      { "seed": 1, "size": 30, "tail": 5 }
+    ],
+    "FFWM": [
+      { "seed": 1111, "size": 60, "tail": 30 },
+      { "seed": 7777, "size": 45, "tail": 20 }
+    ],
+    "TSLA": [
+      { "seed": 2024, "size": 100, "tail": 50 },
+      { "seed": 88, "size": 22, "tail": 11 },
+      { "seed": 42, "size": 80, "tail": 40 }
+    ],
+    "GOOGL": [
+      { "seed": 12345, "size": 90, "tail": 30 }
+    ]
   }
 }
