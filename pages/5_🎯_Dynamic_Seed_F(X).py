@@ -436,7 +436,7 @@ def render_analytics_tab():
     st.divider()
 
     if st.session_state.df_for_analysis is not None:
-        st.subheader("ผลการวิเคราะห์")
+        st.markdown("ผลการวิเคราะห์")
         df_to_analyze = st.session_state.df_for_analysis
 
         try:
@@ -452,7 +452,7 @@ def render_analytics_tab():
 
             with overview_tab:
                 # ... (ส่วนนี้ทำงานได้ดีอยู่แล้ว ไม่ต้องแก้ไข) ...
-                st.subheader("ภาพรวมประสิทธิภาพ (Overall Performance)")
+                st.markdown("ภาพรวมประสิทธิภาพ (Overall Performance)")
                 gross_profit = df[df['max_net'] > 0]['max_net'].sum()
                 gross_loss = abs(df[df['max_net'] <= 0]['max_net'].sum())
                 profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
