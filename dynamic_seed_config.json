@@ -13,7 +13,7 @@
   ],
   "default_settings": {
     "selected_ticker": "FFWM",
-    "start_date": "2025-04-28",
+    "start_date": "2025-06-10",
     "window_size": 30,
     "num_seeds": 30000,
     "max_workers": 8
