@@ -519,7 +519,7 @@ def render_manual_seed_tab(config: Dict[str, Any]):
         for i, line in enumerate(st.session_state.manual_seed_lines):
             cols = st.columns([1, 2, 2, 2])
             cols[0].write(f"**Line {i+1}**")
-            line['seed'] = cols[1].number_input("Input Seed", value=line.get('seed', 1), min_value=1, key=f"seed_compare_tail_{i}")
+            line['seed'] = cols[1].number_input("Input Seed", value=line.get('seed', 1), min_value=0, key=f"seed_compare_tail_{i}")
             line['size'] = cols[2].number_input("Size (ขนาด Sequence เริ่มต้น)", value=line.get('size', 60), min_value=1, key=f"size_compare_tail_{i}")
             line['tail'] = cols[3].number_input("Tail (ส่วนท้ายที่จะใช้)", value=line.get('tail', 10), min_value=1, max_value=line.get('size', 60), key=f"tail_compare_tail_{i}")
 
