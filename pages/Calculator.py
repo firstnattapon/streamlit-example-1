@@ -4,161 +4,165 @@ import yfinance as yf
 import pandas as pd
 import thingspeak
 import json
+from pathlib import Path
 
+# --- 1. การตั้งค่าและโหลด Configuration ---
+st.set_page_config(page_title="Calculator", page_icon="⌨️")
 
-st.set_page_config( page_title="Calculator", page_icon="⌨️")
-
-if st.button("rerun"):
-    st.rerun()
-    
-channel_id = 2385118
-write_api_key = 'IPSG3MMMBJEB9DY8'
-client = thingspeak.Channel(channel_id, write_api_key , fmt='json')
-
-def average_cf (Ticker = 'FFWM' , field = 1 ):
-    tickerData = yf.Ticker( Ticker)
-    tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
-    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-    filter_date = '2024-01-01 12:00:00+07:00'
-    tickerData = tickerData[tickerData.index >= filter_date]
-    tickerData = len(tickerData)
-    
-    client_2 = thingspeak.Channel(2394198 , 'OVZNYQBL57GJW5JF' , fmt='json')
-    fx_2 = client_2.get_field_last(field='{}'.format(field))
-    fx_js_2 = ( int(eval(json.loads(fx_2)["field{}".format(field)])) ) -  393
-    return   fx_js_2 / tickerData 
-    
-st.write('____')
-cf_day = average_cf()
-st.write( 'average_cf_day:' ,  round(cf_day , 2 ), 'USD', " : " , 'average_cf_mo:' , round(cf_day*30 , 2) ,'USD'  )
-st.write('____')
-
-def Production(Ticker = "FFWM" ):
+@st.cache_data(ttl=300) # Cache config data for 5 minutes
+def load_config(filepath="calculator_config.json"):
+    """
+    Loads the configuration from a JSON file with error handling.
+    """
+    config_path = Path(filepath)
+    if not config_path.is_file():
+        st.error(f"Error: Configuration file not found at '{filepath}'")
+        st.stop()
     try:
-        tickerData = yf.Ticker(Ticker)
-        entry  = tickerData.fast_info['lastPrice']  ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
-        if entry < 10000 :
-            samples = np.arange( 0  ,  np.around(entry, 2) * 3 + step  ,  step)
+        with config_path.open('r', encoding='utf-8') as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        st.error(f"Error: Could not decode JSON from '{filepath}'. Please check for syntax errors.")
+        st.stop()
 
-            df = pd.DataFrame()
-            df['Asset_Price'] =   np.around(samples, 2)
-            df['Fixed_Asset_Value'] = Fixed_Asset_Value
-            df['Amount_Asset']  =   df['Fixed_Asset_Value']  / df['Asset_Price']
+# โหลด config และตั้งค่า Thingspeak หลัก
+CONFIG = load_config()
+THINGSPEAK_CLIENT = thingspeak.Channel(2385118, 'IPSG3MMMBJEB9DY8', fmt='json')
 
-            df_top = df[df.Asset_Price >= np.around(entry, 2) ]
-            df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) *  df_top['Asset_Price']
-            df_top.fillna(0, inplace=True)
-            np_Cash_Balan_top = df_top['Cash_Balan_top'].values
+if st.button("Rerun"):
+    st.rerun()
 
-            xx = np.zeros(len(np_Cash_Balan_top)) ; y_0 = Cash_Balan
-            for idx, v_0  in enumerate(np_Cash_Balan_top) :
-                z_0 = y_0 + v_0
-                y_0 = z_0
-                xx[idx] = y_0
+# --- 2. ฟังก์ชันที่ปรับปรุงแล้ว (Refactored Functions) ---
 
-            df_top['Cash_Balan_top'] = xx
-            df_top = df_top.rename(columns={'Cash_Balan_top': 'Cash_Balan'})
-            df_top  = df_top.sort_values(by='Amount_Asset')
-            df_top  = df_top[:-1]
+@st.cache_data(ttl=600) # Cache a Ticker's history for 10 minutes
+def get_ticker_history(ticker_symbol):
+    """Fetches and processes historical data for a given ticker."""
+    ticker = yf.Ticker(ticker_symbol)
+    history = ticker.history(period='max')[['Close']]
+    history.index = history.index.tz_convert(tz='Asia/Bangkok')
+    return round(history, 3)
 
-            df_down = df[df.Asset_Price <= np.around(entry, 2) ]
-            df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) -  df_down['Amount_Asset'])     *  df_down['Asset_Price']
-            df_down.fillna(0, inplace=True)
-            df_down = df_down.sort_values(by='Asset_Price' , ascending=False)
-            np_Cash_Balan_down = df_down['Cash_Balan_down'].values
+def average_cf(cf_config):
+    """Calculates average CF based on parameters from the config dict."""
+    history = get_ticker_history(cf_config['ticker'])
+    
+    filter_date = '2024-01-01 12:00:00+07:00'
+    filtered_data = history[history.index >= filter_date]
+    count_data = len(filtered_data)
+    
+    if count_data == 0:
+        return 0  # Avoid ZeroDivisionError
 
-            xxx= np.zeros(len(np_Cash_Balan_down)) ; y_1 = Cash_Balan
-            for idx, v_1  in enumerate(np_Cash_Balan_down) :
-                z_1 = y_1 + v_1
-                y_1 = z_1
-                xxx[idx] = y_1
+    client_2 = thingspeak.Channel(cf_config['thingspeak_channel'], cf_config['thingspeak_api_key'], fmt='json')
+    field_data = client_2.get_field_last(field=f"{cf_config['field']}")
+    
+    value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
+    adjusted_value = value - cf_config['offset']
+    
+    return adjusted_value / count_data
 
-            df_down['Cash_Balan_down'] = xxx
-            df_down = df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'})
+@st.cache_data(ttl=60) # Cache production cost calculation for 1 minute
+def production_cost(ticker, fixed_asset_value, cash_balance):
+    """Calculates Production Costs. Parameters are now passed in."""
+    try:
+        ticker_info = yf.Ticker(ticker)
+        entry_price = ticker_info.fast_info['lastPrice']
+        step = 0.01
 
-            df = pd.concat([df_top, df_down], axis=0)
-            Production_Costs = (df['Cash_Balan'].values[-1]) -  Cash_Balan
-            return   abs(Production_Costs)
-    except:pass
+        samples = np.arange(step, np.around(entry_price, 2) * 3 + step, step)
+        
+        df = pd.DataFrame({'Asset_Price': np.around(samples, 2)})
+        df['Fixed_Asset_Value'] = fixed_asset_value
+        df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
 
-def Monitor (Ticker = 'FFWM' , field = 2 ):
-    tickerData = yf.Ticker( Ticker)
-    tickerData = round(tickerData.history(period= 'max' )[['Close']] , 3 )
-    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+        # --- Top Part ---
+        df_top = df[df.Asset_Price >= entry_price].copy()
+        df_top['Cash_Balan'] = cash_balance + ((df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']).cumsum().fillna(0)
+        df_top = df_top.sort_values(by='Amount_Asset').iloc[:-1]
+
+        # --- Down Part ---
+        df_down = df[df.Asset_Price < entry_price].copy().sort_values(by='Asset_Price', ascending=False)
+        df_down['Cash_Balan'] = cash_balance + ((df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']).cumsum().fillna(0)
+        
+        # --- Combine ---
+        combined_df = pd.concat([df_top, df_down], axis=0)
+        if combined_df.empty:
+            return None
+            
+        final_cash_balance = combined_df['Cash_Balan'].iloc[-1]
+        return abs(final_cash_balance - cash_balance)
+        
+    except Exception as e:
+        st.warning(f"Could not calculate Production for {ticker}: {e}")
+        return None
+
+def monitor(thingspeak_client, ticker, field):
+    """Monitors an asset and returns the last 7 days of data and the function value."""
+    history = get_ticker_history(ticker)
+    
     filter_date = '2025-04-28 12:00:00+07:00'
-    tickerData = tickerData[tickerData.index >= filter_date]
+    filtered_data = history[history.index >= filter_date].copy()
     
-    fx = client.get_field_last(field='{}'.format(field))
-    fx_js = int(json.loads(fx)["field{}".format(field)])
-    rng = np.random.default_rng(fx_js)  # <-- แก้ตรงนี้
-    data = rng.integers(2, size = len(tickerData)) # <-- แก้ตรงนี้
-    tickerData['action'] = data
-    tickerData['index'] = [ i+1 for i in range(len(tickerData))]
+    field_data = thingspeak_client.get_field_last(field=f'{field}')
+    fx_js = int(json.loads(field_data)[f"field{field}"])
     
-    tickerData_1 = pd.DataFrame(columns=(tickerData.columns))
-    tickerData_1['action'] =  [ i for i in range(5)]
-    tickerData_1.index = ['+0' , "+1" , "+2" , "+3" , "+4"]
-    df = pd.concat([tickerData , tickerData_1], axis=0).fillna("")
-    rng = np.random.default_rng(fx_js)   # <-- แก้ตรงนี้
-    df['action'] = rng.integers(2, size=len(df))   # <-- แก้ตรงนี้
-    return df.tail(7) , fx_js
+    rng = np.random.default_rng(fx_js)
+    
+    # Create the final display DataFrame
+    display_df = pd.DataFrame(index=['+0', "+1", "+2", "+3", "+4"])
+    # Combine historical data (if any) with future placeholders
+    # Note: This part of the logic was complex and might be simplified
+    # based on the exact goal. The current implementation mimics the original.
+    combined_df = pd.concat([filtered_data, display_df]).fillna("")
+    combined_df['action'] = rng.integers(2, size=len(combined_df))
+    
+    if 'index' not in combined_df.columns:
+        combined_df['index'] = ""
+    
+    # Ensure 'index' column is correctly populated for historical data
+    if not filtered_data.empty:
+        combined_df.loc[filtered_data.index, 'index'] = range(1, len(filtered_data) + 1)
+        
+    return combined_df.tail(7), fx_js
 
-df_7 , fx_js  = Monitor(Ticker = 'FFWM', field = 2)
-st.write( 'FFWM')
-st.write("f(x): {}".format(fx_js) ," , " , "Production: {}".format(    np.around(Production('FFWM'), 2) ))
-st.table(df_7)
-st.write("_____") 
+# --- 3. ส่วนแสดงผลหลัก (Main Display Logic) ---
 
-df_7_1 , fx_js_1  = Monitor(Ticker = 'NEGG', field = 3)
-st.write( 'NEGG')
-st.write("f(x): {}".format(fx_js_1) ," , " , "Production: {}".format(    np.around(Production('NEGG'), 2) ))
-st.table(df_7_1)
-st.write("_____") 
+def main():
+    """Main function to run the Streamlit app."""
+    st.write('____')
+    
+    # Display Average CF
+    cf_day = average_cf(CONFIG['average_cf_config'])
+    st.write(f"average_cf_day: {cf_day:.2f} USD  :  average_cf_mo: {cf_day * 30:.2f} USD")
+    st.write('____')
 
-df_7_2 , fx_js_2  = Monitor(Ticker = 'RIVN', field = 4)
-st.write( 'RIVN')
-st.write("f(x): {}".format(fx_js_2) ," , " , "Production: {}".format(    np.around(Production('RIVN'), 2) ))
-st.table(df_7_2)
-st.write("_____") 
+    # Loop through each asset in the config and display its monitor
+    for asset_config in CONFIG['assets']:
+        ticker = asset_config['ticker']
+        monitor_field = asset_config['monitor_field']
+        prod_params = asset_config['production_params']
 
-df_7_3 , fx_js_3  = Monitor(Ticker = 'APLS', field = 5)
-st.write( 'APLS')
-st.write("f(x): {}".format(fx_js_3) ," , " , "Production: {}".format(    np.around(Production('APLS'), 2) ))
-st.table(df_7_3)
-st.write("_____") 
+        # Get data from functions
+        df_7, fx_js = monitor(THINGSPEAK_CLIENT, ticker, monitor_field)
+        prod_cost = production_cost(
+            ticker=ticker,
+            fixed_asset_value=prod_params['fixed_asset_value'],
+            cash_balance=prod_params['cash_balance']
+        )
+        
+        # Format production cost for display
+        prod_cost_display = f"{prod_cost:.2f}" if prod_cost is not None else "N/A"
+        
+        # Display results (UI remains the same)
+        st.write(ticker)
+        st.write(f"f(x): {fx_js} ,  , Production: {prod_cost_display}")
+        st.table(df_7)
+        st.write("_____")
 
-df_7_4 , fx_js_4  = Monitor(Ticker = 'NVTS', field = 6)
-st.write( 'NVTS')
-st.write("f(x): {}".format(fx_js_4) ," , " , "Production: {}".format(    np.around(Production('NVTS'), 2) ))
-st.table(df_7_4)
-st.write("_____")
+    # Footer
+    st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
+    st.write("***RE > 60 USD")
+    st.stop()
 
-df_7_5 , fx_js_5  = Monitor(Ticker = 'QXO', field = 7)
-st.write( 'QXO')
-st.write("f(x): {}".format(fx_js_5) ," , " , "Production: {}".format(    np.around(Production('QXO'), 2) ))
-st.table(df_7_5)
-st.write("_____")
-
-df_7_6 , fx_js_6  = Monitor(Ticker = 'RXRX', field = 8)
-st.write( 'RXRX')
-st.write("f(x): {}".format(fx_js_6) ," , " , "Production: {}".format(    np.around(Production('RXRX'), 2) ))
-st.table(df_7_6)
-st.write("_____") 
-
-df_7_7 , fx_js_7  = Monitor(Ticker = 'AGL', field = 1)
-st.write( 'AGL')
-st.write("f(x): {}".format(fx_js_7) ," , " , "Production: {}".format(    np.around(Production('AGL'), 2) ))
-st.table(df_7_7)
-st.write("_____") 
-
-
-st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
-st.write("***RE > 60 USD")
-st.stop()
-
-
-
-
-
-
-
+if __name__ == "__main__":
+    main()
