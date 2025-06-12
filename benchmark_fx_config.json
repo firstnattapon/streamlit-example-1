@@ -78,7 +78,7 @@
     {
       "ticker": "CLSK", "name": "CLSK", "is_benchmark": false, "is_selectable": true,
       "params": { "pred": 1, "filter_date": "2022-12-21 12:00:00+07:00", "fixed_asset_value": 1500.0, "cash_balance": 650.0, "step": 0.01 }
-    }
+    } 
   ],
   "global_settings": {
     "filter_date_1": "2020-12-21 12:00:00+07:00",
