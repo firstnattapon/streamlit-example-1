@@ -30,21 +30,29 @@ def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         st.warning(f"⚠️ ไม่พบหรือไฟล์ '{filepath}' ไม่ถูกต้อง จะใช้ค่าเริ่มต้นแทน")
-        # Fallback configuration if JSON is missing or invalid
         return {
-            "assets": ["FFWM", "NEGG", "RIVN", "APLS", "NVTS"],
-            "default_settings": {
-                "selected_ticker": "FFWM",
-                "start_date": "2025-06-10",
-                "window_size": 30,
-                "num_seeds": 30000,
-                "max_workers": 8
-            },
-            "manual_seed_presets": [
-                {'seed': 1234, 'size': 60, 'tail': 30},
-                {'seed': 7777, 'size': 30, 'tail': 10}
-            ]
+            "assets": ["FFWM", "NEGG", "RIVN"],
+            "default_settings": {"selected_ticker": "FFWM", "start_date": "2025-06-10", "window_size": 30, "num_seeds": 30000, "max_workers": 8},
+            "manual_seed_by_asset": {
+                "default": [{'seed': 999, 'size': 50, 'tail': 15}],
+                "FFWM": [{'seed': 1234, 'size': 60, 'tail': 30}, {'seed': 7777, 'size': 30, 'tail': 10}]
+            }
         }
+
+def on_ticker_change_callback(config: Dict[str, Any]):
+    """
+    Callback ที่จะถูกเรียกเมื่อ Ticker ใน Tab Manual Seed เปลี่ยน
+    ทำการอัปเดต st.session_state.manual_seed_lines ให้ตรงกับ Ticker ที่เลือก
+    """
+    selected_ticker = st.session_state.get("manual_ticker_key")
+    if not selected_ticker:
+        return
+
+    presets_by_asset = config.get("manual_seed_by_asset", {})
+    default_presets = presets_by_asset.get("default", [{'seed': 999, 'size': 50, 'tail': 15}])
+    
+    new_presets = presets_by_asset.get(selected_ticker, default_presets)
+    st.session_state.manual_seed_lines = new_presets
 
 def initialize_session_state(config: Dict[str, Any]):
     """
@@ -68,18 +76,14 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'max_workers' not in st.session_state:
         st.session_state.max_workers = defaults.get('max_workers', 8)
     
-    # States for other tabs
     if 'df_for_analysis' not in st.session_state:
         st.session_state.df_for_analysis = None
     
     if 'manual_seed_lines' not in st.session_state:
-        # กำหนดค่า fallback เผื่อไม่มี key ในไฟล์ JSON
-        fallback_seeds = [
-            {'seed': 1234, 'size': 60, 'tail': 30},
-            {'seed': 7777, 'size': 30, 'tail': 10}
-        ]
-        # ดึงค่าจาก config, ถ้าไม่เจอให้ใช้ fallback
-        st.session_state.manual_seed_lines = config.get('manual_seed_presets', fallback_seeds)
+        initial_ticker = defaults.get('selected_ticker', 'FFWM')
+        presets_by_asset = config.get("manual_seed_by_asset", {})
+        default_presets = presets_by_asset.get("default", [{'seed': 999, 'size': 50, 'tail': 15}])
+        st.session_state.manual_seed_lines = presets_by_asset.get(initial_ticker, default_presets)
 
 # ==============================================================================
 # 2. Core Calculation & Data Functions
@@ -136,7 +140,6 @@ def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> 
 # ==============================================================================
 # 3. Strategy Action Generation
 # ==============================================================================
-
 def generate_actions_rebalance_daily(num_days: int) -> np.ndarray:
     return np.ones(num_days, dtype=int)
 
@@ -197,7 +200,7 @@ def generate_actions_sliding_window(ticker_data: pd.DataFrame, window_size: int,
         final_actions = np.concatenate((final_actions, best_actions))
         start_date_str = ticker_data.index[start_index].strftime('%Y-%m-%d'); end_date_str = ticker_data.index[end_index-1].strftime('%Y-%m-%d')
         detail = {'window_number': i + 1, 'timeline': f"{start_date_str} ถึง {end_date_str}", 'best_seed': best_seed, 'max_net': round(max_net, 2),
-                  'price_change_pct': round(((prices_window[-1] / prices_window[0]) - 1) * 100, 2), 'action_count': int(np.sum(best_actions)), 
+                  'price_change_pct': round(((prices_window[-1] / prices_window[0]) - 1) * 100, 2), 'action_count': int(np.sum(best_actions)),
                   'window_size': window_len, 'action_sequence': best_actions.tolist()}
         window_details_list.append(detail)
         progress_bar.progress((i + 1) / num_windows, text=f"ประมวลผล Window {i+1}/{num_windows}")
@@ -207,33 +210,32 @@ def generate_actions_sliding_window(ticker_data: pd.DataFrame, window_size: int,
 # ==============================================================================
 # 4. UI Rendering Functions
 # ==============================================================================
-
 def render_settings_tab(config: Dict[str, Any]):
     st.write("⚙️ **การตั้งค่าพารามิเตอร์**")
-    
-    asset_list = config.get('assets', ['FFWM']) 
+
+    asset_list = config.get('assets', ['FFWM'])
     try:
         default_index = asset_list.index(st.session_state.test_ticker)
     except ValueError:
         default_index = 0
 
     st.session_state.test_ticker = st.selectbox(
-        "เลือก Ticker สำหรับทดสอบ", 
-        options=asset_list, 
+        "เลือก Ticker สำหรับทดสอบ",
+        options=asset_list,
         index=default_index
     )
-    
+
     st.write("📅 **ช่วงวันที่สำหรับการวิเคราะห์**"); col1, col2 = st.columns(2)
-    with col1: 
+    with col1:
         st.session_state.start_date = st.date_input("วันที่เริ่มต้น", value=st.session_state.start_date)
-    with col2: 
+    with col2:
         st.session_state.end_date = st.date_input("วันที่สิ้นสุด", value=st.session_state.end_date)
-    
-    if st.session_state.start_date >= st.session_state.end_date: 
+
+    if st.session_state.start_date >= st.session_state.end_date:
         st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
-    else: 
+    else:
         st.info(f"ช่วงวันที่ที่เลือก: {st.session_state.start_date:%Y-%m-%d} ถึง {st.session_state.end_date:%Y-%m-%d}")
-        
+
     st.session_state.window_size = st.number_input("ขนาด Window (วัน)", min_value=2, value=st.session_state.window_size)
     st.session_state.num_seeds = st.number_input("จำนวน Seeds ต่อ Window", min_value=100, value=st.session_state.num_seeds, format="%d")
     st.session_state.max_workers = st.number_input("จำนวน Workers", min_value=1, max_value=16, value=st.session_state.max_workers)
@@ -241,7 +243,7 @@ def render_settings_tab(config: Dict[str, Any]):
 def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
     if not results:
         st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
-    
+
     try:
         longest_index = max((df.index for df in results.values() if not df.empty), key=len, default=None)
     except ValueError:
@@ -249,77 +251,77 @@ def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str
 
     if longest_index is None:
         st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
-    
+
     chart_data_dict = {}
     for name, df in results.items():
         if not df.empty:
             chart_data_dict[name] = df['net'].reindex(longest_index)
-            
+
     chart_data = pd.DataFrame(chart_data_dict)
-    
+
     st.write(chart_title)
     st.line_chart(chart_data)
 
 def render_test_tab():
     st.write("---")
     if st.button("🚀 เริ่มทดสอบ Best Seed (Optimized)", type="primary"):
-        if st.session_state.start_date >= st.session_state.end_date: 
+        if st.session_state.start_date >= st.session_state.end_date:
             st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'"); return
-        
+
         ticker = st.session_state.test_ticker
         start_date_str = st.session_state.start_date.strftime('%Y-%m-%d')
         end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
-        
+
         st.info(f"กำลังดึงข้อมูลสำหรับ **{ticker}** | {start_date_str} ถึง {end_date_str}")
         ticker_data = get_ticker_data(ticker, start_date_str, end_date_str)
-        
-        if ticker_data.empty: 
+
+        if ticker_data.empty:
             st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
-            
+
         prices = ticker_data['Close'].tolist()
         num_days = len(prices)
-        
+
         with st.spinner("กำลังคำนวณกลยุทธ์ต่างๆ..."):
             st.write("🔍 **เริ่มต้นการค้นหา Best Seed ด้วย Sliding Window**")
             actions_sliding, df_windows = generate_actions_sliding_window(
-                ticker_data, st.session_state.window_size, 
+                ticker_data, st.session_state.window_size,
                 st.session_state.num_seeds, st.session_state.max_workers
             )
             actions_min = generate_actions_rebalance_daily(num_days)
             actions_max = generate_actions_perfect_foresight(prices)
-            
+
             results = {}
             strategy_map = {
                 Strategy.SLIDING_WINDOW: actions_sliding.tolist(),
                 Strategy.REBALANCE_DAILY: actions_min.tolist(),
                 Strategy.PERFECT_FORESIGHT: actions_max.tolist()
             }
-            
+
             for strategy_name, actions in strategy_map.items():
                 df = run_simulation(prices, actions)
-                if not df.empty: 
+                if not df.empty:
                     df.index = ticker_data.index[:len(df)]
                 results[strategy_name] = df
-                
+
         st.success("การทดสอบเสร็จสมบูรณ์!")
-        st.write("---"); 
+        st.write("---");
         display_comparison_charts(results)
-        
+
         st.write("📈 **สรุปผลการค้นหา Best Seed**")
         total_actions = df_windows['action_count'].sum()
         total_net = df_windows['max_net'].sum()
-        
+
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Windows", df_windows.shape[0])
         col2.metric("Total Actions", f"{total_actions}/{num_days}")
         col3.metric("Total Net (Sum)", f"${total_net:,.2f}")
-        
+
         st.dataframe(df_windows[['window_number', 'timeline', 'best_seed', 'max_net', 'price_change_pct', 'action_count']], use_container_width=True)
         csv = df_windows.to_csv(index=False)
         st.download_button(
-            label="📥 ดาวน์โหลด Window Details (CSV)", 
-            data=csv, 
-            file_name=f'best_seed_{ticker}_{st.session_state.window_size}w.csv', 
+            label="📥 ดาวน์โหลด Window Details (CSV)",
+            data=csv,
+            file_name=f'best_seed_{ticker}_{st.session_state.window_size}w.csv',
             mime='text/csv'
         )
 
@@ -393,8 +395,8 @@ def render_analytics_tab():
 
                 st.subheader("สำรวจข้อมูลราย Window")
                 selected_window = st.selectbox(
-                    'เลือก Window ที่ต้องการดูรายละเอียด:', 
-                    options=df['window_number'], 
+                    'เลือก Window ที่ต้องการดูรายละเอียด:',
+                    options=df['window_number'],
                     format_func=lambda x: f"Window #{x} (Timeline: {df.loc[df['window_number'] == x, 'timeline'].iloc[0]})"
                 )
                 if selected_window:
@@ -406,7 +408,7 @@ def render_analytics_tab():
                     w_cols[2].metric("Price Change", f"{window_data['price_change_pct']:.2f}%")
                     st.markdown(f"**Action Sequence:**")
                     st.code(window_data['action_sequence'], language='json')
-            
+
             def safe_literal_eval(val):
                 if pd.isna(val): return []
                 if isinstance(val, list): return val
@@ -418,15 +420,15 @@ def render_analytics_tab():
             with stitched_dna_tab:
                 st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
                 st.markdown("จำลองการเทรดจริงโดยนำ **`action_sequence`** จากแต่ละ Window มา 'เย็บ' ต่อกัน และเปรียบเทียบกับ Benchmark")
-                
+
                 df['action_sequence_list'] = [safe_literal_eval(val) for val in df['action_sequence']]
                 df_sorted = df.sort_values('window_number')
                 stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
-                
+
                 dna_cols = st.columns(2)
                 stitch_ticker = dna_cols[0].text_input(
-                    "Ticker สำหรับจำลอง", 
-                    value=st.session_state.test_ticker, 
+                    "Ticker สำหรับจำลอง",
+                    value=st.session_state.test_ticker,
                     key='stitch_ticker_input'
                 )
                 stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime(2024, 1, 1), key='stitch_date_input')
@@ -442,7 +444,7 @@ def render_analytics_tab():
                             else:
                                 prices = sim_data['Close'].tolist()
                                 n_total = len(prices)
-                                
+
                                 final_actions_dna = stitched_actions[:n_total]
                                 df_dna = run_simulation(prices[:len(final_actions_dna)], final_actions_dna)
                                 df_max = run_simulation(prices, generate_actions_perfect_foresight(prices).tolist())
@@ -458,13 +460,13 @@ def render_analytics_tab():
                                 if not df_min.empty:
                                     df_min.index = sim_data.index[:len(df_min)]
                                     results_dna[Strategy.REBALANCE_DAILY] = df_min
-                                
+
                                 st.subheader("Performance Comparison (Net Profit)")
                                 display_comparison_charts(results_dna)
 
                                 st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
                                 metric_cols = st.columns(3)
-                                
+
                                 final_net_max = results_dna.get(Strategy.PERFECT_FORESIGHT, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
                                 final_net_dna = results_dna.get('Stitched DNA', pd.DataFrame({'net': [0]}))['net'].iloc[-1]
                                 final_net_min = results_dna.get(Strategy.REBALANCE_DAILY, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
@@ -483,25 +485,33 @@ def render_manual_seed_tab(config: Dict[str, Any]):
 
     with st.container(border=True):
         st.subheader("1. กำหนดค่า Input สำหรับการทดสอบ")
-        
+
         col1, col2 = st.columns([1, 2])
         with col1:
             asset_list = config.get('assets', ['FFWM'])
             try:
-                default_index = asset_list.index(st.session_state.test_ticker)
-            except ValueError:
+                # Set initial index for the selectbox
+                default_index = asset_list.index(st.session_state.get('manual_ticker_key', st.session_state.test_ticker))
+            except (ValueError, KeyError):
                 default_index = 0
             
-            manual_ticker = st.selectbox("เลือก Ticker", options=asset_list, index=default_index, key="manual_ticker_compare_tail")
+            manual_ticker = st.selectbox(
+                "เลือก Ticker",
+                options=asset_list,
+                index=default_index,
+                key="manual_ticker_key",
+                on_change=on_ticker_change_callback,
+                args=(config,)
+            )
 
         with col2:
             c1, c2 = st.columns(2)
-            manual_start_date = c1.date_input("วันที่เริ่มต้น (Start Date)", value=datetime(2025, 4, 28), key="manual_start_compare_tail")
-            manual_end_date = c2.date_input("วันที่สิ้นสุด (End Date)", value=datetime(2025, 6, 9), key="manual_end_compare_tail")
+            manual_start_date = c1.date_input("วันที่เริ่มต้น (Start Date)", value=datetime(2025, 4, 28).date(), key="manual_start_compare_tail")
+            manual_end_date = c2.date_input("วันที่สิ้นสุด (End Date)", value=datetime(2025, 6, 9).date(), key="manual_end_compare_tail")
 
         if manual_start_date >= manual_end_date:
             st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
-        
+
         st.divider()
 
         st.write("**กำหนดกลยุทธ์ (Seed/Size/Tail) ที่ต้องการเปรียบเทียบ:**")
@@ -512,48 +522,53 @@ def render_manual_seed_tab(config: Dict[str, Any]):
             line['seed'] = cols[1].number_input("Input Seed", value=line.get('seed', 1), min_value=1, key=f"seed_compare_tail_{i}")
             line['size'] = cols[2].number_input("Size (ขนาด Sequence เริ่มต้น)", value=line.get('size', 60), min_value=1, key=f"size_compare_tail_{i}")
             line['tail'] = cols[3].number_input("Tail (ส่วนท้ายที่จะใช้)", value=line.get('tail', 10), min_value=1, max_value=line.get('size', 60), key=f"tail_compare_tail_{i}")
-        
+
         b_col1, b_col2, _ = st.columns([1,1,4])
         if b_col1.button("➕ เพิ่ม Line เปรียบเทียบ"):
             st.session_state.manual_seed_lines.append({'seed': np.random.randint(1, 10000), 'size': 50, 'tail': 20})
             st.rerun()
 
         if b_col2.button("➖ ลบ Line สุดท้าย"):
-            if len(st.session_state.manual_seed_lines) > 1: st.session_state.manual_seed_lines.pop(); st.rerun()
-            else: st.warning("ต้องมีอย่างน้อย 1 line")
-    
+            if len(st.session_state.manual_seed_lines) > 1:
+                st.session_state.manual_seed_lines.pop()
+                st.rerun()
+            else:
+                st.warning("ต้องมีอย่างน้อย 1 line")
+
     st.write("---")
 
     if st.button("📈 เปรียบเทียบประสิทธิภาพ Seeds", type="primary", key="compare_manual_seeds_btn"):
-        if manual_start_date >= manual_end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
-        
+        if manual_start_date >= manual_end_date:
+            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
+
         with st.spinner("กำลังดึงข้อมูลและจำลองการเทรด..."):
             start_str = manual_start_date.strftime('%Y-%m-%d'); end_str = manual_end_date.strftime('%Y-%m-%d')
             ticker_data = get_ticker_data(manual_ticker, start_str, end_str)
 
-            if ticker_data.empty: st.error(f"ไม่พบข้อมูลสำหรับ {manual_ticker} ในช่วงวันที่ที่เลือก"); return
-            
+            if ticker_data.empty:
+                st.error(f"ไม่พบข้อมูลสำหรับ {manual_ticker} ในช่วงวันที่ที่เลือก"); return
+
             prices = ticker_data['Close'].tolist(); num_trading_days = len(prices)
             st.info(f"📊 พบข้อมูลราคา {num_trading_days} วันทำการในช่วงที่เลือก")
 
             results = {}
-            max_sim_len = 0 
+            max_sim_len = 0
 
             for i, line_info in enumerate(st.session_state.manual_seed_lines):
                 input_seed, size_seed, tail_seed = line_info['seed'], line_info['size'], line_info['tail']
-                
+
                 if tail_seed > size_seed:
                     st.error(f"Line {i+1}: Tail ({tail_seed}) ต้องไม่มากกว่า Size ({size_seed})"); return
 
                 rng_best = np.random.default_rng(input_seed)
                 full_actions = rng_best.integers(0, 2, size=size_seed)
                 actions_from_tail = full_actions[-tail_seed:].tolist()
-                
+
                 sim_len = min(num_trading_days, len(actions_from_tail))
                 if sim_len == 0: continue
 
                 prices_to_sim, actions_to_sim = prices[:sim_len], actions_from_tail[:sim_len]
-                
+
                 df_line = run_simulation(prices_to_sim, actions_to_sim)
                 if not df_line.empty:
                     df_line.index = ticker_data.index[:sim_len]
@@ -561,8 +576,9 @@ def render_manual_seed_tab(config: Dict[str, Any]):
                     results[strategy_name] = df_line
                     max_sim_len = max(max_sim_len, sim_len)
 
-            if not results: st.error("ไม่สามารถสร้างผลลัพธ์จาก Seed ที่กำหนดได้"); return
-                
+            if not results:
+                st.error("ไม่สามารถสร้างผลลัพธ์จาก Seed ที่กำหนดได้"); return
+
             if max_sim_len > 0:
                 prices_for_benchmark = prices[:max_sim_len]
                 df_max = run_simulation(prices_for_benchmark, generate_actions_perfect_foresight(prices_for_benchmark).tolist())
@@ -578,10 +594,10 @@ def render_manual_seed_tab(config: Dict[str, Any]):
             st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
             sorted_names = [name for name in results.keys() if name not in [Strategy.PERFECT_FORESIGHT, Strategy.REBALANCE_DAILY]]
             display_order = [Strategy.PERFECT_FORESIGHT] + sorted(sorted_names) + [Strategy.REBALANCE_DAILY]
-            
-            final_results_list = [{'name': name, 'net': results[name]['net'].iloc[-1]} 
+
+            final_results_list = [{'name': name, 'net': results[name]['net'].iloc[-1]}
                                   for name in display_order if name in results and not results[name].empty]
-            
+
             if final_results_list:
                 final_metrics_cols = st.columns(len(final_results_list))
                 for idx, item in enumerate(final_results_list):
@@ -599,34 +615,27 @@ def main():
     initialize_session_state(config)
 
     tab1, tab2, tab3, tab4 = st.tabs([
-        "⚙️ การตั้งค่า", 
-        "🚀 ทดสอบ Best Seed", 
-        "📊 Advanced Analytics", 
+        "⚙️ การตั้งค่า",
+        "🚀 ทดสอบ Best Seed",
+        "📊 Advanced Analytics",
         "🌱 Manual Seed Comparator"
     ])
 
-    with tab1: 
+    with tab1:
         render_settings_tab(config)
-    with tab2: 
+    with tab2:
         render_test_tab()
-    with tab3: 
+    with tab3:
         render_analytics_tab()
-    with tab4: 
+    with tab4:
         render_manual_seed_tab(config)
 
     with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิดการ Refactor"):
         st.markdown("""
-        **Best Seed Sliding Window** เป็นเทคนิคการหา action sequence ที่ดีที่สุดโดย:
-        1. **แบ่งข้อมูล**: แบ่งข้อมูลราคาออกเป็นช่วง ๆ (windows) ตามขนาดที่กำหนด
-        2. **ค้นหา Seed**: ในแต่ละ window ทำการสุ่ม seed หลาย ๆ ตัวและคำนวณผลกำไร
-        3. **เลือก Best Seed**: เลือก seed ที่ให้ผลกำไรสูงสุดในแต่ละ window
-        4. **รวม Actions**: นำ action sequences จากแต่ละ window มาต่อกันเป็น sequence สุดท้าย
-
-        ---
         **หลักการ Refactoring ที่ใช้ในเวอร์ชันนี้:**
-        - **Dynamic Configuration**: ตั้งค่ารายการ `assets`, ค่าเริ่มต้นต่างๆ, และ **ค่าเริ่มต้นของ Manual Seeds** ผ่านไฟล์ `dynamic_seed_config.json` ทำให้ไม่ต้องแก้ไขโค้ด
+        - **Dynamic Configuration**: ตั้งค่ารายการ `assets`, ค่าเริ่มต้นต่างๆ, และ **ค่าเริ่มต้นของ Manual Seeds ที่แตกต่างกันในแต่ละ Asset** ผ่านไฟล์ `dynamic_seed_config.json` ทั้งหมด
+        - **Callback-Driven UI**: ใช้ `on_change` callback ใน `st.selectbox` เพื่ออัปเดตค่า `presets` ของ Manual Seed ทันทีที่ผู้ใช้เปลี่ยน Ticker
         - **Separation of Concerns**: แยกโค้ดส่วน UI (`render_...`), การคำนวณ (`calculate_...`), และการสร้างข้อมูล (`generate_...`) ออกจากกันอย่างชัดเจน
-        - **Single Responsibility**: แต่ละฟังก์ชันมีหน้าที่เดียว เช่น `get_ticker_data` ดึงข้อมูล, `run_simulation` จำลองการเทรด
         - **Centralized Initialization**: ใช้ `initialize_session_state` เพื่อตั้งค่าเริ่มต้นทั้งหมดในที่เดียว ทำให้โค้ดสะอาดและจัดการง่ายขึ้น
         - **Readability**: ใช้ชื่อตัวแปรและฟังก์ชันที่สื่อความหมาย, เพิ่ม Type Hints เพื่อให้โค้ดเข้าใจง่ายขึ้น
         """)
