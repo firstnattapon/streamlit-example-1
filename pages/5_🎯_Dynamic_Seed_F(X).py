@@ -398,7 +398,6 @@ def render_analytics_tab():
     """แสดงผล UI สำหรับ Tab 'Advanced Analytics Dashboard'"""
     st.header("วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
     
-    # --- ใช้ Container เพื่อจัดกลุ่ม UI ของการโหลดข้อมูล ---
     with st.container(border=True):
         st.subheader("เลือกวิธีการนำเข้าข้อมูล:")
         
@@ -416,22 +415,57 @@ def render_analytics_tab():
         
         with col2:
             st.markdown("##### 2. หรือ โหลดจาก GitHub URL")
+            
+            # <-- START: การเปลี่ยนแปลงในส่วนนี้ -->
+            
+            # สร้าง URL เริ่มต้นจาก Ticker ที่เลือกใน Tab 1
             default_github_url = f"https://raw.githubusercontent.com/firstnattapon/streamlit-example-1/main/Seed_Sliding_Window/{st.session_state.test_ticker}.csv"
-            github_url = st.text_input("ป้อน GitHub URL ของไฟล์ CSV:", value=default_github_url, key="github_url_input")
+            
+            # ใช้ st.session_state เพื่อเก็บค่า URL ปัจจุบัน
+            if 'github_url' not in st.session_state:
+                st.session_state.github_url = default_github_url
+            
+            # ถ้าผู้ใช้เปลี่ยน Ticker ใน Tab 1, ให้อัปเดต URL เริ่มต้นใน Tab 3 ด้วย
+            # แต่ถ้าผู้ใช้เคยพิมพ์ URL เองแล้ว จะไม่ไปเขียนทับ
+            if st.session_state.get('last_selected_ticker') != st.session_state.test_ticker:
+                 st.session_state.github_url = default_github_url
+                 st.session_state.last_selected_ticker = st.session_state.test_ticker
+
+            st.session_state.github_url = st.text_input(
+                "ป้อน GitHub URL ของไฟล์ CSV:", 
+                value=st.session_state.github_url, 
+                key="github_url_input_v2" # เปลี่ยน key เพื่อหลีกเลี่ยง conflict
+            )
             
             if st.button("📥 โหลดข้อมูลจาก GitHub"):
-                if github_url:
+                if st.session_state.github_url:
                     try:
-                        raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+                        # ตรวจสอบและแก้ไข URL ให้เป็น raw content URL โดยอัตโนมัติ
+                        raw_url = st.session_state.github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+                        
+                        # ใช้ head request เพื่อเช็คว่าไฟล์มีอยู่จริงหรือไม่ ก่อนดาวน์โหลด
+                        import requests
+                        response = requests.head(raw_url, timeout=5)
+                        response.raise_for_status() # จะโยน Exception ถ้าเจอ 4xx หรือ 5xx error
+
                         with st.spinner("กำลังดาวน์โหลดข้อมูล..."):
                             st.session_state.df_for_analysis = pd.read_csv(raw_url)
                         st.success("✅ โหลดข้อมูลจาก GitHub สำเร็จ!")
+
+                    except requests.exceptions.HTTPError as e:
+                        if e.response.status_code == 404:
+                            st.error(f"❌ ไม่พบไฟล์ที่ URL: `{raw_url}` กรุณาตรวจสอบว่าไฟล์มีอยู่จริงบน GitHub")
+                        else:
+                            st.error(f"❌ เกิดข้อผิดพลาด HTTP ขณะเชื่อมต่อ: {e}")
+                        st.session_state.df_for_analysis = None
                     except Exception as e:
                         st.error(f"❌ ไม่สามารถโหลดข้อมูลจาก URL ได้: {e}")
                         st.session_state.df_for_analysis = None
                 else:
                     st.warning("กรุณาป้อน URL ของไฟล์ CSV")
-    
+            
+            # <-- END: การเปลี่ยนแปลงในส่วนนี้ -->
+
     st.divider()
 
     # --- ส่วนของการวิเคราะห์ (จะทำงานเมื่อมีข้อมูลใน state เท่านั้น) ---
