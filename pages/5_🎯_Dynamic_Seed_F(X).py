@@ -1,396 +1,508 @@
-# เริ่ม
-import pandas as pd
-import numpy as np
-import yfinance as yf
+# v3: Combined Monitor (v1) with Advanced Analytics (v2) into a single app with multiple tabs
+
 import streamlit as st
-import math
+import numpy as np
+import datetime
+import thingspeak
+import pandas as pd
+import yfinance as yf
 import json
-import ast
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
-from datetime import datetime, timedelta
+import concurrent.futures
+from threading import Lock
+import os
+import ast
 from typing import List, Tuple, Dict, Any
 
+st.set_page_config(page_title="Total Asset Monitor", page_icon="🏦", layout="wide")
+
 # ==============================================================================
-# 1. Configuration & Constants
+# 1. GLOBAL CONFIGURATION & CACHE SETUP
 # ==============================================================================
 
-class Strategy:
-    REBALANCE_DAILY = "Rebalance Daily (Min)"
-    PERFECT_FORESIGHT = "Perfect Foresight (Max)"
-    SLIDING_WINDOW = "Best Seed Sliding Window"
-    MANUAL_SEED = "Manual Seed Strategy"
+# --- Session State Initialization for Analytics Tab ---
+# This ensures that variables persist across reruns for the analytics tab
+if 'df_for_analysis' not in st.session_state:
+    st.session_state.df_for_analysis = None
+if 'analytics_ticker' not in st.session_state:
+    st.session_state.analytics_ticker = 'FFWM' # Default ticker for analytics tab
 
-def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
+# --- Cache for Real-time Prices ---
+_cache_lock = Lock()
+_price_cache = {}
+_cache_timestamp = {}
+
+@st.cache_data
+def load_monitor_config(file_path='monitor_config.json'):
+    """Load asset configuration for the real-time monitor from a JSON file."""
+    if not os.path.exists(file_path):
+        st.error(f"Configuration file not found: {file_path}")
+        return []
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {
-            "assets": ["FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL"],
-            "default_settings": {
-                "selected_ticker": "FFWM", "start_date": "2025-04-28",
-                "window_size": 30, "num_seeds": 30000, "max_workers": 8
-            }
-        }
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        st.error(f"Error loading {file_path}: {e}")
+        return []
 
-def initialize_session_state(config: Dict[str, Any]):
-    defaults = config.get('default_settings', {})
-    if 'test_ticker' not in st.session_state:
-        st.session_state.test_ticker = defaults.get('selected_ticker', 'FFWM')
-    if 'start_date' not in st.session_state:
-        st.session_state.start_date = datetime.strptime(defaults.get('start_date', '2025-04-28'), '%Y-%m-%d')
-    if 'end_date' not in st.session_state:
-        st.session_state.end_date = datetime.now()
-    if 'window_size' not in st.session_state:
-        st.session_state.window_size = defaults.get('window_size', 30)
-    if 'num_seeds' not in st.session_state:
-        st.session_state.num_seeds = defaults.get('num_seeds', 30000)
-    if 'max_workers' not in st.session_state:
-        st.session_state.max_workers = defaults.get('max_workers', 8)
-    if 'df_for_analysis' not in st.session_state:
-        st.session_state.df_for_analysis = None
-    if 'manual_seed_lines' not in st.session_state:
-        st.session_state.manual_seed_lines = [
-            {'seed': 1234, 'size': 60, 'tail': 30},
-            {'seed': 7777, 'size': 30, 'tail': 10}
-        ]
+ASSET_CONFIGS = load_monitor_config()
+
+@st.cache_resource
+def get_thingspeak_clients():
+    """Initialize and cache ThingSpeak clients."""
+    try:
+        channel_id_1, key_1 = 2528199, '2E65V8XEIPH9B2VV'
+        channel_id_2, key_2 = 2385118, 'IPSG3MMMBJEB9DY8'
+        return (
+            thingspeak.Channel(channel_id_1, key_1, fmt='json'),
+            thingspeak.Channel(channel_id_2, key_2, fmt='json')
+        )
+    except Exception as e:
+        st.error(f"Failed to initialize ThingSpeak clients: {e}")
+        return None, None
+
+client, client_2 = get_thingspeak_clients()
+
+def clear_all_caches():
+    """Clear all Streamlit and custom caches."""
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    sell.cache_clear()
+    buy.cache_clear()
+    calculate_optimized_cached.cache_clear() # Clear cache for analytics function
+    with _cache_lock:
+        _price_cache.clear()
+        _cache_timestamp.clear()
+    st.success("🗑️ Clear ALL caches complete!")
+    # No st.rerun() here to allow the message to be seen before the rerun from the button.
 
 # ==============================================================================
-# 2. Core Calculation & Data Functions (ไม่มีการแก้ไข)
+# 2. HELPER FUNCTIONS (From v1 - Monitor)
+# ==============================================================================
+
+@lru_cache(maxsize=128)
+def sell(asset, fix_c=1500, Diff=60):
+    if asset == 0: return 0, 0, 0
+    unit_price = round((fix_c - Diff) / asset, 2)
+    adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
+    total = round(asset * unit_price + adjust_qty * unit_price, 2)
+    return unit_price, adjust_qty, total
+
+@lru_cache(maxsize=128)
+def buy(asset, fix_c=1500, Diff=60):
+    if asset == 0: return 0, 0, 0
+    unit_price = round((fix_c + Diff) / asset, 2)
+    adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
+    total = round(asset * unit_price - adjust_qty * unit_price, 2)
+    return unit_price, adjust_qty, total
+
+def get_cached_price(ticker, max_age=30):
+    """Get price from a time-sensitive cache or fetch from yfinance."""
+    now = datetime.datetime.now()
+    with _cache_lock:
+        if (ticker in _price_cache and
+            ticker in _cache_timestamp and
+            (now - _cache_timestamp[ticker]).seconds < max_age):
+            return _price_cache[ticker]
+    try:
+        price = yf.Ticker(ticker).fast_info['lastPrice']
+        with _cache_lock:
+            _price_cache[ticker] = price
+            _cache_timestamp[ticker] = now
+        return price
+    except Exception:
+        return 0.0
+
+@st.cache_data(ttl=60)
+def get_all_assets_from_thingspeak(configs):
+    """Fetch all asset values from ThingSpeak concurrently."""
+    if not client or not configs: return {}
+    assets = {}
+    def fetch_asset(field):
+        try:
+            data = client.get_field_last(field=field)
+            return eval(json.loads(data)[field])
+        except Exception:
+            return 0.0
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
+        future_to_field = {executor.submit(fetch_asset, asset['asset_field']): asset for asset in configs}
+        for future in concurrent.futures.as_completed(future_to_field):
+            config = future_to_field[future]
+            try:
+                assets[config['ticker']] = future.result()
+            except Exception as e:
+                st.error(f"Error fetching asset for {config['ticker']} (field {config['asset_field']}): {e}")
+    return assets
+
+
+# ==============================================================================
+# 3. HELPER FUNCTIONS (From v2 - Analytics)
 # ==============================================================================
 
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """ดึงข้อมูลราคาปิดของ Ticker จาก yfinance และ cache ผลลัพธ์."""
     try:
         data = yf.Ticker(ticker).history(start=start_date, end=end_date)[['Close']]
-        if data.empty: return pd.DataFrame()
+        if data.empty:
+            return pd.DataFrame()
+        # Ensure timezone is consistent
         if data.index.tz is None:
             data = data.tz_localize('UTC').tz_convert('Asia/Bangkok')
         else:
             data = data.tz_convert('Asia/Bangkok')
         return data
     except Exception as e:
-        st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {str(e)}")
+        st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {e}")
         return pd.DataFrame()
 
 @lru_cache(maxsize=2048)
 def calculate_optimized_cached(action_tuple: Tuple[int, ...], price_tuple: Tuple[float, ...], fix: int = 1500) -> Tuple:
+    """ฟังก์ชันคำนวณหลักที่ถูกแคชด้วย lru_cache."""
     action_array = np.asarray(action_tuple, dtype=np.int32)
     price_array = np.asarray(price_tuple, dtype=np.float64)
     n = len(action_array)
     if n == 0: return (np.array([]),) * 6
-    action_array_calc = action_array.copy(); action_array_calc[0] = 1
-    amount = np.empty(n, dtype=np.float64); buffer = np.zeros(n, dtype=np.float64)
-    cash = np.empty(n, dtype=np.float64); asset_value = np.empty(n, dtype=np.float64)
+    action_array_calc = action_array.copy()
+    action_array_calc[0] = 1
+    amount = np.empty(n, dtype=np.float64)
+    buffer = np.zeros(n, dtype=np.float64)
+    cash = np.empty(n, dtype=np.float64)
+    asset_value = np.empty(n, dtype=np.float64)
     sumusd = np.empty(n, dtype=np.float64)
-    initial_price = price_array[0]; amount[0] = fix / initial_price; cash[0] = fix
-    asset_value[0] = amount[0] * initial_price; sumusd[0] = cash[0] + asset_value[0]
+    initial_price = price_array[0]
+    amount[0] = fix / initial_price
+    cash[0] = fix
+    asset_value[0] = amount[0] * initial_price
+    sumusd[0] = cash[0] + asset_value[0]
     refer = -fix * np.log(initial_price / price_array)
     for i in range(1, n):
         curr_price = price_array[i]
-        if action_array_calc[i] == 0: amount[i] = amount[i-1]; buffer[i] = 0
-        else: amount[i] = fix / curr_price; buffer[i] = amount[i-1] * curr_price - fix
-        cash[i] = cash[i-1] + buffer[i]; asset_value[i] = amount[i] * curr_price
+        if action_array_calc[i] == 0:
+            amount[i] = amount[i-1]
+            buffer[i] = 0
+        else:
+            amount[i] = fix / curr_price
+            buffer[i] = amount[i-1] * curr_price - fix
+        cash[i] = cash[i-1] + buffer[i]
+        asset_value[i] = amount[i] * curr_price
         sumusd[i] = cash[i] + asset_value[i]
     return buffer, sumusd, cash, asset_value, amount, refer
 
 def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> pd.DataFrame:
+    """จำลองการเทรดจากราคาและ Action ที่กำหนด และคืนค่าเป็น DataFrame."""
     if not prices or not actions: return pd.DataFrame()
     buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized_cached(tuple(actions), tuple(prices), fix)
     if len(sumusd) == 0: return pd.DataFrame()
     initial_capital = sumusd[0]
-    df = pd.DataFrame({
+    return pd.DataFrame({
         'price': prices, 'action': actions, 'buffer': np.round(buffer, 2),
         'sumusd': np.round(sumusd, 2), 'cash': np.round(cash, 2),
         'asset_value': np.round(asset_value, 2), 'amount': np.round(amount, 2),
         'refer': np.round(refer + initial_capital, 2),
         'net': np.round(sumusd - refer - initial_capital, 2)
     })
-    return df
-
-# ==============================================================================
-# 3. Strategy Action Generation (ไม่มีการแก้ไข)
-# ==============================================================================
 
 def generate_actions_rebalance_daily(num_days: int) -> np.ndarray:
     return np.ones(num_days, dtype=int)
 
 def generate_actions_perfect_foresight(prices: List[float], fix: int = 1500) -> np.ndarray:
-    price_arr = np.asarray(prices, dtype=np.float64); n = len(price_arr)
+    price_arr = np.asarray(prices, dtype=np.float64)
+    n = len(price_arr)
     if n < 2: return np.ones(n, dtype=int)
-    dp = np.zeros(n, dtype=np.float64); path = np.zeros(n, dtype=int); dp[0] = float(fix * 2)
+    dp = np.zeros(n, dtype=np.float64)
+    path = np.zeros(n, dtype=int)
+    dp[0] = float(fix * 2)
     for i in range(1, n):
-        j_indices = np.arange(i); profits = fix * ((price_arr[i] / price_arr[j_indices]) - 1)
+        j_indices = np.arange(i)
+        profits = fix * ((price_arr[i] / price_arr[j_indices]) - 1)
         current_sumusd = dp[j_indices] + profits
-        best_idx = np.argmax(current_sumusd); dp[i] = current_sumusd[best_idx]; path[i] = j_indices[best_idx]
-    actions = np.zeros(n, dtype=int); current_day = np.argmax(dp)
+        best_idx = np.argmax(current_sumusd)
+        dp[i] = current_sumusd[best_idx]
+        path[i] = j_indices[best_idx]
+    actions = np.zeros(n, dtype=int)
+    current_day = np.argmax(dp)
     while current_day > 0:
-        actions[current_day] = 1; current_day = path[current_day]
+        actions[current_day] = 1
+        current_day = path[current_day]
     actions[0] = 1
     return actions
 
-def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int, max_workers: int) -> Tuple[int, float, np.ndarray]:
-    window_len = len(prices_window)
-    if window_len < 2: return 1, 0.0, np.ones(window_len, dtype=int)
-    def evaluate_seed_batch(seed_batch: np.ndarray) -> List[Tuple[int, float]]:
-        results = []
-        for seed in seed_batch:
-            rng = np.random.default_rng(seed)
-            actions_window = rng.integers(0, 2, size=window_len)
-            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(actions_window), tuple(prices_window))
-            net = sumusd - refer - sumusd[0]
-            results.append((seed, net[-1]))
-        return results
-    best_seed_for_window = -1; max_net_for_window = -np.inf
-    random_seeds = np.arange(num_seeds_to_try)
-    batch_size = max(1, num_seeds_to_try // (max_workers * 4))
-    seed_batches = [random_seeds[j:j+batch_size] for j in range(0, len(random_seeds), batch_size)]
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(evaluate_seed_batch, batch) for batch in seed_batches]
-        for future in as_completed(futures):
-            for seed, final_net in future.result():
-                if final_net > max_net_for_window:
-                    max_net_for_window = final_net; best_seed_for_window = seed
-    if best_seed_for_window >= 0:
-        rng_best = np.random.default_rng(best_seed_for_window)
-        best_actions = rng_best.integers(0, 2, size=window_len)
-    else: best_seed_for_window = 1; best_actions = np.ones(window_len, dtype=int); max_net_for_window = 0.0
-    best_actions[0] = 1
-    return best_seed_for_window, max_net_for_window, best_actions
-
-def generate_actions_sliding_window(ticker_data: pd.DataFrame, window_size: int, num_seeds_to_try: int, max_workers: int) -> Tuple[np.ndarray, pd.DataFrame]:
-    prices = ticker_data['Close'].to_numpy(); n = len(prices)
-    final_actions = np.array([], dtype=int); window_details_list = []
-    num_windows = (n + window_size - 1) // window_size
-    progress_bar = st.progress(0, text="กำลังประมวลผล Sliding Windows...")
-    st.write(f"📊 ข้อมูลทั้งหมด: {n} วัน | ขนาด Window: {window_size} วัน | จำนวน Windows: {num_windows}")
-    st.write(f"⚡ ใช้ Parallel Processing: {max_workers} workers"); st.write("---")
-    for i, start_index in enumerate(range(0, n, window_size)):
-        end_index = min(start_index + window_size, n); prices_window = prices[start_index:end_index]; window_len = len(prices_window)
-        if window_len == 0: continue
-        best_seed, max_net, best_actions = find_best_seed_for_window(prices_window, num_seeds_to_try, max_workers)
-        final_actions = np.concatenate((final_actions, best_actions))
-        start_date_str = ticker_data.index[start_index].strftime('%Y-%m-%d'); end_date_str = ticker_data.index[end_index-1].strftime('%Y-%m-%d')
-        detail = {'window_number': i + 1, 'timeline': f"{start_date_str} ถึง {end_date_str}", 'best_seed': best_seed, 'max_net': round(max_net, 2),
-                  'price_change_pct': round(((prices_window[-1] / prices_window[0]) - 1) * 100, 2), 'action_count': int(np.sum(best_actions)), 
-                  'window_size': window_len, 'action_sequence': best_actions.tolist()}
-        window_details_list.append(detail)
-        progress_bar.progress((i + 1) / num_windows, text=f"ประมวลผล Window {i+1}/{num_windows}")
-    progress_bar.empty()
-    return final_actions, pd.DataFrame(window_details_list)
 
 # ==============================================================================
-# 4. UI Rendering Functions
+# 4. UI RENDERING FUNCTIONS
 # ==============================================================================
 
-def render_settings_tab(config: Dict[str, Any]):
-    st.write("⚙️ **การตั้งค่าพารามิเตอร์**")
-    asset_list = config.get('assets', ['FFWM']); default_index = asset_list.index(st.session_state.test_ticker) if st.session_state.test_ticker in asset_list else 0
-    st.session_state.test_ticker = st.selectbox("เลือก Ticker สำหรับทดสอบ", options=asset_list, index=default_index)
-    st.write("📅 **ช่วงวันที่สำหรับการวิเคราะห์**"); col1, col2 = st.columns(2)
-    with col1: st.session_state.start_date = st.date_input("วันที่เริ่มต้น", value=st.session_state.start_date)
-    with col2: st.session_state.end_date = st.date_input("วันที่สิ้นสุด", value=st.session_state.end_date)
-    if st.session_state.start_date >= st.session_state.end_date: st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
-    else: st.info(f"ช่วงวันที่ที่เลือก: {st.session_state.start_date:%Y-%m-%d} ถึง {st.session_state.end_date:%Y-%m-%d}")
-    st.session_state.window_size = st.number_input("ขนาด Window (วัน)", min_value=2, value=st.session_state.window_size)
-    st.session_state.num_seeds = st.number_input("จำนวน Seeds ต่อ Window", min_value=100, value=st.session_state.num_seeds, format="%d")
-    st.session_state.max_workers = st.number_input("จำนวน Workers", min_value=1, max_value=16, value=st.session_state.max_workers)
-
-def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
-    if not results:
-        st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
+def render_monitor_tab(configs, last_assets_all):
+    """Renders the main real-time monitoring dashboard."""
+    st.header("Real-time Asset Monitor & Trading Signals")
     
-    try:
-        longest_index = max((df.index for df in results.values() if not df.empty), key=len, default=None)
-    except ValueError:
-        longest_index = None
+    if not configs:
+        st.warning("Monitor configuration is empty. Please check `monitor_config.json`.")
+        return
 
-    if longest_index is None:
-        st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
+    # --- Controls ---
+    st.markdown("##### Controls")
+    control_cols = st.columns(4)
+    x_2 = control_cols[0].number_input('Difference (Diff)', step=1, value=60, help="ค่าส่วนต่างสำหรับคำนวณราคาเป้าหมาย")
     
-    chart_data_dict = {}
-    for name, df in results.items():
-        if not df.empty:
-            chart_data_dict[name] = df['net'].reindex(longest_index)
+    # --- Asset Inputs & Calculations ---
+    st.markdown("##### Asset Values")
+    asset_inputs = {}
+    cols = st.columns(len(configs))
+    for i, config in enumerate(configs):
+        with cols[i]:
+            ticker = config['ticker']
+            last_asset_val = last_assets_all.get(ticker, 0.0)
+            label = f'{ticker} Asset'
+            asset_inputs[ticker] = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_asset")
+
+    st.divider()
+
+    # --- Trading Sections ---
+    st.markdown("##### Trading Actions")
+    trading_cols = st.columns(len(configs))
+    
+    for i, config in enumerate(configs):
+        with trading_cols[i]:
+            ticker = config['ticker']
+            asset_val = asset_inputs.get(ticker, 0.0)
+            fix_c = config['fix_c']
             
-    chart_data = pd.DataFrame(chart_data_dict)
-    
-    st.write(chart_title)
-    st.line_chart(chart_data)
-    # --- ส่วนของกราฟกระแสเงินสดถูกลบออกไปตามคำขอ ---
+            st.subheader(f"{ticker}")
 
-def render_test_tab():
-    st.write("---")
-    if st.button("🚀 เริ่มทดสอบ Best Seed (Optimized)", type="primary"):
-        if st.session_state.start_date >= st.session_state.end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'"); return
-        ticker = st.session_state.test_ticker
-        start_date_str = st.session_state.start_date.strftime('%Y-%m-%d'); end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
-        st.info(f"กำลังดึงข้อมูลสำหรับ **{ticker}** | {start_date_str} ถึง {end_date_str}")
-        ticker_data = get_ticker_data(ticker, start_date_str, end_date_str)
-        if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
-        prices = ticker_data['Close'].tolist(); num_days = len(prices)
-        with st.spinner("กำลังคำนวณกลยุทธ์ต่างๆ..."):
-            st.write("🔍 **เริ่มต้นการค้นหา Best Seed ด้วย Sliding Window**")
-            actions_sliding, df_windows = generate_actions_sliding_window(ticker_data, st.session_state.window_size, st.session_state.num_seeds, st.session_state.max_workers)
-            actions_min = generate_actions_rebalance_daily(num_days)
-            actions_max = generate_actions_perfect_foresight(prices)
-            results = {}
-            for strategy_name, actions in {Strategy.SLIDING_WINDOW: actions_sliding.tolist(), Strategy.REBALANCE_DAILY: actions_min.tolist(), Strategy.PERFECT_FORESIGHT: actions_max.tolist()}.items():
-                df = run_simulation(prices, actions)
-                if not df.empty: df.index = ticker_data.index
-                results[strategy_name] = df
-        st.success("การทดสอบเสร็จสมบูรณ์!")
-        st.write("---"); display_comparison_charts(results)
-        st.write("📈 **สรุปผลการค้นหา Best Seed**")
-        total_actions = df_windows['action_count'].sum(); total_net = df_windows['max_net'].sum()
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Windows", df_windows.shape[0]); col2.metric("Total Actions", f"{total_actions}/{num_days}"); col3.metric("Total Net (Sum)", f"${total_net:,.2f}")
-        st.dataframe(df_windows[['window_number', 'timeline', 'best_seed', 'max_net', 'price_change_pct', 'action_count']], use_container_width=True)
-        csv = df_windows.to_csv(index=False)
-        st.download_button(label="📥 ดาวน์โหลด Window Details (CSV)", data=csv, file_name=f'best_seed_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
+            # Calculations
+            sell_calc = sell(asset_val, fix_c=fix_c, Diff=x_2)
+            buy_calc = buy(asset_val, fix_c=fix_c, Diff=x_2)
+            
+            # Display Price Info
+            try:
+                current_price = get_cached_price(ticker)
+                if current_price > 0:
+                    pv = current_price * asset_val
+                    pl_value = pv - fix_c
+                    pl_color = "green" if pl_value >= 0 else "red"
+                    st.metric(
+                        label="Current Price",
+                        value=f"{current_price:,.3f}",
+                        delta=f"P/L: {pl_value:,.2f}",
+                        delta_color=pl_color
+                    )
+                    st.write(f"Portfolio Value: **{pv:,.2f}**")
+                else:
+                    st.info(f"Price for {ticker} unavailable.")
+            except Exception:
+                st.warning(f"Could not get price for {ticker}.")
+
+            st.write("---")
+            
+            # Sell Action
+            st.markdown(f"**SELL** at **{buy_calc[0]}**")
+            st.write(f"(Qty: `{buy_calc[1]}`, Total: `{buy_calc[2]}`)")
+            if st.button(f"SELL MATCH {ticker}", key=f'btn_sell_{ticker}'):
+                field_num = int(config['asset_field'].replace('field', ''))
+                new_asset = last_assets_all.get(ticker, 0.0) - buy_calc[1]
+                client.update({f'field{field_num}': new_asset})
+                st.success(f"SELL order for {ticker} sent! New asset: {new_asset}")
+                st.toast(f"Updated {ticker} on ThingSpeak!", icon="📉")
+                # No clear cache here to avoid disrupting other users, will be cleared on manual rerun
+
+            # Buy Action
+            st.markdown(f"**BUY** at **{sell_calc[0]}**")
+            st.write(f"(Qty: `{sell_calc[1]}`, Total: `{sell_calc[2]}`)")
+            if st.button(f"BUY MATCH {ticker}", key=f'btn_buy_{ticker}'):
+                field_num = int(config['asset_field'].replace('field', ''))
+                new_asset = last_assets_all.get(ticker, 0.0) + sell_calc[1]
+                client.update({f'field{field_num}': new_asset})
+                st.success(f"BUY order for {ticker} sent! New asset: {new_asset}")
+                st.toast(f"Updated {ticker} on ThingSpeak!", icon="📈")
+
+def render_update_assets_tab(configs):
+    """Renders the tab for manually updating asset values on ThingSpeak."""
+    st.header("Manual Asset Update on ThingSpeak")
+    st.warning("การเปลี่ยนแปลงค่าในหน้านี้จะเขียนทับข้อมูลบน ThingSpeak โดยตรง", icon="⚠️")
+    
+    if not client or not configs:
+        st.error("ThingSpeak client or configuration not available.")
+        return
+
+    for config in configs:
+        with st.container(border=True):
+            ticker = config['ticker']
+            field = config['asset_field']
+            
+            st.markdown(f"#### Update Asset: `{ticker}` (Field: {field})")
+            new_val = st.number_input(f"Enter new value for {ticker}", step=0.001, value=0.0, key=f'input_update_{ticker}')
+            if st.button(f"UPDATE {ticker} ON THINGSPEAK", key=f'btn_update_{ticker}', type="primary"):
+                try:
+                    client.update({field: new_val})
+                    st.success(f"Successfully updated {ticker} to: {new_val}")
+                    st.toast(f"Sent update for {ticker}!", icon="🛰️")
+                    # It's good practice to clear cache after manual update
+                    if st.checkbox("Clear cache after update?", key=f"clear_cache_{ticker}", value=True):
+                        clear_all_caches()
+                        st.rerun()
+
+                except Exception as e:
+                    st.error(f"Failed to update {ticker}: {e}")
 
 def render_analytics_tab():
-    st.markdown("วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
-    # ... โค้ดส่วนนี้ยาวและไม่มีการเปลี่ยนแปลง จึงขอละไว้เพื่อความกระชับ ...
-    # (วางโค้ดเดิมของ render_analytics_tab ทั้งหมดที่นี่ได้เลย)
-    
-# ==============================================================================
-# 4.5. <<< CORRECTED FUNCTION FOR TAB 4 (Final Version) >>>
-# ==============================================================================
+    """Renders the UI for the 'Advanced Analytics Dashboard' tab, ported from v2."""
+    st.header("Stitched DNA Backtest Analysis")
+    st.markdown("วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึกจากไฟล์ CSV ที่ได้จาก `Best Seed Sliding Window`")
 
-def render_manual_seed_tab(config: Dict[str, Any]):
-    """
-    แสดงผล UI และจัดการ Logic สำหรับ Tab 'Manual Seed'
-    Final Version: ใช้หลักการ 'tail' และเปรียบเทียบแต่ละ line เป็นเส้นกราฟแยกกัน
-    """
-    st.header("🌱 Manual Seed Strategy Comparator")
-    st.markdown("สร้างและเปรียบเทียบ Action Sequences โดยการตัดส่วนท้าย (`tail`) จาก Seed ที่กำหนด")
-
+    # --- Data Loading Section ---
     with st.container(border=True):
-        st.subheader("1. กำหนดค่า Input สำหรับการทดสอบ")
-        
-        # --- Input สำหรับ Ticker และ Date Range ---
-        col1, col2 = st.columns([1, 2])
+        st.markdown("##### 1. นำเข้าข้อมูล")
+        col1, col2 = st.columns(2)
         with col1:
-            asset_list = config.get('assets', ['FFWM'])
-            default_index = asset_list.index(st.session_state.test_ticker) if st.session_state.test_ticker in asset_list else 0
-            manual_ticker = st.selectbox("เลือก Ticker", options=asset_list, index=default_index, key="manual_ticker_compare_tail")
-
+            uploaded_file = st.file_uploader("อัปโหลดไฟล์ CSV จากเครื่อง", type=['csv'], key="local_uploader")
+            if uploaded_file:
+                try:
+                    st.session_state.df_for_analysis = pd.read_csv(uploaded_file)
+                    st.success("✅ โหลดไฟล์สำเร็จ!")
+                except Exception as e:
+                    st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
+                    st.session_state.df_for_analysis = None
+        
         with col2:
-            c1, c2 = st.columns(2)
-            manual_start_date = c1.date_input("วันที่เริ่มต้น (Start Date)", value=datetime(2025, 4, 28), key="manual_start_compare_tail")
-            manual_end_date = c2.date_input("วันที่สิ้นสุด (End Date)", value=datetime(2025, 6, 9), key="manual_end_compare_tail")
-
-        if manual_start_date >= manual_end_date:
-            st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
-        
-        st.divider()
-
-        # --- Input สำหรับ Seed Lines (Dynamic) ---
-        st.write("**กำหนดกลยุทธ์ (Seed/Size/Tail) ที่ต้องการเปรียบเทียบ:**")
-
-        for i, line in enumerate(st.session_state.manual_seed_lines):
-            cols = st.columns([1, 2, 2, 2])
-            cols[0].write(f"**Line {i+1}**")
-            line['seed'] = cols[1].number_input("Input Seed", value=line.get('seed', 1), min_value=1, key=f"seed_compare_tail_{i}")
-            line['size'] = cols[2].number_input("Size (ขนาด Sequence เริ่มต้น)", value=line.get('size', 60), min_value=1, key=f"size_compare_tail_{i}")
-            line['tail'] = cols[3].number_input("Tail (ส่วนท้ายที่จะใช้)", value=line.get('tail', 10), min_value=1, max_value=line.get('size', 60), key=f"tail_compare_tail_{i}")
-        
-        b_col1, b_col2, _ = st.columns([1,1,4])
-        if b_col1.button("➕ เพิ่ม Line เปรียบเทียบ"):
-            st.session_state.manual_seed_lines.append({'seed': np.random.randint(1, 10000), 'size': 50, 'tail': 20})
-            st.rerun()
-
-        if b_col2.button("➖ ลบ Line สุดท้าย"):
-            if len(st.session_state.manual_seed_lines) > 1: st.session_state.manual_seed_lines.pop(); st.rerun()
-            else: st.warning("ต้องมีอย่างน้อย 1 line")
-    
-    st.write("---")
-
-    if st.button("📈 เปรียบเทียบประสิทธิภาพ Seeds", type="primary"):
-        if manual_start_date >= manual_end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
-        
-        with st.spinner("กำลังดึงข้อมูลและจำลองการเทรด..."):
-            start_str = manual_start_date.strftime('%Y-%m-%d'); end_str = manual_end_date.strftime('%Y-%m-%d')
-            ticker_data = get_ticker_data(manual_ticker, start_str, end_str)
-
-            if ticker_data.empty: st.error(f"ไม่พบข้อมูลสำหรับ {manual_ticker} ในช่วงวันที่ที่เลือก"); return
+            st.session_state.analytics_ticker = st.text_input(
+                "หรือ ป้อน Ticker เพื่อโหลดจาก GitHub",
+                value=st.session_state.analytics_ticker,
+                key="github_ticker_input"
+            )
+            github_url = f"https://raw.githubusercontent.com/firstnattapon/streamlit-example-1/main/Seed_Sliding_Window/{st.session_state.analytics_ticker}.csv"
             
-            prices = ticker_data['Close'].tolist(); num_trading_days = len(prices)
-            st.info(f"📊 พบข้อมูลราคา {num_trading_days} วันทำการในช่วงที่เลือก")
+            if st.button("📥 โหลดข้อมูลจาก GitHub"):
+                st.info(f"พยายามโหลดจาก: `{github_url}`")
+                try:
+                    with st.spinner("กำลังดาวน์โหลดข้อมูล..."):
+                        st.session_state.df_for_analysis = pd.read_csv(github_url)
+                    st.success(f"✅ โหลดข้อมูล {st.session_state.analytics_ticker} จาก GitHub สำเร็จ!")
+                except Exception as e:
+                    st.error(f"❌ ไม่สามารถโหลดข้อมูลจาก URL ได้: {e}")
+                    st.session_state.df_for_analysis = None
 
-            results = {}
-            max_sim_len = 0 
+    st.divider()
 
-            for i, line_info in enumerate(st.session_state.manual_seed_lines):
-                input_seed = line_info['seed']; size_seed = line_info['size']; tail_seed = line_info['tail']
-                
-                if tail_seed > size_seed:
-                    st.error(f"Line {i+1}: Tail ({tail_seed}) ต้องไม่มากกว่า Size ({size_seed})"); return
+    # --- Analysis Section ---
+    if st.session_state.df_for_analysis is not None:
+        st.markdown("##### 2. ผลการวิเคราะห์")
+        df_to_analyze = st.session_state.df_for_analysis
 
-                # สร้าง Action Sequence เต็ม -> แล้วตัดเอาเฉพาะส่วนท้าย
-                rng_best = np.random.default_rng(input_seed)
-                full_actions = rng_best.integers(0, 2, size=size_seed)
-                actions_from_tail = full_actions[-tail_seed:].tolist()
-                
-                sim_len = min(num_trading_days, len(actions_from_tail))
-                if sim_len == 0: continue
+        try:
+            # Check for required columns
+            required_cols = ['window_number', 'timeline', 'max_net', 'best_seed', 'action_sequence']
+            if not all(col in df_to_analyze.columns for col in required_cols):
+                st.error(f"ไฟล์ CSV ไม่สมบูรณ์! กรุณาตรวจสอบว่ามีคอลัมน์เหล่านี้: {', '.join(required_cols)}")
+                return
 
-                prices_to_sim = prices[:sim_len]; actions_to_sim = actions_from_tail[:sim_len]
-                
-                df_line = run_simulation(prices_to_sim, actions_to_sim)
-                if not df_line.empty:
-                    df_line.index = ticker_data.index[:sim_len]
-                    strategy_name = f"Seed {input_seed} (Tail {tail_seed})"
-                    results[strategy_name] = df_line
-                    max_sim_len = max(max_sim_len, sim_len)
+            st.markdown("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
+            st.markdown("จำลองการเทรดจริงโดยนำ `action_sequence` จากแต่ละ Window มา 'เย็บ' ต่อกัน และเปรียบเทียบกับ Benchmark")
 
-            if not results: st.error("ไม่สามารถสร้างผลลัพธ์จาก Seed ที่กำหนดได้"); return
-                
-            if max_sim_len > 0:
-                prices_for_benchmark = prices[:max_sim_len]
-                df_max = run_simulation(prices_for_benchmark, generate_actions_perfect_foresight(prices_for_benchmark).tolist())
-                df_min = run_simulation(prices_for_benchmark, generate_actions_rebalance_daily(max_sim_len).tolist())
-                if not df_max.empty:
-                    df_max.index = ticker_data.index[:max_sim_len]; results[Strategy.PERFECT_FORESIGHT] = df_max
-                if not df_min.empty:
-                    df_min.index = ticker_data.index[:max_sim_len]; results[Strategy.REBALANCE_DAILY] = df_min
+            def safe_literal_eval(val):
+                if pd.isna(val) or val is None: return []
+                if isinstance(val, list): return val
+                if isinstance(val, str) and val.strip().startswith('[') and val.strip().endswith(']'):
+                    try: return ast.literal_eval(val)
+                    except (ValueError, SyntaxError): return []
+                return []
 
-            st.success("การเปรียบเทียบเสร็จสมบูรณ์!")
-            display_comparison_charts(results, chart_title="📊 Performance Comparison (Net Profit)")
+            # Create the full 'stitched' action sequence
+            df_to_analyze['action_sequence_list'] = df_to_analyze['action_sequence'].apply(safe_literal_eval)
+            stitched_actions = [action for seq in df_to_analyze.sort_values('window_number')['action_sequence_list'] for action in seq]
 
-            st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
-            sorted_names = [name for name in results.keys() if name not in [Strategy.PERFECT_FORESIGHT, Strategy.REBALANCE_DAILY]]
-            display_order = [Strategy.PERFECT_FORESIGHT] + sorted(sorted_names) + [Strategy.REBALANCE_DAILY]
-            
-            num_cols = len(results)
-            if num_cols > 0:
-                final_metrics_cols = st.columns(num_cols)
-                col_idx = 0
-                for name in display_order:
-                    if name in results and not results[name].empty:
-                        df_result = results[name]; final_net = df_result['net'].iloc[-1]
-                        final_metrics_cols[col_idx].metric(name, f"${final_net:,.2f}")
-                        col_idx += 1
+            dna_cols = st.columns(2)
+            stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.analytics_ticker, key='stitch_ticker_input')
+            stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime.date(2024, 1, 1), key='stitch_date_input')
+
+            if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA", type="primary", use_container_width=True):
+                if not stitched_actions:
+                    st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้")
+                else:
+                    with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker}..."):
+                        end_date = datetime.datetime.now()
+                        sim_data = get_ticker_data(stitch_ticker, stitch_start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+
+                        if sim_data.empty:
+                            st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
+                        else:
+                            prices = sim_data['Close'].tolist()
+                            n_total = len(prices)
+                            final_actions_dna = stitched_actions[:n_total]
+
+                            df_dna = run_simulation(prices[:len(final_actions_dna)], final_actions_dna)
+                            df_max = run_simulation(prices, generate_actions_perfect_foresight(prices).tolist())
+                            df_min = run_simulation(prices, generate_actions_rebalance_daily(n_total).tolist())
+
+                            plot_len = len(df_dna)
+                            if plot_len > 0:
+                                # !!! THE BUG FIX IS APPLIED HERE !!!
+                                # Using .values ensures we get the raw data without trying to align mismatched pandas indexes.
+                                plot_df = pd.DataFrame({
+                                    'Max Performance (Perfect)': df_max['net'].values[:plot_len],
+                                    'Stitched DNA Strategy': df_dna['net'].values,
+                                    'Min Performance (Rebalance Daily)': df_min['net'].values[:plot_len]
+                                }, index=sim_data.index[:plot_len])
+
+                                st.subheader("Performance Comparison (Net Profit)")
+                                st.line_chart(plot_df)
+
+                                st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
+                                final_net_dna = df_dna['net'].iloc[-1]
+                                final_net_min = df_min['net'].iloc[plot_len-1]
+                                metric_cols = st.columns(3)
+                                metric_cols[0].metric("Max Performance (at DNA End)", f"${df_max['net'].iloc[plot_len-1]:,.2f}")
+                                metric_cols[1].metric("Stitched DNA Strategy", f"${final_net_dna:,.2f}", delta=f"{final_net_dna - final_net_min:,.2f} vs Min", delta_color="off")
+                                metric_cols[2].metric("Min Performance (at DNA End)", f"${final_net_min:,.2f}")
+                            else:
+                                st.warning("ไม่มีข้อมูล DNA ที่จะแสดงผลได้")
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล: {e}")
+            st.exception(e) # Show full traceback for debugging
 
 # ==============================================================================
-# 5. Main Application
+# 5. MAIN APPLICATION LOGIC
 # ==============================================================================
 def main():
-    st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
-    st.markdown("🎯 Best Seed Sliding Window Tester (Optimized)")
-    st.caption("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window (Refactored Version)")
+    st.title("🏦 Total Asset Management Dashboard")
 
-    config = load_config()
-    initialize_session_state(config)
+    # --- Data Fetching for Monitor Tab ---
+    # This runs regardless of the selected tab to keep data fresh,
+    # but st.cache_data prevents re-fetching too often.
+    last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS) if ASSET_CONFIGS else {}
+    if not client or not client_2:
+        st.error("ThingSpeak client is not available. Some features will be disabled.")
+        return
+    if not ASSET_CONFIGS:
+        st.stop()
 
-    tab1, tab2, tab3, tab4 = st.tabs(["⚙️ การตั้งค่า", "🚀 ทดสอบ", "📊 Advanced Analytics", "🌱 Manual Seed"])
+    # --- Main Tab Structure ---
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📈 Real-time Monitor",
+        "📝 Update Assets",
+        "🧬 Advanced Analytics",
+        "⚙️ System Control"
+    ])
 
-    with tab1: render_settings_tab(config)
-    with tab2: render_test_tab()
-    with tab3: render_analytics_tab() # ใส่โค้ดส่วนนี้กลับเข้าไปถ้าต้องการ
-    with tab4: render_manual_seed_tab(config)
+    with tab1:
+        render_monitor_tab(ASSET_CONFIGS, last_assets_all)
+
+    with tab2:
+        render_update_assets_tab(ASSET_CONFIGS)
+        
+    with tab3:
+        render_analytics_tab()
+
+    with tab4:
+        st.header("System Control")
+        st.warning("การกระทำในหน้านี้มีผลต่อทั้งแอปพลิเคชัน")
+        if st.button("🔄 RERUN & REFETCH DATA", use_container_width=True):
+            st.rerun()
+        if st.button("🗑️ CLEAR ALL CACHES & RERUN", type="primary", use_container_width=True):
+            clear_all_caches()
+            st.rerun()
 
 if __name__ == "__main__":
     main()
