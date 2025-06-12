@@ -269,7 +269,7 @@ def display_dashboard(selected_ticker, config, asset_configs, net_pv_df, buffer_
         col3.plotly_chart(fig_net_pv, use_container_width=True)
         col4.plotly_chart(fig_price_long, use_container_width=True)
 
-        st.markdown('##### Accumulation & Distribution -vs- Emotional Marketing Cycle')
+        st.write('##### Accumulation & Distribution -vs- Emotional Marketing Cycle')
         st.write('____')
 
     # --- ส่วนแสดงข้อมูลดิบ (ถ้าเลือก) ---
