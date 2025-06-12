@@ -2,250 +2,335 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import streamlit as st
-import thingspeak
 import json
 import plotly.express as px
- 
-st.set_page_config(page_title="Benchmark_F(X)", page_icon="🛰️"  , layout="wide") 
- 
-# @st.cache_data 
-def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
+from typing import Dict, List, Tuple, Any
+
+# --- Constants ---
+CONFIG_FILEPATH = 'benchmark_fx_config.json'
+
+# --- 1. Configuration & Data Loading ---
+
+@st.cache_data
+def load_config(filepath: str) -> Dict[str, Any]:
+    """
+    โหลดและแยกวิเคราะห์ไฟล์ตั้งค่า JSON
+    
+    Args:
+        filepath (str): ที่อยู่ของไฟล์ config.json
+
+    Returns:
+        Dict[str, Any]: Dictionary ของค่าที่ตั้งไว้
+    """
     try:
-        tickerData = yf.Ticker(Ticker)
-        tickerData = tickerData.history(period= 'max' )[['Close']]
-        tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-        filter_date = filter_date
-        tickerData = tickerData[tickerData.index >= filter_date]
-        entry  = tickerData.Close[0] ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
-        if entry < 10000 :
-            samples = np.arange( 0  ,  np.around(entry, 2) * 3 + step  ,  step)
-            df = pd.DataFrame()
-            df['Asset_Price'] =   np.around(samples, 2)
-            df['Fixed_Asset_Value'] = Fixed_Asset_Value
-            df['Amount_Asset']  =   df['Fixed_Asset_Value']  / df['Asset_Price']
-            df_top = df[df.Asset_Price >= np.around(entry, 2) ]
-            df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) *  df_top['Asset_Price']
-            df_top.fillna(0, inplace=True)
-            np_Cash_Balan_top = df_top['Cash_Balan_top'].values
-            xx = np.zeros(len(np_Cash_Balan_top)) ; y_0 = Cash_Balan
-            for idx, v_0  in enumerate(np_Cash_Balan_top) :
-                z_0 = y_0 + v_0
-                y_0 = z_0
-                xx[idx] = y_0
-            df_top['Cash_Balan_top'] = xx
-            df_top = df_top.rename(columns={'Cash_Balan_top': 'Cash_Balan'})
-            df_top  = df_top.sort_values(by='Amount_Asset')
-            df_top  = df_top[:-1]
-            df_down = df[df.Asset_Price <= np.around(entry, 2) ]
-            df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) -  df_down['Amount_Asset'])     *  df_down['Asset_Price']
-            df_down.fillna(0, inplace=True)
-            df_down = df_down.sort_values(by='Asset_Price' , ascending=False)
-            np_Cash_Balan_down = df_down['Cash_Balan_down'].values
-            xxx= np.zeros(len(np_Cash_Balan_down)) ; y_1 = Cash_Balan
-            for idx, v_1  in enumerate(np_Cash_Balan_down) :
-                z_1 = y_1 + v_1
-                y_1 = z_1
-                xxx[idx] = y_1
-            df_down['Cash_Balan_down'] = xxx
-            df_down = df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'})
-            df = pd.concat([df_top, df_down], axis=0)
-            Production_Costs = (df['Cash_Balan'].values[-1]) -  Cash_Balan
-            tickerData['Close'] = np.around(tickerData['Close'].values , 2)
-            tickerData['pred'] = pred
-            tickerData['Fixed_Asset_Value'] = Fixed_Asset_Value
-            tickerData['Amount_Asset']  =  0.
-            tickerData['Amount_Asset'][0]  =  tickerData['Fixed_Asset_Value'][0] / tickerData['Close'][0]
-            tickerData['re']  =  0.
-            tickerData['Cash_Balan'] = Cash_Balan
-            Close =   tickerData['Close'].values
-            pred =  tickerData['pred'].values
-            Amount_Asset =  tickerData['Amount_Asset'].values
-            re = tickerData['re'].values
-            Cash_Balan = tickerData['Cash_Balan'].values
-            for idx, x_0 in enumerate(Amount_Asset):
-                if idx != 0:
-                    if pred[idx] == 0:
-                        Amount_Asset[idx] = Amount_Asset[idx-1]
-                    elif  pred[idx] == 1:
-                        Amount_Asset[idx] =   Fixed_Asset_Value / Close[idx]
-            tickerData['Amount_Asset'] = Amount_Asset
-            for idx, x_1 in enumerate(re):
-                if idx != 0:
-                    if pred[idx] == 0:
-                        re[idx] =  0
-                    elif  pred[idx] == 1:
-                        re[idx] =  (Amount_Asset[idx-1] * Close[idx])  - Fixed_Asset_Value
-            tickerData['re'] = re
-            for idx, x_2 in enumerate(Cash_Balan):
-                if idx != 0:
-                    Cash_Balan[idx] = Cash_Balan[idx-1] + re[idx]
-            tickerData['Cash_Balan'] = Cash_Balan
-            tickerData ['refer_model'] = 0.
-            price = np.around(tickerData['Close'].values, 2)
-            Cash  = tickerData['Cash_Balan'].values
-            refer_model =  tickerData['refer_model'].values
-            for idx, x_3 in enumerate(price):
-                try:
-                    refer_model[idx] = (df[df['Asset_Price'] == x_3]['Cash_Balan'].values[0])
-                except:
-                    refer_model[idx] = np.nan
-            tickerData['Production_Costs'] = abs(Production_Costs)
-            tickerData['refer_model'] = refer_model
-            tickerData['pv'] =  tickerData['Cash_Balan'] + ( tickerData['Amount_Asset'] * tickerData['Close']  )
-            tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value
-            tickerData['net_pv'] =   tickerData['pv'] - tickerData['refer_pv']
-            tickerData = tickerData.reset_index()
-            final = tickerData[['re' , 'net_pv']]
-            return  final
-    except:pass
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        st.error(f"ไม่พบไฟล์ตั้งค่า: {filepath}")
+        return {}
+    except json.JSONDecodeError:
+        st.error(f"ไฟล์ {filepath} มีรูปแบบ JSON ไม่ถูกต้อง")
+        return {}
+
+@st.cache_data
+def fetch_price_history(ticker: str) -> pd.DataFrame:
+    """
+    ดึงข้อมูลราคาย้อนหลังทั้งหมดสำหรับ Ticker ที่กำหนดและแปลง Timezone
+    
+    Args:
+        ticker (str): สัญลักษณ์ Ticker
+
+    Returns:
+        pd.DataFrame: DataFrame ของราคาปิด หรือ DataFrame ว่างถ้าไม่สำเร็จ
+    """
+    try:
+        ticker_data = yf.Ticker(ticker)
+        history = ticker_data.history(period='max')[['Close']]
+        if history.empty:
+            return pd.DataFrame()
+        history.index = history.index.tz_convert(tz='Asia/bangkok')
+        return history
+    except Exception as e:
+        # st.warning(f"ไม่สามารถดึงข้อมูลราคาสำหรับ {ticker} ได้: {e}")
+        return pd.DataFrame()
+
+# --- 2. Core Calculation Logic ---
+
+def calculate_asset_dynamics(ticker: str, params: Dict[str, Any]) -> pd.DataFrame:
+    """
+    คำนวณค่า re และ net_pv สำหรับ asset เดียว (เดิมคือฟังก์ชัน delta2)
+    
+    Args:
+        ticker (str): สัญลักษณ์ Ticker
+        params (Dict[str, Any]): Dictionary ของพารามิเตอร์สำหรับ Ticker นี้
+
+    Returns:
+        pd.DataFrame: DataFrame ที่มีคอลัมน์ 're' และ 'net_pv'
+    """
+    try:
+        # ดึงค่า settings จาก params dict
+        pred = params['pred']
+        filter_date = params['filter_date']
+        step = params['step']
+        fixed_asset_value = params['fixed_asset_value']
+        initial_cash_balance = params['cash_balance']
+
+        hist_data = fetch_price_history(ticker)
+        if hist_data.empty:
+            return pd.DataFrame()
+
+        filtered_data = hist_data[hist_data.index >= filter_date].copy()
+        if filtered_data.empty:
+            return pd.DataFrame()
+
+        entry_price = filtered_data.Close[0]
         
-# @st.cache_data
-def Un_15 (Ticker = '' ):
-    a_0 = pd.DataFrame()
-    a_1 = pd.DataFrame()
+        # --- สร้าง Grid อ้างอิง ---
+        samples = np.arange(0, np.around(entry_price, 2) * 3 + step, step)
+        grid_df = pd.DataFrame({'Asset_Price': np.around(samples, 2)})
+        grid_df['Fixed_Asset_Value'] = fixed_asset_value
+        grid_df['Amount_Asset'] = grid_df['Fixed_Asset_Value'] / grid_df['Asset_Price']
+        
+        # คำนวณ Cash Balance สำหรับ Grid ราคาขึ้น (df_top)
+        df_top = grid_df[grid_df.Asset_Price >= np.around(entry_price, 2)].copy()
+        df_top['Cash_Balan'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
+        df_top.fillna(0, inplace=True)
+        df_top['Cash_Balan'] = initial_cash_balance + df_top['Cash_Balan'].cumsum()
+        df_top = df_top.sort_values(by='Amount_Asset')[:-1]
+
+        # คำนวณ Cash Balance สำหรับ Grid ราคาลง (df_down)
+        df_down = grid_df[grid_df.Asset_Price <= np.around(entry_price, 2)].copy()
+        df_down = df_down.sort_values(by='Asset_Price', ascending=False)
+        df_down['Cash_Balan'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
+        df_down.fillna(0, inplace=True)
+        df_down['Cash_Balan'] = initial_cash_balance + df_down['Cash_Balan'].cumsum()
+        
+        simulation_grid = pd.concat([df_top, df_down], axis=0)
+        production_costs = abs(simulation_grid['Cash_Balan'].iloc[-1] - initial_cash_balance)
+        
+        # --- จำลองการเทรดตามประวัติราคา ---
+        sim_df = filtered_data
+        sim_df['Close'] = np.around(sim_df['Close'].values, 2)
+        sim_df['pred'] = pred
+        sim_df['Fixed_Asset_Value'] = fixed_asset_value
+        sim_df['Amount_Asset'] = 0.0
+        sim_df.iloc[0, sim_df.columns.get_loc('Amount_Asset')] = fixed_asset_value / sim_df.iloc[0]['Close']
+        sim_df['re'] = 0.0
+        sim_df['Cash_Balan'] = initial_cash_balance
+
+        # Vectorized calculation ไม่ได้ง่ายสำหรับ stateful loop แบบนี้, for-loop ยังคงจำเป็น
+        amount_asset_arr = sim_df['Amount_Asset'].values
+        close_arr = sim_df['Close'].values
+        re_arr = sim_df['re'].values
+        cash_balan_arr = sim_df['Cash_Balan'].values
+
+        for i in range(1, len(sim_df)):
+            if pred == 1: # สมมติว่า pred เป็น 1 ตลอดตามโค้ดเดิม
+                amount_asset_arr[i] = fixed_asset_value / close_arr[i]
+                re_arr[i] = (amount_asset_arr[i-1] * close_arr[i]) - fixed_asset_value
+            else: # pred == 0
+                amount_asset_arr[i] = amount_asset_arr[i-1]
+                re_arr[i] = 0
+            cash_balan_arr[i] = cash_balan_arr[i-1] + re_arr[i]
+
+        sim_df['Amount_Asset'] = amount_asset_arr
+        sim_df['re'] = re_arr
+        sim_df['Cash_Balan'] = cash_balan_arr
+
+        # --- คำนวณค่าสุดท้าย ---
+        sim_df = sim_df.merge(simulation_grid[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}),
+                              left_on='Close', right_on='Asset_Price', how='left')
+        
+        sim_df['Production_Costs'] = production_costs
+        sim_df['pv'] = sim_df['Cash_Balan'] + (sim_df['Amount_Asset'] * sim_df['Close'])
+        sim_df['refer_pv'] = sim_df['refer_model'] + fixed_asset_value
+        sim_df['net_pv'] = sim_df['pv'] - sim_df['refer_pv']
+
+        return sim_df[['re', 'net_pv']]
+
+    except Exception as e:
+        # st.warning(f"เกิดข้อผิดพลาดในการคำนวณสำหรับ Ticker '{ticker}': {e}")
+        return pd.DataFrame()
+
+
+@st.cache_data
+def process_assets_data(tickers_to_process: Tuple[str, ...], _config_dict: Dict[str, Any]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, np.ndarray]:
+    """
+    ประมวลผลสินทรัพย์หลายตัวพร้อมกัน และรวมผลลัพธ์ (เดิมคือฟังก์ชัน Un_15)
     
-    for  x in (Ticker) :
-      a_2 = delta2( x  , pred= 1  )[['re' , 'net_pv'] ]
-      a_0 = pd.concat([a_0 , a_2[['re']].rename( columns={"re": "{}_re".format(x) })   ], axis = 1)
-      a_1 = pd.concat([a_1 , a_2[['net_pv']].rename(columns={"net_pv": "{}_net_pv".format(x) }) ], axis = 1)
+    Args:
+        tickers_to_process (Tuple[str, ...]): Tuple ของ Ticker ที่จะประมวลผล (จำเป็นต้องเป็น Tuple เพื่อให้ cache ทำงาน)
+        _config_dict (Dict[str, Any]): Dictionary ของค่าตั้งค่าทั้งหมด
+
+    Returns:
+        Tuple: (net_pv_df, re_df, buffer_df, diff_fx)
+    """
+    all_results = {
+        ticker: calculate_asset_dynamics(ticker, _config_dict[ticker]['params'])
+        for ticker in tickers_to_process
+    }
+    valid_results = {t: res for t, res in all_results.items() if not res.empty}
     
-    net_dd = []
-    net = 0
-    for i in  a_0.sum(axis=1 ,    numeric_only=True).values  :
-      net = net+i
-      net_dd.append(net)
+    if not valid_results:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), np.array([])
 
-    a_0['Sum_Buffer'] =    net_dd
-    a_1['Sum_Delta'] =     a_1.sum(axis=1 ,    numeric_only=True )
+    re_df = pd.concat([res[['re']].rename(columns={"re": f"{t}_re"}) for t, res in valid_results.items()], axis=1)
+    net_pv_df = pd.concat([res[['net_pv']].rename(columns={"net_pv": f"{t}_net_pv"}) for t, res in valid_results.items()], axis=1)
 
-    a_3 = pd.DataFrame()
-    net_dd_1 = [] #1
-    net_1 = 0
-    for i in   a_0['{}_re'.format(Ticker[0])].values :
-        net_1 = net_1+i
-        net_dd_1.append(net_1)
-    a_3['{}_Buffer'.format(Ticker[0])] =    net_dd_1
+    re_df['Sum_Buffer'] = re_df.sum(axis=1, numeric_only=True).cumsum()
+    net_pv_df['Sum_Delta'] = net_pv_df.sum(axis=1, numeric_only=True)
 
-    net_dd_2 = [] #2
-    net_2 = 0
-    for i in   a_0['{}_re'.format(Ticker[1])].values :
-        net_2 = net_2+i
-        net_dd_2.append(net_2)
-    a_3['{}_Buffer'.format(Ticker[1])] =  net_dd_2
+    buffer_df = pd.DataFrame()
+    for ticker in valid_results.keys():
+        buffer_df[f'{ticker}_Buffer'] = re_df[f'{ticker}_re'].cumsum()
 
-    net_dd_3 = [] #3
-    net_3 = 0
-    for i in   a_0['{}_re'.format(Ticker[2])].values :
-        net_3 = net_3+i
-        net_dd_3.append(net_3)
-    a_3['{}_Buffer'.format(Ticker[2])] =  net_dd_3
+    last_ticker = tickers_to_process[-1]
+    diff_fx = np.array([])
+    if last_ticker in valid_results:
+        diff_fx = valid_results[last_ticker].net_pv.diff().fillna(0.0).values
+        
+    return net_pv_df, re_df, buffer_df, diff_fx
 
-    net_dd_4 = [] #4
-    net_4 = 0
-    for i in   a_0['{}_re'.format(Ticker[3])].values :
-        net_4 = net_4+i
-        net_dd_4.append(net_4)
-    a_3['{}_Buffer'.format(Ticker[3])] =  net_dd_4
+# --- 3. UI Display and Application Flow ---
+
+def display_dashboard(selected_ticker, config, asset_configs, net_pv_df, buffer_df, diff_fx):
+    """
+    ฟังก์ชันสำหรับวาดส่วนแสดงผลหลักทั้งหมด
+    """
+    st.header(f"Dashboard for: {selected_ticker}")
+
+    # --- ส่วนแสดงผลหลัก ---
+    checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %', value=True)
+    if checkbox1:
+        delta_percent_df = pd.DataFrame()
+        
+        # สร้าง Delta_2 (กราฟเปอร์เซ็นต์) แบบ Dynamic
+        for ticker in net_pv_df.columns[net_pv_df.columns.str.endswith('_net_pv')]:
+            base_ticker = ticker.replace('_net_pv', '')
+            asset_name = asset_configs[base_ticker]['name']
+            net_pv_col = f'{base_ticker}_net_pv'
+            buffer_col = f'{base_ticker}_Buffer'
+            
+            if buffer_col in buffer_df.columns:
+                fixed_value = asset_configs[base_ticker]['params']['fixed_asset_value']
+                survival = buffer_df[buffer_col].abs().max() + buffer_df[buffer_col].abs().min()
+                # survival = (abs(np.min(buffer_df[buffer_col].values)) + abs(np.max(buffer_df[buffer_col].values)))
+                delta_percent_df[asset_name] = net_pv_df[net_pv_col] / (fixed_value + survival) * 100
+
+        # --- ดึงข้อมูลราคาและเตรียมกราฟ ---
+        price_history = fetch_price_history(selected_ticker)
+        filter_date_1 = config['global_settings']['filter_date_1']
+        filter_date_2 = config['global_settings']['filter_date_2']
+        
+        price_data_long = price_history[price_history.index >= filter_date_1].reset_index(drop=True)
+        price_data_short = price_history[price_history.index >= filter_date_2].reset_index(drop=True)
+        
+        if len(diff_fx) == len(price_data_short):
+            price_data_short['Diff'] = diff_fx
+        else:
+            price_data_short['Diff'] = 0
+
+        # --- แสดงข้อมูลตัวเลข ---
+        st.write('____')
+        add_risk = net_pv_df[f'{selected_ticker}_net_pv'].iloc[-1]
+        survival_selected = buffer_df[f'{selected_ticker}_Buffer'].abs().max() + buffer_df[f'{selected_ticker}_Buffer'].abs().min()
+        fixed_asset_value_selected = asset_configs[selected_ticker]['params']['fixed_asset_value']
+        
+        st.metric(label="Add Risk", value=f"{add_risk:,.2f}")
+        st.metric(label="Survival Value", value=f"{survival_selected:,.2f}")
+        st.write(f'Data > add_risk/Fixed: {fixed_asset_value_selected / add_risk:.2f} , Premium & Discount: {(fixed_asset_value_selected + survival_selected) / add_risk:.2f}')
+        
+        try:
+            yahoo = yf.Ticker(selected_ticker)
+            bs = yahoo.get_balance_sheet().iloc[:, 0]
+            net_current_assets = bs.get('CurrentAssets', 0) - (bs.get('CurrentLiabilities', 0) + bs.get('LongTermDebt', 0))
+            net_current_assets_pct = (net_current_assets / bs.get('CurrentAssets', 1)) * 100
+            st.write(f'Finance > Net Current Assets %: {net_current_assets_pct:.2f}%')
+        except Exception:
+            st.write('Finance > ไม่สามารถดึงข้อมูล Balance Sheet ได้')
+        st.write('____')
+
+        # --- วาดกราฟ ---
+        col1, col2 = st.columns(2)
+        col3, col4 = st.columns(2)
+        
+        nbinsy_val = config['global_settings'].get('nbinsy_default', 40)
+        
+        fig_price_short = px.line(price_data_short, y='Close', title=f'ราคาปิด (ตั้งแต่ {filter_date_2.split(" ")[0]})')
+        fig_density = px.density_heatmap(price_data_short, x="Diff", y="Close", marginal_y="histogram", text_auto=True, nbinsy=nbinsy_val, color_continuous_scale=px.colors.sequential.Turbo, title="Price vs. Daily Net PV Change")
+        fig_density.add_hline(y=price_data_short.Close.iloc[-1], line_color='Red', annotation_text="Current Price")
+        
+        fig_net_pv = px.line(net_pv_df, y=f'{selected_ticker}_net_pv', title=f'Net PV ของ {selected_ticker}')
+        fig_price_long = px.line(price_data_long, y='Close', title=f'ราคาปิด (ตั้งแต่ {filter_date_1.split(" ")[0]})')
+        fig_price_long.add_vline(x=len(price_data_long) - len(price_data_short), line_color='Red', annotation_text="Start of Recent Period")
+
+        col1.plotly_chart(fig_price_short, use_container_width=True)
+        col2.plotly_chart(fig_density, use_container_width=True)
+        col3.plotly_chart(fig_net_pv, use_container_width=True)
+        col4.plotly_chart(fig_price_long, use_container_width=True)
+
+        st.markdown('##### Accumulation & Distribution -vs- Emotional Marketing Cycle')
+        st.write('____')
+
+    # --- ส่วนแสดงข้อมูลดิบ (ถ้าเลือก) ---
+    if st.checkbox('Show Raw Data', value=False):
+        st.subheader("Raw Data Inspector")
+        st.write(f"Net PV (%) vs Benchmarks")
+        st.line_chart(delta_percent_df if 'delta_percent_df' in locals() else "Please check the box above first.")
+        st.write("Buffer of each Asset")
+        st.line_chart(buffer_df)
+
+def main():
+    """
+    ฟังก์ชันหลักในการรัน Streamlit Application
+    """
+    st.set_page_config(page_title="Benchmark_F(X)", page_icon="🛰️", layout="wide")
+    st.title("🛰️ Benchmark F(X) Analysis")
     
-    #diff
-    di = a_2
-    di['dif'] = di.net_pv.diff().fillna(0.0)
-    di = di.dif.values
-    return  a_1 , a_0 , a_3 , di
+    config = load_config(CONFIG_FILEPATH)
+    if not config:
+        st.stop()
 
-ans = ['SSII', 'LUNR', 'QXO', 'QUBT', 'BULL', 'SOUN', 'JANX', 'NMAX', 'DJT', 'CLSK']
-
-col1, col2  = st.columns(2)
-number = col2.number_input('Ticker_Yahoo', value=0 , step =1 , min_value=0  ) 
-title = col1.text_input('Ticker_Yahoo', ans[number])
-
-# try:
-Ticker_s = ['SPY' , 'QQQM' , 'GLD' , title ]
-Delta , Sum_Buffer , Buffer , diff_fx =  Un_15(Ticker = Ticker_s )
-
-checkbox1 = st.checkbox('Delta_Benchmark_F(X) / Max.Sum_Buffer %' , value=1 )
-if checkbox1 :
-    Delta_2 = Delta
-
-    Delta_2['S&P_500_ETF'] = Delta_2['{}_net_pv'.format(Ticker_s[0])].values/(1500+(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[0])].values))+abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[0])].values))))*100
-    Delta_2['NASDAQ_100_ETF'] = Delta_2['{}_net_pv'.format(Ticker_s[1])].values/(1500+(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[1])].values))+abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[1])].values))))*100
-    Delta_2['Gold_ETF'] = Delta_2['{}_net_pv'.format(Ticker_s[2])].values/(1500+(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[2])].values))+abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[2])].values))))*100
-    Delta_2['{}'.format(Ticker_s[3])]=Delta_2['{}_net_pv'.format(Ticker_s[3])].values/(1500+(abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values))+abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values))))*100
-    Delta_2 = Delta_2[[ 'S&P_500_ETF' , 'NASDAQ_100_ETF' , 'Gold_ETF' , '{}'.format(Ticker_s[3]) ]]
-
-    tickerData = yf.Ticker(title)
-    tickerData = tickerData.history(period= 'max' )[['Close']]
-    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-    filter_date_1 = '2020-12-21 12:00:00+07:00'
-    tickerData_1 = tickerData[tickerData.index >= filter_date_1]
-    filter_date_2 = '2022-12-21 12:00:00+07:00'
-    tickerData_2 = tickerData[tickerData.index >= filter_date_2]
-    tickerData_2['Diff'] = diff_fx
-    tickerData_1 = tickerData_1.reset_index(drop=True)
-    tickerData_2 = tickerData_2.reset_index(drop=True)
+    # --- เตรียมข้อมูลจาก config ---
+    asset_configs = {asset['ticker']: asset for asset in config['assets']}
+    selectable_tickers = [asset['ticker'] for asset in config['assets'] if asset.get('is_selectable', False)]
+    benchmark_tickers = [asset['ticker'] for asset in config['assets'] if asset.get('is_benchmark', False)]
     
-    add_risk =  Delta['{}_net_pv'.format(title)].values[-1]
-    survival =  (abs(np.min( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) +  abs(np.max( Buffer['{}_Buffer'.format(Ticker_s[3])].values)) )  
-    st.write('____')
-    st.write('Data' , add_risk , 1500 / add_risk , 'add_risk> ', '(', (1500+survival) / add_risk  , ') Premium & Discount , P/E'  )
+    # --- UI Widgets ---
+    selected_ticker = st.selectbox('เลือก Ticker ที่ต้องการวิเคราะห์', options=selectable_tickers, help="เลือกหุ้นที่ต้องการเปรียบเทียบกับ Benchmark")
 
-    yahoo   =  yf.Ticker(title)
-    data 	=  yahoo.get_balance_sheet().T
-    Net_CurrentAssets =   data['CurrentAssets'][0] - (data['CurrentLiabilities'][0]  +  data['LongTermDebt'][0])
-    Net_CurrentAssets_2 = (Net_CurrentAssets / data['CurrentAssets'][0]) * 100
-    
-    st.write('AVG. S&P500 P/E' , 7 ,  'finance> ', Net_CurrentAssets_2 , '%' )
-    
-    col3, col4  = st.columns(2)
-    col5, col6  = st.columns(2)
-    # number = st.number_input('nbinsy', value=50 , step =1 , min_value=1  ) 
-    fig = px.density_heatmap(tickerData_2 , x="Diff", y="Close",   marginal_y="histogram"  , text_auto=True , nbinsy=40 , color_continuous_scale = px.colors.sequential.Turbo )
-    fig.add_shape(type='line', x0=-1 , y0=tickerData_2.Close.values[-1] , x1= max(tickerData_2.Diff)   , y1= tickerData_2.Close.values[-1], line=dict(color='Red')  )
-    fig_2 = px.line(tickerData_2  , y='Close' )
-    fig_3 = px.line( Delta['{}_net_pv'.format(title)] , y='{}_net_pv'.format(title))
-    fig_4 = px.line( tickerData_1  , y='Close' )
-    fig_4.add_shape(type='line', x0= len(tickerData_1)-len(tickerData_2) , y0=0 , y1= max(tickerData_1.Close) , x1= len(tickerData_1)-len(tickerData_2)   , line=dict(color='Red')  )
+    # --- Data Processing ---
+    if selected_ticker:
+        try:
+            tickers_to_run = benchmark_tickers + [selected_ticker]
+            
+            net_pv_df, re_df, buffer_df, diff_fx = process_assets_data(tuple(tickers_to_run), asset_configs)
 
-    col3.plotly_chart( fig_2  , use_container_width=True)
-    col4.plotly_chart(fig, use_container_width=True)
-    col5.plotly_chart(fig_3, use_container_width=True)
-    col6.plotly_chart(fig_4, use_container_width=True)
+            if net_pv_df.empty:
+                st.warning(f"ไม่สามารถประมวลผลข้อมูลสำหรับ Ticker: {selected_ticker} ได้ โปรดลอง Ticker อื่น")
+            else:
+                display_dashboard(selected_ticker, config, asset_configs, net_pv_df, buffer_df, diff_fx)
 
-    st.write('Accumulation กะเก็บพลังงาน & Distribution ปล่อยพลังงาน' ,'-vs-' , 'Emotional_Marketing ตอนนี้เราอยู่ตรงไหนของวัฏจักร' )
-    st.write('____')
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดที่ไม่คาดคิด: {e}")
 
-checkbox2 = st.checkbox('Data' , value=0 )
-if checkbox2 :
+    # --- ส่วนแสดงข้อมูลเพิ่มเติม ---
+    if st.checkbox('Cycle_Market Explanation', value=False):
+        st.info("""
+        **การเกิด Cycle_Market ของระบบ**
 
-    st.line_chart(Delta['{}_net_pv'.format(title)] )
-    st.line_chart(Delta_2)
-    
-    st.line_chart(tickerData_2.Close.values)
-    st.line_chart(tickerData_1.values)
-    
-    st.line_chart(Buffer)
-    st.write( 'survival' , survival)
-    
-# except:pass
+        - **Step 1: Divergence (Timing Realize)**
+          - **Condition:** `Intrinsic_Value_Cf` **หนี** `Benchmark_Cf` + `Delta/Zone` **สูง** + `Volume` ปกติ/ต่ำลง
+          - **Interpretation:** เกิดการสะสม (Accumulation) หรือการกระจาย (Distribution) อย่างมีนัยสำคัญ สร้างโอกาสในการจับจังหวะ
 
-checkbox3 = st.checkbox('Cycle_Market' , value=0 )
-if checkbox3 :
-    st.write(""" 
-    { การเกิด Cycle_Market ของระบบ }
-    
-    Step1 . ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ  Delta/Zone สูง &  Vo ปกติหรือต่ำลง
-    
-    _____( สะสมดูดของ , แจกจ่ายทุ่มของ ) เกิด Cycle  >  {Timing Realize}
-    
-    Step2 .ถ้า Intrinsic_Value_Cf  {หนี} Benchmark_Cf  และ Delta/Zone ต่ำ  &   Vo สูง
-    
-    _____เจ็บปวด , คาดหวัง , เริ่มต้นวัฏจักร Cycle > {ตลาดไม่มีประสิทธิภาพ No_Realize}
-    
-    Step3 .ถ้า Intrinsic_Value_Cf  {เท่ากับ}  Benchmark_Cf และ Delta/Zone สูง  &  Vo ปกติหรือต่ำลง
-    
-    _____ไม่มี Premium กับ Discount ไม่มีช่องว่างให้เล่นสินทรัพย์สะท้อนมูลค่าที่แท้จริง > {Realize}
-    """)
- 
- 
+        - **Step 2: Inefficiency (No Realize)**
+          - **Condition:** `Intrinsic_Value_Cf` **หนี** `Benchmark_Cf` + `Delta/Zone` **ต่ำ** + `Volume` **สูง**
+          - **Interpretation:** ตลาดไม่มีประสิทธิภาพ เกิดความเจ็บปวด (Pain) หรือความคาดหวัง (Hope) สูงสุด เป็นจุดเริ่มต้นของวัฏจักรรอบใหม่
 
+        - **Step 3: Equilibrium (Realize)**
+          - **Condition:** `Intrinsic_Value_Cf` **เท่ากับ** `Benchmark_Cf` + `Delta/Zone` **สูง** + `Volume` ปกติ/ต่ำลง
+          - **Interpretation:** ไม่มี Premium หรือ Discount สินทรัพย์สะท้อนมูลค่าที่แท้จริง ไม่มีช่องว่างให้เก็งกำไร
+        """)
 
+if __name__ == "__main__":
+    main()
