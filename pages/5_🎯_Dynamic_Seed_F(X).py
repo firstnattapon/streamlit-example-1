@@ -277,7 +277,7 @@ def render_test_tab():
 def render_analytics_tab():
     st.markdown("วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
     with st.container(border=True):
-        st.markdown(""เลือกวิธีการนำเข้าข้อมูล:")
+        st.subheader("เลือกวิธีการนำเข้าข้อมูล:")
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("##### 1. อัปโหลดไฟล์จากเครื่อง")
