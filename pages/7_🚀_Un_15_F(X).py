@@ -2,235 +2,236 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import streamlit as st
-import thingspeak
 import json
-import plotly.express as px
+from typing import Dict, Optional, List
 
+# --- Configuration & Data Loading ---
 
-st.set_page_config(page_title="Exist_F(X)", page_icon="☀")
-
-def delta_1(Ticker = "FFWM" ):
+def load_config(filename: str = "Un15_fx_config.json") -> Dict:
+    """Loads asset configurations from a JSON file."""
     try:
-        tickerData = yf.Ticker(Ticker)
-        entry  = tickerData.fast_info['lastPrice']  ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
-        # แก้ตรงentry -1
-        if entry < 10000 :
-            samples = np.arange( 0  ,  np.around(entry, 2) * 3 + step  ,  step)
+        with open(filename, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        st.error(f"Error: Configuration file '{filename}' not found.")
+        return {}
+    except json.JSONDecodeError:
+        st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
+        return {}
 
-            df = pd.DataFrame()
-            df['Asset_Price'] =   np.around(samples, 2)
-            df['Fixed_Asset_Value'] = Fixed_Asset_Value
-            df['Amount_Asset']  =   df['Fixed_Asset_Value']  / df['Asset_Price']
+# --- Core Calculation Functions (Refactored for Performance & Clarity) ---
 
-            df_top = df[df.Asset_Price >= np.around(entry, 2) ]
-            df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) *  df_top['Asset_Price']
-            df_top.fillna(0, inplace=True)
-            np_Cash_Balan_top = df_top['Cash_Balan_top'].values
+def calculate_cash_balance_model(entry: float, config: Dict) -> pd.DataFrame:
+    """
+    Calculates the core cash balance model DataFrame based on an entry price.
+    This version is refactored to use vectorized operations (cumsum) instead of loops.
+    """
+    Fixed_Asset_Value = config['Fixed_Asset_Value']
+    Cash_Balan = config['Cash_Balan']
+    step = config['step']
 
-            xx = np.zeros(len(np_Cash_Balan_top)) ; y_0 = Cash_Balan
-            for idx, v_0  in enumerate(np_Cash_Balan_top) :
-                z_0 = y_0 + v_0
-                y_0 = z_0
-                xx[idx] = y_0
+    if entry >= 10000:
+        return pd.DataFrame()
 
-            df_top['Cash_Balan_top'] = xx
-            df_top = df_top.rename(columns={'Cash_Balan_top': 'Cash_Balan'})
-            df_top  = df_top.sort_values(by='Amount_Asset')
-            df_top  = df_top[:-1]
+    samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
+    
+    df = pd.DataFrame({'Asset_Price': np.around(samples, 2)})
+    df['Fixed_Asset_Value'] = Fixed_Asset_Value
+    # np.divide with where clause avoids division by zero errors
+    df['Amount_Asset'] = np.divide(df['Fixed_Asset_Value'], df['Asset_Price'], 
+                                   out=np.zeros_like(df['Asset_Price']), where=df['Asset_Price']!=0)
 
-            # df_down =  df[:int(len(samples)/2+1)]
-            df_down = df[df.Asset_Price <= np.around(entry, 2) ]
-            df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) -  df_down['Amount_Asset'])     *  df_down['Asset_Price']
-            df_down.fillna(0, inplace=True)
-            df_down = df_down.sort_values(by='Asset_Price' , ascending=False)
-            np_Cash_Balan_down = df_down['Cash_Balan_down'].values
+    # --- Top part calculation (Vectorized) ---
+    df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
+    df_top['Cash_Balan_Change'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
+    df_top.fillna(0, inplace=True)
+    df_top['Cash_Balan'] = Cash_Balan + df_top['Cash_Balan_Change'].cumsum()
+    df_top = df_top.sort_values(by='Amount_Asset')[:-1]
 
-            xxx= np.zeros(len(np_Cash_Balan_down)) ; y_1 = Cash_Balan
-            for idx, v_1  in enumerate(np_Cash_Balan_down) :
-                z_1 = y_1 + v_1
-                y_1 = z_1
-                xxx[idx] = y_1
+    # --- Down part calculation (Vectorized) ---
+    df_down = df[df.Asset_Price <= np.around(entry, 2)].copy()
+    df_down['Cash_Balan_Change'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
+    df_down.fillna(0, inplace=True)
+    df_down = df_down.sort_values(by='Asset_Price', ascending=False)
+    df_down['Cash_Balan'] = Cash_Balan + df_down['Cash_Balan_Change'].cumsum()
 
-            df_down['Cash_Balan_down'] = xxx
-            df_down = df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'})
-
-            df = pd.concat([df_top, df_down], axis=0)
-            Production_Costs = (df['Cash_Balan'].values[-1]) -  Cash_Balan
-            return   abs(Production_Costs)
-    except:pass
+    return pd.concat([df_top, df_down], axis=0).drop(columns=['Cash_Balan_Change'])
 
 
-def delta6(Ticker = "FFWM" , pred = 1 ,  filter_date = '2022-12-21 12:00:00+07:00'):
+def delta_1(config: Dict) -> Optional[float]:
+    """Calculates Production_Costs based on asset configuration."""
     try:
-        tickerData = yf.Ticker(Ticker)
-        tickerData = tickerData.history(period= 'max' )[['Close']]
-        tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-        filter_date = filter_date
-        tickerData = tickerData[tickerData.index >= filter_date]
-        entry  = tickerData.Close[0] ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
+        tickerData = yf.Ticker(config['Ticker'])
+        entry_price = tickerData.fast_info['lastPrice']
+        
+        df_model = calculate_cash_balance_model(entry_price, config)
 
-        if entry < 10000 :
-            samples = np.arange( 0  ,  np.around(entry, 2) * 3 + step  ,  step)
-
-            df = pd.DataFrame()
-            df['Asset_Price'] =   np.around(samples, 2)
-            df['Fixed_Asset_Value'] = Fixed_Asset_Value
-            df['Amount_Asset']  =   df['Fixed_Asset_Value']  / df['Asset_Price']
-
-            df_top = df[df.Asset_Price >= np.around(entry, 2) ]
-            df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) *  df_top['Asset_Price']
-            df_top.fillna(0, inplace=True)
-            np_Cash_Balan_top = df_top['Cash_Balan_top'].values
-
-            xx = np.zeros(len(np_Cash_Balan_top)) ; y_0 = Cash_Balan
-            for idx, v_0  in enumerate(np_Cash_Balan_top) :
-                z_0 = y_0 + v_0
-                y_0 = z_0
-                xx[idx] = y_0
-
-            df_top['Cash_Balan_top'] = xx
-            df_top = df_top.rename(columns={'Cash_Balan_top': 'Cash_Balan'})
-            df_top  = df_top.sort_values(by='Amount_Asset')
-            df_top  = df_top[:-1]
-
-            # df_down =  df[:int(len(samples)/2+1)]
-            df_down = df[df.Asset_Price <= np.around(entry, 2) ]
-            df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) -  df_down['Amount_Asset'])     *  df_down['Asset_Price']
-            df_down.fillna(0, inplace=True)
-            df_down = df_down.sort_values(by='Asset_Price' , ascending=False)
-            np_Cash_Balan_down = df_down['Cash_Balan_down'].values
-
-            xxx= np.zeros(len(np_Cash_Balan_down)) ; y_1 = Cash_Balan
-            for idx, v_1  in enumerate(np_Cash_Balan_down) :
-                z_1 = y_1 + v_1
-                y_1 = z_1
-                xxx[idx] = y_1
-
-            df_down['Cash_Balan_down'] = xxx
-            df_down = df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'})
-
-            df = pd.concat([df_top, df_down], axis=0)
-            Production_Costs = (df['Cash_Balan'].values[-1]) -  Cash_Balan
-
-            tickerData['Close'] = np.around(tickerData['Close'].values , 2)
-            tickerData['pred'] = pred
-            tickerData['Fixed_Asset_Value'] = Fixed_Asset_Value
-            tickerData['Amount_Asset']  =  0.
-            tickerData['Amount_Asset'][0]  =  tickerData['Fixed_Asset_Value'][0] / tickerData['Close'][0]
-            tickerData['re']  =  0.
-            tickerData['Cash_Balan'] = Cash_Balan
-
-            Close =   tickerData['Close'].values
-            pred =  tickerData['pred'].values
-            Amount_Asset =  tickerData['Amount_Asset'].values
-            re = tickerData['re'].values
-            Cash_Balan = tickerData['Cash_Balan'].values
-
-            for idx, x_0 in enumerate(Amount_Asset):
-                if idx != 0:
-                    if pred[idx] == 0:
-                        Amount_Asset[idx] = Amount_Asset[idx-1]
-                    elif  pred[idx] == 1:
-                        Amount_Asset[idx] =   Fixed_Asset_Value / Close[idx]
-            tickerData['Amount_Asset'] = Amount_Asset
-
-            for idx, x_1 in enumerate(re):
-                if idx != 0:
-                    if pred[idx] == 0:
-                        re[idx] =  0
-                    elif  pred[idx] == 1:
-                        re[idx] =  (Amount_Asset[idx-1] * Close[idx])  - Fixed_Asset_Value
-            tickerData['re'] = re
-
-            for idx, x_2 in enumerate(Cash_Balan):
-                if idx != 0:
-                    Cash_Balan[idx] = Cash_Balan[idx-1] + re[idx]
-
-            tickerData['Cash_Balan'] = Cash_Balan
-            tickerData ['refer_model'] = 0.
-
-            price = np.around(tickerData['Close'].values, 2)
-            Cash  = tickerData['Cash_Balan'].values
-            refer_model =  tickerData['refer_model'].values
-
-            for idx, x_3 in enumerate(price):
-                try:
-                    refer_model[idx] = (df[df['Asset_Price'] == x_3]['Cash_Balan'].values[0])
-                except:
-                    refer_model[idx] = np.nan
-
-            tickerData['refer_model'] = refer_model
-            tickerData['pv'] =  tickerData['Cash_Balan'] + ( tickerData['Amount_Asset'] * tickerData['Close']  )
-            tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value
-            tickerData['net_pv'] =   tickerData['pv'] - tickerData['refer_pv']
-            final = tickerData[['net_pv' , 'pred' ,  're'  , 'Cash_Balan' ,'Close' ]]
-            return  final
-    except:pass
+        if not df_model.empty:
+            production_costs = df_model['Cash_Balan'].iloc[-1] - config['Cash_Balan']
+            return abs(production_costs)
+    except Exception as e:
+        st.warning(f"Could not calculate delta_1 for {config.get('Ticker', 'N/A')}: {e}")
+    return None
 
 
-def un_16 (df_pc_pe =[]):
-  a_0 = pd.DataFrame()
-  a_1 = pd.DataFrame()
-  Max_Production  = 0
-  for x in df_pc_pe :
-      a_2 = delta6( x )[['re' , 'net_pv'] ]
-      a_0 = pd.concat([a_0 , a_2[['re']].rename( columns={"re": "{}_re".format(x) })   ], axis = 1)
-      a_1 = pd.concat([a_1 , a_2[['net_pv']].rename(columns={"net_pv": "{}_net_pv".format(x) }) ], axis = 1)
-      Max_Production = Max_Production + delta_1(x)
-
-  net_dd = []
-  net = 0
-  for i in  a_0.sum(axis=1 ,    numeric_only=True).values  :
-      net = net+i
-      net_dd.append(net)
-
-  a_0['maxcash_dd'] =    net_dd
-  a_1['cf'] = a_1.sum(axis=1 ,    numeric_only=True )
-  a_x = pd.concat([a_0 , a_1], axis = 1)
-
-  return  a_x
-  
-Ticker_input  = st.text_input("Ticker", ['FFWM','NEGG','RIVN','APLS' , 'NVTS' , 'QXO' , 'RXRX' , 'AGl'])
-list_from_string = eval(Ticker_input)
-data = un_16(list_from_string)
-for i in list_from_string :
-    data['{}_re'.format(i)] = np.cumsum(data['{}_re'.format(i)].values)
-
-df_new = data
-
-# drop_df =  [ '{}_re'.format(i) for i in list_from_string ]
-# df_new = data.drop( drop_df , axis=1)
-
-roll_over = []
-max_dd = df_new.maxcash_dd.values
-for i in range(len(max_dd)):
+def delta6(config: Dict) -> Optional[pd.DataFrame]:
+    """
+    Performs a vectorized historical simulation based on asset configuration.
+    This version replaces multiple for-loops with efficient pandas operations.
+    """
     try:
-        roll = max_dd[:i]
-        roll_min = np.min(roll)
-        roll_max = 0
-        data_roll =  roll_min - roll_max  
-        roll_over.append(data_roll)
-    except:pass
-# st.line_chart(roll_over)
+        # 1. Load data and initial setup
+        ticker_hist = yf.Ticker(config['Ticker']).history(period='max')
+        ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
+        sim_df = ticker_hist[ticker_hist.index >= config['filter_date']][['Close']].copy()
+        
+        if sim_df.empty:
+            st.warning(f"No historical data found for {config['Ticker']} after {config['filter_date']}")
+            return None
 
-min_sum =  abs(np.min(roll_over))
-sum =    (df_new.cf.values   / min_sum ) * 100
-# st.line_chart(sum)
+        entry_price = sim_df['Close'].iloc[0]
+        df_model = calculate_cash_balance_model(entry_price, config)
+        if df_model.empty: return None
 
-cf =  df_new.cf.values
-# st.line_chart(cf)
+        # 2. Vectorized Simulation
+        sim_df['Close'] = np.around(sim_df['Close'], 2)
+        sim_df['pred'] = config['pred']
+        
+        # Calculate Amount_Asset using np.where and ffill
+        sim_df['Amount_Asset'] = np.where(
+            sim_df['pred'] == 1,
+            config['Fixed_Asset_Value'] / sim_df['Close'],
+            np.nan
+        )
+        sim_df['Amount_Asset'].ffill(inplace=True)
+        # Set initial value
+        sim_df['Amount_Asset'].iloc[0] = config['Fixed_Asset_Value'] / sim_df['Close'].iloc[0]
+
+        # Calculate realized_gain_loss using shift() and np.where
+        sim_df['realized_gain_loss'] = np.where(
+            sim_df['pred'] == 1,
+            (sim_df['Amount_Asset'].shift(1) * sim_df['Close']) - config['Fixed_Asset_Value'],
+            0
+        )
+        sim_df['realized_gain_loss'].iloc[0] = 0 # First day has no gain/loss
+
+        # Calculate Cash_Balan using cumsum()
+        sim_df['Cash_Balan'] = config['Cash_Balan'] + sim_df['realized_gain_loss'].cumsum()
+
+        # 3. Merge with reference model and calculate final metrics
+        sim_df = pd.merge_asof(
+            sim_df.sort_values('Close'),
+            df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model', 'Asset_Price': 'Close'}).sort_values('Close'),
+            on='Close',
+            direction='nearest'
+        )
+        sim_df.sort_index(inplace=True)
+        
+        sim_df['pv'] = sim_df['Cash_Balan'] + (sim_df['Amount_Asset'] * sim_df['Close'])
+        sim_df['refer_pv'] = sim_df['refer_model'] + config['Fixed_Asset_Value']
+        sim_df['net_pv'] = sim_df['pv'] - sim_df['refer_pv']
+        
+        return sim_df[['net_pv', 'pred', 'realized_gain_loss', 'Cash_Balan', 'Close']]
+        
+    except Exception as e:
+        st.warning(f"Could not process delta6 for {config.get('Ticker', 'N/A')}: {e}")
+    return None
 
 
-df_all =   pd.DataFrame(list(zip(cf,   roll_over )) , columns =['Sum_Delta',   'Max_Sum_Buffer'] )
-df_all_2 = pd.DataFrame(  sum , columns = ['True_Alpha'] )
+def run_portfolio_simulation(active_configs: Dict[str, Dict]) -> pd.DataFrame:
+    """Aggregates results from multiple assets specified in active_configs."""
+    gains_df = pd.DataFrame()
+    net_pv_df = pd.DataFrame()
+    
+    for ticker, config in active_configs.items():
+        sim_result = delta6(config)
+        if sim_result is not None:
+            gains_df = pd.concat([gains_df, sim_result[['realized_gain_loss']].rename(columns={"realized_gain_loss": f"{ticker}_re"})], axis=1)
+            net_pv_df = pd.concat([net_pv_df, sim_result[['net_pv']].rename(columns={"net_pv": f"{ticker}_net_pv"})], axis=1)
 
-st.write('____')
-st.write( '(' ,df_all.Sum_Delta.values[-1]  , df_all.Max_Sum_Buffer.values[-1] , ')' ,  df_all_2.True_Alpha.values[-1] )
+    if gains_df.empty:
+        return pd.DataFrame()
+        
+    # Combine results
+    gains_df['maxcash_dd'] = gains_df.sum(axis=1, numeric_only=True).cumsum()
+    net_pv_df['net_pv_sum'] = net_pv_df.sum(axis=1, numeric_only=True)
+    
+    return pd.concat([gains_df, net_pv_df], axis=1)
 
-col1, col2 = st.columns(2)
-col1.plotly_chart(px.line(df_all))
-col2.plotly_chart(px.line(df_all_2))
-st.write('____')
 
-st.plotly_chart(px.line(df_new))
- 
+# --- Main Application & UI ---
+
+def main():
+    """Main function to run the Streamlit application."""
+    st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
+    st.title("Exist F(X) - Portfolio Analysis")
+
+    # 1. Load config and get user selection
+    full_config = load_config()
+    if not full_config:
+        st.stop()
+
+    all_tickers = list(full_config.keys())
+    selected_tickers = st.multiselect(
+        "Select Tickers to Analyze",
+        options=all_tickers,
+        default=all_tickers
+    )
+
+    active_configs = {ticker: full_config[ticker] for ticker in selected_tickers if ticker in full_config}
+
+    if not active_configs:
+        st.warning("Please select at least one ticker to start the analysis.")
+        st.stop()
+
+    # 2. Run calculation
+    with st.spinner('Calculating portfolio simulation... This may take a moment.'):
+        results_df = run_portfolio_simulation(active_configs)
+    
+    if results_df.empty:
+        st.error("Failed to generate data for the selected tickers. Please check the warnings above.")
+        st.stop()
+
+    # 3. Process final results for plotting (Original logic maintained)
+    for ticker in selected_tickers:
+        col_name = f'{ticker}_re'
+        if col_name in results_df.columns:
+            results_df[col_name] = results_df[col_name].cumsum()
+
+    # Calculate rolling drawdown
+    cumulative_gains = results_df['maxcash_dd']
+    running_max = cumulative_gains.cummax()
+    roll_over = cumulative_gains - running_max # This is the drawdown
+    
+    min_sum_val = roll_over.min()
+    # Avoid division by zero
+    min_sum_abs = abs(min_sum_val) if min_sum_val != 0 else 1.0
+
+    # Create final dataframes for plotting
+    df_all = pd.DataFrame({
+        'Sum_Delta': results_df['net_pv_sum'],
+        'Max_Sum_Buffer': roll_over
+    })
+    df_all_2 = pd.DataFrame({
+        'True_Alpha': (results_df['net_pv_sum'] / min_sum_abs) * 100
+    })
+
+    # 4. Display results (UI is identical to the original)
+    st.write('____')
+    st.metric(
+        label="Final Values (Sum_Delta, Max_Sum_Buffer)",
+        value=f"{df_all.Sum_Delta.iloc[-1]:,.2f}",
+        delta=f"{df_all.Max_Sum_Buffer.iloc[-1]:,.2f} (Buffer)",
+        delta_color="inverse"
+    )
+    st.metric(label="Final True Alpha (%)", value=f"{df_all_2.True_Alpha.iloc[-1]:.2f}%")
+
+    col1, col2 = st.columns(2)
+    col1.plotly_chart(px.line(df_all, title="Portfolio: Sum Delta vs Max Sum Buffer"), use_container_width=True)
+    col2.plotly_chart(px.line(df_all_2, title="Portfolio: True Alpha (%)"), use_container_width=True)
+    
+    st.write('____')
+    st.plotly_chart(px.line(results_df, title="Detailed Portfolio Simulation"), use_container_width=True)
+
+if __name__ == "__main__":
+    main()
