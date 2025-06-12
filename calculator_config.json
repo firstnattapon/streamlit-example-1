@@ -1,0 +1,75 @@
+{
+  "average_cf_config": {
+    "ticker": "FFWM",
+    "field": 1,
+    "thingspeak_channel": 2394198,
+    "thingspeak_api_key": "OVZNYQBL57GJW5JF",
+    "offset": 393
+  },
+  "assets": [
+    {
+      "ticker": "FFWM",
+      "monitor_field": 2,
+      "production_params": {
+        "fixed_asset_value": 1500.0,
+        "cash_balance": 650.0
+      }
+    },
+    {
+      "ticker": "NEGG",
+      "monitor_field": 3,
+      "production_params": {
+        "fixed_asset_value": 1500.0,
+        "cash_balance": 650.0
+      }
+    },
+    {
+      "ticker": "RIVN",
+      "monitor_field": 4,
+      "production_params": {
+        "fixed_asset_value": 1500.0,
+        "cash_balance": 650.0
+      }
+    },
+    {
+      "ticker": "APLS",
+      "monitor_field": 5,
+      "production_params": {
+        "fixed_asset_value": 1500.0,
+        "cash_balance": 650.0
+      }
+    },
+    {
+      "ticker": "NVTS",
+      "monitor_field": 6,
+      "production_params": {
+        "fixed_asset_value": 1500.0,
+        "cash_balance": 650.0
+      }
+    },
+    {
+      "ticker": "QXO",
+      "monitor_field": 7,
+      "production_params": {
+        "fixed_asset_value": 1500.0,
+        "cash_balance": 650.0
+      }
+    },
+    {
+      "ticker": "RXRX",
+      "monitor_field": 8,
+      "production_params": {
+        "fixed_asset_value": 1500.0,
+        "cash_balance": 650.0
+      }
+    },
+    {
+      "ticker": "AGL",
+      "monitor_field": 1,
+      "production_params": {
+        "fixed_asset_value": 1500.0,
+        "cash_balance": 650.0
+      }
+    }
+  ]
+}
