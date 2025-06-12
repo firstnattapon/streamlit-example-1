@@ -275,7 +275,7 @@ def render_test_tab():
         st.download_button("📥 ดาวน์โหลด Window Details (CSV)", data=csv, file_name=f'best_seed_{ticker}.csv', mime='text/csv')
 
 def render_analytics_tab():
-    st.header("วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
+    st.markdown("วิเคราะห์ผลลัพธ์ Backtest ในเชิงลึก")
     with st.container(border=True):
         st.subheader("เลือกวิธีการนำเข้าข้อมูล:")
         col1, col2 = st.columns(2)
