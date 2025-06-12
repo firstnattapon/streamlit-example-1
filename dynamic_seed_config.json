@@ -11,28 +11,36 @@
   },
   "manual_seed_by_asset": {
     "FFWM": [
-      { "seed": 1111, "size": 60, "tail": 30 },
-      { "seed": 7777, "size": 45, "tail": 20 }
+      { "seed": 16942, "size": 60, "tail": 30 },
+      { "seed": 0, "size": 30, "tail": 30 }
     ],
     "NEGG": [
-      { "seed": 1111, "size": 60, "tail": 30 },
-      { "seed": 7777, "size": 45, "tail": 20 }
+      { "seed": 24441, "size": 60, "tail": 30 },
+      { "seed": 0, "size": 30, "tail": 30 }
     ],
     "APLS": [
-      { "seed": 1111, "size": 60, "tail": 30 },
-      { "seed": 7777, "size": 45, "tail": 20 }
+      { "seed": 5646, "size": 60, "tail": 30 },
+      { "seed": 0, "size": 30, "tail": 30 }
     ],
     "QXO": [
-      { "seed": 1111, "size": 60, "tail": 30 },
-      { "seed": 7777, "size": 45, "tail": 20 }
+      { "seed": 25206, "size": 60, "tail": 30 },
+      { "seed": 0, "size": 30, "tail": 30 }
     ],
     "RXRX": [
-      { "seed": 1111, "size": 60, "tail": 30 },
-      { "seed": 7777, "size": 45, "tail": 20 }
+      { "seed": 11335, "size": 60, "tail": 30 },
+      { "seed": 0, "size": 30, "tail": 30 }
     ],
     "AGL": [
-      { "seed": 1111, "size": 60, "tail": 30 },
-      { "seed": 7777, "size": 45, "tail": 20 }
+      { "seed": 27656, "size": 60, "tail": 30 },
+      { "seed": 0, "size": 30, "tail": 30 }
+    ],
+    "NVTS": [
+      { "seed": 4788, "size": 60, "tail": 30 },
+      { "seed": 0, "size": 30, "tail": 30 }
+    ],
+    "RIVN": [
+      { "seed": 23691, "size": 60, "tail": 30 },
+      { "seed": 0, "size": 30, "tail": 30 }      
     ]
   }
 }
