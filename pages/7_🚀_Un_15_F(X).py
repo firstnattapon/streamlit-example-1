@@ -7,7 +7,7 @@ from typing import Dict, Optional, List
 
 # --- Configuration & Data Loading ---
 
-def load_config(filename: str = "Un15_fx_config.json") -> Dict:
+def load_config(filename: str = "un15_fx_config.json") -> Dict:
     """Loads asset configurations from a JSON file."""
     try:
         with open(filename, 'r', encoding='utf-8') as f:
