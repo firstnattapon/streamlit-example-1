@@ -10,10 +10,6 @@
     "max_workers": 8
   },
   "manual_seed_by_asset": {
-    "default": [
-      { "seed": 999, "size": 50, "tail": 15 },
-      { "seed": 1, "size": 30, "tail": 5 }
-    ],
     "FFWM": [
       { "seed": 1111, "size": 60, "tail": 30 },
       { "seed": 7777, "size": 45, "tail": 20 }
