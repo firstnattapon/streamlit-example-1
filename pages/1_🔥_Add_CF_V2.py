@@ -30,7 +30,7 @@ product_cost_default = config.get('product_cost_default', 0.0)
 main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
 
 # --- Thingspeak Clients Initialization ---
-asset_clients = {} # <--- NEW: Dictionary to hold a client for each asset
+asset_clients = {} # Dictionary to hold a client for each asset
 try:
     # Client for Main Output (Net CF, etc.)
     client_main = thingspeak.Channel(
@@ -38,15 +38,14 @@ try:
         main_channel_config.get('write_api_key')
     )
     
-    # <--- NEW: Create a client for each individual asset
+    # Create a client for each individual asset
     for asset in assets_config:
         ticker = asset['ticker']
         channel_info = asset.get('holding_channel', {})
         if channel_info.get('channel_id') and channel_info.get('write_api_key'):
             asset_clients[ticker] = thingspeak.Channel(
                 channel_info['channel_id'],
-                channel_info['write_api_key'],
-                fmt='json'
+                channel_info['write_api_key']
             )
         else:
             st.warning(f"Missing 'holding_channel' config for {ticker}. It won't be updated on Thingspeak.")
@@ -68,10 +67,19 @@ for asset in assets_config:
     if ticker in asset_clients:
         try:
             field = asset['holding_channel']['field']
-            # <--- CHANGE: Use the specific client for this asset
             client = asset_clients[ticker]
             last_asset_json = client.get_field_last(field=field)
-            last_holding = eval(json.loads(last_asset_json)[field])
+
+            # --- BUG FIX IS HERE ---
+            # The API returns a plain string (e.g., "123.45"), not a complex JSON object.
+            # We must convert it directly to a float.
+            # The old code `eval(json.loads(last_asset_json)[field])` was incorrect
+            # and caused the holding to always default to 0.
+            if last_asset_json: # Check if the string is not empty
+                last_holding = float(last_asset_json)
+            else: # Handle case where the field is empty
+                last_holding = 0.0
+            
             asset_data[ticker]['last_holding'] = last_holding
         except Exception as e:
             st.warning(f"Could not fetch last holding for {ticker}. Defaulting to 0. Error: {e}")
@@ -80,7 +88,7 @@ for asset in assets_config:
         asset_data[ticker]['last_holding'] = 0.0
 
     try:
-        # Get last price from yfinance (this part is unchanged)
+        # Get last price from yfinance
         last_price = yf.Ticker(ticker).fast_info['lastPrice']
         asset_data[ticker]['last_price'] = last_price
     except Exception as e:
@@ -98,7 +106,7 @@ for asset in assets_config:
 st.write("_____")
 
 total_asset_value = 0.0
-# We will get holding values from st.session_state later, so no need for a separate dictionary here
+# We will get holding values from st.session_state later
 for asset in assets_config:
     ticker = asset["ticker"]
     holding_value = asset_data[ticker].get('last_holding', 0.0)
@@ -112,7 +120,7 @@ for asset in assets_config:
 
 st.write("_____")
 
-# --- Final Calculations (Unchanged) ---
+# --- Final Calculations ---
 Product_cost = st.number_input('Product_cost', step=0.01, value=product_cost_default)
 j_1 = st.number_input('Portfolio_cash', step=0.01, value=0.00)
 
@@ -147,7 +155,7 @@ with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings"):
     st.write("Click the button below to confirm and send data to all Thingspeak channels.")
     
     if st.button("Confirm and Send All Data"):
-        # 1. Update Main Channel (as before)
+        # 1. Update Main Channel
         try:
             if Product_cost == 0:
                 st.error("Product_cost cannot be zero.")
@@ -165,7 +173,7 @@ with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings"):
         except Exception as e:
             st.error(f"❌ Failed to update Main Channel on Thingspeak: {e}")
 
-        # 2. <--- NEW: Loop through each asset and update its individual channel
+        # 2. Loop through each asset and update its individual channel
         st.write("---")
         st.write("Updating individual asset holdings...")
         for asset in assets_config:
@@ -186,7 +194,7 @@ with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings"):
                 st.info(f"ℹ️ Skipping update for {ticker} (no client configured).")
 
 
-# --- Chart Display Section (Unchanged, as it shows the main output) ---
+# --- Chart Display Section ---
 st.write("_____")
 main_channel_id = main_channel_config.get('channel_id')
 main_fields_map = main_channel_config.get('fields', {})
