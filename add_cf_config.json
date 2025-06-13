@@ -84,6 +84,15 @@
                 "write_api_key": "2E65V8XEIPH9B2VV",
                 "field": "field8"
             }
+        },
+        {
+            "ticker": "FLNC",
+            "reference_price": 7.00,
+            "holding_channel": {
+                "channel_id": 2988802,
+                "write_api_key": "85IOR3R3ZG643PBP",
+                "field": "field1"
+            }
         }
     ]
 }
