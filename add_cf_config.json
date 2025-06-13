@@ -51,8 +51,8 @@
             "ticker": "RXRX",
             "thingspeak_field": 7,
             "reference_price": 5.40,
-            "data_source_channel_id": 5259555,
-            "data_source_api_key": "zVZNYQBL57GJW5JF"
+            "data_source_channel_id": 2528199,
+            "data_source_api_key": "2E65V8XEIPH9B2VV"
         },
         {
             "ticker": "AGL",
