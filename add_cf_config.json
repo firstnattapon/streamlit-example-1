@@ -17,8 +17,8 @@
             "ticker": "FFWM",
             "reference_price": 6.88,
             "holding_channel": {
-                "channel_id": 100001,
-                "write_api_key": "YOUR_API_KEY_FOR_FFWM",
+                "channel_id": 2528199,
+                "write_api_key": "2E65V8XEIPH9B2VV",
                 "field": "field1"
             }
         },
@@ -26,63 +26,63 @@
             "ticker": "NEGG",
             "reference_price": 25.20,
             "holding_channel": {
-                "channel_id": 100002,
-                "write_api_key": "YOUR_API_KEY_FOR_NEGG",
-                "field": "field1"
+                "channel_id": 2528199,
+                "write_api_key": "2E65V8XEIPH9B2VV",
+                "field": "field2"
             }
         },
         {
             "ticker": "RIVN",
             "reference_price": 10.07,
             "holding_channel": {
-                "channel_id": 100003,
-                "write_api_key": "YOUR_API_KEY_FOR_RIVN",
-                "field": "field1"
+                "channel_id": 2528199,
+                "write_api_key": "2E65V8XEIPH9B2VV",
+                "field": "field3"
             }
         },
         {
             "ticker": "APLS",
             "reference_price": 39.61,
             "holding_channel": {
-                "channel_id": 100004,
-                "write_api_key": "YOUR_API_KEY_FOR_APLS",
-                "field": "field1"
+                "channel_id": 2528199,
+                "write_api_key": "2E65V8XEIPH9B2VV",
+                "field": "field4"
             }
         },
         {
             "ticker": "NVTS",
             "reference_price": 3.05,
             "holding_channel": {
-                "channel_id": 100005,
-                "write_api_key": "YOUR_API_KEY_FOR_NVTS",
-                "field": "field1"
+                "channel_id": 2528199,
+                "write_api_key": "2E65V8XEIPH9B2VV",
+                "field": "field5"
             }
         },
         {
             "ticker": "QXO",
             "reference_price": 19.00,
             "holding_channel": {
-                "channel_id": 100006,
-                "write_api_key": "YOUR_API_KEY_FOR_QXO",
-                "field": "field1"
+                "channel_id": 2528199,
+                "write_api_key": "2E65V8XEIPH9B2VV",
+                "field": "field6"
             }
         },
         {
             "ticker": "RXRX",
             "reference_price": 5.40,
             "holding_channel": {
-                "channel_id": 100007,
-                "write_api_key": "YOUR_API_KEY_FOR_RXRX",
-                "field": "field1"
+                "channel_id": 2528199,
+                "write_api_key": "2E65V8XEIPH9B2VV",
+                "field": "field7"
             }
         },
         {
             "ticker": "AGL",
             "reference_price": 3.00,
             "holding_channel": {
-                "channel_id": 100008,
-                "write_api_key": "YOUR_API_KEY_FOR_AGL",
-                "field": "field1"
+                "channel_id": 2528199,
+                "write_api_key": "2E65V8XEIPH9B2VV",
+                "field": "field8"
             }
         }
     ]
