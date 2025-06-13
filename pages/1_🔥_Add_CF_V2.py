@@ -68,16 +68,18 @@ for asset in assets_config:
         try:
             field = asset['holding_channel']['field']
             client = asset_clients[ticker]
-            last_asset_json = client.get_field_last(field=field)
+            # This returns a JSON string like: '{"created_at":...,"field1":"82.0"}'
+            last_asset_json_string = client.get_field_last(field=field)
 
-            # --- BUG FIX IS HERE ---
-            # The API returns a plain string (e.g., "123.45"), not a complex JSON object.
-            # We must convert it directly to a float.
-            # The old code `eval(json.loads(last_asset_json)[field])` was incorrect
-            # and caused the holding to always default to 0.
-            if last_asset_json: # Check if the string is not empty
-                last_holding = float(last_asset_json)
-            else: # Handle case where the field is empty
+            # --- BUG FIX IS HERE (v2) ---
+            # We now correctly handle the JSON string response from the API.
+            if last_asset_json_string:
+                # 1. Parse the JSON string into a Python dictionary
+                data_dict = json.loads(last_asset_json_string)
+                # 2. Extract the value using the 'field' variable (e.g., "field1") as the key
+                # 3. Convert the extracted value (e.g., "82.0") to a float
+                last_holding = float(data_dict[field])
+            else: # Handle case where the field is empty on ThingSpeak
                 last_holding = 0.0
             
             asset_data[ticker]['last_holding'] = last_holding
