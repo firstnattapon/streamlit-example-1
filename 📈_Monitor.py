@@ -51,7 +51,7 @@ def get_thingspeak_clients(configs):
     for channel_id, api_key in unique_channels:
         try:
             clients[channel_id] = thingspeak.Channel(channel_id, api_key, fmt='json')
-            st.info(f"ThingSpeak client created for Channel ID: {channel_id}")
+            # st.info(f"ThingSpeak client created for Channel ID: {channel_id}")
         except Exception as e:
             st.error(f"Failed to create client for Channel ID {channel_id}: {e}")
     return clients
