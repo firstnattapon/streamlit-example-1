@@ -51,6 +51,24 @@
     }
   },
   {
+    "ticker": "FLNC",
+    "monitor_field": {
+      "field": 1,
+      "channel_id": 2988808,
+      "api_key": "QBIPN1AIZ88QQW5V"
+    },
+    "asset_field": {
+      "field": "field1",
+      "channel_id": 2988802,
+      "api_key": "85IOR3R3ZG643PBP"
+    },
+    "fix_c": 1500,
+    "option_config": {
+      "base_value": 300.0,
+      "label": "FLNC (LV:FLNC@7.85)"
+    }
+  },
+  {
     "ticker": "NEGG",
     "monitor_field": {
       "field": 3,
