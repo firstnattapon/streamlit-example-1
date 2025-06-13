@@ -17,7 +17,7 @@
       "label": "AGL (LV:500@3.0)"
     }
   },
-  {
+  { 
     "ticker": "APLS",
     "monitor_field": {
       "field": 5,
@@ -65,9 +65,9 @@
     "fix_c": 1500,
     "option_config": {
       "base_value": 200.0,
-      "label": "FLNC (LV:200@7.15)"
+      "label": "FLNC (LV:200@7.00)"
     }
-  },
+  },  
   {
     "ticker": "NEGG",
     "monitor_field": {
