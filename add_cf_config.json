@@ -1,45 +1,65 @@
 {
     "product_cost_default": 10750.00,
+    "primary_update_channel": {
+        "channel_id": 2394198,
+        "write_api_key": "OVZNYQBL57GJW5JF"
+    },
     "assets": [
         {
             "ticker": "FFWM",
-            "thingspeak_field": "field1",
-            "reference_price": 6.88
+            "thingspeak_field": 1,
+            "reference_price": 6.88,
+            "data_source_channel_id": 2528199,
+            "data_source_api_key": "2E65V8XEIPH9B2VV"
         },
         {
             "ticker": "NEGG",
-            "thingspeak_field": "field2",
-            "reference_price": 25.20
+            "thingspeak_field": 2,
+            "reference_price": 25.20,
+            "data_source_channel_id": 2528199,
+            "data_source_api_key": "2E65V8XEIPH9B2VV"
         },
         {
             "ticker": "RIVN",
-            "thingspeak_field": "field3",
-            "reference_price": 10.07
+            "thingspeak_field": 3,
+            "reference_price": 10.07,
+            "data_source_channel_id": 2528199,
+            "data_source_api_key": "2E65V8XEIPH9B2VV"
         },
         {
             "ticker": "APLS",
-            "thingspeak_field": "field4",
-            "reference_price": 39.61
+            "thingspeak_field": 4,
+            "reference_price": 39.61,
+            "data_source_channel_id": 2528199,
+            "data_source_api_key": "2E65V8XEIPH9B2VV"
         },
         {
             "ticker": "NVTS",
-            "thingspeak_field": "field5",
-            "reference_price": 3.05
+            "thingspeak_field": 5,
+            "reference_price": 3.05,
+            "data_source_channel_id": 2528199,
+            "data_source_api_key": "2E65V8XEIPH9B2VV"
         },
         {
             "ticker": "QXO",
-            "thingspeak_field": "field6",
-            "reference_price": 19.00
+            "thingspeak_field": 6,
+            "reference_price": 19.00,
+            "data_source_channel_id": 2528199,
+            "data_source_api_key": "2E65V8XEIPH9B2VV"
         },
         {
             "ticker": "RXRX",
-            "thingspeak_field": "field7",
-            "reference_price": 5.40
+            "thingspeak_field": 7,
+            "reference_price": 5.40,
+            "data_source_channel_id": 5259555,
+            "data_source_api_key": "zVZNYQBL57GJW5JF"
         },
         {
             "ticker": "AGL",
-            "thingspeak_field": "field8",
-            "reference_price": 3.00
+            "thingspeak_field": 8,
+            "reference_price": 3.00,
+            "data_source_channel_id": 2528199,
+            "data_source_api_key": "2E65V8XEIPH9B2VV"
         }
     ]
 }
