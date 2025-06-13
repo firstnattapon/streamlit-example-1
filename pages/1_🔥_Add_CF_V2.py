@@ -251,7 +251,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
 
 def main():
     """Main function to run the Streamlit application."""
-    st.title("🔥 Add Cashflow V3 - MultiChannel")
+    st.write("🔥 Add Cashflow V3 - MultiChannel")
 
     # --- Load configs and initialize clients (runs once) ---
     config = load_config()
