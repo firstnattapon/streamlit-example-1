@@ -65,7 +65,7 @@
     "fix_c": 1500,
     "option_config": {
       "base_value": 300.0,
-      "label": "FLNC (LV:FLNC@7.85)"
+      "label": "FLNC (LV:300@7.85)"
     }
   },
   {
