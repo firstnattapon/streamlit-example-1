@@ -1,6 +1,6 @@
 {
   "assets": [
-    "FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL"  
+    "FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" , "FLNC"
   ],
   "default_settings": {
     "selected_ticker": "FFWM",
@@ -32,6 +32,9 @@
       { "seed": 4788, "size": 60, "tail": 30 }
     ],
     "RIVN": [
+      { "seed": 23691, "size": 60, "tail": 30 }
+    ]
+    "FLNC": [
       { "seed": 23691, "size": 60, "tail": 30 }
     ]
   }
