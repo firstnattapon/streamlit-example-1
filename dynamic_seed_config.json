@@ -1,6 +1,6 @@
 {
   "assets": [
-    "FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" 
+    "FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" , 'NTLA' 
   ],
   "default_settings": {
     "selected_ticker": "FFWM",
