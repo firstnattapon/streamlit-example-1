@@ -133,8 +133,9 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
 
 def display_results(metrics: Dict[str, float]):
     """Displays all the calculated metrics."""
+    
+    st.divider()
     with st.expander("📈 Results", expanded=False):
-        # st.divider()
         st.write('Current Portfolio Value (Assets + Cash):', f"**{metrics['now_pv']:,.2f}**")
         
         col1, col2 = st.columns(2)
@@ -144,9 +145,7 @@ def display_results(metrics: Dict[str, float]):
         st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
         st.metric('Log PV (Calculated Cost)', f"{metrics['log_pv']:,.2f}")
         
-        # st.divider()
     st.metric(label="💰 Net Cashflow", value=f"{metrics['net_cf']:,.2f}")
-    # st.divider()
     
 def render_charts(config: Dict[str, Any]):
     """Renders all ThingSpeak charts using iframes."""
