@@ -95,7 +95,7 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
     user_inputs = {}
     
     # --- Price Inputs ---
-    st.header("📊 Current Asset Prices")
+    st.write("📊 Current Asset Prices")
     current_prices = {}
     for asset in assets_config:
         ticker = asset["ticker"]
@@ -107,7 +107,7 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
     st.divider()
 
     # --- Holding Inputs ---
-    st.header("📦 Asset Holdings")
+    st.write("📦 Asset Holdings")
     current_holdings = {}
     total_asset_value = 0.0
     for asset in assets_config:
@@ -125,7 +125,7 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
     st.divider()
     
     # --- Final Calculation Inputs ---
-    st.header("⚙️ Calculation Parameters")
+    st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', step=0.01, value=product_cost_default, format="%.2f")
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', step=0.01, value=0.00, format="%.2f")
     
@@ -134,7 +134,7 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
 def display_results(metrics: Dict[str, float]):
     """Displays all the calculated metrics."""
     st.divider()
-    st.header("📈 Results")
+    st.write("📈 Results")
     st.write('Current Portfolio Value (Assets + Cash):', f"**{metrics['now_pv']:,.2f}**")
     
     col1, col2 = st.columns(2)
@@ -150,7 +150,7 @@ def display_results(metrics: Dict[str, float]):
     
 def render_charts(config: Dict[str, Any]):
     """Renders all ThingSpeak charts using iframes."""
-    st.header("📊 ThingSpeak Charts")
+    st.write("📊 ThingSpeak Charts")
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
     main_channel_id = main_channel_config.get('channel_id')
     main_fields_map = main_channel_config.get('fields', {})
