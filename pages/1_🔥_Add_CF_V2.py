@@ -50,7 +50,7 @@ def initialize_thingspeak_clients(config: Dict[str, Any]) -> Tuple[thingspeak.Ch
             else:
                 st.warning(f"Missing 'holding_channel' config for {ticker}. It won't be updated on ThingSpeak.")
 
-        # st.sidebar.success(f"Initialized main client and {len(asset_clients)} asset clients.")
+        st.sidebar.success(f"Initialized main client and {len(asset_clients)} asset clients.")
         return client_main, asset_clients
 
     except (KeyError, Exception) as e:
@@ -250,6 +250,8 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
 # --- 4. MAIN APPLICATION FLOW ---
 
 def main():
+    """Main function to run the Streamlit application."""
+    st.write("🔥 Add Cashflow V3 - MultiChannel")
 
     # --- Load configs and initialize clients (runs once) ---
     config = load_config()
