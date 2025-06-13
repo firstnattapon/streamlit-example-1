@@ -50,7 +50,7 @@ def initialize_thingspeak_clients(config: Dict[str, Any]) -> Tuple[thingspeak.Ch
             else:
                 st.warning(f"Missing 'holding_channel' config for {ticker}. It won't be updated on ThingSpeak.")
 
-        st.sidebar.success(f"Initialized main client and {len(asset_clients)} asset clients.")
+        st.success(f"Initialized main client and {len(asset_clients)} asset clients.")
         return client_main, asset_clients
 
     except (KeyError, Exception) as e:
