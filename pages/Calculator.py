@@ -160,7 +160,7 @@ def main():
         
         # --- 3.1. แก้ไขการเรียกใช้ฟังก์ชัน production_cost ---
         # อ่านค่า t0 และ fix จาก config แล้วส่งไปให้ฟังก์ชัน
-        prod_cost = production_cost(
+        max , now = production_cost(
             ticker=ticker,
             t0=prod_params.get('t0', 0.0),      # ดึงค่า t0, ถ้าไม่มีให้เป็น 0.0
             fix=prod_params.get('fix', 0.0)     # ดึงค่า fix, ถ้าไม่มีให้เป็น 0.0
@@ -169,7 +169,7 @@ def main():
         # prod_cost_display = f"{prod_cost[0]:.2f}" if prod_cost is not None else "N/A"
         
         st.write(ticker)
-        st.write(f"f(x): {fx_js} ,  , Production: prod_cost[0]")
+        st.write(f"f(x): {fx_js} ,  , Production: max")
         st.table(df_7)
         st.write("_____")
 
