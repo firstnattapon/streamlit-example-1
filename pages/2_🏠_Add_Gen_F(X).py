@@ -228,12 +228,12 @@ def create_asset_tab_content(asset_config):
         st.error(f"Failed to create ThingSpeak client for {ticker}: {e}")
         return
 
-    # --- ส่วน Gen_fx ---
-    gen_fx_check = st.checkbox(f'{ticker}_Add_Gen', key=f"gen_fx_{ticker}")
-    if gen_fx_check:
-        if st.button("Rerun_Gen", key=f"rerun_gen_{ticker}"):
-            # [ปรับปรุง] ส่ง client ที่สร้างขึ้นใหม่เข้าไปในฟังก์ชัน
-            Gen_fx(Ticker=ticker, field=field, client=client)
+    # # --- ส่วน Gen_fx ---
+    # gen_fx_check = st.checkbox(f'{ticker}_Add_Gen', key=f"gen_fx_{ticker}")
+    # if gen_fx_check:
+    #     if st.button("Rerun_Gen", key=f"rerun_gen_{ticker}"):
+    #         # [ปรับปรุง] ส่ง client ที่สร้างขึ้นใหม่เข้าไปในฟังก์ชัน
+    #         Gen_fx(Ticker=ticker, field=field, client=client)
 
     # --- ส่วน Manual Add Gen ---
     gen_m_check = st.checkbox(f'{ticker}_Add_Gen_M', key=f"gen_m_{ticker}")
@@ -248,18 +248,18 @@ def create_asset_tab_content(asset_config):
                 except Exception as e:
                     st.error(f"Failed to update ThingSpeak: {e}")
 
-    # --- ส่วน Njit ---
-    njit_check = st.checkbox(f'{ticker}_njit', key=f"njit_{ticker}")
-    if njit_check:
-        if st.button(f"Run Njit for {ticker}", key=f"run_njit_{ticker}"):
-            with st.spinner(f"Running NJIT optimization for {ticker}... This may take a long time."):
-                try:
-                    ix = feed_data(data=ticker)
-                    # [ปรับปรุง] ใช้ client ที่สร้างขึ้นสำหรับ Tab นี้
-                    client.update({f'field{field}': ix})
-                    st.success(f"Found optimal seed for {ticker}: {ix}. Updated ThingSpeak.")
-                except Exception as e:
-                    st.error(f"An error occurred during NJIT processing or ThingSpeak update: {e}")
+    # # --- ส่วน Njit ---
+    # njit_check = st.checkbox(f'{ticker}_njit', key=f"njit_{ticker}")
+    # if njit_check:
+    #     if st.button(f"Run Njit for {ticker}", key=f"run_njit_{ticker}"):
+    #         with st.spinner(f"Running NJIT optimization for {ticker}... This may take a long time."):
+    #             try:
+    #                 ix = feed_data(data=ticker)
+    #                 # [ปรับปรุง] ใช้ client ที่สร้างขึ้นสำหรับ Tab นี้
+    #                 client.update({f'field{field}': ix})
+    #                 st.success(f"Found optimal seed for {ticker}: {ix}. Updated ThingSpeak.")
+    #             except Exception as e:
+    #                 st.error(f"An error occurred during NJIT processing or ThingSpeak update: {e}")
 
     st.write("_____")
 
