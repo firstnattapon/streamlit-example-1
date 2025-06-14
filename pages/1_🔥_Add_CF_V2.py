@@ -6,6 +6,7 @@ import thingspeak
 import json
 import streamlit.components.v1 as components
 from typing import Dict, Any, Tuple, List
+from datetime import datetime # Import datetime for timestamping
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Add_CF_V3_MultiChannel (Refactored)", page_icon="🚀")
@@ -21,6 +22,27 @@ def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
     except (FileNotFoundError, json.JSONDecodeError) as e:
         st.error(f"Error loading or parsing {filename}: {e}")
         st.stop()
+
+# --- NEW FUNCTION TO UPDATE THE CONFIG FILE ---
+def update_cashflow_offset(new_offset: float, filename: str = "add_cf_config.json"):
+    """Reads the config, updates the cashflow_offset, and writes it back."""
+    try:
+        # Read the existing config
+        with open(filename, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+
+        # Update the values
+        config_data['cashflow_offset'] = new_offset
+        config_data['cashflow_offset_comment'] = f"Offset reset to {new_offset:,.2f} on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+
+        # Write the updated config back to the file
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, indent=4, ensure_ascii=False)
+        
+        return True
+    except Exception as e:
+        st.error(f"Failed to update config file {filename}: {e}")
+        return False
 
 @st.cache_resource
 def initialize_thingspeak_clients(config: Dict[str, Any]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
@@ -48,7 +70,7 @@ def initialize_thingspeak_clients(config: Dict[str, Any]) -> Tuple[thingspeak.Ch
             else:
                 st.warning(f"Missing 'holding_channel' config for {ticker}. It won't be updated on ThingSpeak.")
 
-        st.success(f"Initialized main client and {len(asset_clients)} asset clients.")
+        # st.success(f"Initialized main client and {len(asset_clients)} asset clients.") # Can be a bit noisy
         return client_main, asset_clients
 
     except (KeyError, Exception) as e:
@@ -92,7 +114,6 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
     """Renders all Streamlit input widgets and returns their current values."""
     user_inputs = {}
     
-    # --- Price Inputs ---
     st.write("📊 Current Asset Prices")
     current_prices = {}
     for asset in assets_config:
@@ -104,7 +125,6 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
 
     st.divider()
 
-    # --- Holding Inputs ---
     st.write("📦 Asset Holdings")
     current_holdings = {}
     total_asset_value = 0.0
@@ -122,7 +142,6 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
 
     st.divider()
     
-    # --- Final Calculation Inputs ---
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', step=0.01, value=product_cost_default, format="%.2f")
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', step=0.01, value=0.00, format="%.2f")
@@ -143,12 +162,10 @@ def display_results(metrics: Dict[str, float], cashflow_offset: float, offset_co
         st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
         st.metric('Log PV (Calculated Cost)', f"{metrics['log_pv']:,.2f}")
         
-    # --- MODIFIED SECTION: Display offset and raw cashflow ---
     st.metric(label="💰 Offset_Cashflow", value=f"{(metrics['net_cf'] - cashflow_offset):,.2f}")
     st.info(f"Net Cashflow (raw): {metrics['net_cf']:,.2f}")
     if offset_comment:
         st.caption(offset_comment)
-    # --- END MODIFIED SECTION ---
     
 def render_charts(config: Dict[str, Any]):
     """Renders all ThingSpeak charts using iframes."""
@@ -179,10 +196,8 @@ def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str
     """Performs all financial calculations."""
     metrics = {}
     
-    # Unpack user inputs for clarity
     total_asset_value = user_inputs['total_asset_value']
     portfolio_cash = user_inputs['portfolio_cash']
-    product_cost = user_inputs['product_cost']
     current_prices = user_inputs['current_prices']
 
     metrics['now_pv'] = total_asset_value + portfolio_cash
@@ -194,7 +209,6 @@ def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str
     metrics['t_n'] = np.prod(live_prices) if live_prices else 0
     
     t_0, t_n = metrics['t_0'], metrics['t_n']
-    # Add safety check to prevent math errors
     metrics['ln'] = -1500 * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
     
     number_of_assets = len(assets_config)
@@ -213,12 +227,10 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
         st.write("Click the button below to confirm and send data to all ThingSpeak channels.")
         
         if st.button("Confirm and Send All Data"):
-            # 1. Validate Product Cost (still needed for some metrics)
             if user_inputs['product_cost'] == 0:
                 st.error("Product_cost cannot be zero. Update failed.")
                 return
 
-            # 2. Update Main Channel
             try:
                 main_fields_map = main_channel_config.get('fields', {})
                 payload = {
@@ -227,7 +239,6 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
                     main_fields_map.get('buffer'): user_inputs['portfolio_cash'],
                     main_fields_map.get('cost_minus_cf'): user_inputs['product_cost'] - metrics['net_cf']
                 }
-                # Filter out any fields that weren't found in the config
                 payload = {k: v for k, v in payload.items() if k}
                 client_main.update(payload)
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
@@ -236,7 +247,6 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
 
             st.divider()
             
-            # 3. Update individual asset channels
             st.write("Updating individual asset holdings...")
             for asset in config.get('assets', []):
                 ticker = asset['ticker']
@@ -259,35 +269,47 @@ def main():
     """Main function to run the Streamlit application."""
     st.write("🔥 Add Cashflow V3 - MultiChannel (Refactored)")
 
-    # --- Load configs and initialize clients (runs once) ---
+    # Load configs and initialize clients
     config = load_config()
     if not config: return
     
     clients = initialize_thingspeak_clients(config)
     
-    # --- Data Fetching and UI ---
+    # Data Fetching and UI
     assets_config = config.get('assets', [])
-    # --- MODIFIED: Get new values from config ---
     product_cost_default = config.get('product_cost_default', 0.0)
     cashflow_offset = config.get('cashflow_offset', 0.0)
     offset_comment = config.get('cashflow_offset_comment', '')
-    # --- END MODIFIED SECTION ---
 
-    initial_data = fetch_initial_data(assets_config, clients[1]) # clients[1] is asset_clients
+    initial_data = fetch_initial_data(assets_config, clients[1])
     user_inputs = render_ui_and_get_inputs(assets_config, initial_data, product_cost_default)
 
-    # --- Calculation and Result Display ---
     if st.button("Recalculate"): 
         pass 
         
     metrics = calculate_metrics(assets_config, user_inputs)
-    # --- MODIFIED: Pass offset values to display function ---
     display_results(metrics, cashflow_offset, offset_comment)
     
-    # --- Update Logic ---
+    # --- MODIFIED SECTION: ADD BUTTON TO RESET OFFSET ---
+    st.divider()
+    st.write("#### 🎯 Reset Cashflow Offset")
+    st.write(f"Clicking the button will set the new offset to the current Net Cashflow value of **`{metrics['net_cf']:,.2f}`**, making the `Offset_Cashflow` zero.")
+    if st.button("Set Current Cashflow as New Offset (ทำให้ Offset_CF = 0)"):
+        if update_cashflow_offset(metrics['net_cf']):
+            st.success("✅ Config file updated successfully! The app will now reload with the new offset.")
+            # Clear caches before rerunning to ensure new config is loaded
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.rerun() # Rerun the script from the top
+        else:
+            st.error("❌ Failed to update the configuration file.")
+    st.divider()
+    # --- END MODIFIED SECTION ---
+
+    # Update Logic
     handle_thingspeak_update(config, clients, metrics, user_inputs)
     
-    # --- Chart Display ---
+    # Chart Display
     render_charts(config)
 
 
