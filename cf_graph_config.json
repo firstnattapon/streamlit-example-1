@@ -30,5 +30,10 @@
     {
         "ticker": "AGL",
         "entry_price": 3.00
+    },
+    {
+        "ticker": "FLNC",
+        "entry_price": 7.00
     }
+
 ]
