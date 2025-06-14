@@ -17,8 +17,8 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "fixed_asset_value": 1500.0,
-        "cash_balance": 650.0
+        "t0": 6.88,
+        "fix": 1500.0
       }
     },
     {
@@ -27,8 +27,8 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "fixed_asset_value": 1500.0,
-        "cash_balance": 650.0
+        "t0": 1.5,
+        "fix": 1500.0
       }
     },
     {
@@ -37,8 +37,8 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "fixed_asset_value": 1500.0,
-        "cash_balance": 650.0
+        "t0": 11.0,
+        "fix": 1500.0
       }
     },
     {
@@ -47,8 +47,8 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "fixed_asset_value": 1500.0,
-        "cash_balance": 650.0
+        "t0": 45.0,
+        "fix": 1500.0
       }
     },
     {
@@ -57,8 +57,8 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "fixed_asset_value": 1500.0,
-        "cash_balance": 650.0
+        "t0": 8.0,
+        "fix": 1500.0
       }
     },
     {
@@ -67,8 +67,8 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "fixed_asset_value": 1500.0,
-        "cash_balance": 650.0
+        "t0": 20.0,
+        "fix": 1500.0
       }
     },
     {
@@ -77,8 +77,8 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "fixed_asset_value": 1500.0,
-        "cash_balance": 650.0
+        "t0": 2.5,
+        "fix": 1500.0
       }
     },
     {
@@ -87,8 +87,8 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "fixed_asset_value": 1500.0,
-        "cash_balance": 650.0
+        "t0": 30.0,
+        "fix": 1500.0
       }
     }
   ]
