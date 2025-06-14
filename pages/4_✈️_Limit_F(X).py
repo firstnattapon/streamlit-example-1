@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
 
 # === CONFIG LOADING ===
-def load_config(path='config.json'):
+def load_config(path='limit_fx_config.json'):
     """Loads the asset configuration from a JSON file."""
     with open(path, 'r') as f:
         config = json.load(f)
