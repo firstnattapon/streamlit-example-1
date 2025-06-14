@@ -27,7 +27,7 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 1.5,
+        "t0": 25.2,
         "fix": 1500.0
       }
     },
@@ -37,7 +37,7 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 11.0,
+        "t0": 10.07,
         "fix": 1500.0
       }
     },
@@ -47,7 +47,7 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 45.0,
+        "t0": 39.61,
         "fix": 1500.0
       }
     },
@@ -57,7 +57,7 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 8.0,
+        "t0": 3.05,
         "fix": 1500.0
       }
     },
@@ -67,7 +67,7 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 20.0,
+        "t0": 19.0,
         "fix": 1500.0
       }
     },
@@ -77,7 +77,7 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 2.5,
+        "t0": 5.4,
         "fix": 1500.0
       }
     },
@@ -87,9 +87,21 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 30.0,
+        "t0": 3.0,
+        "fix": 1500.0
+      }
+    } , 
+    {
+      "ticker": "FLNC",
+      "monitor_field": 1,
+      "channel_id": 2988808,
+      "write_api_key": "QBIPN1AIZ88QQW5V",
+      "production_params": {
+        "t0": 7.0,
         "fix": 1500.0
       }
     }
+
+    
   ]
 }
