@@ -147,8 +147,8 @@ def display_results(metrics: Dict[str, float], cashflow_offset: float):
         st.metric('Log PV (Calculated Cost)', f"{metrics['log_pv']:,.2f}")
         
     # <<< CHANGE HERE (2/2): Apply the offset to the displayed value
-    st.metric(label="💰 Net Cashflow (Adjusted)", value=f"{(metrics['net_cf'] - cashflow_offset):,.2f}")
-    st.caption(f"Original Net CF: {metrics['net_cf']:,.2f} | Offset: {cashflow_offset:,.2f}") # Optional: show details
+    st.metric(label="💰 Net Cashflow", value=f"{(metrics['net_cf'] - cashflow_offset):,.2f}")
+    st.caption(f"Offset: {cashflow_offset:,.2f}") # Optional: show details
     
 def render_charts(config: Dict[str, Any]):
     """Renders all ThingSpeak charts using iframes."""
@@ -259,9 +259,6 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
 # --- 4. MAIN APPLICATION FLOW ---
 
 def main():
-    """Main function to run the Streamlit application."""
-    st.write("🔥 Add Cashflow V3 - MultiChannel (Refactored)")
-
     # --- Load configs and initialize clients (runs once) ---
     config = load_config()
     if not config: return
