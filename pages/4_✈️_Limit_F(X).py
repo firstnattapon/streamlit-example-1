@@ -155,7 +155,7 @@ def plot(Ticker, act):
     st.line_chart(df_plot_burn)
 
     st.write("Detailed Data (Min Action)")
-    st.dataframe(df_min)
+    st.table(df_min)
 
 # === TAB LAYOUT ===
 tab_names = TICKERS + ['Burn_Cash', 'Ref_index_Log', 'cf_log']
