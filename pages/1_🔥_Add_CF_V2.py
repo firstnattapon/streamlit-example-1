@@ -1,5 +1,4 @@
-# main_refactored.py
-
+# code
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -24,6 +23,7 @@ def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
         st.error(f"Error loading or parsing {filename}: {e}")
         st.stop()
 
+# ... (initialize_thingspeak_clients and fetch_initial_data remain the same) ...
 @st.cache_resource
 def initialize_thingspeak_clients(config: Dict[str, Any]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
     """Initializes and returns the main and asset-specific ThingSpeak clients."""
@@ -87,9 +87,8 @@ def fetch_initial_data(assets_config: List[Dict[str, Any]], asset_clients: Dict[
             initial_data[ticker]['last_price'] = asset.get('reference_price', 0.0)
             
     return initial_data
-
 # --- 2. UI & DISPLAY FUNCTIONS ---
-
+# ... (render_ui_and_get_inputs remains the same) ...
 def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, float]], product_cost_default: float) -> Dict[str, Any]:
     """Renders all Streamlit input widgets and returns their current values."""
     user_inputs = {}
@@ -131,7 +130,7 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
     
     return user_inputs
 
-def display_results(metrics: Dict[str, float]):
+def display_results(metrics: Dict[str, float], cashflow_offset: float): # <--- MODIFIED: Pass in offset
     """Displays all the calculated metrics."""
     
     st.divider()
@@ -145,8 +144,13 @@ def display_results(metrics: Dict[str, float]):
         st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
         st.metric('Log PV (Calculated Cost)', f"{metrics['log_pv']:,.2f}")
         
-    st.metric(label="💰 Net Cashflow", value=f"{metrics['net_cf']:,.2f}")
+        # <--- NEW: Display the offset for transparency --->
+        st.metric('Cashflow Offset (Reset Baseline)', f"{cashflow_offset:,.2f}", 
+                  help="This value is subtracted from the raw cashflow to get the final Net Cashflow. Use the 'Reset' button to update it.")
     
+    st.metric(label="💰 Net Cashflow", value=f"{metrics['net_cf']:,.2f}")
+
+# ... (render_charts remains the same) ...
 def render_charts(config: Dict[str, Any]):
     """Renders all ThingSpeak charts using iframes."""
     st.write("📊 ThingSpeak Charts")
@@ -169,10 +173,9 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-
 # --- 3. CORE LOGIC & UPDATE FUNCTIONS ---
 
-def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Dict[str, float]:
+def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str, Any], cashflow_offset: float) -> Dict[str, float]: # <--- MODIFIED: Pass in offset
     """Performs all financial calculations."""
     metrics = {}
     
@@ -192,11 +195,27 @@ def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str
     
     t_0, t_n = metrics['t_0'], metrics['t_n']
     metrics['ln'] = -1500 * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
-    metrics['log_pv'] = product_cost + metrics['ln']
-    metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
+    
+    number_of_assets = len(assets_config)
+    metrics['log_pv'] = (number_of_assets * 1500) + metrics['ln']
+    
+    # <--- MODIFIED SECTION: Calculate raw CF, then apply the offset --->
+    raw_net_cf = metrics['now_pv'] - metrics['log_pv']
+    metrics['raw_net_cf'] = raw_net_cf # Store the raw value for the reset logic
+    metrics['net_cf'] = raw_net_cf - cashflow_offset # This is the final, displayed value
     
     return metrics
 
+# <--- NEW FUNCTION: Handles the entire reset process --->
+def handle_cashflow_reset(config: Dict[str, Any], metrics: Dict[str, float]):
+    """Renders UI for resetting the cashflow and handles the config file update."""
+    st.divider()
+    with st.expander("⚙️ Reset Net Cashflow Baseline"):
+        st.warning("This will set the current 'raw' cashflow as the new baseline (offset), effectively making the displayed Net Cashflow zero.")
+        st.write(f"Current Raw Net Cashflow: **{metrics.get('raw_net_cf', 0):,.2f}**")
+        st.write(f"Current Offset: **{config.get('cashflow_offset', 0.0):,.2f}**")
+
+# ... (handle_thingspeak_update remains mostly the same, just a logic change) ...
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     """Handles the expander and button logic for updating all ThingSpeak channels."""
     client_main, asset_clients = clients
@@ -206,21 +225,19 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
         st.write("Click the button below to confirm and send data to all ThingSpeak channels.")
         
         if st.button("Confirm and Send All Data"):
-            # 1. Validate Product Cost
             if user_inputs['product_cost'] == 0:
                 st.error("Product_cost cannot be zero. Update failed.")
                 return
 
-            # 2. Update Main Channel
             try:
                 main_fields_map = main_channel_config.get('fields', {})
+                # IMPORTANT: We send the final, offset-adjusted 'net_cf' to ThingSpeak
                 payload = {
                     main_fields_map.get('net_cf'): metrics['net_cf'],
-                    main_fields_map.get('pure_alpha'): metrics['net_cf'] / user_inputs['product_cost'],
+                    main_fields_map.get('pure_alpha'): metrics['net_cf'] / user_inputs['product_cost'] if user_inputs['product_cost'] != 0 else 0,
                     main_fields_map.get('buffer'): user_inputs['portfolio_cash'],
                     main_fields_map.get('cost_minus_cf'): user_inputs['product_cost'] - metrics['net_cf']
                 }
-                # Filter out any fields that weren't found in the config
                 payload = {k: v for k, v in payload.items() if k}
                 client_main.update(payload)
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
@@ -229,7 +246,6 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
 
             st.divider()
             
-            # 3. Update individual asset channels
             st.write("Updating individual asset holdings...")
             for asset in config.get('assets', []):
                 ticker = asset['ticker']
@@ -237,7 +253,6 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
                     try:
                         current_holding = user_inputs['current_holdings'][ticker]
                         field_to_update = asset['holding_channel']['field']
-                        
                         client_to_update = asset_clients[ticker]
                         client_to_update.update({field_to_update: current_holding})
                         st.success(f"✅ Successfully updated holding for {ticker}.")
@@ -249,33 +264,36 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
 # --- 4. MAIN APPLICATION FLOW ---
 
 def main():
-    # """Main function to run the Streamlit application."""
-    # st.write("🔥 Add Cashflow V3 - MultiChannel")
+    """Main function to run the Streamlit application."""
+    st.write("🔥 Add Cashflow V3 - MultiChannel (Refactored)")
 
-    # --- Load configs and initialize clients (runs once) ---
     config = load_config()
     if not config: return
     
     clients = initialize_thingspeak_clients(config)
     
-    # --- Data Fetching and UI ---
     assets_config = config.get('assets', [])
     product_cost_default = config.get('product_cost_default', 0.0)
+    # <--- NEW: Get the offset from the config --->
+    cashflow_offset = config.get('cashflow_offset', 0.0) 
 
-    initial_data = fetch_initial_data(assets_config, clients[1]) # clients[1] is asset_clients
+    initial_data = fetch_initial_data(assets_config, clients[1])
     user_inputs = render_ui_and_get_inputs(assets_config, initial_data, product_cost_default)
 
-    # --- Calculation and Result Display ---
-    if st.button("Recalculate"): # Changed from Rerun to avoid full page reload
-        pass # The script re-runs from top on widget interaction anyway
+    if st.button("Recalculate"):
+        pass 
         
-    metrics = calculate_metrics(assets_config, user_inputs)
-    display_results(metrics)
+    # <--- MODIFIED: Pass the offset into the calculation --->
+    metrics = calculate_metrics(assets_config, user_inputs, cashflow_offset)
     
-    # --- Update Logic ---
+    # <--- MODIFIED: Pass the offset for display --->
+    display_results(metrics, cashflow_offset)
+    
+    # <--- NEW: Call the reset handler function --->
+    handle_cashflow_reset(config, metrics)
+    
     handle_thingspeak_update(config, clients, metrics, user_inputs)
     
-    # --- Chart Display ---
     render_charts(config)
 
 
