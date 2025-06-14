@@ -191,7 +191,7 @@ def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str
     metrics['t_n'] = np.prod(live_prices) if live_prices else 0
     
     t_0, t_n = metrics['t_0'], metrics['t_n']
-    metrics['ln'] = -1500 * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
+    metrics['ln'] = -1500 * np.log(t_0 / t_n) # if t_0 > 0 and t_n > 0 else 0
     metrics['log_pv'] = product_cost + metrics['ln']
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     
