@@ -145,8 +145,9 @@ def display_results(metrics: Dict[str, float]):
         st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
         st.metric('Log PV (Calculated Cost)', f"{metrics['log_pv']:,.2f}")
         
-    st.metric(label="💰 Net Cashflow", value=f"{metrics['net_cf']:,.2f}")
-    
+    st.metric(label="💰 Net Cashflow", value=f"{ metrics['net_cf']:,.2f}")
+    st.metric(label="💰 Off Cashflow", value=f"{ metrics['net_cf'] - config.get('cashflow_offset', 0.0) :,.2f}")
+
 def render_charts(config: Dict[str, Any]):
     """Renders all ThingSpeak charts using iframes."""
     st.write("📊 ThingSpeak Charts")
