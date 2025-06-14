@@ -1,36 +1,52 @@
 {
   "assets": [
     {
+      "symbol": "AGL",
+      "field": 1,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
       "symbol": "FFWM",
-      "field": 2
+      "field": 2,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
     },
     {
       "symbol": "NEGG",
-      "field": 3
+      "field": 3,
+      "channel_id": 255555,
+      "write_api_key": "YOUR_API_KEY_FOR_NEGG"
     },
     {
       "symbol": "RIVN",
-      "field": 4
+      "field": 4,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
     },
     {
       "symbol": "APLS",
-      "field": 5
+      "field": 5,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
     },
     {
       "symbol": "NVTS",
-      "field": 6
+      "field": 6,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
     },
     {
       "symbol": "QXO",
-      "field": 7
+      "field": 7,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
     },
     {
       "symbol": "RXRX",
-      "field": 8
-    },
-    {
-      "symbol": "AGL",
-      "field": 1
+      "field": 8,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
     }
   ]
 }
