@@ -62,5 +62,21 @@
     "step": 0.01,
     "filter_date": "2022-12-21 12:00:00+07:00",
     "pred": 1
+  },
+  "AGL": {
+    "Ticker": "AGL",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
+  },
+  "FLNC": {
+    "Ticker": "FLNC",
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2022-12-21 12:00:00+07:00",
+    "pred": 1
   }
 }
