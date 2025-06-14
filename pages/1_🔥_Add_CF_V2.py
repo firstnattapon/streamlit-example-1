@@ -211,7 +211,6 @@ def handle_cashflow_reset(config: Dict[str, Any], metrics: Dict[str, float]):
     """Renders UI for resetting the cashflow and handles the config file update."""
     st.divider()
     with st.expander("⚙️ Reset Net Cashflow Baseline"):
-        st.warning("This will set the current 'raw' cashflow as the new baseline (offset), effectively making the displayed Net Cashflow zero.")
         st.write(f"Current Raw Net Cashflow: **{metrics.get('raw_net_cf', 0):,.2f}**")
         st.write(f"Current Offset: **{config.get('cashflow_offset', 0.0):,.2f}**")
 
