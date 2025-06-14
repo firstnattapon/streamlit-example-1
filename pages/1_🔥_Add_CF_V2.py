@@ -131,7 +131,8 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
     
     return user_inputs
 
-def display_results(metrics: Dict[str, float]):
+# <<< CHANGE HERE (1/2): Modify function signature to accept cashflow_offset
+def display_results(metrics: Dict[str, float], cashflow_offset: float):
     """Displays all the calculated metrics."""
     
     st.divider()
@@ -145,7 +146,9 @@ def display_results(metrics: Dict[str, float]):
         st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
         st.metric('Log PV (Calculated Cost)', f"{metrics['log_pv']:,.2f}")
         
-    st.metric(label="💰 Net Cashflow", value=f"{metrics['net_cf']:,.2f}")
+    # <<< CHANGE HERE (2/2): Apply the offset to the displayed value
+    st.metric(label="💰 Net Cashflow (Adjusted)", value=f"{(metrics['net_cf'] - cashflow_offset):,.2f}")
+    st.caption(f"Original Net CF: {metrics['net_cf']:,.2f} | Offset: {cashflow_offset:,.2f}") # Optional: show details
     
 def render_charts(config: Dict[str, Any]):
     """Renders all ThingSpeak charts using iframes."""
@@ -194,11 +197,9 @@ def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str
     # Add safety check to prevent math errors
     metrics['ln'] = -1500 * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
     
-    # --- MODIFIED SECTION ---
-    # Calculate log_pv based on the number of assets * 1500, instead of product_cost
+    # Calculate log_pv based on the number of assets * 1500
     number_of_assets = len(assets_config)
     metrics['log_pv'] = (number_of_assets * 1500) + metrics['ln']
-    # --- END MODIFIED SECTION ---
     
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     
@@ -221,6 +222,8 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
             # 2. Update Main Channel
             try:
                 main_fields_map = main_channel_config.get('fields', {})
+                # IMPORTANT: Data sent to ThingSpeak is still the ORIGINAL net_cf
+                # The offset is only for display purposes in the UI.
                 payload = {
                     main_fields_map.get('net_cf'): metrics['net_cf'],
                     main_fields_map.get('pure_alpha'): metrics['net_cf'] / user_inputs['product_cost'],
@@ -268,6 +271,11 @@ def main():
     # --- Data Fetching and UI ---
     assets_config = config.get('assets', [])
     product_cost_default = config.get('product_cost_default', 0.0)
+    # <<< CHANGE HERE: Get cashflow_offset from the config file. Default to 0 if not found.
+    cashflow_offset = config.get('cashflow_offset', 0.0)
+    if cashflow_offset != 0:
+        st.info(f"Using Cashflow Offset: {cashflow_offset:,.2f} ({config.get('cashflow_offset_comment', '')})")
+
 
     initial_data = fetch_initial_data(assets_config, clients[1]) # clients[1] is asset_clients
     user_inputs = render_ui_and_get_inputs(assets_config, initial_data, product_cost_default)
@@ -277,9 +285,12 @@ def main():
         pass # The script re-runs from top on widget interaction anyway
         
     metrics = calculate_metrics(assets_config, user_inputs)
-    display_results(metrics)
+    # <<< CHANGE HERE: Pass the cashflow_offset to the display function
+    display_results(metrics, cashflow_offset)
     
     # --- Update Logic ---
+    # Note: The handle_thingspeak_update function sends the original metrics['net_cf'],
+    # so the offset only affects the display in this app, not the data logged in ThingSpeak.
     handle_thingspeak_update(config, clients, metrics, user_inputs)
     
     # --- Chart Display ---
