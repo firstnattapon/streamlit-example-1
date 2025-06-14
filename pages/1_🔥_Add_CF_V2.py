@@ -1,5 +1,3 @@
-# main_refactored.py
-
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -131,8 +129,8 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
     
     return user_inputs
 
-def display_results(metrics: Dict[str, float]):
-    """Displays all the calculated metrics."""
+def display_results(metrics: Dict[str, float], cashflow_offset: float, offset_comment: str):
+    """Displays all the calculated metrics, including the offset cashflow."""
     
     st.divider()
     with st.expander("📈 Results", expanded=False):
@@ -145,7 +143,12 @@ def display_results(metrics: Dict[str, float]):
         st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
         st.metric('Log PV (Calculated Cost)', f"{metrics['log_pv']:,.2f}")
         
-    st.metric(label="💰 Net Cashflow", value=f"{metrics['net_cf']:,.2f}")
+    # --- MODIFIED SECTION: Display offset and raw cashflow ---
+    st.metric(label="💰 Offset_Cashflow", value=f"{(metrics['net_cf'] - cashflow_offset):,.2f}")
+    st.info(f"Net Cashflow (raw): {metrics['net_cf']:,.2f}")
+    if offset_comment:
+        st.caption(offset_comment)
+    # --- END MODIFIED SECTION ---
     
 def render_charts(config: Dict[str, Any]):
     """Renders all ThingSpeak charts using iframes."""
@@ -194,11 +197,8 @@ def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str
     # Add safety check to prevent math errors
     metrics['ln'] = -1500 * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
     
-    # --- MODIFIED SECTION ---
-    # Calculate log_pv based on the number of assets * 1500, instead of product_cost
     number_of_assets = len(assets_config)
     metrics['log_pv'] = (number_of_assets * 1500) + metrics['ln']
-    # --- END MODIFIED SECTION ---
     
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     
@@ -267,17 +267,22 @@ def main():
     
     # --- Data Fetching and UI ---
     assets_config = config.get('assets', [])
+    # --- MODIFIED: Get new values from config ---
     product_cost_default = config.get('product_cost_default', 0.0)
+    cashflow_offset = config.get('cashflow_offset', 0.0)
+    offset_comment = config.get('cashflow_offset_comment', '')
+    # --- END MODIFIED SECTION ---
 
     initial_data = fetch_initial_data(assets_config, clients[1]) # clients[1] is asset_clients
     user_inputs = render_ui_and_get_inputs(assets_config, initial_data, product_cost_default)
 
     # --- Calculation and Result Display ---
-    if st.button("Recalculate"): # Changed from Rerun to avoid full page reload
-        pass # The script re-runs from top on widget interaction anyway
+    if st.button("Recalculate"): 
+        pass 
         
     metrics = calculate_metrics(assets_config, user_inputs)
-    display_results(metrics)
+    # --- MODIFIED: Pass offset values to display function ---
+    display_results(metrics, cashflow_offset, offset_comment)
     
     # --- Update Logic ---
     handle_thingspeak_update(config, clients, metrics, user_inputs)
