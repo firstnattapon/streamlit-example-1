@@ -169,7 +169,7 @@ def main():
         # prod_cost_display = f"{prod_cost[0]:.2f}" if prod_cost is not None else "N/A"
         
         st.write(ticker)
-        st.write(f"f(x): {fx_js} ,  , Production: {prod_cost}")
+        st.write(f"f(x): {fx_js} ,  , Production: prod_cost[0]")
         st.table(df_7)
         st.write("_____")
 
