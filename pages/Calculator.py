@@ -9,11 +9,8 @@ from pathlib import Path
 # --- 1. การตั้งค่าและโหลด Configuration ---
 st.set_page_config(page_title="Calculator", page_icon="⌨️")
 
-@st.cache_data(ttl=300) # Cache config data for 5 minutes
+@st.cache_data(ttl=300)
 def load_config(filepath="calculator_config.json"):
-    """
-    Loads the configuration from a JSON file with error handling.
-    """
     config_path = Path(filepath)
     if not config_path.is_file():
         st.error(f"Error: Configuration file not found at '{filepath}'")
@@ -25,7 +22,6 @@ def load_config(filepath="calculator_config.json"):
         st.error(f"Error: Could not decode JSON from '{filepath}'. Please check for syntax errors.")
         st.stop()
 
-# โหลด config
 CONFIG = load_config()
 
 if st.button("Rerun"):
@@ -33,22 +29,16 @@ if st.button("Rerun"):
 
 # --- 2. ฟังก์ชันที่ปรับปรุงแล้ว (Refactored Functions) ---
 
-@st.cache_data(ttl=600) # Cache a Ticker's history for 10 minutes
+@st.cache_data(ttl=600)
 def get_ticker_history(ticker_symbol):
-    """Fetches and processes historical data for a given ticker."""
     ticker = yf.Ticker(ticker_symbol)
     history = ticker.history(period='max')[['Close']]
     history.index = history.index.tz_convert(tz='Asia/Bangkok')
     return round(history, 3)
 
 def average_cf(cf_config):
-    """
-    Calculates average CF. Uses .get() for safety to prevent KeyErrors.
-    """
     history = get_ticker_history(cf_config['ticker'])
     
-    # --- ป้องกัน KeyError ---
-    # ใช้ .get() เพื่อดึงค่า 'filter_date'. ถ้าไม่มี ให้ใช้ค่า default ที่เคย hardcode ไว้
     default_date = "2024-01-01 12:00:00+07:00"
     filter_date = cf_config.get('filter_date', default_date)
     
@@ -66,13 +56,21 @@ def average_cf(cf_config):
     field_data = client.get_field_last(field=f"{cf_config['field']}")
     
     value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
-    adjusted_value = value - cf_config.get('offset', 0) # ป้องกัน KeyError ที่ offset ด้วย
+    adjusted_value = value - cf_config.get('offset', 0)
     
     return adjusted_value / count_data
 
 @st.cache_data(ttl=60)
 def production_cost(ticker, fixed_asset_value, cash_balance):
-    """Calculates Production Costs."""
+    """
+    Calculates Production Costs.
+    **UPDATED**: Returns None if fixed_asset_value is 0 to avoid misleading results.
+    """
+    # --- เพิ่มการตรวจสอบตรงนี้ ---
+    if fixed_asset_value <= 0:
+        st.warning(f"Production cost for {ticker} skipped: 'fixed_asset_value' is zero or missing in config.")
+        return None
+
     try:
         ticker_info = yf.Ticker(ticker)
         entry_price = ticker_info.fast_info['lastPrice']
@@ -103,7 +101,6 @@ def production_cost(ticker, fixed_asset_value, cash_balance):
         return None
 
 def monitor(channel_id, api_key, ticker, field, filter_date):
-    """Monitors an asset. Now robust to missing data."""
     thingspeak_client = thingspeak.Channel(id=channel_id, api_key=api_key, fmt='json')
     history = get_ticker_history(ticker)
     
@@ -113,7 +110,6 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
         field_data = thingspeak_client.get_field_last(field=f'{field}')
         fx_js = int(json.loads(field_data)[f"field{field}"])
     except (json.JSONDecodeError, KeyError, TypeError):
-        # ถ้าดึงข้อมูลจาก Thingspeak ไม่ได้ หรือข้อมูลผิด format ให้ใช้ค่า default
         fx_js = 0 
     
     rng = np.random.default_rng(fx_js)
@@ -131,12 +127,9 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     return combined_df.tail(7), fx_js
 
 # --- 3. ส่วนแสดงผลหลัก (Main Display Logic) ---
-
 def main():
-    """Main function to run the Streamlit app."""
     st.write('____')
     
-    # ใช้ .get() เพื่อป้องกันกรณีที่ 'average_cf_config' ไม่มีในไฟล์ config
     avg_cf_config = CONFIG.get('average_cf_config')
     if avg_cf_config:
         cf_day = average_cf(avg_cf_config)
@@ -145,21 +138,18 @@ def main():
         st.warning("`average_cf_config` not found in configuration file.")
     st.write('____')
     
-    # --- ป้องกัน KeyError ---
-    # ใช้ .get() เพื่อดึง monitor_config และ filter_date อย่างปลอดภัย
-    monitor_config = CONFIG.get('monitor_config', {}) # ให้ default เป็น dict ว่าง
+    monitor_config = CONFIG.get('monitor_config', {})
     default_monitor_date = "2025-04-28 12:00:00+07:00"
     monitor_filter_date = monitor_config.get('filter_date', default_monitor_date)
 
-    for asset_config in CONFIG.get('assets', []): # ป้องกันกรณีที่ 'assets' ไม่มี
+    for asset_config in CONFIG.get('assets', []):
         ticker = asset_config.get('ticker', 'N/A')
         monitor_field = asset_config.get('monitor_field')
         prod_params = asset_config.get('production_params', {})
         channel_id = asset_config.get('channel_id')
         api_key = asset_config.get('write_api_key')
 
-        # ตรวจสอบว่ามีข้อมูลที่จำเป็นครบถ้วนหรือไม่
-        if not all([ticker, monitor_field, channel_id, api_key]):
+        if not all([ticker != 'N/A', monitor_field, channel_id, api_key]):
             st.warning(f"Skipping an asset due to missing configuration: {asset_config}")
             continue
 
