@@ -148,7 +148,7 @@ def display_results(metrics: Dict[str, float], config: Dict[str, Any]):
         
     st.metric(label="💰 Net Cashflow", value=f"{ metrics['net_cf']:,.2f}")
     # This line now works because 'config' is available within this function's scope
-    st.metric(label="💰 Off Cashflow", value=f"{ metrics['net_cf'] - config.get('cashflow_offset', 0.0) :,.2f}")
+    st.info(label="💰 Baseline Cashflow", value=f"{ metrics['net_cf'] - config.get('cashflow_offset', 0.0) :,.2f}")
 
 def render_charts(config: Dict[str, Any]):
     """Renders all ThingSpeak charts using iframes."""
