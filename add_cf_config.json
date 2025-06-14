@@ -1,6 +1,6 @@
 {
     "product_cost_default": 10750.00,
-    "cashflow_offset": 0.0,
+    "cashflow_offset": 1709.67,
     "thingspeak_channels": {
         "main_output": {
             "channel_id": 2394198,
