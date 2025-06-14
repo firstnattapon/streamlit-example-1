@@ -1,3 +1,4 @@
+# v3 (Bulletproof Version)
 import streamlit as st
 import numpy as np
 import yfinance as yf
@@ -64,11 +65,9 @@ def average_cf(cf_config):
 def production_cost(ticker, fixed_asset_value, cash_balance):
     """
     Calculates Production Costs.
-    **UPDATED**: Returns None if fixed_asset_value is 0 to avoid misleading results.
+    Returns None if fixed_asset_value is 0 to avoid misleading results.
     """
-    # --- เพิ่มการตรวจสอบตรงนี้ ---
-    if fixed_asset_value <= 0:
-        st.warning(f"Production cost for {ticker} skipped: 'fixed_asset_value' is zero or missing in config.")
+    if not isinstance(fixed_asset_value, (int, float)) or fixed_asset_value <= 0:
         return None
 
     try:
@@ -128,6 +127,8 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
 
 # --- 3. ส่วนแสดงผลหลัก (Main Display Logic) ---
 def main():
+    # --- เพิ่มบรรทัดนี้เพื่อ "ติดเครื่องหมาย" ให้โค้ด ---
+    st.success("✅ Code Version 3 (Bulletproof) is now running!")
     st.write('____')
     
     avg_cf_config = CONFIG.get('average_cf_config')
@@ -157,7 +158,7 @@ def main():
         
         prod_cost = production_cost(
             ticker=ticker,
-            fixed_asset_value=prod_params.get('fixed_asset_value', 0),
+            fixed_asset_value=prod_params.get('fixed_asset_value'), # เอา default 0 ออก
             cash_balance=prod_params.get('cash_balance', 0)
         )
         
