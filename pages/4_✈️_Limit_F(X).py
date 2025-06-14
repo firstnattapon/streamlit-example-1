@@ -134,7 +134,7 @@ def Limit_fx(Ticker, act=-1):
     return df
 
 def plot(Ticker, act):
-    df_min = Limit_fx(Ticker, act=-1)
+    df_min = Limit_fx(Ticker, act=-1) 
     df_fx = Limit_fx(Ticker, act=act)
     df_max = Limit_fx(Ticker, act=-2)
 
