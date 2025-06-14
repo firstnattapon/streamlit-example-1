@@ -1,4 +1,3 @@
-# code
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -23,21 +22,19 @@ def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
         st.error(f"Error loading or parsing {filename}: {e}")
         st.stop()
 
-# ... (initialize_thingspeak_clients and fetch_initial_data remain the same) ...
+# MODIFIED: Now returns a third client for the config channel
 @st.cache_resource
-def initialize_thingspeak_clients(config: Dict[str, Any]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
-    """Initializes and returns the main and asset-specific ThingSpeak clients."""
-    main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
+def initialize_thingspeak_clients(config: Dict[str, Any]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel], thingspeak.Channel]:
+    """Initializes and returns the main, asset-specific, and config ThingSpeak clients."""
+    channels_config = config.get('thingspeak_channels', {})
     assets_config = config.get('assets', [])
     
     try:
-        # Client for Main Output (Net CF, etc.)
-        client_main = thingspeak.Channel(
-            main_channel_config['channel_id'],
-            main_channel_config['write_api_key']
-        )
+        # Client for Main Output
+        main_cfg = channels_config.get('main_output', {})
+        client_main = thingspeak.Channel(main_cfg['channel_id'], main_cfg['write_api_key'])
         
-        # Create a client for each individual asset
+        # Clients for individual assets
         asset_clients = {}
         for asset in assets_config:
             ticker = asset['ticker']
@@ -47,15 +44,44 @@ def initialize_thingspeak_clients(config: Dict[str, Any]) -> Tuple[thingspeak.Ch
                     channel_info['channel_id'],
                     channel_info['write_api_key']
                 )
-            else:
-                st.warning(f"Missing 'holding_channel' config for {ticker}. It won't be updated on ThingSpeak.")
+        
+        # NEW: Client for Configuration (offset, etc.)
+        client_config = None
+        config_cfg = channels_config.get('config_channel', {})
+        if config_cfg.get('channel_id') and config_cfg.get('write_api_key'):
+            client_config = thingspeak.Channel(
+                config_cfg['channel_id'],
+                write_key=config_cfg['write_api_key'],
+                read_key=config_cfg.get('read_api_key') # Read key is important!
+            )
+            st.success(f"Initialized main, {len(asset_clients)} asset, and config clients.")
+        else:
+            st.warning("Missing 'config_channel' config. Reset functionality will be disabled.")
 
-        st.success(f"Initialized main client and {len(asset_clients)} asset clients.")
-        return client_main, asset_clients
+        return client_main, asset_clients, client_config
 
     except (KeyError, Exception) as e:
-        st.error(f"Failed to initialize ThingSpeak clients from config. Check your config file. Error: {e}")
+        st.error(f"Failed to initialize ThingSpeak clients. Check your config file. Error: {e}")
         st.stop()
+
+# NEW: Function to fetch the offset from ThingSpeak
+def fetch_initial_offset(client_config: thingspeak.Channel, config_details: Dict[str, str]) -> float:
+    """Fetches the last cashflow offset value from the config ThingSpeak channel."""
+    if not client_config or not config_details:
+        return 0.0
+
+    try:
+        field = config_details['offset_field']
+        last_offset_str = client_config.get_field_last(field=field)
+        if last_offset_str:
+            data_dict = json.loads(last_offset_str)
+            last_offset = float(data_dict[field])
+            st.info(f"Successfully fetched last cashflow offset from ThingSpeak: {last_offset:,.2f}")
+            return last_offset
+        return 0.0
+    except Exception as e:
+        st.warning(f"Could not fetch last offset from ThingSpeak. Defaulting to 0. Error: {e}")
+        return 0.0
 
 def fetch_initial_data(assets_config: List[Dict[str, Any]], asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, float]]:
     """Fetches last holding from ThingSpeak and last price from yfinance for each asset."""
@@ -63,8 +89,6 @@ def fetch_initial_data(assets_config: List[Dict[str, Any]], asset_clients: Dict[
     for asset in assets_config:
         ticker = asset["ticker"]
         initial_data[ticker] = {}
-
-        # Fetch last holding from ThingSpeak
         last_holding = 0.0
         if ticker in asset_clients:
             try:
@@ -77,23 +101,17 @@ def fetch_initial_data(assets_config: List[Dict[str, Any]], asset_clients: Dict[
             except Exception as e:
                 st.warning(f"Could not fetch last holding for {ticker}. Defaulting to 0. Error: {e}")
         initial_data[ticker]['last_holding'] = last_holding
-
-        # Fetch last price from yfinance
         try:
             last_price = yf.Ticker(ticker).fast_info['lastPrice']
             initial_data[ticker]['last_price'] = last_price
         except Exception as e:
             st.warning(f"Could not fetch price for {ticker}. Defaulting to reference price. Error: {e}")
             initial_data[ticker]['last_price'] = asset.get('reference_price', 0.0)
-            
     return initial_data
-# --- 2. UI & DISPLAY FUNCTIONS ---
-# ... (render_ui_and_get_inputs remains the same) ...
+
+# --- 2. UI & DISPLAY FUNCTIONS (No changes needed here) ---
 def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, float]], product_cost_default: float) -> Dict[str, Any]:
-    """Renders all Streamlit input widgets and returns their current values."""
     user_inputs = {}
-    
-    # --- Price Inputs ---
     st.write("📊 Current Asset Prices")
     current_prices = {}
     for asset in assets_config:
@@ -102,10 +120,7 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
         price_value = initial_data[ticker].get('last_price', 0.0)
         current_prices[ticker] = st.number_input(label, step=0.01, value=price_value, key=f"price_{ticker}", format="%.2f")
     user_inputs['current_prices'] = current_prices
-
     st.divider()
-
-    # --- Holding Inputs ---
     st.write("📦 Asset Holdings")
     current_holdings = {}
     total_asset_value = 0.0
@@ -114,50 +129,35 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
         holding_value = initial_data[ticker].get('last_holding', 0.0)
         asset_holding = st.number_input(f"{ticker}_asset", step=0.01, value=holding_value, key=f"holding_{ticker}", format="%.2f")
         current_holdings[ticker] = asset_holding
-        
         individual_asset_value = asset_holding * current_prices[ticker]
         st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
         total_asset_value += individual_asset_value
     user_inputs['current_holdings'] = current_holdings
     user_inputs['total_asset_value'] = total_asset_value
-
     st.divider()
-    
-    # --- Final Calculation Inputs ---
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', step=0.01, value=product_cost_default, format="%.2f")
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', step=0.01, value=0.00, format="%.2f")
-    
     return user_inputs
 
-def display_results(metrics: Dict[str, float], cashflow_offset: float): # <--- MODIFIED: Pass in offset
-    """Displays all the calculated metrics."""
-    
+def display_results(metrics: Dict[str, float], cashflow_offset: float):
     st.divider()
     with st.expander("📈 Results", expanded=False):
         st.write('Current Portfolio Value (Assets + Cash):', f"**{metrics['now_pv']:,.2f}**")
-        
         col1, col2 = st.columns(2)
         col1.metric('t_0 (Product of Reference Prices)', f"{metrics['t_0']:,.2f}")
         col2.metric('t_n (Product of Live Prices)', f"{metrics['t_n']:,.2f}")
-    
         st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
         st.metric('Log PV (Calculated Cost)', f"{metrics['log_pv']:,.2f}")
-        
-        # <--- NEW: Display the offset for transparency --->
         st.metric('Cashflow Offset (Reset Baseline)', f"{cashflow_offset:,.2f}", 
-                  help="This value is subtracted from the raw cashflow to get the final Net Cashflow. Use the 'Reset' button to update it.")
-    
+                  help="This value is subtracted from the raw cashflow to get the final Net Cashflow. It is fetched from ThingSpeak on startup.")
     st.metric(label="💰 Net Cashflow", value=f"{metrics['net_cf']:,.2f}")
 
-# ... (render_charts remains the same) ...
 def render_charts(config: Dict[str, Any]):
-    """Renders all ThingSpeak charts using iframes."""
     st.write("📊 ThingSpeak Charts")
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
     main_channel_id = main_channel_config.get('channel_id')
     main_fields_map = main_channel_config.get('fields', {})
-
     def create_chart_iframe(channel_id, field_name, chart_title):
         if channel_id and field_name:
             chart_number = field_name.replace('field', '')
@@ -167,7 +167,6 @@ def render_charts(config: Dict[str, Any]):
             st.divider()
         else:
             st.warning(f"Chart for '{chart_title}' cannot be displayed. Missing config for field '{field_name}'.")
-
     create_chart_iframe(main_channel_id, main_fields_map.get('net_cf'), 'Cashflow')
     create_chart_iframe(main_channel_id, main_fields_map.get('pure_alpha'), 'Pure_Alpha')
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
@@ -175,80 +174,67 @@ def render_charts(config: Dict[str, Any]):
 
 # --- 3. CORE LOGIC & UPDATE FUNCTIONS ---
 
-def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str, Any], cashflow_offset: float) -> Dict[str, float]: # <--- MODIFIED: Pass in offset
-    """Performs all financial calculations."""
+def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str, Any], cashflow_offset: float) -> Dict[str, float]:
     metrics = {}
-    
-    # Unpack user inputs for clarity
     total_asset_value = user_inputs['total_asset_value']
     portfolio_cash = user_inputs['portfolio_cash']
     product_cost = user_inputs['product_cost']
     current_prices = user_inputs['current_prices']
-
     metrics['now_pv'] = total_asset_value + portfolio_cash
-    
     reference_prices = [asset['reference_price'] for asset in assets_config]
     live_prices = [current_prices[asset['ticker']] for asset in assets_config]
-
     metrics['t_0'] = np.prod(reference_prices) if reference_prices else 0
     metrics['t_n'] = np.prod(live_prices) if live_prices else 0
-    
     t_0, t_n = metrics['t_0'], metrics['t_n']
     metrics['ln'] = -1500 * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
-    
     number_of_assets = len(assets_config)
     metrics['log_pv'] = (number_of_assets * 1500) + metrics['ln']
-    
-    # <--- MODIFIED SECTION: Calculate raw CF, then apply the offset --->
     raw_net_cf = metrics['now_pv'] - metrics['log_pv']
-    metrics['raw_net_cf'] = raw_net_cf # Store the raw value for the reset logic
-    metrics['net_cf'] = raw_net_cf - cashflow_offset # This is the final, displayed value
-    
+    metrics['raw_net_cf'] = raw_net_cf
+    metrics['net_cf'] = raw_net_cf - cashflow_offset
     return metrics
 
-# <--- NEW FUNCTION: Handles the entire reset process --->
-def handle_cashflow_reset(config: Dict[str, Any], metrics: Dict[str, float]):
-    """Renders UI for resetting the cashflow and handles the config file update."""
+# MODIFIED: This function now updates ThingSpeak instead of writing to a file.
+def handle_cashflow_reset(client_config: thingspeak.Channel, config_details: Dict[str, str], metrics: Dict[str, float], current_offset: float):
+    """Renders UI for resetting the cashflow and sends the new offset to ThingSpeak."""
     st.divider()
     with st.expander("⚙️ Reset Net Cashflow Baseline"):
-        st.warning("This will set the current 'raw' cashflow as the new baseline (offset), effectively making the displayed Net Cashflow zero.")
+        if not client_config:
+            st.error("Config Channel not initialized. Cannot reset cashflow.")
+            return
+
+        st.warning("This will update the baseline (offset) on ThingSpeak, effectively making the displayed Net Cashflow zero on next run.")
         st.write(f"Current Raw Net Cashflow: **{metrics.get('raw_net_cf', 0):,.2f}**")
-        st.write(f"Current Offset: **{config.get('cashflow_offset', 0.0):,.2f}**")
+        st.write(f"Current Offset (from ThingSpeak): **{current_offset:,.2f}**")
         
-        if st.button("RESET CASHFLOW TO ZERO"):
+        if st.button("RESET CASHFLOW TO ZERO (Update ThingSpeak)"):
             new_offset = metrics.get('raw_net_cf', 0.0)
-            config['cashflow_offset'] = new_offset
+            field_to_update = config_details['offset_field']
             
             try:
-                # Write the updated configuration back to the file
-                with open("add_cf_config.json", 'w', encoding='utf-8') as f:
-                    json.dump(config, f, indent=4)
+                # Update the offset value on the ThingSpeak channel
+                client_config.update({field_to_update: new_offset})
                 
-                st.success(f"✅ Success! Offset updated to {new_offset:,.2f}. The config file has been saved.")
-                st.info("🔄 Please press 'R' or rerun the script to see the change take effect.")
+                st.success(f"✅ Success! Sent new offset {new_offset:,.2f} to ThingSpeak.")
+                st.info("🔄 Please press 'R' or rerun the app to fetch the new offset and see the change take effect.")
                 
-                # Clear the cache so the config is re-read on the next run
+                # Clear cache to force re-fetch on the next run
                 st.cache_data.clear()
+                st.cache_resource.clear()
             except Exception as e:
-                st.error(f"❌ Failed to write to config file: {e}")
+                st.error(f"❌ Failed to update offset on ThingSpeak: {e}")
 
-# ... (handle_thingspeak_update remains mostly the same, just a logic change) ...
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Dict[str, float], user_inputs: Dict[str, Any]):
-    """Handles the expander and button logic for updating all ThingSpeak channels."""
-    client_main, asset_clients = clients
+    client_main, asset_clients, _ = clients # Unpack the third client, but we don't use it here
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
-    
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         st.write("Click the button below to confirm and send data to all ThingSpeak channels.")
-        
         if st.button("Confirm and Send All Data"):
             if user_inputs['product_cost'] == 0:
                 st.error("Product_cost cannot be zero. Update failed.")
                 return
-
             try:
                 main_fields_map = main_channel_config.get('fields', {})
-                # IMPORTANT: We send the final, offset-adjusted 'net_cf' to ThingSpeak
                 payload = {
                     main_fields_map.get('net_cf'): metrics['net_cf'],
                     main_fields_map.get('pure_alpha'): metrics['net_cf'] / user_inputs['product_cost'] if user_inputs['product_cost'] != 0 else 0,
@@ -260,9 +246,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
             except Exception as e:
                 st.error(f"❌ Failed to update Main Channel on Thingspeak: {e}")
-
             st.divider()
-            
             st.write("Updating individual asset holdings...")
             for asset in config.get('assets', []):
                 ticker = asset['ticker']
@@ -282,37 +266,38 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
 
 def main():
     """Main function to run the Streamlit application."""
-    st.write("🔥 Add Cashflow V3 - MultiChannel (Refactored)")
+    st.write("🔥 Add Cashflow V3 - MultiChannel (Persistent Offset)")
 
     config = load_config()
     if not config: return
     
-    clients = initialize_thingspeak_clients(config)
+    # MODIFIED: Unpack three clients now
+    client_main, asset_clients, client_config = initialize_thingspeak_clients(config)
     
     assets_config = config.get('assets', [])
     product_cost_default = config.get('product_cost_default', 0.0)
-    # <--- NEW: Get the offset from the config --->
-    cashflow_offset = config.get('cashflow_offset', 0.0) 
+    
+    # NEW: Fetch the offset from ThingSpeak at the start
+    config_channel_details = config.get('thingspeak_channels', {}).get('config_channel', {})
+    cashflow_offset = fetch_initial_offset(client_config, config_channel_details)
 
-    initial_data = fetch_initial_data(assets_config, clients[1])
+    initial_data = fetch_initial_data(assets_config, asset_clients)
     user_inputs = render_ui_and_get_inputs(assets_config, initial_data, product_cost_default)
 
     if st.button("Recalculate"):
         pass 
         
-    # <--- MODIFIED: Pass the offset into the calculation --->
     metrics = calculate_metrics(assets_config, user_inputs, cashflow_offset)
     
-    # <--- MODIFIED: Pass the offset for display --->
     display_results(metrics, cashflow_offset)
     
-    # <--- NEW: Call the reset handler function --->
-    handle_cashflow_reset(config, metrics)
+    # MODIFIED: Call the reset handler with the new required arguments
+    handle_cashflow_reset(client_config, config_channel_details, metrics, cashflow_offset)
     
-    handle_thingspeak_update(config, clients, metrics, user_inputs)
+    # MODIFIED: Pass all three clients to the update handler
+    handle_thingspeak_update(config, (client_main, asset_clients, client_config), metrics, user_inputs)
     
     render_charts(config)
-
 
 if __name__ == "__main__":
     main()
