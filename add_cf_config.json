@@ -1,4 +1,6 @@
 {
+    "cashflow_offset": 1709.67,
+    "cashflow_offset_comment": "Offset as of 14/6/68",
     "product_cost_default": 10750.00,
     "thingspeak_channels": {
         "main_output": {
