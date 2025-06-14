@@ -166,10 +166,10 @@ def main():
             fix=prod_params.get('fix', 0.0)     # ดึงค่า fix, ถ้าไม่มีให้เป็น 0.0
         )
         
-        # prod_cost_display = f"{prod_cost[0]:.2f}" if prod_cost is not None else "N/A"
+        # prod_costmax_display = f"{prod_cost[0]:.2f}" if prod_cost is not None else "N/A"
         
         st.write(ticker)
-        st.write(f"f(x): {fx_js} ,   Production: max")
+        st.write(f"f(x): {fx_js} ,   Production: max )
         st.table(df_7)
         st.write("_____")
 
