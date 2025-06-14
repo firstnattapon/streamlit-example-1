@@ -214,23 +214,6 @@ def handle_cashflow_reset(config: Dict[str, Any], metrics: Dict[str, float]):
         st.warning("This will set the current 'raw' cashflow as the new baseline (offset), effectively making the displayed Net Cashflow zero.")
         st.write(f"Current Raw Net Cashflow: **{metrics.get('raw_net_cf', 0):,.2f}**")
         st.write(f"Current Offset: **{config.get('cashflow_offset', 0.0):,.2f}**")
-        
-        if st.button("RESET CASHFLOW TO ZERO"):
-            new_offset = metrics.get('raw_net_cf', 0.0)
-            config['cashflow_offset'] = new_offset
-            
-            try:
-                # Write the updated configuration back to the file
-                with open("add_cf_config.json", 'w', encoding='utf-8') as f:
-                    json.dump(config, f, indent=4)
-                
-                st.success(f"✅ Success! Offset updated to {new_offset:,.2f}. The config file has been saved.")
-                st.info("🔄 Please press 'R' or rerun the script to see the change take effect.")
-                
-                # Clear the cache so the config is re-read on the next run
-                st.cache_data.clear()
-            except Exception as e:
-                st.error(f"❌ Failed to write to config file: {e}")
 
 # ... (handle_thingspeak_update remains mostly the same, just a logic change) ...
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Dict[str, float], user_inputs: Dict[str, Any]):
