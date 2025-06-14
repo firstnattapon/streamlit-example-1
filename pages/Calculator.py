@@ -91,7 +91,7 @@ def production_cost(ticker, t0, fix):
         #     return None
 
         3. คำนวณตามสมการใหม่
-        production_value = (fix * -1) * math.log(t0 / 0.00)
+        production_value = (fix * -1) * math.log(t0 / 0.01)
         return production_value
 
     except Exception as e:
