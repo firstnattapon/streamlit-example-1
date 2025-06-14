@@ -194,7 +194,7 @@ def Gen_fx(Ticker, field, client):
 
 
 # 1. ฟังก์ชันสำหรับโหลดการตั้งค่าจาก JSON
-def load_config(filename="config.json"):
+def load_config(filename="add_gen_config.json"):
     """Loads asset configurations from a JSON file."""
     try:
         with open(filename, 'r', encoding='utf-8') as f:
