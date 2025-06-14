@@ -5,6 +5,7 @@ import pandas as pd
 import thingspeak
 import json
 from pathlib import Path
+import math # <-- 1. เพิ่มการ import math สำหรับฟังก์ชัน log
 
 # --- 1. การตั้งค่าและโหลด Configuration ---
 st.set_page_config(page_title="Calculator", page_icon="⌨️")
@@ -46,9 +47,7 @@ def average_cf(cf_config):
     Calculates average CF. Uses .get() for safety to prevent KeyErrors.
     """
     history = get_ticker_history(cf_config['ticker'])
-    
-    # --- ป้องกัน KeyError ---
-    # ใช้ .get() เพื่อดึงค่า 'filter_date'. ถ้าไม่มี ให้ใช้ค่า default ที่เคย hardcode ไว้
+
     default_date = "2024-01-01 12:00:00+07:00"
     filter_date = cf_config.get('filter_date', default_date)
     
@@ -66,38 +65,35 @@ def average_cf(cf_config):
     field_data = client.get_field_last(field=f"{cf_config['field']}")
     
     value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
-    adjusted_value = value - cf_config.get('offset', 0) # ป้องกัน KeyError ที่ offset ด้วย
+    adjusted_value = value - cf_config.get('offset', 0)
     
     return adjusted_value / count_data
 
+# --- 2.1. แก้ไขฟังก์ชัน production_cost ---
 @st.cache_data(ttl=60)
-def production_cost(ticker, fixed_asset_value, cash_balance):
-    """Calculates Production Costs."""
+def production_cost(ticker, t0, fix):
+    """
+    Calculates Production based on the new formula:
+    production = (fix * -1) * ln(t0 / current_price)
+    """
+    # ตรวจสอบค่า input พื้นฐาน
+    if t0 <= 0 or fix == 0:
+        return 0.0
+
     try:
+        # 1. ดึงราคาปัจจุบัน
         ticker_info = yf.Ticker(ticker)
-        entry_price = ticker_info.fast_info['lastPrice']
-        step = 0.01
+        current_price = ticker_info.fast_info['lastPrice']
 
-        samples = np.arange(step, np.around(entry_price, 2) * 3 + step, step)
-        
-        df = pd.DataFrame({'Asset_Price': np.around(samples, 2)})
-        df['Fixed_Asset_Value'] = fixed_asset_value
-        df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
-
-        df_top = df[df.Asset_Price >= entry_price].copy()
-        df_top['Cash_Balan'] = cash_balance + ((df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']).cumsum().fillna(0)
-        df_top = df_top.sort_values(by='Amount_Asset').iloc[:-1]
-
-        df_down = df[df.Asset_Price < entry_price].copy().sort_values(by='Asset_Price', ascending=False)
-        df_down['Cash_Balan'] = cash_balance + ((df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']).cumsum().fillna(0)
-        
-        combined_df = pd.concat([df_top, df_down], axis=0)
-        if combined_df.empty:
+        # 2. ป้องกันการหารด้วยศูนย์ หรือ log ของค่าที่ไม่ใช่บวก
+        if current_price <= 0:
+            st.warning(f"Cannot calculate production for {ticker}: Current price is {current_price}, which is invalid for the formula.")
             return None
-            
-        final_cash_balance = combined_df['Cash_Balan'].iloc[-1]
-        return abs(final_cash_balance - cash_balance)
-        
+
+        # 3. คำนวณตามสมการใหม่
+        production_value = (fix * -1) * math.log(t0 / current_price)
+        return production_value
+
     except Exception as e:
         st.warning(f"Could not calculate Production for {ticker}: {e}")
         return None
@@ -113,7 +109,6 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
         field_data = thingspeak_client.get_field_last(field=f'{field}')
         fx_js = int(json.loads(field_data)[f"field{field}"])
     except (json.JSONDecodeError, KeyError, TypeError):
-        # ถ้าดึงข้อมูลจาก Thingspeak ไม่ได้ หรือข้อมูลผิด format ให้ใช้ค่า default
         fx_js = 0 
     
     rng = np.random.default_rng(fx_js)
@@ -136,7 +131,6 @@ def main():
     """Main function to run the Streamlit app."""
     st.write('____')
     
-    # ใช้ .get() เพื่อป้องกันกรณีที่ 'average_cf_config' ไม่มีในไฟล์ config
     avg_cf_config = CONFIG.get('average_cf_config')
     if avg_cf_config:
         cf_day = average_cf(avg_cf_config)
@@ -145,30 +139,29 @@ def main():
         st.warning("`average_cf_config` not found in configuration file.")
     st.write('____')
     
-    # --- ป้องกัน KeyError ---
-    # ใช้ .get() เพื่อดึง monitor_config และ filter_date อย่างปลอดภัย
-    monitor_config = CONFIG.get('monitor_config', {}) # ให้ default เป็น dict ว่าง
+    monitor_config = CONFIG.get('monitor_config', {})
     default_monitor_date = "2025-04-28 12:00:00+07:00"
     monitor_filter_date = monitor_config.get('filter_date', default_monitor_date)
 
-    for asset_config in CONFIG.get('assets', []): # ป้องกันกรณีที่ 'assets' ไม่มี
+    for asset_config in CONFIG.get('assets', []):
         ticker = asset_config.get('ticker', 'N/A')
         monitor_field = asset_config.get('monitor_field')
         prod_params = asset_config.get('production_params', {})
         channel_id = asset_config.get('channel_id')
         api_key = asset_config.get('write_api_key')
 
-        # ตรวจสอบว่ามีข้อมูลที่จำเป็นครบถ้วนหรือไม่
         if not all([ticker, monitor_field, channel_id, api_key]):
             st.warning(f"Skipping an asset due to missing configuration: {asset_config}")
             continue
 
         df_7, fx_js = monitor(channel_id, api_key, ticker, monitor_field, monitor_filter_date)
         
+        # --- 3.1. แก้ไขการเรียกใช้ฟังก์ชัน production_cost ---
+        # อ่านค่า t0 และ fix จาก config แล้วส่งไปให้ฟังก์ชัน
         prod_cost = production_cost(
             ticker=ticker,
-            fixed_asset_value=prod_params.get('fixed_asset_value', 0),
-            cash_balance=prod_params.get('cash_balance', 0)
+            t0=prod_params.get('t0', 0.0),      # ดึงค่า t0, ถ้าไม่มีให้เป็น 0.0
+            fix=prod_params.get('fix', 0.0)     # ดึงค่า fix, ถ้าไม่มีให้เป็น 0.0
         )
         
         prod_cost_display = f"{prod_cost:.2f}" if prod_cost is not None else "N/A"
