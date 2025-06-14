@@ -1,4 +1,4 @@
-# main_refactored.py
+# main 
 
 import pandas as pd
 import numpy as np
@@ -131,7 +131,8 @@ def render_ui_and_get_inputs(assets_config: List[Dict[str, Any]], initial_data: 
     
     return user_inputs
 
-def display_results(metrics: Dict[str, float]):
+# vvvvvv CHANGE 1: Added 'config' as a parameter here vvvvvv
+def display_results(metrics: Dict[str, float], config: Dict[str, Any]):
     """Displays all the calculated metrics."""
     
     st.divider()
@@ -146,6 +147,7 @@ def display_results(metrics: Dict[str, float]):
         st.metric('Log PV (Calculated Cost)', f"{metrics['log_pv']:,.2f}")
         
     st.metric(label="💰 Net Cashflow", value=f"{ metrics['net_cf']:,.2f}")
+    # This line now works because 'config' is available within this function's scope
     st.metric(label="💰 Off Cashflow", value=f"{ metrics['net_cf'] - config.get('cashflow_offset', 0.0) :,.2f}")
 
 def render_charts(config: Dict[str, Any]):
@@ -278,7 +280,8 @@ def main():
         pass # The script re-runs from top on widget interaction anyway
         
     metrics = calculate_metrics(assets_config, user_inputs)
-    display_results(metrics)
+    # vvvvvv CHANGE 2: Passed 'config' as an argument here vvvvvv
+    display_results(metrics, config) 
     
     # --- Update Logic ---
     handle_thingspeak_update(config, clients, metrics, user_inputs)
