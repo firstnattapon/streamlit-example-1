@@ -82,16 +82,16 @@ def production_cost(ticker, t0, fix):
 
     try:
         # 1. ดึงราคาปัจจุบัน
-        ticker_info = yf.Ticker(ticker)
-        current_price = ticker_info.fast_info['lastPrice']
+        # ticker_info = yf.Ticker(ticker)
+        # current_price = ticker_info.fast_info['lastPrice']
 
         # 2. ป้องกันการหารด้วยศูนย์ หรือ log ของค่าที่ไม่ใช่บวก
-        if current_price <= 0:
-            st.warning(f"Cannot calculate production for {ticker}: Current price is {current_price}, which is invalid for the formula.")
-            return None
+        # if current_price <= 0:
+        #     st.warning(f"Cannot calculate production for {ticker}: Current price is {current_price}, which is invalid for the formula.")
+        #     return None
 
-        3. คำนวณตามสมการใหม่
-        production_value = (fix * -1) * math.log(t0 / current_price)
+        #3. คำนวณตามสมการใหม่
+        production_value = (fix * -1) * math.log(t0 / 0.01)
         return production_value
 
     except Exception as e:
