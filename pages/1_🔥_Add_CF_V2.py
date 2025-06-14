@@ -191,8 +191,15 @@ def calculate_metrics(assets_config: List[Dict[str, Any]], user_inputs: Dict[str
     metrics['t_n'] = np.prod(live_prices) if live_prices else 0
     
     t_0, t_n = metrics['t_0'], metrics['t_n']
-    metrics['ln'] = -1500 * np.log(t_0 / t_n) # if t_0 > 0 and t_n > 0 else 0
-    metrics['log_pv'] = product_cost + metrics['ln']
+    # Add safety check to prevent math errors
+    metrics['ln'] = -1500 * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
+    
+    # --- MODIFIED SECTION ---
+    # Calculate log_pv based on the number of assets * 1500, instead of product_cost
+    number_of_assets = len(assets_config)
+    metrics['log_pv'] = (number_of_assets * 1500) + metrics['ln']
+    # --- END MODIFIED SECTION ---
+    
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     
     return metrics
@@ -206,7 +213,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
         st.write("Click the button below to confirm and send data to all ThingSpeak channels.")
         
         if st.button("Confirm and Send All Data"):
-            # 1. Validate Product Cost
+            # 1. Validate Product Cost (still needed for some metrics)
             if user_inputs['product_cost'] == 0:
                 st.error("Product_cost cannot be zero. Update failed.")
                 return
@@ -249,8 +256,8 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, metrics: Di
 # --- 4. MAIN APPLICATION FLOW ---
 
 def main():
-    # """Main function to run the Streamlit application."""
-    # st.write("🔥 Add Cashflow V3 - MultiChannel")
+    """Main function to run the Streamlit application."""
+    st.write("🔥 Add Cashflow V3 - MultiChannel (Refactored)")
 
     # --- Load configs and initialize clients (runs once) ---
     config = load_config()
