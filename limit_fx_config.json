@@ -47,6 +47,12 @@
       "field": 8,
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
+      "symbol": "FLNC",
+      "field": 1,
+      "channel_id": 2988808,
+      "write_api_key": "QBIPN1AIZ88QQW5V"
     }
   ]
 }
