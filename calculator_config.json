@@ -4,8 +4,8 @@
     "field": 1,
     "channel_id": 2394198,
     "write_api_key": "OVZNYQBL57GJW5JF",
-    "offset": 1,
-    "filter_date": "2025-06-15 12:00:00+07:00"
+    "offset": 1700,
+    "filter_date": "2025-06-14 12:00:00+07:00"
   },
   "monitor_config": {
     "filter_date": "2025-04-28 12:00:00+07:00"
