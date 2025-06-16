@@ -1,3 +1,4 @@
+# v1 (แก้ไขแล้ว)
 # 📈_Monitor.py
 import streamlit as st
 import numpy as np
@@ -51,7 +52,6 @@ def get_thingspeak_clients(configs):
     for channel_id, api_key in unique_channels:
         try:
             clients[channel_id] = thingspeak.Channel(channel_id, api_key, fmt='json')
-            # st.info(f"ThingSpeak client created for Channel ID: {channel_id}")
         except Exception as e:
             st.error(f"Failed to create client for Channel ID {channel_id}: {e}")
     return clients
@@ -118,13 +118,20 @@ def Monitor(ticker, monitor_config, _clients_ref):
         fx_raw = client.get_field_last(field=str(field_num))
         fx_js = int(json.loads(fx_raw)[f"field{field_num}"])
         
+        # --- START: โค้ดส่วนที่แก้ไข ---
         rng = np.random.default_rng(fx_js)
-        tickerData['action'] = rng.integers(2, size=len(tickerData))
+        
+        # 1. เตรียมข้อมูลประวัติและข้อมูล dummy สำหรับอนาคต
         tickerData['index'] = [i+1 for i in range(len(tickerData))]
-        # Add 5 dummy rows for future
-        tickerData_1 = pd.DataFrame({'action': [i for i in range(5)]}, index=[f'+{i}' for i in range(5)])
-        df = pd.concat([tickerData, tickerData_1], axis=0).fillna("")
+        dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
+        
+        # 2. รวม DataFrame ทั้งสองเข้าด้วยกัน
+        df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
+        
+        # 3. สร้างคอลัมน์ 'action' เพียงครั้งเดียวหลังจากรวม DataFrame แล้ว
         df['action'] = rng.integers(2, size=len(df))
+        # --- END: โค้ดส่วนที่แก้ไข ---
+        
         return df.tail(7), fx_js
     except Exception as e:
         st.error(f"Error in Monitor function for {ticker}: {str(e)}")
@@ -152,7 +159,6 @@ def fetch_asset(asset_config, client):
     try:
         field_name = asset_config['field']
         data = client.get_field_last(field=field_name)
-        # Use float() for safety instead of eval()
         return float(json.loads(data)[field_name])
     except (json.JSONDecodeError, KeyError, ValueError, TypeError):
         return 0.0
@@ -247,7 +253,6 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
             except Exception as e:
                 st.error(f"Failed to SELL {ticker}: {e}")
 
-    # Compact price info
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -278,11 +283,9 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
                 st.error(f"Failed to BUY {ticker}: {e}")
 
 # ---------- MAIN LOGIC ----------
-# Fetch all data concurrently
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-# Nex day toggle
 nex, Nex_day_sell = 0, 0
 Nex_day_ = st.checkbox('nex_day')
 if Nex_day_:
@@ -293,7 +296,6 @@ if Nex_day_:
     st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
 st.write("_____")
 
-# Asset controls
 control_cols = st.columns(8)
 x_2 = control_cols[7].number_input('Diff', step=1, value=60)
 Start = control_cols[0].checkbox('start')
@@ -303,7 +305,6 @@ if Start:
 asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
 st.write("_____")
 
-# Calculations
 calculations = {}
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
@@ -314,7 +315,6 @@ for config in ASSET_CONFIGS:
         'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
     }
 
-# Trading sections
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
     df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), 0))
@@ -322,7 +322,6 @@ for config in ASSET_CONFIGS:
     asset_val = asset_inputs.get(ticker, 0.0)
     calc = calculations.get(ticker, {})
     
-    # Pass the clients dictionary to the trading section
     trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
     st.write("_____")
 
