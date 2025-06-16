@@ -113,7 +113,7 @@ def Monitor(ticker, monitor_config, _clients_ref):
         
         tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-        tickerData = tickerData[tickerData.index >= '2023-01-01 12:00:00+07:00']
+        tickerData = tickerData[tickerData.index >= '2025-04-28 12:00:00+07:00']
         
         fx_raw = client.get_field_last(field=str(field_num))
         fx_js = int(json.loads(fx_raw)[f"field{field_num}"])
