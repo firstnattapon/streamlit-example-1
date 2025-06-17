@@ -50,7 +50,7 @@
         {
             "type": "option",
             "name": "FLNC Call @ 7.00",
-            "underlying_ticker": "FLNC ",
+            "underlying_ticker": "FLNC",
             "contracts_or_shares": 200,
             "premium_paid_per_share": 0.98,
             "strike": 6.0
