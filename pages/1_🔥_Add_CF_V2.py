@@ -47,13 +47,13 @@ def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dic
         st.error(f"Failed to initialize ThingSpeak clients. Error: {e}")
         st.stop()
 
-def fetch_initial_data(stock_assets: List[Dict[str, Any]], asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, float]]:
-    """Fetches last holding and last price for each STOCK asset."""
+def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, float]]:
+    """Fetches last holding and last price for each STOCK and OPTION UNDERLYING asset."""
     initial_data = {}
     tickers_to_fetch = {asset['ticker'] for asset in stock_assets}
     
     # Also need prices for underlying stocks of options
-    option_underlyings = {item.get('underlying_ticker') for item in st.session_state.option_assets if item.get('underlying_ticker')}
+    option_underlyings = {item.get('underlying_ticker') for item in option_assets if item.get('underlying_ticker')}
     tickers_to_fetch.update(option_underlyings)
 
     for ticker in tickers_to_fetch:
@@ -78,7 +78,6 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], asset_clients: Dict[s
         last_holding = 0.0
         if ticker in asset_clients:
             try:
-                # ... (holding fetch logic remains the same) ...
                 client = asset_clients[ticker]
                 field = asset['holding_channel']['field']
                 last_asset_json_string = client.get_field_last(field=field)
@@ -93,7 +92,7 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], asset_clients: Dict[s
 
 # --- 2. UI & DISPLAY FUNCTIONS ---
 
-def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, float]], product_cost_default: float) -> Dict[str, Any]:
+def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, float]], product_cost_default: float) -> Dict[str, Any]:
     """Renders all Streamlit input widgets for STOCKS and returns their current values."""
     user_inputs = {}
     st.header("📈 Core Portfolio (Stocks)")
@@ -103,7 +102,7 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], initial_data: D
     current_prices = {}
     
     all_tickers = {asset['ticker'] for asset in stock_assets}
-    all_tickers.update({opt['underlying_ticker'] for opt in st.session_state.option_assets})
+    all_tickers.update({opt['underlying_ticker'] for opt in option_assets})
 
     for ticker in sorted(list(all_tickers)):
         price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
@@ -164,6 +163,29 @@ def display_results(stock_metrics: Dict[str, float], options_pl: float, config: 
               help="This represents the total value of your core portfolio plus the current unrealized profit or loss from your options.")
 
 
+def render_charts(config: Dict[str, Any]):
+    """Renders all ThingSpeak charts using iframes."""
+    st.write("📊 ThingSpeak Charts")
+    main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
+    main_channel_id = main_channel_config.get('channel_id')
+    main_fields_map = main_channel_config.get('fields', {})
+
+    def create_chart_iframe(channel_id, field_name, chart_title):
+        if channel_id and field_name:
+            chart_number = field_name.replace('field', '')
+            url = f'https://thingspeak.com/channels/{channel_id}/charts/{chart_number}?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15'
+            st.write(f"**{chart_title}**")
+            components.iframe(url, width=800, height=200)
+            st.divider()
+        else:
+            st.warning(f"Chart for '{chart_title}' cannot be displayed. Missing config for field '{field_name}'.")
+
+    create_chart_iframe(main_channel_id, main_fields_map.get('net_cf'), 'Cashflow')
+    create_chart_iframe(main_channel_id, main_fields_map.get('pure_alpha'), 'Pure_Alpha')
+    create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
+    create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
+
+
 # --- 3. CORE LOGIC & UPDATE FUNCTIONS ---
 
 def perform_calculations(stock_assets, option_assets, user_inputs):
@@ -204,7 +226,7 @@ def perform_calculations(stock_assets, option_assets, user_inputs):
         total_cost_basis = contracts * premium
         
         # 2. Calculate Total Current Intrinsic Value
-        # Assuming Call option for now. To handle Puts, you'd need a "type" field.
+        # Assuming Call option for now. To handle Puts, you'd need a "type" field in the option config.
         intrinsic_value_per_share = max(0, last_price - strike)
         total_intrinsic_value = intrinsic_value_per_share * contracts
         
@@ -214,7 +236,7 @@ def perform_calculations(stock_assets, option_assets, user_inputs):
         
     return stock_metrics, total_options_pl
 
-def handle_thingspeak_update(config, clients, metrics, user_inputs):
+def handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs):
     """Handles updating ThingSpeak. IMPORTANT: Sends stock-only metrics to keep charts stable."""
     client_main, asset_clients = clients
     
@@ -233,12 +255,12 @@ def handle_thingspeak_update(config, clients, metrics, user_inputs):
             except Exception as e:
                 st.error(f"❌ Failed to update Main Channel: {e}")
             
-            # ... (asset update logic remains the same for stocks) ...
+            st.divider()
+            # Update individual asset channels
             for ticker, client in asset_clients.items():
                 try:
                     holding = user_inputs['current_holdings'][ticker]
-                    # This assumes field1 for all, adjust if needed
-                    channel_info = next((a['holding_channel'] for a in st.session_state.stock_assets if a['ticker'] == ticker), None)
+                    channel_info = next((a['holding_channel'] for a in stock_assets if a['ticker'] == ticker), None)
                     if channel_info:
                         client.update({channel_info['field']: holding})
                         st.success(f"✅ Holding for {ticker} updated.")
@@ -253,22 +275,23 @@ def main():
 
     # Separate assets into stocks and options once
     all_assets = config.get('assets', [])
-    st.session_state.stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
-    st.session_state.option_assets = [item for item in all_assets if item.get('type') == 'option']
+    stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
+    option_assets = [item for item in all_assets if item.get('type') == 'option']
 
-    clients = initialize_thingspeak_clients(config, st.session_state.stock_assets)
+    clients = initialize_thingspeak_clients(config, stock_assets)
     
-    initial_data = fetch_initial_data(st.session_state.stock_assets, clients[1])
+    initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
     
-    user_inputs = render_ui_and_get_inputs(st.session_state.stock_assets, initial_data, config.get('product_cost_default', 0.0))
+    user_inputs = render_ui_and_get_inputs(stock_assets, option_assets, initial_data, config.get('product_cost_default', 0.0))
 
     if st.button("Recalculate"):
-        st.experimental_rerun()
+        # This button just triggers a rerun, which is Streamlit's default behavior
+        pass
         
     # --- Calculations ---
     stock_metrics, total_options_pl = perform_calculations(
-        st.session_state.stock_assets,
-        st.session_state.option_assets,
+        stock_assets,
+        option_assets,
         user_inputs
     )
     
@@ -276,15 +299,11 @@ def main():
     display_results(stock_metrics, total_options_pl, config)
     
     # --- Update Logic ---
-    handle_thingspeak_update(config, clients, stock_metrics, user_inputs)
+    handle_thingspeak_update(config, clients, stock_assets, stock_metrics, user_inputs)
     
     # --- Chart Display ---
     render_charts(config)
 
-# Dummy render_charts function if you removed it
-def render_charts(config: Dict[str, Any]):
-    st.write("---") # Placeholder for charts
-    st.write("Chart display area.")
 
 if __name__ == "__main__":
     main()
