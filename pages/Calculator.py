@@ -1,187 +1,290 @@
-import streamlit as st
+import pandas as pd
 import numpy as np
 import yfinance as yf
-import pandas as pd
+import streamlit as st
 import thingspeak
 import json
-from pathlib import Path
-import math # <-- ไม่ได้ใช้ในฟังก์ชันนี้แล้ว แต่เก็บไว้เผื่อใช้ที่อื่น
+import streamlit.components.v1 as components
+from typing import Dict, Any, Tuple, List
 
-# --- 1. การตั้งค่าและโหลด Configuration ---
-st.set_page_config(page_title="Calculator", page_icon="⌨️")
+# --- Page Configuration ---
+st.set_page_config(page_title="Add_CF_Calculator", page_icon="🚀")
 
-@st.cache_data(ttl=300) # Cache config data for 5 minutes
-def load_config(filepath="calculator_config.json"):
-    """
-    Loads the configuration from a JSON file with error handling.
-    """
-    config_path = Path(filepath)
-    if not config_path.is_file():
-        st.error(f"Error: Configuration file not found at '{filepath}'")
-        st.stop()
+# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS ---
+
+@st.cache_data
+def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
+    """Loads the entire configuration from a JSON file."""
     try:
-        with config_path.open('r', encoding='utf-8') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except json.JSONDecodeError:
-        st.error(f"Error: Could not decode JSON from '{filepath}'. Please check for syntax errors.")
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        st.error(f"Error loading or parsing {filename}: {e}")
         st.stop()
 
-# โหลด config
-CONFIG = load_config()
-
-if st.button("Rerun"):
-    st.rerun()
-
-# --- 2. ฟังก์ชันที่ปรับปรุงแล้ว (Refactored Functions) ---
-
-@st.cache_data(ttl=600) # Cache a Ticker's history for 10 minutes
-def get_ticker_history(ticker_symbol):
-    """Fetches and processes historical data for a given ticker."""
-    ticker = yf.Ticker(ticker_symbol)
-    history = ticker.history(period='max')[['Close']]
-    history.index = history.index.tz_convert(tz='Asia/Bangkok')
-    return round(history, 3)
-
-def average_cf(cf_config):
-    """
-    Calculates average CF. Uses .get() for safety to prevent KeyErrors.
-    """
-    history = get_ticker_history(cf_config['ticker'])
-
-    default_date = "2024-01-01 12:00:00+07:00"
-    filter_date = cf_config.get('filter_date', default_date)
-
-    filtered_data = history[history.index >= filter_date]
-    count_data = len(filtered_data)
-
-    if count_data == 0:
-        return 0
-
-    client = thingspeak.Channel(
-        id=cf_config['channel_id'],
-        api_key=cf_config['write_api_key'],
-        fmt='json'
-    )
-    field_data = client.get_field_last(field=f"{cf_config['field']}")
-
-    value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
-    adjusted_value = value - cf_config.get('offset', 0)
-
-    return adjusted_value / count_data
-
-# --- 2.1. แก้ไขฟังก์ชัน production_cost ---
-@st.cache_data(ttl=60)
-def production_cost(ticker, t0, fix):
-    """
-    Calculates Production based on the new formula:
-    production = (fix * -1) * ln(t0 / current_price)
-    Returns a tuple (max_production, now_production) or None on error.
-    """
-    # ตรวจสอบค่า input พื้นฐาน
-    if t0 <= 0 or fix == 0:
-        return None # คืนค่า None เพื่อบ่งบอกว่าคำนวณไม่ได้
-
+@st.cache_resource
+def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dict[str, Any]]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
+    """Initializes and returns the main and asset-specific ThingSpeak clients."""
+    main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
+    
     try:
-        # 1. ดึงราคาปัจจุบัน (แก้ไข: ใส่ # หน้าคอมเมนต์)
-        ticker_info = yf.Ticker(ticker)
-        current_price = ticker_info.fast_info['lastPrice']
+        client_main = thingspeak.Channel(
+            main_channel_config['channel_id'],
+            main_channel_config['write_api_key']
+        )
+        asset_clients = {}
+        for asset in stock_assets: # Only initialize for stocks
+            ticker = asset['ticker']
+            channel_info = asset.get('holding_channel', {})
+            if channel_info.get('channel_id') and channel_info.get('write_api_key'):
+                asset_clients[ticker] = thingspeak.Channel(
+                    channel_info['channel_id'],
+                    channel_info['write_api_key']
+                )
+        st.success(f"Initialized main client and {len(asset_clients)} stock clients.")
+        return client_main, asset_clients
+    except (KeyError, Exception) as e:
+        st.error(f"Failed to initialize ThingSpeak clients. Error: {e}")
+        st.stop()
 
-        # 2. ป้องกันการหารด้วยศูนย์ หรือ log ของค่าที่ไม่ใช่บวก (แก้ไข: ใส่ # หน้าคอมเมนต์)
-        if current_price <= 0:
-            st.warning(f"Cannot calculate production for {ticker}: Current price is {current_price}, which is invalid for the formula.")
-            return None
+def fetch_initial_data(stock_assets: List[Dict[str, Any]], asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, float]]:
+    """Fetches last holding and last price for each STOCK asset."""
+    initial_data = {}
+    tickers_to_fetch = {asset['ticker'] for asset in stock_assets}
+    
+    # Also need prices for underlying stocks of options
+    option_underlyings = {item.get('underlying_ticker') for item in st.session_state.option_assets if item.get('underlying_ticker')}
+    tickers_to_fetch.update(option_underlyings)
 
-        # 3. คำนวณตามสมการใหม่ (แก้ไข: ใส่ # หน้าคอมเมนต์)
-        # สมมติราคาต่ำสุดที่เป็นไปได้คือ 0.01 เพื่อคำนวณค่า Max Production
-        max_production_value = (fix * -1) * math.log(t0 / 0.01)
-        now_production_value = (fix * -1) * math.log(t0 / current_price)
+    for ticker in tickers_to_fetch:
+        initial_data[ticker] = {}
+        # Fetch last price from yfinance
+        try:
+            last_price = yf.Ticker(ticker).fast_info['lastPrice']
+            initial_data[ticker]['last_price'] = last_price
+        except Exception:
+            # Try to find a reference price if yfinance fails
+            ref_price = 0.0
+            for asset in stock_assets:
+                if asset['ticker'] == ticker:
+                    ref_price = asset.get('reference_price', 0.0)
+                    break
+            initial_data[ticker]['last_price'] = ref_price
+            st.warning(f"Could not fetch price for {ticker}. Defaulting to {ref_price}.")
+    
+    # Fetch holdings only for stocks
+    for asset in stock_assets:
+        ticker = asset["ticker"]
+        last_holding = 0.0
+        if ticker in asset_clients:
+            try:
+                # ... (holding fetch logic remains the same) ...
+                client = asset_clients[ticker]
+                field = asset['holding_channel']['field']
+                last_asset_json_string = client.get_field_last(field=field)
+                if last_asset_json_string:
+                    data_dict = json.loads(last_asset_json_string)
+                    last_holding = float(data_dict[field])
+            except Exception as e:
+                 st.warning(f"Could not fetch last holding for {ticker}. Defaulting to 0. Error: {e}")
+        initial_data[ticker]['last_holding'] = last_holding
+            
+    return initial_data
 
-        return max_production_value, now_production_value
+# --- 2. UI & DISPLAY FUNCTIONS ---
 
-    except Exception as e:
-        st.warning(f"Could not calculate Production for {ticker}: {e}")
-        return None
+def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, float]], product_cost_default: float) -> Dict[str, Any]:
+    """Renders all Streamlit input widgets for STOCKS and returns their current values."""
+    user_inputs = {}
+    st.header("📈 Core Portfolio (Stocks)")
+    
+    # --- Price Inputs (for all relevant tickers) ---
+    st.write("📊 Current Asset Prices")
+    current_prices = {}
+    
+    all_tickers = {asset['ticker'] for asset in stock_assets}
+    all_tickers.update({opt['underlying_ticker'] for opt in st.session_state.option_assets})
 
-def monitor(channel_id, api_key, ticker, field, filter_date):
-    """Monitors an asset. Now robust to missing data."""
-    thingspeak_client = thingspeak.Channel(id=channel_id, api_key=api_key, fmt='json')
-    history = get_ticker_history(ticker)
+    for ticker in sorted(list(all_tickers)):
+        price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
+        current_prices[ticker] = st.number_input(f"ราคา_{ticker}", value=price_value, key=f"price_{ticker}", format="%.2f")
+    user_inputs['current_prices'] = current_prices
 
-    filtered_data = history[history.index >= filter_date].copy()
+    st.divider()
 
-    try:
-        field_data = thingspeak_client.get_field_last(field=f'{field}')
-        fx_js = int(json.loads(field_data)[f"field{field}"])
-    except (json.JSONDecodeError, KeyError, TypeError):
-        fx_js = 0
+    # --- Holding Inputs (for stocks only) ---
+    st.write("📦 Stock Holdings")
+    current_holdings = {}
+    total_asset_value = 0.0
+    for asset in stock_assets:
+        ticker = asset["ticker"]
+        holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
+        asset_holding = st.number_input(f"{ticker}_asset", value=holding_value, key=f"holding_{ticker}", format="%.2f")
+        current_holdings[ticker] = asset_holding
+        individual_asset_value = asset_holding * current_prices[ticker]
+        st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
+        total_asset_value += individual_asset_value
+    user_inputs['current_holdings'] = current_holdings
+    user_inputs['total_stock_value'] = total_asset_value
 
-    rng = np.random.default_rng(fx_js)
+    st.divider()
+    
+    # --- Final Calculation Inputs ---
+    st.write("⚙️ Calculation Parameters")
+    user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
+    user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
+    
+    return user_inputs
 
-    display_df = pd.DataFrame(index=['+0', "+1", "+2", "+3", "+4"])
-    combined_df = pd.concat([filtered_data, display_df]).fillna("")
-    combined_df['action'] = rng.integers(2, size=len(combined_df))
+def display_results(stock_metrics: Dict[str, float], options_pl: float, config: Dict[str, Any]):
+    """Displays all the calculated metrics in separate sections."""
+    
+    # --- Stock Portfolio Results ---
+    st.divider()
+    with st.expander("📈 Core Portfolio Results", expanded=True):
+        st.metric('Current Stock Portfolio Value (Assets + Cash):', f"{stock_metrics['now_pv']:,.2f}")
+        col1, col2 = st.columns(2)
+        col1.metric('t_0 (Product of Reference Prices)', f"{stock_metrics['t_0']:,.2f}")
+        col2.metric('t_n (Product of Live Prices)', f"{stock_metrics['t_n']:,.2f}")
+        st.metric('Log PV (Calculated Stock Cost)', f"{stock_metrics['log_pv']:,.2f}")
+        
+        st.metric(label="💰 Net Cashflow (From Stocks Only)", value=f"{stock_metrics['net_cf']:,.2f}", 
+                  help="This value is stable and only reflects the performance of the core stock portfolio and cash.")
+        st.metric(label=f"💰 Baseline @ {config.get('cashflow_offset_comment', '')}", value=f"{stock_metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
 
-    if 'index' not in combined_df.columns:
-        combined_df['index'] = ""
+    # --- Options Portfolio Results ---
+    with st.expander("⌥ Options Portfolio Results", expanded=True):
+        st.metric(label="💰 Options Unrealized P/L", value=f"{options_pl:,.2f}",
+                  help="This is the (volatile) Profit/Loss from your options positions, based on intrinsic value.")
 
-    if not filtered_data.empty:
-        combined_df.loc[filtered_data.index, 'index'] = range(1, len(filtered_data) + 1)
+    # --- Grand Total ---
+    st.divider()
+    grand_total_value = stock_metrics['now_pv'] + options_pl
+    st.metric("👑 Grand Total (Core PV + Options P/L)", f"{grand_total_value:,.2f}",
+              help="This represents the total value of your core portfolio plus the current unrealized profit or loss from your options.")
 
-    return combined_df.tail(7), fx_js
 
-# --- 3. ส่วนแสดงผลหลัก (Main Display Logic) ---
+# --- 3. CORE LOGIC & UPDATE FUNCTIONS ---
+
+def perform_calculations(stock_assets, option_assets, user_inputs):
+    """Performs all financial calculations for both stocks and options."""
+    # --- Stock Calculations ---
+    stock_metrics = {}
+    total_stock_value = user_inputs['total_stock_value']
+    portfolio_cash = user_inputs['portfolio_cash']
+    current_prices = user_inputs['current_prices']
+
+    stock_metrics['now_pv'] = total_stock_value + portfolio_cash
+    
+    reference_prices = [asset['reference_price'] for asset in stock_assets]
+    live_prices = [current_prices[asset['ticker']] for asset in stock_assets]
+
+    stock_metrics['t_0'] = np.prod(reference_prices) if reference_prices else 0
+    stock_metrics['t_n'] = np.prod(live_prices) if live_prices else 0
+    t_0, t_n = stock_metrics['t_0'], stock_metrics['t_n']
+    
+    stock_metrics['ln'] = -1500 * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
+    number_of_assets = len(stock_assets)
+    stock_metrics['log_pv'] = (number_of_assets * 1500) + stock_metrics['ln']
+    stock_metrics['net_cf'] = stock_metrics['now_pv'] - stock_metrics['log_pv']
+
+    # --- Options P/L Calculation ---
+    total_options_pl = 0.0
+    for option in option_assets:
+        underlying_ticker = option.get("underlying_ticker")
+        if not underlying_ticker:
+            continue
+            
+        last_price = current_prices.get(underlying_ticker, 0.0)
+        strike = option.get("strike", 0.0)
+        contracts = option.get("contracts_or_shares", 0.0) # Using your 'contracts' field as number of shares
+        premium = option.get("premium_paid_per_share", 0.0)
+
+        # 1. Calculate Total Cost Basis
+        total_cost_basis = contracts * premium
+        
+        # 2. Calculate Total Current Intrinsic Value
+        # Assuming Call option for now. To handle Puts, you'd need a "type" field.
+        intrinsic_value_per_share = max(0, last_price - strike)
+        total_intrinsic_value = intrinsic_value_per_share * contracts
+        
+        # 3. Calculate Unrealized P/L for this option
+        unrealized_pl = total_intrinsic_value - total_cost_basis
+        total_options_pl += unrealized_pl
+        
+    return stock_metrics, total_options_pl
+
+def handle_thingspeak_update(config, clients, metrics, user_inputs):
+    """Handles updating ThingSpeak. IMPORTANT: Sends stock-only metrics to keep charts stable."""
+    client_main, asset_clients = clients
+    
+    with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
+        if st.button("Confirm and Send All Data"):
+            try:
+                # We send the STABLE net_cf from stocks only.
+                payload = {
+                    'field1': metrics['net_cf'],
+                    'field2': metrics['net_cf'] / user_inputs['product_cost'],
+                    'field3': user_inputs['portfolio_cash'],
+                    'field4': user_inputs['product_cost'] - metrics['net_cf']
+                }
+                client_main.update(payload)
+                st.success("✅ Main Channel updated on Thingspeak (with stable stock data)!")
+            except Exception as e:
+                st.error(f"❌ Failed to update Main Channel: {e}")
+            
+            # ... (asset update logic remains the same for stocks) ...
+            for ticker, client in asset_clients.items():
+                try:
+                    holding = user_inputs['current_holdings'][ticker]
+                    # This assumes field1 for all, adjust if needed
+                    channel_info = next((a['holding_channel'] for a in st.session_state.stock_assets if a['ticker'] == ticker), None)
+                    if channel_info:
+                        client.update({channel_info['field']: holding})
+                        st.success(f"✅ Holding for {ticker} updated.")
+                except Exception as e:
+                    st.error(f"❌ Failed to update holding for {ticker}: {e}")
+
+# --- 4. MAIN APPLICATION FLOW ---
 
 def main():
-    """Main function to run the Streamlit app."""
-    st.write('____')
+    config = load_config()
+    if not config: return
 
-    avg_cf_config = CONFIG.get('average_cf_config')
-    if avg_cf_config:
-        cf_day = average_cf(avg_cf_config)
-        st.write(f"average_cf_day: {cf_day:.2f} USD  :  average_cf_mo: {cf_day * 30:.2f} USD")
-    else:
-        st.warning("`average_cf_config` not found in configuration file.")
-    st.write('____')
+    # Separate assets into stocks and options once
+    all_assets = config.get('assets', [])
+    st.session_state.stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
+    st.session_state.option_assets = [item for item in all_assets if item.get('type') == 'option']
 
-    monitor_config = CONFIG.get('monitor_config', {})
-    default_monitor_date = "2025-04-28 12:00:00+07:00"
-    monitor_filter_date = monitor_config.get('filter_date', default_monitor_date)
+    clients = initialize_thingspeak_clients(config, st.session_state.stock_assets)
+    
+    initial_data = fetch_initial_data(st.session_state.stock_assets, clients[1])
+    
+    user_inputs = render_ui_and_get_inputs(st.session_state.stock_assets, initial_data, config.get('product_cost_default', 0.0))
 
-    for asset_config in CONFIG.get('assets', []):
-        ticker = asset_config.get('ticker', 'N/A')
-        monitor_field = asset_config.get('monitor_field')
-        prod_params = asset_config.get('production_params', {})
-        channel_id = asset_config.get('channel_id')
-        api_key = asset_config.get('write_api_key')
+    if st.button("Recalculate"):
+        st.experimental_rerun()
+        
+    # --- Calculations ---
+    stock_metrics, total_options_pl = perform_calculations(
+        st.session_state.stock_assets,
+        st.session_state.option_assets,
+        user_inputs
+    )
+    
+    # --- Display Results ---
+    display_results(stock_metrics, total_options_pl, config)
+    
+    # --- Update Logic ---
+    handle_thingspeak_update(config, clients, stock_metrics, user_inputs)
+    
+    # --- Chart Display ---
+    render_charts(config)
 
-        if not all([ticker, monitor_field, channel_id, api_key]):
-            st.warning(f"Skipping an asset due to missing configuration: {asset_config}")
-            continue
-
-        df_7, fx_js = monitor(channel_id, api_key, ticker, monitor_field, monitor_filter_date)
-
-        # --- 3.1. แก้ไขการเรียกใช้ฟังก์ชัน production_cost ---
-        # 1. เรียกฟังก์ชันและรับผลลัพธ์มาเก็บในตัวแปรเดียว (prod_cost) ซึ่งจะเป็น tuple หรือ None
-        prod_cost = production_cost(
-            ticker=ticker,
-            t0=prod_params.get('t0', 0.0),
-            fix=prod_params.get('fix', 0.0)
-        )
-
-        # 2. ตรวจสอบว่า prod_cost ไม่ใช่ None ก่อนนำไปใช้งาน
-        #    ถ้าไม่ใช่ None ก็จะดึงค่าจาก tuple ด้วย index [0] และ [1]
-        prod_cost_max_display = f"{prod_cost[0]:.2f}" if prod_cost is not None else "N/A"
-        prod_cost_now_display = f"{prod_cost[1]:.2f}" if prod_cost is not None else "N/A"
-
-        st.write(ticker)
-        # 3. แก้ไข Syntax ของ f-string และใช้ตัวแปรที่สร้างไว้ด้านบน
-        st.write(f"f(x): {fx_js} ,   Production_max : {prod_cost_max_display}  , Production_now : {prod_cost_now_display}")
-        st.table(df_7)
-        st.write("_____")
-
-    st.write("***ก่อนตลาดเปิดตรวจสอบ TB ล่าสุด > RE เมื่อตลอดเปิด")
-    st.write("***RE > 60 USD")
-    # st.stop() # เอา st.stop() ออกไป เพราะโดยปกติแล้ว Streamlit จะรันจบเอง ไม่จำเป็นต้องสั่งหยุด
+# Dummy render_charts function if you removed it
+def render_charts(config: Dict[str, Any]):
+    st.write("---") # Placeholder for charts
+    st.write("Chart display area.")
 
 if __name__ == "__main__":
     main()
