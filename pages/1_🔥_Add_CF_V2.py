@@ -14,7 +14,6 @@ st.set_page_config(page_title="Add_CF_V1_with_Options", page_icon="🚀")
 
 @st.cache_data
 def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
-    """Loads the entire configuration from a JSON file."""
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -24,7 +23,6 @@ def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
 
 @st.cache_resource
 def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dict[str, Any]]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
-    """Initializes ThingSpeak clients for stocks only."""
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
     try:
         client_main = thingspeak.Channel(main_channel_config['channel_id'], main_channel_config['write_api_key'])
@@ -41,11 +39,9 @@ def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dic
         st.stop()
 
 def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, Any]]:
-    """Fetches last holding for stocks and last price for all underlying assets."""
     initial_data = {}
     tickers_to_fetch = {asset['ticker'] for asset in stock_assets}
     tickers_to_fetch.update({opt.get('underlying_ticker') for opt in option_assets if opt.get('underlying_ticker')})
-
     for ticker in tickers_to_fetch:
         initial_data[ticker] = {}
         try:
@@ -55,7 +51,6 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
             ref_price = next((a.get('reference_price', 0.0) for a in stock_assets if a['ticker'] == ticker), 0.0)
             initial_data[ticker]['last_price'] = ref_price
             st.warning(f"Could not fetch price for {ticker}. Defaulting to {ref_price}.")
-    
     for asset in stock_assets:
         ticker = asset["ticker"]
         last_holding = 0.0
@@ -70,15 +65,12 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
             except Exception as e:
                 st.warning(f"Could not fetch holding for {ticker}. Defaulting to 0. Error: {e}")
         initial_data[ticker]['last_holding'] = last_holding
-            
     return initial_data
 
 # --- 2. UI & DISPLAY FUNCTIONS ---
 
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
-    """Renders UI similar to V1, focusing on stock inputs but getting prices for all tickers."""
     user_inputs = {}
-    
     st.write("📊 Current Asset Prices")
     current_prices = {}
     all_tickers = {asset['ticker'] for asset in stock_assets}
@@ -88,9 +80,7 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
         price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
         current_prices[ticker] = st.number_input(label, value=price_value, key=f"price_{ticker}", format="%.2f")
     user_inputs['current_prices'] = current_prices
-
     st.divider()
-
     st.write("📦 Stock Holdings")
     current_holdings = {}
     total_stock_value = 0.0
@@ -99,34 +89,27 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
         holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
         asset_holding = st.number_input(f"{ticker}_asset", value=holding_value, key=f"holding_{ticker}", format="%.2f")
         current_holdings[ticker] = asset_holding
-        
         individual_asset_value = asset_holding * current_prices[ticker]
         st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
         total_stock_value += individual_asset_value
     user_inputs['current_holdings'] = current_holdings
     user_inputs['total_stock_value'] = total_stock_value
-
     st.divider()
-    
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
-    
     return user_inputs
 
-def display_results(metrics: Dict[str, float], config: Dict[str, Any]):
-    """Displays all the calculated metrics, now including Options P/L in the main values."""
+def display_results(metrics: Dict[str, float], options_pl: float, config: Dict[str, Any]):
+    """Displays all the calculated metrics, showing the Options P/L component explicitly."""
     st.divider()
     with st.expander("📈 Results", expanded=True):
-        st.metric('Current Total Value (Stocks + Cash + Options P/L):', f"{metrics['now_pv']:,.2f}")
-        
+        st.metric(f"Current Total Value (Stocks + Cash + Options P/L: {options_pl:,.2f})", f"{metrics['now_pv']:,.2f}")
         col1, col2 = st.columns(2)
         col1.metric('t_0 (Product of Stock Reference Prices)', f"{metrics['t_0']:,.2f}")
         col2.metric('t_n (Product of Stock Live Prices)', f"{metrics['t_n']:,.2f}")
-    
         st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
         st.metric('Log PV (Calculated Stock Cost)', f"{metrics['log_pv']:,.2f}")
-        
     st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
     st.metric(label=f"💰 Baseline @ {config.get('cashflow_offset_comment', '')}", value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
 
@@ -136,7 +119,6 @@ def render_charts(config: Dict[str, Any]):
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
     main_channel_id = main_channel_config.get('channel_id')
     main_fields_map = main_channel_config.get('fields', {})
-
     def create_chart_iframe(channel_id, field_name, chart_title):
         if channel_id and field_name:
             chart_number = field_name.replace('field', '')
@@ -151,57 +133,40 @@ def render_charts(config: Dict[str, Any]):
 
 # --- 3. CORE LOGIC & UPDATE FUNCTIONS ---
 
-def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Dict[str, float]:
+def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Tuple[Dict[str, float], float]:
     """Performs all financial calculations, combining stock value and options P/L."""
     metrics = {}
-    
-    # Unpack user inputs
     total_stock_value = user_inputs['total_stock_value']
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
-
-    # --- Calculate Options P/L ---
     total_options_pl = 0.0
     for option in option_assets:
         underlying_ticker = option.get("underlying_ticker")
         if not underlying_ticker: continue
-        
         last_price = current_prices.get(underlying_ticker, 0.0)
         strike = option.get("strike", 0.0)
         contracts = option.get("contracts_or_shares", 0.0)
         premium = option.get("premium_paid_per_share", 0.0)
-
         total_cost_basis = contracts * premium
-        intrinsic_value_per_share = max(0, last_price - strike) # Assumes Call
+        intrinsic_value_per_share = max(0, last_price - strike)
         total_intrinsic_value = intrinsic_value_per_share * contracts
         unrealized_pl = total_intrinsic_value - total_cost_basis
         total_options_pl += unrealized_pl
-    
-    # --- Combine Values for Final Calculation ---
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
-    
-    # --- The rest of the calculation is based on STOCKS only ---
     reference_prices = [asset['reference_price'] for asset in stock_assets]
     live_prices = [current_prices[asset['ticker']] for asset in stock_assets]
-
     metrics['t_0'] = np.prod(reference_prices) if reference_prices else 0
     metrics['t_n'] = np.prod(live_prices) if live_prices else 0
-    
     t_0, t_n = metrics['t_0'], metrics['t_n']
     metrics['ln'] = -1500 * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
-    
     number_of_assets = len(stock_assets)
     metrics['log_pv'] = (number_of_assets * 1500) + metrics['ln']
-    
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
-    
-    return metrics
+    return metrics, total_options_pl
 
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
-    """Handles updating ThingSpeak with the combined, volatile metrics."""
     client_main, asset_clients = clients
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
-    
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         if st.button("Confirm and Send All Data"):
             try:
@@ -215,9 +180,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
             except Exception as e:
                 st.error(f"❌ Failed to update Main Channel on Thingspeak: {e}")
-
             st.divider()
-            
             for asset in stock_assets:
                 ticker = asset['ticker']
                 if ticker in asset_clients:
@@ -234,27 +197,17 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
 def main():
     config = load_config()
     if not config: return
-
-    # Separate assets into stocks and options
     all_assets = config.get('assets', [])
     stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
     option_assets = [item for item in all_assets if item.get('type') == 'option']
-
     clients = initialize_thingspeak_clients(config, stock_assets)
-    
     initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
-    
     user_inputs = render_ui_and_get_inputs(stock_assets, option_assets, initial_data, config.get('product_cost_default', 0.0))
-
     if st.button("Recalculate"):
         pass 
-        
-    metrics = calculate_metrics(stock_assets, option_assets, user_inputs)
-    
-    display_results(metrics, config) 
-    
+    metrics, options_pl = calculate_metrics(stock_assets, option_assets, user_inputs)
+    display_results(metrics, options_pl, config) 
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
-    
     render_charts(config)
 
 if __name__ == "__main__":
