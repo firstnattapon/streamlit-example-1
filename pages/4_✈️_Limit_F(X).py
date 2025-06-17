@@ -239,6 +239,7 @@ with tab_dict['cf_log']:
     - **Net Profit**: `sumusd - refer - sumusd[0]` (ต้นทุนเริ่มต้น)
     - **Ref_index_Log**: `initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))`
     - **Net in Ref_index_Log**: `(daily_sumusd - ref_log - total_initial_capital) - net_at_index_0`
+    - **Option P/L**: `(max(0, ราคาหุ้นปัจจุบัน - Strike) * contracts_or_shares) - (contracts_or_shares * premium_paid_per_share)`
     ---
     """)
     iframe("https://monica.im/share/artifact?id=qpAkuKjBpuVz2cp9nNFRs3")
