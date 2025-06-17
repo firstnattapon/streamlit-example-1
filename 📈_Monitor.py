@@ -1,5 +1,4 @@
-# v1 (แก้ไขแล้ว)
-# 📈_Monitor.py
+# 📈_Monitor.py (Updated)
 import streamlit as st
 import numpy as np
 import datetime
@@ -17,16 +16,25 @@ st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide")
 # ---------- CONFIGURATION ----------
 @st.cache_data
 def load_config(file_path='monitor_config.json'):
-    """Load asset configuration from a JSON file."""
+    """Load configuration from a JSON file."""
     if not os.path.exists(file_path):
         st.error(f"Configuration file not found: {file_path}")
-        return []
+        return None #<-- แก้ไข: คืนค่า None หากไม่พบไฟล์
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
-ASSET_CONFIGS = load_config()
-if not ASSET_CONFIGS:
+#<-- แก้ไข: โหลดและแยกส่วนคอนฟิก
+CONFIG_DATA = load_config()
+if not CONFIG_DATA:
     st.stop()
+
+ASSET_CONFIGS = CONFIG_DATA.get('assets', [])
+GLOBAL_START_DATE = CONFIG_DATA.get('global_settings', {}).get('start_date')
+
+if not ASSET_CONFIGS:
+    st.error("No 'assets' list found in monitor_config.json")
+    st.stop()
+#<-- สิ้นสุดส่วนที่แก้ไข
 
 # ---------- GLOBAL CACHE & CLIENT MANAGEMENT ----------
 _cache_lock = Lock()
@@ -105,32 +113,34 @@ def get_cached_price(ticker, max_age=30):
 
 # ---------- DATA FETCHING ----------
 @st.cache_data(ttl=300)
-def Monitor(ticker, monitor_config, _clients_ref):
+#<-- แก้ไข: รับพารามิเตอร์ start_date
+def Monitor(asset_config, _clients_ref, start_date):
     """Fetches monitor data for a single ticker using its specific channel."""
+    ticker = asset_config['ticker']
     try:
-        client = _clients_ref[monitor_config['channel_id']]
-        field_num = monitor_config['field']
+        monitor_field_config = asset_config['monitor_field']
+        
+        client = _clients_ref[monitor_field_config['channel_id']]
+        field_num = monitor_field_config['field']
         
         tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-        tickerData = tickerData[tickerData.index >= '2025-04-28 12:00:00+07:00']
+        
+        #<-- แก้ไข: ใช้ start_date ส่วนกลางที่รับเข้ามา
+        if start_date:
+            tickerData = tickerData[tickerData.index >= start_date]
         
         fx_raw = client.get_field_last(field=str(field_num))
         fx_js = int(json.loads(fx_raw)[f"field{field_num}"])
         
-        # --- START: โค้ดส่วนที่แก้ไข ---
         rng = np.random.default_rng(fx_js)
         
-        # 1. เตรียมข้อมูลประวัติและข้อมูล dummy สำหรับอนาคต
         tickerData['index'] = [i+1 for i in range(len(tickerData))]
         dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
         
-        # 2. รวม DataFrame ทั้งสองเข้าด้วยกัน
         df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
         
-        # 3. สร้างคอลัมน์ 'action' เพียงครั้งเดียวหลังจากรวม DataFrame แล้ว
         df['action'] = rng.integers(2, size=len(df))
-        # --- END: โค้ดส่วนที่แก้ไข ---
         
         return df.tail(7), fx_js
     except Exception as e:
@@ -138,11 +148,13 @@ def Monitor(ticker, monitor_config, _clients_ref):
         return pd.DataFrame(), 0
 
 @st.cache_data(ttl=300)
-def fetch_all_monitor_data(configs, _clients_ref):
+#<-- แก้ไข: รับพารามิเตอร์ start_date
+def fetch_all_monitor_data(configs, _clients_ref, start_date):
     results = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
+        #<-- แก้ไข: ส่ง start_date ไปยังฟังก์ชัน Monitor
         future_to_ticker = {
-            executor.submit(Monitor, asset['ticker'], asset['monitor_field'], _clients_ref): asset['ticker']
+            executor.submit(Monitor, asset, _clients_ref, start_date): asset['ticker']
             for asset in configs
         }
         for future in concurrent.futures.as_completed(future_to_ticker):
@@ -283,7 +295,8 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
                 st.error(f"Failed to BUY {ticker}: {e}")
 
 # ---------- MAIN LOGIC ----------
-monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
+#<-- แก้ไข: ส่ง GLOBAL_START_DATE ไปยังฟังก์ชัน
+monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
 nex, Nex_day_sell = 0, 0
