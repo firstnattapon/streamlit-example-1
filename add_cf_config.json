@@ -20,7 +20,7 @@
             "name": "FFWM Call @ 6.88",
             "underlying_ticker": "FFWM",
             "contracts_or_shares": 200,
-            "premium_paid_per_share": 1.17,
+            "premium_paid_per_share": 0.00,
             "strike": 5.0
         },
         {
@@ -28,7 +28,7 @@
             "name": "AGL Call @ 3.0",
             "underlying_ticker": "AGL",
             "contracts_or_shares": 500,
-            "premium_paid_per_share": 0.538,
+            "premium_paid_per_share": 0.00,
             "strike": 2.5
         },
         {
@@ -36,7 +36,7 @@
             "name": "QXO Call @ 19.0",
             "underlying_ticker": "QXO",
             "contracts_or_shares": 100,
-            "premium_paid_per_share": 4.0,
+            "premium_paid_per_share": 0.00,
             "strike": 15.0
         },
         {
@@ -44,7 +44,7 @@
             "name": "RXRX Call @ 5.40",
             "underlying_ticker": "RXRX",
             "contracts_or_shares": 200,
-            "premium_paid_per_share": 1.4,
+            "premium_paid_per_share": 0.00,
             "strike": 4.0
         },    
         {
@@ -52,7 +52,7 @@
             "name": "FLNC Call @ 7.00",
             "underlying_ticker": "FLNC",
             "contracts_or_shares": 200,
-            "premium_paid_per_share": 0.98,
+            "premium_paid_per_share": 0.00,
             "strike": 6.0
         },        
         {
