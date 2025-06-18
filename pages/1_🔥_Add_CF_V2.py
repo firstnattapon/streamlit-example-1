@@ -113,7 +113,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, config: Dict[s
         col1.metric('t_0 (Product of Stock Reference Prices)', f"{metrics['t_0']:,.2f}")
         col2.metric('t_n (Product of Stock Live Prices)', f"{metrics['t_n']:,.2f}")
         st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
-        st.metric( f"Log PV (Calculated: {metrics['log_pv']:,.2f} -{metrics['ln']:,.2f} )" , f"{metrics['log_pv']:,.2f}")
+        st.metric( f"Log PV (Calculated: {metrics['log_pv'] - metrics['ln']  :,.2f} {metrics['ln']:,.2f} )" , f"{metrics['log_pv']:,.2f}")
     st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
     st.metric(label=f"💰 Baseline @ {config.get('cashflow_offset_comment', '')}", value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
 
