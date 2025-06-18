@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import streamlit as st
+import json  # <--- เพิ่มที่นี่
 import ast
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
