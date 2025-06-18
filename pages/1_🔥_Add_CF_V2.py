@@ -197,7 +197,7 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
     metrics['ln'] = -log_pv_multiplier * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
     number_of_assets = len(stock_assets)
     metrics['log_pv'] = (number_of_assets * log_pv_multiplier) + metrics['ln']
-    metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
+    metrics['net_cf'] =  (metrics['now_pv'] - metrics['log_pv']) * (-1)
     return metrics, total_options_pl
 
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
