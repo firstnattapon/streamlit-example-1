@@ -116,7 +116,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, config: Dict[s
         st.metric( f"Log PV (Calculated: {metrics['log_pv'] - metrics['ln']  :,.2f}{metrics['ln']:,.2f} )" , f"{metrics['log_pv']:,.2f}")
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
         st.metric(label=f"💰 Baseline {metrics['log_pv'] - metrics['ln']  :,.1f} - {config.get('product_cost_default', 0)} @ {config.get('cashflow_offset_comment', '')}", value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
-    st.metric(label="💰 Net",  value=   f"({ 1699.46 - (metrics['net_cf'] - config.get('cashflow_offset', 0.0)):,.2f} ) " )
+        st.metric(label="💰 Net",  value=   f"( { 1699.46 - ( metrics['net_cf'] - config.get('cashflow_offset', 0.0)):,.2f} )" )
 
 
 def render_charts(config: Dict[str, Any]):
