@@ -174,7 +174,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         if st.button("Confirm and Send All Data"):
-            diff =  f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}"
+            diff =  metrics['net_cf'] - config.get('cashflow_offset', 0.0) 
             try:
                 payload = {
                     'field1': diff ,
