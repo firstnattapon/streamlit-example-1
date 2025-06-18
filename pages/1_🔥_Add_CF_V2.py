@@ -134,7 +134,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, config: Dict[s
         baseline_target = config.get('baseline_target', 0.0)
         adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
         final_value = baseline_target - adjusted_cf
-        st.metric(label=f"💰 Net @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value:,.2f} )")
+        st.metric(label=f"💰 Net @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value:,.2f}*-1 )")
 
 def render_charts(config: Dict[str, Any]):
     """Renders ThingSpeak charts using iframe components."""
