@@ -128,7 +128,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, config: Dict[s
         baseline_val = metrics['log_pv'] - metrics['ln']
         product_cost = config.get('product_cost_default', 0)
         baseline_label = f"💰 Baseline {baseline_val:,.1f} - {product_cost} = {offset_display_val:+.0f}"
-        st.metric(label=baseline_label, value=f"{ (metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f) * (-1)  }") 
+        st.metric(label=baseline_label, value=f"{ (metrics['net_cf'] - config.get('cashflow_offset', 0.0)* (-1) :,.2f) }") 
         
         # Use 'baseline_target' from config instead of the hardcoded 1699.46
         baseline_target = config.get('baseline_target', 0.0)
