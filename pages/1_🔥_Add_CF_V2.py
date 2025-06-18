@@ -174,12 +174,13 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         if st.button("Confirm and Send All Data"):
+            diff =  f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}"
             try:
                 payload = {
-                    'field1': metrics['net_cf'],
-                    'field2': metrics['net_cf'] / user_inputs['product_cost'],
+                    'field1': diff ,
+                    'field2': diff  / user_inputs['product_cost'],
                     'field3': user_inputs['portfolio_cash'],
-                    'field4': user_inputs['product_cost'] - metrics['net_cf']
+                    'field4': user_inputs['product_cost'] - diff
                 }
                 client_main.update(payload)
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
