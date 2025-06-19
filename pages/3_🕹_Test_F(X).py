@@ -11,7 +11,7 @@ st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
 
 # === CONFIG & CONSTANTS ===
 @st.cache_data
-def load_config(path='limit_fx_config.json'):
+def load_config(path='limit_fx_config1.json'):
     """Loads the entire configuration from a JSON file."""
     try:
         with open(path, 'r') as f:
@@ -27,6 +27,7 @@ CONFIG = load_config()
 if not CONFIG:
     st.stop()
 
+# Extract settings from config
 ASSETS = CONFIG.get('assets', [])
 GLOBAL_SETTINGS = CONFIG.get('global_settings', {})
 CF_LOG_SETTINGS = CONFIG.get('cf_log_settings', {})
@@ -70,18 +71,15 @@ def get_act_from_thingspeak(channel_id, api_key, field):
     except Exception:
         return 0
 
-# <<<--- START OF FIX ---<<<
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix):
-    """
-    Numba-optimized calculation function.
-    Assumes price_list is not empty.
-    """
     action_array = np.asarray(action_list, dtype=np.int32)
     action_array[0] = 1
     price_array = np.asarray(price_list, dtype=np.float64)
     n = len(action_array)
-    
+    if n == 0:
+        return (np.empty(0, dtype=np.float64),) * 6
+        
     amount = np.empty(n, dtype=np.float64)
     buffer = np.zeros(n, dtype=np.float64)
     cash = np.empty(n, dtype=np.float64)
@@ -107,37 +105,6 @@ def calculate_optimized(action_list, price_list, fix):
         asset_value[i] = amount[i] * curr_price
         sumusd[i] = cash[i] + asset_value[i]
     return buffer, sumusd, cash, asset_value, amount, refer
-# >>>--- END OF FIX ---<<<
-
-
-def get_max_action(price_list, fix=1500):
-    prices = np.asarray(price_list, dtype=np.float64)
-    n = len(prices)
-    if n < 2:
-        return np.ones(n, dtype=int)
-    dp = np.zeros(n, dtype=np.float64)
-    path = np.zeros(n, dtype=int)
-    initial_capital = float(fix * 2)
-    dp[0] = initial_capital
-    for i in range(1, n):
-        max_prev_sumusd = 0
-        best_j = 0
-        for j in range(i):
-            profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1)
-            current_sumusd = dp[j] + profit_from_j_to_i
-            if current_sumusd > max_prev_sumusd:
-                max_prev_sumusd = current_sumusd
-                best_j = j
-        dp[i] = max_prev_sumusd
-        path[i] = best_j
-    actions = np.zeros(n, dtype=int)
-    last_action_day = np.argmax(dp)
-    current_day = last_action_day
-    while current_day > 0:
-        actions[current_day] = 1
-        current_day = path[current_day]
-    actions[0] = 1
-    return actions
 
 @st.cache_data(ttl=600)
 def Limit_fx(Ticker, act, fix_value):
@@ -147,14 +114,10 @@ def Limit_fx(Ticker, act, fix_value):
         data.index = data.index.tz_convert(tz='Asia/Bangkok')
         data = data[data.index >= FILTER_DATE]
         prices = np.array(data.Close.values, dtype=np.float64)
-    except Exception as e:
-        st.warning(f"Could not get yfinance data for {Ticker}: {e}")
+    except Exception:
         return pd.DataFrame()
 
-    # <<<--- START OF FIX ---<<<
-    # Guard against empty prices *before* calling the Numba function
-    if len(prices) == 0:
-        return pd.DataFrame()
+    if len(prices) == 0: return pd.DataFrame()
 
     if act == -1:
         actions = np.ones(len(prices), dtype=np.int64)
@@ -162,10 +125,7 @@ def Limit_fx(Ticker, act, fix_value):
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
 
-    # Now it's safe to call the Numba function
     buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices, fix_value)
-    # >>>--- END OF FIX ---<<<
-
     initial_capital = sumusd[0] if len(sumusd) > 0 else 0
     return pd.DataFrame({
         'buffer': buffer, 'sumusd': sumusd, 'net': sumusd - refer - initial_capital
@@ -190,10 +150,7 @@ def plot(Ticker, act, fix_value):
     st.line_chart(df_plot_burn)
 
     with st.expander("Detailed Data (Min Action)"):
-        st.dataframe(Limit_fx(Ticker, act=-1, fix_value=fix_value)) # Recalculate full df for display
-
-def iframe(frame='', width=1500, height=800):
-    components.iframe(frame, width=width, height=height, scrolling=True)
+        st.dataframe(df_min)
 
 def render_risk_analysis(df_burn_cash):
     st.header("Cash Burn Risk Analysis")
