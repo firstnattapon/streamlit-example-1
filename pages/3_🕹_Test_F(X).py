@@ -44,10 +44,7 @@ def get_prices(tickers, start_date):
             if not tickerHist.empty:
                 tickerHist.index = tickerHist.index.tz_convert(tz='Asia/Bangkok')
                 tickerHist = tickerHist[tickerHist.index >= start_date]
-                # <<<--- START OF FIX ---<<<
-                # Rename column to be specific and avoid duplicates
                 tickerHist = tickerHist.rename(columns={'Close': f"{ticker}_price"})
-                # >>>--- END OF FIX ---<<<
                 df_list.append(tickerHist)
         except Exception as e:
             st.warning(f"Could not fetch data for {ticker}: {e}")
@@ -81,6 +78,8 @@ def calculate_optimized(action_list, price_list, fix=1500):
     cash = np.empty(n, dtype=np.float64)
     asset_value = np.empty(n, dtype=np.float64)
     sumusd = np.empty(n, dtype=np.float64)
+    if price_array.shape[0] == 0: # Guard against empty price array
+        return buffer, sumusd, cash, asset_value, amount, np.empty(0, dtype=np.float64)
     initial_price = price_array[0]
     amount[0] = fix / initial_price
     cash[0] = fix
@@ -99,6 +98,7 @@ def calculate_optimized(action_list, price_list, fix=1500):
         asset_value[i] = amount[i] * curr_price
         sumusd[i] = cash[i] + asset_value[i]
     return buffer, sumusd, cash, asset_value, amount, refer
+
 
 def get_max_action(price_list, fix=1500):
     prices = np.asarray(price_list, dtype=np.float64)
@@ -217,68 +217,83 @@ for asset in ASSETS:
 # === REF_INDEX_LOG TAB (FIXED) ===
 with tab_dict['Ref_index_Log']:
     filter_date = '2023-01-01 12:00:00+07:00'
-    # The get_prices function is now defined at the top level
-    prices_df = get_prices(TICKERS, filter_date).dropna()
+    prices_df = get_prices(TICKERS, filter_date)
 
     if not prices_df.empty:
-        # Align dataframes by index
-        dfs_to_align = {f'sumusd_{symbol}': Limit_fx(symbol, act=-1)[['sumusd']] for symbol in TICKERS}
-        aligned_dfs = [prices_df] + list(dfs_to_align.values())
+        # <<<--- START OF FIX ---<<<
+        # Create uniquely named dataframes for concatenation
+        dfs_to_align = []
+        for symbol in TICKERS:
+            df_temp = Limit_fx(symbol, act=-1)
+            if not df_temp.empty:
+                renamed_df = df_temp[['sumusd']].rename(columns={'sumusd': f'sumusd_{symbol}'})
+                dfs_to_align.append(renamed_df)
         
-        # Concatenate and forward-fill to handle misaligned dates
-        df_sumusd_ = pd.concat(aligned_dfs, axis=1).ffill().dropna()
+        if dfs_to_align:
+            aligned_dfs = [prices_df] + dfs_to_align
+            df_sumusd_ = pd.concat(aligned_dfs, axis=1).ffill().dropna()
 
-        # Define columns based on the new naming convention
-        price_cols = [f"{ticker}_price" for ticker in TICKERS]
+            price_cols = [col for col in df_sumusd_.columns if '_price' in col]
+            sumusd_cols = [col for col in df_sumusd_.columns if 'sumusd_' in col]
+            
+            if not price_cols or not sumusd_cols:
+                 st.warning("Could not find price or sumusd columns after alignment.")
+            else:
+                int_st = np.prod(df_sumusd_.iloc[0][price_cols])
+                initial_capital_per_stock = 3000
+                initial_capital_Ref_index_Log = initial_capital_per_stock * len(TICKERS)
 
-        # Recalculate based on aligned data
-        int_st = np.prod(df_sumusd_.iloc[0][price_cols])
-        initial_capital_per_stock = 3000
-        initial_capital_Ref_index_Log = initial_capital_per_stock * len(TICKERS)
+                def calculate_ref_log(row):
+                    int_end = np.prod(row[price_cols])
+                    if int_st == 0 or int_end == 0: return initial_capital_Ref_index_Log
+                    return initial_capital_Ref_index_Log + (-1500 * np.log(int_st / int_end))
 
-        def calculate_ref_log(row):
-            int_end = np.prod(row[price_cols])
-            # Add a small epsilon to avoid log(0)
-            if int_st == 0 or int_end == 0: return initial_capital_Ref_index_Log
-            return initial_capital_Ref_index_Log + (-1500 * np.log(int_st / int_end))
+                df_sumusd_['ref_log'] = df_sumusd_.apply(calculate_ref_log, axis=1)
+                df_sumusd_['daily_sumusd'] = df_sumusd_[sumusd_cols].sum(axis=1)
 
-        df_sumusd_['ref_log'] = df_sumusd_.apply(calculate_ref_log, axis=1)
-        
-        sumusd_cols = [col for col in df_sumusd_.columns if 'sumusd_' in col]
-        df_sumusd_['daily_sumusd'] = df_sumusd_[sumusd_cols].sum(axis=1)
-
-        total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in TICKERS if not Limit_fx(symbol, act=-1).empty])
-        net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
-        net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
-        df_sumusd_['net'] = net_raw - net_at_index_0
-        
-        st.line_chart(df_sumusd_['net'])
-        with st.expander("View Data"):
-            st.dataframe(df_sumusd_)
+                total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in TICKERS if not Limit_fx(symbol, act=-1).empty])
+                net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
+                net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
+                df_sumusd_['net'] = net_raw - net_at_index_0
+                
+                st.line_chart(df_sumusd_['net'])
+                with st.expander("View Data"):
+                    st.dataframe(df_sumusd_)
+        # >>>--- END OF FIX ---<<<
     else:
         st.warning("Could not fetch sufficient price data for Ref_index_Log.")
 
-
 # === BURN_CASH TAB ===
 with tab_dict['Burn_Cash']:
-    # Align dataframes by index to ensure correct summation
-    dfs_to_align = {f'buffer_{symbol}': Limit_fx(symbol, act=-1)[['buffer']] for symbol in TICKERS}
-    if any(df.empty for df in dfs_to_align.values()):
-        st.error("Cannot calculate burn cash due to missing data for one or more assets.")
-    else:
-        df_burn_cash = pd.concat(list(dfs_to_align.values()), axis=1).ffill().dropna()
+    # <<<--- START OF FIX ---<<<
+    # Create uniquely named dataframes for concatenation
+    dfs_to_align = []
+    for symbol in TICKERS:
+        df_temp = Limit_fx(symbol, act=-1)
+        if not df_temp.empty:
+            renamed_df = df_temp[['buffer']].rename(columns={'buffer': f'buffer_{symbol}'})
+            dfs_to_align.append(renamed_df)
     
+    if not dfs_to_align:
+        st.error("Cannot calculate burn cash due to missing data for all assets.")
+    else:
+        df_burn_cash = pd.concat(dfs_to_align, axis=1).ffill().dropna()
+        # >>>--- END OF FIX ---<<<
+
         df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
         df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
-
-        # --- START: Risk Calculation ---
+        
+        st.header("Cash Burn Risk Analysis")
+        st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
+        
+        # --- Risk Calculation ---
         max_daily_burn = df_burn_cash['daily_burn'].min()
         cumulative_burn_series = df_burn_cash['cumulative_burn']
         
         peak_to_trough_burn = 0
         if not cumulative_burn_series.empty:
             peak_index = cumulative_burn_series.idxmax()
-            peak_to_trough_burn = cumulative_burn_series[peak_index] - cumulative_burn_series[peak_index:].min()
+            peak_to_trough_burn = cumulative_burn_series.loc[peak_index] - cumulative_burn_series.loc[peak_index:].min()
 
         max_30_day_burn = 0
         if len(cumulative_burn_series) >= 30:
@@ -289,10 +304,6 @@ with tab_dict['Burn_Cash']:
         if len(cumulative_burn_series) >= 90:
             rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
             max_90_day_burn = rolling_90_day_change.min()
-        # --- END: Risk Calculation ---
-        
-        st.header("Cash Burn Risk Analysis")
-        st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
         
         col1, col2 = st.columns(2)
         with col1:
