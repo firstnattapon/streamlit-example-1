@@ -35,14 +35,6 @@
         },
         {
             "type": "option",
-            "name": "QXO Call @ 19.0",
-            "underlying_ticker": "QXO",
-            "contracts_or_shares": 100,
-            "premium_paid_per_share": 4.0,
-            "strike": 15.0
-        },
-        {
-            "type": "option",
             "name": "RXRX Call @ 5.40",
             "underlying_ticker": "RXRX",
             "contracts_or_shares": 200,
