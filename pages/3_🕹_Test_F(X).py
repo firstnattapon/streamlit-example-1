@@ -13,29 +13,29 @@ st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
 @st.cache_data
 def load_config(path='limit_fx_config.json'):
     """Loads the asset configuration from a JSON file."""
-    with open(path, 'r') as f:
-        config = json.load(f)
-    return config['assets']
+    try:
+        with open(path, 'r') as f:
+            config = json.load(f)
+        return config['assets']
+    except FileNotFoundError:
+        st.error(f"Configuration file '{path}' not found. Please ensure it exists in the correct directory.")
+        return None
+    except (json.JSONDecodeError, KeyError) as e:
+        st.error(f"Error reading or parsing '{path}': {e}")
+        return None
 
-try:
-    ASSETS = load_config()
-    TICKERS = [a['symbol'] for a in ASSETS]
-except FileNotFoundError:
-    st.error("Error: `limit_fx_config.json` not found. Please create the configuration file.")
+ASSETS = load_config()
+if not ASSETS:
     st.stop()
-except (KeyError, json.JSONDecodeError):
-    st.error("Error: `limit_fx_config.json` is not formatted correctly.")
-    st.stop()
+
+TICKERS = [a['symbol'] for a in ASSETS]
 
 
-# === DATA FETCHING & CALCULATION FUNCTIONS (Moved to top-level) ===
+# === DATA FETCHING & CALCULATION FUNCTIONS ===
 
 @st.cache_data(ttl=600)
 def get_prices(tickers, start_date):
-    """
-    Fetches historical price data for a list of tickers.
-    Defined at the top level for proper caching.
-    """
+    """Fetches historical price data for a list of tickers."""
     df_list = []
     for ticker in tickers:
         try:
@@ -44,8 +44,11 @@ def get_prices(tickers, start_date):
             if not tickerHist.empty:
                 tickerHist.index = tickerHist.index.tz_convert(tz='Asia/Bangkok')
                 tickerHist = tickerHist[tickerHist.index >= start_date]
-                tickerHist = tickerHist.rename(columns={'Close': ticker})
-                df_list.append(tickerHist[[ticker]])
+                # <<<--- START OF FIX ---<<<
+                # Rename column to be specific and avoid duplicates
+                tickerHist = tickerHist.rename(columns={'Close': f"{ticker}_price"})
+                # >>>--- END OF FIX ---<<<
+                df_list.append(tickerHist)
         except Exception as e:
             st.warning(f"Could not fetch data for {ticker}: {e}")
     if not df_list:
@@ -211,9 +214,10 @@ for asset in ASSETS:
         )
         plot(symbol, act)
 
-# === REF_INDEX_LOG TAB ===
+# === REF_INDEX_LOG TAB (FIXED) ===
 with tab_dict['Ref_index_Log']:
     filter_date = '2023-01-01 12:00:00+07:00'
+    # The get_prices function is now defined at the top level
     prices_df = get_prices(TICKERS, filter_date).dropna()
 
     if not prices_df.empty:
@@ -224,13 +228,18 @@ with tab_dict['Ref_index_Log']:
         # Concatenate and forward-fill to handle misaligned dates
         df_sumusd_ = pd.concat(aligned_dfs, axis=1).ffill().dropna()
 
+        # Define columns based on the new naming convention
+        price_cols = [f"{ticker}_price" for ticker in TICKERS]
+
         # Recalculate based on aligned data
-        int_st = np.prod(df_sumusd_.iloc[0][TICKERS])
+        int_st = np.prod(df_sumusd_.iloc[0][price_cols])
         initial_capital_per_stock = 3000
         initial_capital_Ref_index_Log = initial_capital_per_stock * len(TICKERS)
 
         def calculate_ref_log(row):
-            int_end = np.prod(row[TICKERS])
+            int_end = np.prod(row[price_cols])
+            # Add a small epsilon to avoid log(0)
+            if int_st == 0 or int_end == 0: return initial_capital_Ref_index_Log
             return initial_capital_Ref_index_Log + (-1500 * np.log(int_st / int_end))
 
         df_sumusd_['ref_log'] = df_sumusd_.apply(calculate_ref_log, axis=1)
@@ -238,7 +247,7 @@ with tab_dict['Ref_index_Log']:
         sumusd_cols = [col for col in df_sumusd_.columns if 'sumusd_' in col]
         df_sumusd_['daily_sumusd'] = df_sumusd_[sumusd_cols].sum(axis=1)
 
-        total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in TICKERS])
+        total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in TICKERS if not Limit_fx(symbol, act=-1).empty])
         net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
         net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
         df_sumusd_['net'] = net_raw - net_at_index_0
@@ -248,6 +257,7 @@ with tab_dict['Ref_index_Log']:
             st.dataframe(df_sumusd_)
     else:
         st.warning("Could not fetch sufficient price data for Ref_index_Log.")
+
 
 # === BURN_CASH TAB ===
 with tab_dict['Burn_Cash']:
