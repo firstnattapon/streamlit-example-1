@@ -11,7 +11,7 @@ st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
 
 # === CONFIG & CONSTANTS ===
 @st.cache_data
-def load_config(path='limit_fx_config1.json'):
+def load_config(path='limit_fx_config_t.json'):
     """Loads the entire configuration from a JSON file."""
     try:
         with open(path, 'r') as f:
