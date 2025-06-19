@@ -1,0 +1,71 @@
+{
+  "global_settings": {
+    "filter_date": "2023-01-01 12:00:00+07:00",
+    "fix_value": 1500,
+    "initial_capital_per_stock": 3000
+  },
+  "assets": [
+    {
+      "symbol": "AGL",
+      "field": 1,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
+      "symbol": "FFWM",
+      "field": 2,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
+      "symbol": "NEGG",
+      "field": 3,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
+      "symbol": "RIVN",
+      "field": 4,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
+      "symbol": "APLS",
+      "field": 5,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
+      "symbol": "NVTS",
+      "field": 6,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
+      "symbol": "QXO",
+      "field": 7,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
+      "symbol": "RXRX",
+      "field": 8,
+      "channel_id": 2385118,
+      "write_api_key": "IPSG3MMMBJEB9DY8"
+    },
+    {
+      "symbol": "FLNC",
+      "field": 1,
+      "channel_id": 2988808,
+      "write_api_key": "QBIPN1AIZ88QQW5V"
+    }
+  ],
+  "cf_log_settings": {
+    "iframe_urls": [
+      "https://monica.im/share/artifact?id=qpAkuKjBpuVz2cp9nNFRs3",
+      "https://monica.im/share/artifact?id=wEjeaMxVW6MgDDm3xAZatX",
+      "https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK",
+      "https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx"
+    ]
+  }
+}
