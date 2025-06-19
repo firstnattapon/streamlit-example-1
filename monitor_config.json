@@ -99,7 +99,7 @@
         "channel_id": 2528199,
         "api_key": "2E65V8XEIPH9B2VV"
       },
-      "fix_c": 2100,
+      "fix_c": 1500,
       "option_config": null
     },
     {
@@ -115,10 +115,7 @@
         "api_key": "2E65V8XEIPH9B2VV"
       },
       "fix_c": 1500,
-      "option_config": {
-        "base_value": 79.0,
-        "label": "QXO (LV:79@19.0)"
-      }
+      "option_config": null
     },
     {
       "ticker": "RIVN",
