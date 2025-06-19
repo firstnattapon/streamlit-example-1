@@ -10,27 +10,54 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
 
 # === CONFIG LOADING ===
+@st.cache_data
 def load_config(path='limit_fx_config.json'):
     """Loads the asset configuration from a JSON file."""
     with open(path, 'r') as f:
         config = json.load(f)
     return config['assets']
 
-ASSETS = load_config()
-TICKERS = [a['symbol'] for a in ASSETS]
+try:
+    ASSETS = load_config()
+    TICKERS = [a['symbol'] for a in ASSETS]
+except FileNotFoundError:
+    st.error("Error: `limit_fx_config.json` not found. Please create the configuration file.")
+    st.stop()
+except (KeyError, json.JSONDecodeError):
+    st.error("Error: `limit_fx_config.json` is not formatted correctly.")
+    st.stop()
 
-# === THINGSPEAK (REFACTORED FOR DYNAMIC CLIENTS) ===
-@st.cache_data(ttl=300) # Cache ThingSpeak data for 5 minutes
+
+# === DATA FETCHING & CALCULATION FUNCTIONS (Moved to top-level) ===
+
+@st.cache_data(ttl=600)
+def get_prices(tickers, start_date):
+    """
+    Fetches historical price data for a list of tickers.
+    Defined at the top level for proper caching.
+    """
+    df_list = []
+    for ticker in tickers:
+        try:
+            tickerData = yf.Ticker(ticker)
+            tickerHist = tickerData.history(period='max')[['Close']]
+            if not tickerHist.empty:
+                tickerHist.index = tickerHist.index.tz_convert(tz='Asia/Bangkok')
+                tickerHist = tickerHist[tickerHist.index >= start_date]
+                tickerHist = tickerHist.rename(columns={'Close': ticker})
+                df_list.append(tickerHist[[ticker]])
+        except Exception as e:
+            st.warning(f"Could not fetch data for {ticker}: {e}")
+    if not df_list:
+        return pd.DataFrame()
+    return pd.concat(df_list, axis=1)
+
+@st.cache_data(ttl=300)
 def get_act_from_thingspeak(channel_id, api_key, field):
-    """
-    Fetches the last value from a specific field in a specific ThingSpeak channel.
-    A new client is created for each call to support multiple channels.
-    """
+    """Fetches the last value from a specific field in a specific ThingSpeak channel."""
     try:
-        # Create a client for this specific request
         client = thingspeak.Channel(channel_id, api_key, fmt='json')
         act_json = client.get_field_last(field=str(field))
-        # Handle potential null values from ThingSpeak
         value = json.loads(act_json).get(f"field{field}")
         if value is None:
             st.warning(f"Field {field} on channel {channel_id} returned null. Using default value 0.")
@@ -38,9 +65,8 @@ def get_act_from_thingspeak(channel_id, api_key, field):
         return int(value)
     except Exception as e:
         st.error(f"Could not fetch data from ThingSpeak (Channel: {channel_id}, Field: {field}). Error: {e}")
-        return 0 # Return a safe default value on error
+        return 0
 
-# === CORE CALCULATION FUNCTIONS ===
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=1500):
     action_array = np.asarray(action_list, dtype=np.int32)
@@ -100,16 +126,24 @@ def get_max_action(price_list, fix=1500):
     actions[0] = 1
     return actions
 
-@st.cache_data(ttl=600) # Cache data for 10 minutes
+@st.cache_data(ttl=600)
 def Limit_fx(Ticker, act=-1):
     filter_date = '2023-01-01 12:00:00+07:00'
-    tickerData = yf.Ticker(Ticker)
-    tickerData = tickerData.history(period='max')[['Close']]
-    tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
-    tickerData = tickerData[tickerData.index >= filter_date]
-    prices = np.array(tickerData.Close.values, dtype=np.float64)
+    try:
+        tickerData = yf.Ticker(Ticker)
+        tickerData = tickerData.history(period='max')[['Close']]
+        if tickerData.empty:
+            return pd.DataFrame()
+        tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
+        tickerData = tickerData[tickerData.index >= filter_date]
+        prices = np.array(tickerData.Close.values, dtype=np.float64)
+    except Exception as e:
+        st.warning(f"Could not get yfinance data for {Ticker}: {e}")
+        return pd.DataFrame()
+
     if len(prices) == 0:
-        return pd.DataFrame() # Return empty dataframe if no price data
+        return pd.DataFrame()
+
     if act == -1:
         actions = np.ones(len(prices), dtype=np.int64)
     elif act == -2:
@@ -117,6 +151,7 @@ def Limit_fx(Ticker, act=-1):
     else:
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
+
     buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
     initial_capital = sumusd[0]
     df = pd.DataFrame({
@@ -129,11 +164,12 @@ def Limit_fx(Ticker, act=-1):
         'amount': amount,
         'refer': refer + initial_capital,
         'net': sumusd - refer - initial_capital
-    })
+    }, index=tickerData.index)
     return df
 
+# === UI FUNCTIONS ===
 def plot(Ticker, act):
-    df_min = Limit_fx(Ticker, act=-1) 
+    df_min = Limit_fx(Ticker, act=-1)
     df_fx = Limit_fx(Ticker, act=act)
     df_max = Limit_fx(Ticker, act=-2)
 
@@ -145,7 +181,7 @@ def plot(Ticker, act):
         'min': df_min.net,
         f'fx_{act}': df_fx.net,
         'max': df_max.net
-    })
+    }, index=df_min.index)
     st.write('Refer_Log')
     st.line_chart(chart_data)
 
@@ -153,19 +189,21 @@ def plot(Ticker, act):
     st.write('Burn_Cash (Cumulative)')
     st.line_chart(df_plot_burn)
 
-    st.write("Detailed Data (Min Action)")
-    st.dataframe(df_min)
+    with st.expander("Detailed Data (Min Action)"):
+        st.dataframe(df_min)
 
-# === TAB LAYOUT ===
+def iframe(frame='', width=1500, height=800):
+    components.iframe(frame, width=width, height=height, scrolling=True)
+
+# === MAIN APP LAYOUT ===
 tab_names = TICKERS + ['Burn_Cash', 'Ref_index_Log', 'cf_log']
 tabs = st.tabs(tab_names)
 tab_dict = dict(zip(tab_names, tabs))
 
-# === MAIN ASSET TABS (MODIFIED LOOP) ===
+# === MAIN ASSET TABS ===
 for asset in ASSETS:
     symbol = asset['symbol']
     with tab_dict[symbol]:
-        # Get act by passing the specific credentials for this asset
         act = get_act_from_thingspeak(
             channel_id=asset['channel_id'],
             api_key=asset['write_api_key'],
@@ -175,23 +213,19 @@ for asset in ASSETS:
 
 # === REF_INDEX_LOG TAB ===
 with tab_dict['Ref_index_Log']:
-    @st.cache_data(ttl=600)
-    def get_prices(tickers, start_date):
-        df_list = []
-        for ticker in tickers:
-            tickerData = yf.Ticker(ticker)
-            tickerHist = tickerData.history(period='max')[['Close']]
-            tickerHist.index = tickerHist.index.tz_convert(tz='Asia/Bangkok')
-            tickerHist = tickerHist[tickerHist.index >= start_date]
-            tickerHist = tickerHist.rename(columns={'Close': ticker})
-            df_list.append(tickerHist[[ticker]])
-        return pd.concat(df_list, axis=1)
-
     filter_date = '2023-01-01 12:00:00+07:00'
     prices_df = get_prices(TICKERS, filter_date).dropna()
 
     if not prices_df.empty:
-        int_st = np.prod(prices_df.iloc[0][TICKERS])
+        # Align dataframes by index
+        dfs_to_align = {f'sumusd_{symbol}': Limit_fx(symbol, act=-1)[['sumusd']] for symbol in TICKERS}
+        aligned_dfs = [prices_df] + list(dfs_to_align.values())
+        
+        # Concatenate and forward-fill to handle misaligned dates
+        df_sumusd_ = pd.concat(aligned_dfs, axis=1).ffill().dropna()
+
+        # Recalculate based on aligned data
+        int_st = np.prod(df_sumusd_.iloc[0][TICKERS])
         initial_capital_per_stock = 3000
         initial_capital_Ref_index_Log = initial_capital_per_stock * len(TICKERS)
 
@@ -199,95 +233,77 @@ with tab_dict['Ref_index_Log']:
             int_end = np.prod(row[TICKERS])
             return initial_capital_Ref_index_Log + (-1500 * np.log(int_st / int_end))
 
-        prices_df['ref_log'] = prices_df.apply(calculate_ref_log, axis=1)
-        ref_log_values = prices_df.ref_log.values
+        df_sumusd_['ref_log'] = df_sumusd_.apply(calculate_ref_log, axis=1)
         
-        sumusd_dfs = {f'sumusd_{symbol}': Limit_fx(symbol, act=-1).sumusd for symbol in TICKERS}
-        df_sumusd_ = pd.DataFrame(sumusd_dfs)
-        
-        df_sumusd_['daily_sumusd'] = df_sumusd_.sum(axis=1)
-        df_sumusd_['ref_log'] = ref_log_values
-        
+        sumusd_cols = [col for col in df_sumusd_.columns if 'sumusd_' in col]
+        df_sumusd_['daily_sumusd'] = df_sumusd_[sumusd_cols].sum(axis=1)
+
         total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in TICKERS])
         net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
         net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
         df_sumusd_['net'] = net_raw - net_at_index_0
         
         st.line_chart(df_sumusd_['net'])
-        st.dataframe(df_sumusd_)
+        with st.expander("View Data"):
+            st.dataframe(df_sumusd_)
     else:
-        st.warning("Could not fetch price data for Ref_index_Log.")
+        st.warning("Could not fetch sufficient price data for Ref_index_Log.")
 
-# === BURN_CASH TAB (UPDATED) ===
+# === BURN_CASH TAB ===
 with tab_dict['Burn_Cash']:
-    # ดึงข้อมูล buffer จาก Limit_fx สำหรับทุก Tickers
-    # ใช้ act=-1 (always buy) ตาม logic เดิมของแท็บนี้
-    buffers = {f'buffer_{symbol}': Limit_fx(symbol, act=-1).buffer for symbol in TICKERS}
-    df_burn_cash = pd.DataFrame(buffers)
-    
-    # คำนวณ daily และ cumulative burn
-    df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
-    df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
-
-    # --- START: การคำนวณค่าความเสี่ยง ---
-    
-    # 1. 1-Day Burn (Max Daily Burn)
-    max_daily_burn = df_burn_cash['daily_burn'].min()
-
-    # 2. Peak-to-Trough (Overall Drawdown)
-    cumulative_burn_series = df_burn_cash['cumulative_burn']
-    if not cumulative_burn_series.empty:
-        # คำนวณ drawdown จากจุดสูงสุด ไม่ใช่แค่ค่าต่ำสุด
-        peak_index = cumulative_burn_series.idxmax()
-        peak_to_trough_burn = cumulative_burn_series[peak_index] - cumulative_burn_series[peak_index:].min()
+    # Align dataframes by index to ensure correct summation
+    dfs_to_align = {f'buffer_{symbol}': Limit_fx(symbol, act=-1)[['buffer']] for symbol in TICKERS}
+    if any(df.empty for df in dfs_to_align.values()):
+        st.error("Cannot calculate burn cash due to missing data for one or more assets.")
     else:
+        df_burn_cash = pd.concat(list(dfs_to_align.values()), axis=1).ffill().dropna()
+    
+        df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
+        df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
+
+        # --- START: Risk Calculation ---
+        max_daily_burn = df_burn_cash['daily_burn'].min()
+        cumulative_burn_series = df_burn_cash['cumulative_burn']
+        
         peak_to_trough_burn = 0
+        if not cumulative_burn_series.empty:
+            peak_index = cumulative_burn_series.idxmax()
+            peak_to_trough_burn = cumulative_burn_series[peak_index] - cumulative_burn_series[peak_index:].min()
 
-    # 3. Rolling Window Burn (30-Day and 90-Day)
-    if len(cumulative_burn_series) >= 30:
-        rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-        max_30_day_burn = rolling_30_day_change.min()
-    else:
-        max_30_day_burn = cumulative_burn_series.min() if not cumulative_burn_series.empty else 0
+        max_30_day_burn = 0
+        if len(cumulative_burn_series) >= 30:
+            rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
+            max_30_day_burn = rolling_30_day_change.min()
+        
+        max_90_day_burn = 0
+        if len(cumulative_burn_series) >= 90:
+            rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
+            max_90_day_burn = rolling_90_day_change.min()
+        # --- END: Risk Calculation ---
+        
+        st.header("Cash Burn Risk Analysis")
+        st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Short-Term Risk")
+            st.metric(label="🔥 1-Day Burn (Worst Day)", value=f"{max_daily_burn:,.2f} USD")
+            st.metric(label="🔥 30-Day Burn (Worst Month)", value=f"{max_30_day_burn:,.2f} USD")
+        
+        with col2:
+            st.subheader("Medium to Long-Term Risk")
+            st.metric(label="🔥 90-Day Burn (Worst Quarter)", value=f"{max_90_day_burn:,.2f} USD")
+            st.metric(label="🏔️ Peak-to-Trough Burn (Max Drawdown)", value=f"{peak_to_trough_burn:,.2f} USD")
 
-    if len(cumulative_burn_series) >= 90:
-        rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-        max_90_day_burn = rolling_90_day_change.min()
-    else:
-        max_90_day_burn = cumulative_burn_series.min() if not cumulative_burn_series.empty else 0
-
-
-    # --- END: การคำนวณค่าความเสี่ยง ---
-    
-    st.header("Cash Burn Risk Analysis")
-    st.info("การวิเคราะห์นี้อิงจากการ Backtest ด้วยกลยุทธ์ 'ซื้อทุกครั้ง' (act=-1) เพื่อประเมินความเสี่ยงสูงสุดที่เป็นไปได้")
-    
-    # แสดงผลในรูปแบบตารางที่สวยงาม
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Short-Term Risk")
-        st.metric(label="🔥 1-Day Burn (Worst Day)", value=f"{max_daily_burn:,.2f} USD")
-        st.metric(label="🔥 30-Day Burn (Worst Month)", value=f"{max_30_day_burn:,.2f} USD")
-    
-    with col2:
-        st.subheader("Medium to Long-Term Risk")
-        st.metric(label="🔥 90-Day Burn (Worst Quarter)", value=f"{max_90_day_burn:,.2f} USD")
-        st.metric(label="🏔️ Peak-to-Trough Burn (Max Drawdown)", value=f"{peak_to_trough_burn:,.2f} USD")
-
-    st.markdown("---")
-    
-    # พล็อตกราฟ
-    st.subheader("Cumulative Cash Burn Over Time")
-    st.line_chart(df_burn_cash['cumulative_burn'])
-    
-    with st.expander("View Detailed Burn Data"):
-        st.dataframe(df_burn_cash)
+        st.markdown("---")
+        
+        st.subheader("Cumulative Cash Burn Over Time")
+        st.line_chart(df_burn_cash['cumulative_burn'])
+        
+        with st.expander("View Detailed Burn Data"):
+            st.dataframe(df_burn_cash)
 
 # === CF_LOG TAB ===
-def iframe(frame='', width=1500, height=800):
-    components.iframe(frame, width=width, height=height, scrolling=True)
-
 with tab_dict['cf_log']:
     st.markdown("""
     - **Rebalance**: `-fix * ln(t0 / tn)`
