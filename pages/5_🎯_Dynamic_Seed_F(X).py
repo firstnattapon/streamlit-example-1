@@ -618,7 +618,7 @@ def main():
         "⚙️ การตั้งค่า",
         "🚀 ทดสอบ Best Seed",
         "📊 Advanced Analytics",
-        "🌱 Manual Seed Comparator"
+        "🌱 Forward Rolling Comparator"
     ])
 
     with tab1:
