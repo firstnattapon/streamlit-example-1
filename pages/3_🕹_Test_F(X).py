@@ -4,7 +4,7 @@ import yfinance as yf
 import streamlit as st
 import math
 import json
-import ast
+import ast 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from datetime import datetime
