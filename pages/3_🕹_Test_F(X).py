@@ -36,10 +36,10 @@ def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
         return {
             "assets": ["FFWM", "NEGG", "RIVN", "BTC-USD", "ETH-USD"],
             "default_settings": {
-                "selected_ticker": "FFWM", "start_date": "2025-06-10", "window_size": 30, 
-                "num_seeds": 30000, "max_workers": 8, 
+                "selected_ticker": "FFWM", "start_date": "2024-01-01", "end_date": "2024-07-01", "window_size": 30, 
+                "num_seeds": 10000, "max_workers": 8, 
                 "ga_population_size": 50, "ga_generations": 20,
-                "pm_lookback_period": 750, "pm_num_analogs": 5
+                "pm_lookback_period": 252, "pm_num_analogs": 5
             },
             "manual_seed_by_asset": {
                 "default": [{'seed': 999, 'size': 50, 'tail': 15}],
@@ -58,17 +58,18 @@ def initialize_session_state(config: Dict[str, Any]):
     defaults = config.get('default_settings', {})
     if 'test_ticker' not in st.session_state: st.session_state.test_ticker = defaults.get('selected_ticker', 'FFWM')
     if 'start_date' not in st.session_state:
-        try: st.session_state.start_date = datetime.strptime(defaults.get('start_date', '2025-01-01'), '%Y-%m-%d').date()
-        except ValueError: st.session_state.start_date = datetime(2025, 1, 1).date()
-    if 'end_date' not in st.session_state: st.session_state.end_date = datetime.now().date()
+        try: st.session_state.start_date = datetime.strptime(defaults.get('start_date', '2024-01-01'), '%Y-%m-%d').date()
+        except ValueError: st.session_state.start_date = datetime(2024, 1, 1).date()
+    if 'end_date' not in st.session_state:
+        try: st.session_state.end_date = datetime.strptime(defaults.get('end_date', '2024-07-01'), '%Y-%m-%d').date()
+        except ValueError: st.session_state.end_date = datetime.now().date()
     if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 30)
-    if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 30000)
+    if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 10000)
     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
     if 'ga_population_size' not in st.session_state: st.session_state.ga_population_size = defaults.get('ga_population_size', 50)
     if 'ga_generations' not in st.session_state: st.session_state.ga_generations = defaults.get('ga_generations', 20)
     
-    # Pattern Matching settings
-    if 'pm_lookback_period' not in st.session_state: st.session_state.pm_lookback_period = defaults.get('pm_lookback_period', 750)
+    if 'pm_lookback_period' not in st.session_state: st.session_state.pm_lookback_period = defaults.get('pm_lookback_period', 252)
     if 'pm_num_analogs' not in st.session_state: st.session_state.pm_num_analogs = defaults.get('pm_num_analogs', 5)
 
     if 'df_for_analysis' not in st.session_state: st.session_state.df_for_analysis = None
@@ -79,18 +80,18 @@ def initialize_session_state(config: Dict[str, Any]):
         st.session_state.manual_seed_lines = presets_by_asset.get(initial_ticker, default_presets)
 
 # ==============================================================================
-# 2. Core Calculation & Data Functions (No Changes)
+# 2. Core Calculation & Data Functions
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     try:
-        data = yf.Ticker(ticker).history(start=start_date, end=end_date)[['Close']]
+        data = yf.Ticker(ticker).history(start=start_date, end=end_date, auto_adjust=True)[['Close']]
         if data.empty: return pd.DataFrame()
         if data.index.tz is None:
             data = data.tz_localize('UTC').tz_convert('Asia/Bangkok')
         else:
             data = data.tz_convert('Asia/Bangkok')
-        return data
+        return data.rename(columns={'Close': 'price'})
     except Exception as e:
         st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {str(e)}")
         return pd.DataFrame()
@@ -117,13 +118,10 @@ def _calculate_simulation_numba(action_array: np.ndarray, price_array: np.ndarra
     for i in range(1, n):
         curr_price = price_array[i]
         if action_array_calc[i] == 0:
-            amount[i] = amount[i-1]
-            buffer[i] = 0.0
+            amount[i] = amount[i-1]; buffer[i] = 0.0
         else:
-            amount[i] = fix / curr_price
-            buffer[i] = amount[i-1] * curr_price - fix
-        cash[i] = cash[i-1] + buffer[i]
-        asset_value[i] = amount[i] * curr_price
+            amount[i] = fix / curr_price; buffer[i] = amount[i-1] * curr_price - fix
+        cash[i] = cash[i-1] + buffer[i]; asset_value[i] = amount[i] * curr_price
         sumusd[i] = cash[i] + asset_value[i]
     return buffer, sumusd, cash, asset_value, amount, refer
 
@@ -135,25 +133,24 @@ def calculate_optimized_cached(action_tuple: Tuple[int, ...], price_tuple: Tuple
 
 def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> pd.DataFrame:
     if not prices or not actions: return pd.DataFrame()
-    prices, actions = prices[:len(actions)], actions[:len(prices)]
+    min_len = min(len(prices), len(actions))
+    prices, actions = prices[:min_len], actions[:min_len]
     action_array = np.asarray(actions, dtype=np.int32)
     price_array = np.asarray(prices, dtype=np.float64)
     buffer, sumusd, cash, asset_value, amount, refer = _calculate_simulation_numba(action_array, price_array, fix)
     if len(sumusd) == 0: return pd.DataFrame()
     initial_capital = sumusd[0]
-    df = pd.DataFrame({
+    return pd.DataFrame({
         'price': prices, 'action': actions, 'buffer': np.round(buffer, 2),
         'sumusd': np.round(sumusd, 2), 'cash': np.round(cash, 2),
         'asset_value': np.round(asset_value, 2), 'amount': np.round(amount, 2),
         'refer': np.round(refer + initial_capital, 2),
         'net': np.round(sumusd - refer - initial_capital, 2)
     })
-    return df
 
 # ==============================================================================
 # 3. Strategy Action Generation
 # ==============================================================================
-# --- OMITTED FOR BREVITY: All functions for Benchmarks, Random Seed, Chaotic, GA are here ---
 # 3.0 Benchmarks
 def generate_actions_rebalance_daily(num_days: int) -> np.ndarray: return np.ones(num_days, dtype=np.int32)
 @njit(cache=True)
@@ -171,115 +168,128 @@ def generate_actions_perfect_foresight(price_arr: np.ndarray, fix: int = 1500) -
     actions[0] = 1
     return actions
 
-# 3.1 & 3.2 & 3.3 ... All functions from previous steps are assumed to be here
-# To save space, I will skip pasting them again. The new model is self-contained.
+# 3.1 Standard Seed Generation (functions are self-contained, no change)
+def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int, max_workers: int) -> Tuple[int, float, np.ndarray]:
+    window_len = len(prices_window);
+    if window_len < 2: return 1, 0.0, np.ones(window_len, dtype=np.int32)
+    def evaluate_seed_batch(seed_batch: np.ndarray) -> List[Tuple[int, float]]:
+        results = []
+        for seed in seed_batch:
+            rng = np.random.default_rng(seed); actions_window = rng.integers(0, 2, size=window_len, dtype=np.int32)
+            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(actions_window), tuple(prices_window))
+            net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+            results.append((seed, net))
+        return results
+    best_seed_for_window = -1; max_net_for_window = -np.inf
+    random_seeds = np.arange(num_seeds_to_try)
+    batch_size = max(1, num_seeds_to_try // (max_workers * 4 if max_workers > 0 else 1))
+    seed_batches = [random_seeds[j:j+batch_size] for j in range(0, len(random_seeds), batch_size)]
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(evaluate_seed_batch, batch) for batch in seed_batches]
+        for future in as_completed(futures):
+            for seed, final_net in future.result():
+                if final_net > max_net_for_window: max_net_for_window = final_net; best_seed_for_window = seed
+    if best_seed_for_window >= 0:
+        rng_best = np.random.default_rng(best_seed_for_window)
+        best_actions = rng_best.integers(0, 2, size=window_len, dtype=np.int32)
+    else: best_seed_for_window = 1; best_actions = np.ones(window_len, dtype=np.int32); max_net_for_window = 0.0
+    best_actions[0] = 1
+    return best_seed_for_window, max_net_for_window, best_actions
+
+def generate_actions_sliding_window(ticker_data: pd.DataFrame, **kwargs) -> Tuple[np.ndarray, pd.DataFrame]:
+    prices = ticker_data['price'].to_numpy(); n = len(prices); window_size = kwargs['window_size']
+    final_actions = np.array([], dtype=np.int32); window_details_list = []
+    num_windows = (n + window_size - 1) // window_size
+    progress_bar = st.progress(0, text="กำลังประมวลผล Random Seed...")
+    for i, start_index in enumerate(range(0, n, window_size)):
+        end_index = min(start_index + window_size, n); prices_window = prices[start_index:end_index]
+        window_len = len(prices_window)
+        if window_len == 0: continue
+        best_seed, max_net, best_actions = find_best_seed_for_window(prices_window, kwargs['num_seeds_to_try'], kwargs['max_workers'])
+        final_actions = np.concatenate((final_actions, best_actions))
+        start_date_str = ticker_data.index[start_index].strftime('%Y-%m-%d'); end_date_str = ticker_data.index[end_index-1].strftime('%Y-%m-%d')
+        detail = {'window_number': i + 1, 'timeline': f"{start_date_str} to {end_date_str}", 'best_seed': best_seed, 'max_net': round(max_net, 2),'price_change_pct': round(((prices_window[-1] / prices_window[0]) - 1) * 100, 2) if prices_window[0] != 0 else 0, 'action_count': int(np.sum(best_actions)), 'window_size': window_len, 'action_sequence': best_actions.tolist()}
+        window_details_list.append(detail)
+        progress_bar.progress((i + 1) / num_windows, text=f"Processing Window {i+1}/{num_windows}")
+    progress_bar.empty()
+    return final_actions, pd.DataFrame(window_details_list)
+
 
 # 3.4 [NEW] Pattern Matching (DTW) Generation
 @lru_cache(maxsize=1024)
-def find_best_historical_analogs_dtw(target_pattern: tuple, historical_data: tuple, window_size: int, num_analogs: int) -> list:
-    """Finds the best historical analogs using Dynamic Time Warping."""
-    target_pattern = np.array(target_pattern)
-    historical_data = np.array(historical_data)
-    
+def find_best_historical_analogs_dtw(target_pattern_tuple: tuple, historical_data_tuple: tuple, window_size: int, num_analogs: int) -> list:
+    target_pattern = np.array(target_pattern_tuple)
+    historical_data = np.array(historical_data_tuple)
     distances = []
-    # Loop through historical data to find similar patterns
-    for i in range(len(historical_data) - window_size):
+    for i in range(len(historical_data) - window_size * 2): # Ensure there's a future
         historical_pattern = historical_data[i : i + window_size]
-        # Normalize patterns to compare shapes, not absolute values
         normalized_target = target_pattern / target_pattern[0]
         normalized_historical = historical_pattern / historical_pattern[0]
-        
-        # Calculate DTW distance
-        distance = dtw(normalized_target, normalized_historical, keep_internals=True).distance
-        
-        # We need to know what happened *after* this historical pattern
-        future_start = i + window_size
-        future_end = future_start + window_size
-        if future_end <= len(historical_data):
-            distances.append((distance, future_start, future_end))
-    
-    # Sort by distance (smaller is better) and take the top N
+        distance = dtw(normalized_target, normalized_historical, keep_internals=False).distance
+        future_start = i + window_size; future_end = future_start + window_size
+        distances.append((distance, future_start, future_end))
     distances.sort(key=lambda x: x[0])
     return distances[:num_analogs]
 
-def generate_actions_sliding_window_pattern_matching(
-    ticker_data: pd.DataFrame, 
-    window_size: int, 
-    lookback_period: int, 
-    num_analogs: int
-) -> Tuple[np.ndarray, pd.DataFrame]:
-    
-    all_prices = ticker_data['Close'].to_numpy()
+def generate_actions_sliding_window_pattern_matching(ticker_data: pd.DataFrame, **kwargs) -> Tuple[np.ndarray, pd.DataFrame]:
+    all_prices = ticker_data['price'].to_numpy()
+    window_size = kwargs['window_size']; lookback_period = kwargs['lookback_period']; num_analogs = kwargs['num_analogs']
     n = len(all_prices)
+    if n < lookback_period + window_size:
+        st.error(f"ข้อมูลไม่เพียงพอ ({n} วัน) สำหรับ Lookback Period ({lookback_period}) และ Window Size ({window_size}) กรุณาลดค่า Lookback Period หรือเพิ่มช่วงวันที่ของข้อมูล")
+        return np.array([]), pd.DataFrame()
+    
+    action_start_offset = lookback_period
+    sim_prices = all_prices[action_start_offset:]
     final_actions = np.array([], dtype=np.int32)
     window_details_list = []
     
-    num_windows = (n - lookback_period) // window_size
-    if num_windows <= 0:
-        st.error(f"ข้อมูลไม่เพียงพอสำหรับ Lookback Period ({lookback_period}) และ Window Size ({window_size}) กรุณาลดค่า Lookback Period หรือเพิ่มช่วงวันที่ของข้อมูล")
-        return np.array([]), pd.DataFrame()
-
+    num_windows = (len(sim_prices) + window_size - 1) // window_size
     progress_bar = st.progress(0, text="กำลังค้นหารูปแบบราคาในอดีต (Pattern Matching)...")
-    
-    # We can only start predicting after the lookback_period
-    for i, start_index in enumerate(range(lookback_period, n, window_size)):
-        end_index = min(start_index + window_size, n)
-        if end_index - start_index < window_size: continue # Skip partial windows at the end
 
-        # 1. Define target pattern and historical search space
-        target_pattern = all_prices[start_index:end_index]
-        historical_data = all_prices[:start_index]
+    for i in range(num_windows):
+        current_day_index = action_start_offset + (i * window_size)
+        target_start = current_day_index - window_size
+        target_end = current_day_index
+        if target_start < 0: continue
 
-        # 2. Find best analogs from history
-        analogs = find_best_historical_analogs_dtw(
-            tuple(target_pattern), 
-            tuple(historical_data), 
-            window_size, 
-            num_analogs
-        )
+        target_pattern = all_prices[target_start:target_end]
+        historical_data = all_prices[:target_start]
         
-        # 3. For each analog, find its "perfect future" action sequence
+        if len(historical_data) < window_size * 2: continue
+        
+        analogs = find_best_historical_analogs_dtw(tuple(target_pattern), tuple(historical_data), window_size, num_analogs)
         future_actions_candidates = []
         if analogs:
             for _, future_start, future_end in analogs:
                 future_prices = historical_data[future_start:future_end]
                 if len(future_prices) == window_size:
-                    # Find the best possible actions for that future
                     perfect_actions = generate_actions_perfect_foresight(future_prices)
                     future_actions_candidates.append(perfect_actions)
-
-        # 4. Combine the candidates into a single action sequence (Voting)
+        
         if future_actions_candidates:
-            # Stack candidates and take the mode (most frequent value) for each day
-            stacked_actions = np.vstack(future_actions_candidates)
-            # scipy.stats.mode is better, but np.mean avoids a new dependency
-            # A mean > 0.5 means '1' was more common than '0'
-            voted_actions = (np.mean(stacked_actions, axis=0) > 0.5).astype(int)
-            voted_actions[0] = 1 # Ensure first action is always 1
+            voted_actions = (np.mean(np.vstack(future_actions_candidates), axis=0) > 0.5).astype(int)
+            voted_actions[0] = 1
         else:
-            # If no analogs found, default to rebalancing daily
             voted_actions = np.ones(window_size, dtype=np.int32)
-
+        
         final_actions = np.concatenate((final_actions, voted_actions))
         
-        # Calculate Net for reporting
-        _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(voted_actions), tuple(target_pattern))
-        max_net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else 0.0
-        
-        start_date_str = ticker_data.index[start_index].strftime('%Y-%m-%d')
-        end_date_str = ticker_data.index[end_index-1].strftime('%Y-%m-%d')
-        detail = {
-            'window_number': i + 1, 'timeline': f"{start_date_str} ถึง {end_date_str}", 'max_net': round(max_net, 2),
-            'price_change_pct': round(((target_pattern[-1] / target_pattern[0]) - 1) * 100, 2),
-            'action_count': int(np.sum(voted_actions)), 'analogs_found': len(future_actions_candidates),
-            'window_size': window_len, 'action_sequence': voted_actions.tolist()
-        }
-        window_details_list.append(detail)
+        # Calculate Net for reporting based on actual prices in this window
+        report_prices_start = current_day_index
+        report_prices_end = min(report_prices_start + window_size, n)
+        report_prices = all_prices[report_prices_start:report_prices_end]
+
+        if len(report_prices) > 0:
+            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(voted_actions), tuple(report_prices))
+            max_net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else 0.0
+            
+            detail = {'window_number': i + 1, 'timeline': f"{ticker_data.index[report_prices_start].strftime('%Y-%m-%d')} to {ticker_data.index[report_prices_end-1].strftime('%Y-%m-%d')}", 'max_net': round(max_net, 2), 'price_change_pct': round(((report_prices[-1] / report_prices[0]) - 1) * 100, 2), 'action_count': int(np.sum(voted_actions)), 'analogs_found': len(future_actions_candidates), 'window_size': len(report_prices)}
+            window_details_list.append(detail)
         progress_bar.progress((i + 1) / num_windows, text=f"Analyzing Window {i+1}/{num_windows}")
         
     progress_bar.empty()
     return final_actions, pd.DataFrame(window_details_list)
-
 
 # ==============================================================================
 # 4. UI Rendering Functions
@@ -293,132 +303,86 @@ def render_settings_tab(config: Dict[str, Any]):
     col1, col2 = st.columns(2)
     with col1: st.session_state.start_date = st.date_input("วันที่เริ่มต้น", value=st.session_state.start_date)
     with col2: st.session_state.end_date = st.date_input("วันที่สิ้นสุด", value=st.session_state.end_date)
-    
     if st.session_state.start_date >= st.session_state.end_date: st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
-    else: st.info(f"ช่วงวันที่ที่เลือก: {st.session_state.start_date:%Y-%m-%d} ถึง {st.session_state.end_date:%Y-%m-%d}")
     
     st.divider()
-    
     st.subheader("พารามิเตอร์ทั่วไป")
     c1, c2 = st.columns(2)
     st.session_state.window_size = c1.number_input("ขนาด Window (วัน)", min_value=10, value=st.session_state.window_size)
-    st.session_state.max_workers = c2.number_input("จำนวน Workers (สำหรับ Random/Chaotic)", min_value=1, max_value=16, value=st.session_state.max_workers)
+    st.session_state.max_workers = c2.number_input("จำนวน Workers (สำหรับ Random Seed)", min_value=1, max_value=16, value=st.session_state.max_workers)
+    
+    st.subheader("พารามิเตอร์สำหรับ Random Seed")
+    st.session_state.num_seeds = st.number_input("จำนวน Seeds ต่อ Window", min_value=100, value=st.session_state.num_seeds, format="%d")
 
-    st.subheader("พารามิเตอร์สำหรับ Random/Chaotic Seed")
-    st.session_state.num_seeds = st.number_input("จำนวน Seeds/Params ต่อ Window", min_value=100, value=st.session_state.num_seeds, format="%d")
-    
-    st.subheader("พารามิเตอร์สำหรับ Genetic Algorithm")
-    ga_c1, ga_c2 = st.columns(2)
-    st.session_state.ga_population_size = ga_c1.number_input("ขนาดประชากร (Population Size)", min_value=10, value=st.session_state.ga_population_size)
-    st.session_state.ga_generations = ga_c2.number_input("จำนวนรุ่น (Generations)", min_value=5, value=st.session_state.ga_generations)
-    
     st.subheader("พารามิเตอร์สำหรับ Pattern Matching (DTW)")
     pm_c1, pm_c2 = st.columns(2)
-    st.session_state.pm_lookback_period = pm_c1.number_input("ช่วงข้อมูลในอดีตสำหรับค้นหา (วัน)", min_value=100, value=st.session_state.pm_lookback_period, help="จำนวนวันที่ใช้เป็นฐานข้อมูลในการค้นหารูปแบบที่คล้ายกัน ยิ่งมากยิ่งดีแต่จะช้าลง")
-    st.session_state.pm_num_analogs = pm_c2.number_input("จำนวนรูปแบบที่คล้ายที่สุดที่จะใช้ (Analogs)", min_value=1, max_value=20, value=st.session_state.pm_num_analogs, help="จำนวนรูปแบบที่คล้ายกันที่สุดในอดีตที่จะนำมาลงคะแนนเพื่อตัดสินใจ")
+    st.session_state.pm_lookback_period = pm_c1.number_input("ช่วงข้อมูลในอดีตสำหรับค้นหา (วัน)", min_value=50, value=st.session_state.pm_lookback_period)
+    st.session_state.pm_num_analogs = pm_c2.number_input("จำนวนรูปแบบที่คล้ายที่สุดที่จะใช้ (Analogs)", min_value=1, max_value=20, value=st.session_state.pm_num_analogs)
 
 
-def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
+def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str):
     if not results: st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
-    try: longest_index = max((df.index for name, df in results.items() if not df.empty and 'net' in df.columns), key=len, default=None)
-    except ValueError: longest_index = None
-    if longest_index is None: st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
+    
+    valid_dfs = {name: df for name, df in results.items() if not df.empty and 'net' in df.columns}
+    if not valid_dfs: st.warning("ไม่มีข้อมูล 'net' สำหรับสร้างกราฟ"); return
+
+    longest_index = max((df.index for df in valid_dfs.values()), key=len, default=None)
+    if longest_index is None: return
+
     chart_data = pd.DataFrame(index=longest_index)
-    for name, df in results.items():
-        if not df.empty and 'net' in df.columns:
-            chart_data[name] = df['net'].reindex(longest_index).ffill()
+    for name, df in valid_dfs.items():
+        chart_data[name] = df['net'].reindex(longest_index).ffill()
+    
     st.write(chart_title); st.line_chart(chart_data)
 
 
 def run_and_display_strategy(strategy_func, strategy_args: Dict, strategy_name: str, full_ticker_data: pd.DataFrame, df_columns_to_show: List[str]):
     button_key = f"btn_{strategy_name.replace(' ', '_').replace('(', '').replace(')', '')}"
     if st.button(f"🚀 เริ่มทดสอบ ({strategy_name})", type="primary", key=button_key):
-        if st.session_state.start_date >= st.session_state.end_date:
-            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'"); return
-        
         with st.spinner(f"กำลังคำนวณกลยุทธ์ {strategy_name}..."):
-            # For Pattern Matching, we need a larger dataset including the lookback period
+            
+            # Pattern Matching uses a different data slice
             if strategy_name == Strategy.PATTERN_MATCHING_DTW:
                 test_data = full_ticker_data
-                prices_for_sim = test_data['Close'].to_numpy()[st.session_state.pm_lookback_period:]
-                sim_dates = test_data.index[st.session_state.pm_lookback_period:]
+                lookback = st.session_state.pm_lookback_period
+                if len(test_data) < lookback + st.session_state.window_size:
+                    st.error("ข้อมูลไม่เพียงพอสำหรับ Lookback ที่กำหนด"); return
+                prices_for_sim = test_data['price'].to_numpy()[lookback:]
+                sim_dates = test_data.index[lookback:]
             else:
-                test_data = full_ticker_data
-                prices_for_sim = test_data['Close'].to_numpy()
+                start_date_obj = st.session_state.start_date
+                test_data = full_ticker_data[full_ticker_data.index.date >= start_date_obj]
+                if test_data.empty: st.error("ไม่พบข้อมูลในช่วงวันที่ที่เลือกสำหรับทดสอบ"); return
+                prices_for_sim = test_data['price'].to_numpy()
                 sim_dates = test_data.index
 
             main_actions, df_windows = strategy_func(ticker_data=test_data, **strategy_args)
             
             num_days = len(prices_for_sim)
-            if num_days == 0 or len(main_actions) == 0:
-                st.error("ไม่สามารถสร้างผลลัพธ์ได้ ข้อมูลอาจไม่เพียงพอสำหรับการตั้งค่าปัจจุบัน"); return
+            if num_days == 0 or len(main_actions) == 0: st.error("ไม่สามารถสร้างผลลัพธ์ได้"); return
 
-            actions_min = generate_actions_rebalance_daily(num_days)
-            actions_max = generate_actions_perfect_foresight(prices_for_sim)
-
+            main_actions = main_actions[:num_days] # Ensure actions and prices align
+            
             results_map = {
-                strategy_name: main_actions.tolist(),
-                Strategy.REBALANCE_DAILY: actions_min.tolist(),
-                Strategy.PERFECT_FORESIGHT: actions_max.tolist()
+                strategy_name: run_simulation(prices_for_sim.tolist(), main_actions.tolist()),
+                Strategy.REBALANCE_DAILY: run_simulation(prices_for_sim.tolist(), generate_actions_rebalance_daily(num_days).tolist()),
+                Strategy.PERFECT_FORESIGHT: run_simulation(prices_for_sim.tolist(), generate_actions_perfect_foresight(prices_for_sim).tolist())
             }
-            sim_results = {}
-            for name, actions in results_map.items():
-                df = run_simulation(prices_for_sim.tolist(), actions)
+            
+            for name, df in results_map.items():
                 if not df.empty: df.index = sim_dates[:len(df)]
-                sim_results[name] = df
-        
+
         st.success("การทดสอบเสร็จสมบูรณ์!")
-        st.write("---"); display_comparison_charts(sim_results, f"ผลการทดสอบ: {strategy_name}")
+        st.write("---"); display_comparison_charts(results_map, f"ผลการทดสอบ: {strategy_name}")
         st.write(f"📈 **สรุปผลการค้นหา ({strategy_name})**")
         
         if df_windows is not None and not df_windows.empty:
             total_actions = df_windows['action_count'].sum(); total_net = df_windows['max_net'].sum()
             col1, col2, col3 = st.columns(3)
-            col1.metric("Total Windows", df_windows.shape[0])
-            col2.metric("Total Actions", f"{total_actions}/{num_days}")
-            col3.metric("Total Net (Sum)", f"${total_net:,.2f}")
+            col1.metric("Total Windows", df_windows.shape[0]); col2.metric("Total Actions", f"{total_actions}/{len(main_actions)}"); col3.metric("Total Net (Sum)", f"${total_net:,.2f}")
             st.dataframe(df_windows[df_columns_to_show], use_container_width=True)
             csv = df_windows.to_csv(index=False)
             st.download_button(label=f"📥 ดาวน์โหลด {strategy_name} Details (CSV)", data=csv, file_name=f'{strategy_name.replace(" ", "_")}_{st.session_state.test_ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
-        else:
-            st.warning("ไม่สามารถสร้างข้อมูลสรุป Window ได้")
-
-# --- UI Rendering for each Tab ---
-def render_test_tab(ticker_data): # Random Seed
-    st.markdown("### 🎲 ทดสอบ Best Seed ด้วย Random Search")
-    st.info("กลยุทธ์นี้จะสุ่ม `seed` จำนวนมากเพื่อหาลำดับ Action ที่ดีที่สุดในแต่ละ Window")
-    if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
-    args = {'window_size': st.session_state.window_size, 'num_seeds_to_try': st.session_state.num_seeds, 'max_workers': st.session_state.max_workers}
-    columns_to_show = ['window_number', 'timeline', 'best_seed', 'max_net', 'price_change_pct', 'action_count']
-    run_and_display_strategy(generate_actions_sliding_window, args, Strategy.SLIDING_WINDOW, ticker_data, columns_to_show)
-
-def render_chaotic_test_tab(ticker_data):
-    st.markdown("### 🌀 ทดสอบ Best Seed ด้วย Chaotic Generator")
-    st.info("กลยุทธ์นี้จะค้นหาพารามิเตอร์ `r` และ `x0` ของ Logistic Map ที่ให้ผลตอบแทนดีที่สุดในแต่ละ Window")
-    if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
-    args = {'window_size': st.session_state.window_size, 'num_seeds_to_try': st.session_state.num_seeds, 'max_workers': st.session_state.max_workers}
-    columns_to_show = ['window_number', 'timeline', 'best_seed', 'r_param', 'x0_param', 'max_net', 'price_change_pct', 'action_count']
-    run_and_display_strategy(generate_actions_sliding_window_chaotic, args, Strategy.CHAOTIC_SLIDING_WINDOW, ticker_data, columns_to_show)
-
-def render_ga_test_tab(ticker_data):
-    st.markdown("### 🧬 ทดสอบด้วย Genetic Algorithm Search")
-    st.info("กลยุทธ์นี้ใช้วิวัฒนาการเชิงคำนวณ (GA) เพื่อ 'พัฒนา' Action Sequence ที่ดีที่สุดในแต่ละ Window")
-    if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
-    args = {'window_size': st.session_state.window_size, 'population_size': st.session_state.ga_population_size, 'generations': st.session_state.ga_generations}
-    columns_to_show = ['window_number', 'timeline', 'max_net', 'price_change_pct', 'action_count']
-    run_and_display_strategy(generate_actions_sliding_window_ga, args, Strategy.GENETIC_ALGORITHM, ticker_data, columns_to_show)
-
-def render_pattern_matching_tab(ticker_data):
-    st.markdown("### 🔍 ทดสอบด้วย Pattern Matching (DTW)")
-    st.info("กลยุทธ์นี้จะค้นหารูปแบบราคาในอดีตที่คล้ายกับปัจจุบันที่สุด แล้วนำ Action ที่เคยให้ผลลัพธ์ดีที่สุดในอนาคตของรูปแบบนั้นมาใช้")
-    if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
-    args = {'window_size': st.session_state.window_size, 'lookback_period': st.session_state.pm_lookback_period, 'num_analogs': st.session_state.pm_num_analogs}
-    columns_to_show = ['window_number', 'timeline', 'max_net', 'price_change_pct', 'action_count', 'analogs_found']
-    run_and_display_strategy(generate_actions_sliding_window_pattern_matching, args, Strategy.PATTERN_MATCHING_DTW, ticker_data, columns_to_show)
-
-# ... The render_analytics_tab and render_manual_seed_tab are omitted for brevity ...
-def render_analytics_tab(): st.header("📊 Advanced Analytics Dashboard (Omitted)"); st.info("This tab is for analyzing saved CSV files.")
-def render_manual_seed_tab(config): st.header("🌱 Manual/Forward Testing (Omitted)"); st.info("This tab is for testing custom seeds.")
 
 # ==============================================================================
 # 5. Main Application
@@ -431,42 +395,53 @@ def main():
     config = load_config()
     initialize_session_state(config)
 
-    tab_list = ["⚙️ การตั้งค่า", "🎲 Random Seed", "🌀 Chaotic Seed", "🧬 GA Search", "🔍 Pattern Matching", "📊 Analytics", "🌱 Manual/Forward"]
+    tab_list = ["⚙️ การตั้งค่า", "🎲 Random Seed", "🔍 Pattern Matching", "📊 Analytics"]
     tabs = st.tabs(tab_list)
 
-    # Fetch data once for all tabs to use
-    # For Pattern Matching, we need to fetch more data to serve as the historical lookback
-    start_date_obj = st.session_state.start_date
-    pm_lookback_days = st.session_state.pm_lookback_period
-    data_fetch_start_date = (start_date_obj - pd.Timedelta(days=pm_lookback_days * 1.5)).strftime('%Y-%m-%d') # Fetch 1.5x to account for non-trading days
-    full_ticker_data = get_ticker_data(st.session_state.test_ticker, data_fetch_start_date, st.session_state.end_date.strftime('%Y-%m-%d'))
-    
-    # Filter data for non-pattern matching tabs
-    standard_ticker_data = full_ticker_data.loc[full_ticker_data.index.date >= start_date_obj]
-
     with tabs[0]: render_settings_tab(config)
-    with tabs[1]: render_test_tab(standard_ticker_data)
-    with tabs[2]: render_chaotic_test_tab(standard_ticker_data)
-    with tabs[3]: render_ga_test_tab(standard_ticker_data)
-    with tabs[4]: render_pattern_matching_tab(full_ticker_data) # This tab needs the full dataset
-    with tabs[5]: render_analytics_tab()
-    with tabs[6]: render_manual_seed_tab(config)
+    
+    # Fetch data once for all tabs
+    start_date_obj = st.session_state.start_date
+    end_date_obj = st.session_state.end_date
+    # Fetch extra data for lookback period
+    required_lookback_days = st.session_state.pm_lookback_period + st.session_state.window_size
+    data_fetch_start_date = (start_date_obj - pd.Timedelta(days=required_lookback_days * 1.5)).strftime('%Y-%m-%d')
+    full_ticker_data = get_ticker_data(st.session_state.test_ticker, data_fetch_start_date, end_date_obj.strftime('%Y-%m-%d'))
+
+    with tabs[1]:
+        st.markdown("### 🎲 ทดสอบ Best Seed ด้วย Random Search")
+        st.info("กลยุทธ์นี้จะสุ่ม `seed` จำนวนมากเพื่อหาลำดับ Action ที่ดีที่สุดในแต่ละ Window")
+        if not full_ticker_data.empty:
+            test_data = full_ticker_data[full_ticker_data.index.date >= start_date_obj]
+            args = {'window_size': st.session_state.window_size, 'num_seeds_to_try': st.session_state.num_seeds, 'max_workers': st.session_state.max_workers}
+            columns_to_show = ['window_number', 'timeline', 'best_seed', 'max_net', 'price_change_pct', 'action_count']
+            run_and_display_strategy(generate_actions_sliding_window, args, Strategy.SLIDING_WINDOW, test_data, columns_to_show)
+        else: st.warning("กรุณารอข้อมูลโหลดสักครู่ หรือตรวจสอบการตั้งค่าวันที่")
+
+
+    with tabs[2]:
+        st.markdown("### 🔍 ทดสอบด้วย Pattern Matching (DTW)")
+        st.info("กลยุทธ์นี้จะค้นหารูปแบบราคาในอดีตที่คล้ายกับปัจจุบันที่สุด แล้วนำ Action ที่เคยให้ผลลัพธ์ดีที่สุดในอนาคตของรูปแบบนั้นมาใช้")
+        if not full_ticker_data.empty:
+            # This tab uses the full dataset including the lookback period
+            args = {'window_size': st.session_state.window_size, 'lookback_period': st.session_state.pm_lookback_period, 'num_analogs': st.session_state.pm_num_analogs}
+            columns_to_show = ['window_number', 'timeline', 'max_net', 'price_change_pct', 'action_count', 'analogs_found']
+            run_and_display_strategy(generate_actions_sliding_window_pattern_matching, args, Strategy.PATTERN_MATCHING_DTW, full_ticker_data, columns_to_show)
+        else: st.warning("กรุณารอข้อมูลโหลดสักครู่ หรือตรวจสอบการตั้งค่าวันที่")
+
+    with tabs[3]:
+        st.header("📊 Advanced Analytics Dashboard")
+        st.info("This tab is for analyzing saved CSV files from tests.")
+
 
     with st.expander("📖 คำอธิบายกลยุทธ์และแนวคิด"):
         st.markdown("""
-        **หลักการพื้นฐาน:** กลยุทธ์ทั้งหมดทำงานบนหลักการ "Sliding Window" คือแบ่งช่วงเวลาทั้งหมดออกเป็น "หน้าต่าง" เล็กๆ แล้วพยายามหา "รูปแบบการกระทำ" (Action Sequence) ที่ดีที่สุดสำหรับหน้าต่างนั้นๆ ก่อนจะนำผลลัพธ์ของทุกหน้าต่างมาประกอบกันเป็นกลยุทธ์สุดท้าย
-
+        **หลักการพื้นฐาน:** กลยุทธ์ทั้งหมดทำงานบนหลักการ "Sliding Window" คือแบ่งช่วงเวลาทั้งหมดออกเป็น "หน้าต่าง" เล็กๆ แล้วพยายามหา "รูปแบบการกระทำ" (Action Sequence) ที่ดีที่สุดสำหรับหน้าต่างนั้นๆ
+        
         ---
         #### รูปแบบการค้นหา (Search Strategies)
         *   **🎲 Random Seed:** ค้นหาโดยการสุ่ม Action Sequence จำนวนมาก
-        *   **🌀 Chaotic Seed:** ใช้ "Logistic Map" ในการสร้าง Action Sequence ที่มีรูปแบบซับซ้อน
-        *   **🧬 Genetic Algorithm:** เลียนแบบวิวัฒนาการทางธรรมชาติ เพื่อ "พัฒนา" Sequence ที่ดีที่สุด
         *   **🔍 Pattern Matching (DTW):** **[โมเดลใหม่ระดับสูง]** เป็นเทคนิคที่ค้นหารูปแบบราคาในอดีต (Historical Analogs) ที่มี "รูปทรง" คล้ายกับรูปแบบราคาในปัจจุบันมากที่สุดโดยใช้ Dynamic Time Warping (DTW) จากนั้นจะนำ Action Sequence ที่เคยให้ผลตอบแทนดีที่สุดในอนาคตของรูปแบบเหล่านั้นมา "ลงคะแนน" (Vote) เพื่อสร้างเป็น Action สำหรับปัจจุบัน เป็นกลยุทธ์ที่ขับเคลื่อนด้วยข้อมูลอย่างแท้จริง
-
-        ---
-        #### แท็บอื่นๆ
-        *   **📊 Analytics:** ใช้วิเคราะห์ไฟล์ผลลัพธ์ (.csv) ที่ดาวน์โหลดจากการทดสอบ
-        *   **🌱 Manual/Forward:** ใช้ทดสอบ Action Sequence ที่สร้างจาก Seed ที่กำหนดเอง
         """)
 
 if __name__ == "__main__":
