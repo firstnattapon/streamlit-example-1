@@ -80,23 +80,63 @@ def _calculate_simulation_numba(action_array: np.ndarray, price_array: np.ndarra
 # ==============================================================================
 # 3. Strategy Action Generation (The Final Optimization)
 # ==============================================================================
-# --- Omitted: generate_actions_rebalance_daily, generate_actions_perfect_foresight ---
+# --- NEW: Added missing helper functions ---
+
+def run_simulation(prices: List[float], actions: List[int]) -> pd.DataFrame:
+    """Runs the simulation with given prices and actions, returns a results DataFrame."""
+    price_array = np.array(prices, dtype=np.float64)
+    action_array = np.array(actions, dtype=np.int32)
+
+    if len(price_array) == 0 or len(action_array) == 0:
+        return pd.DataFrame()
+
+    min_len = min(len(price_array), len(action_array))
+    price_array, action_array = price_array[:min_len], action_array[:min_len]
+
+    buffer, sumusd, cash, asset_value, amount, refer = _calculate_simulation_numba(action_array, price_array)
+
+    if len(sumusd) == 0: return pd.DataFrame()
+
+    df = pd.DataFrame({
+        'buffer': buffer, 'sumusd': sumusd, 'cash': cash,
+        'asset_value': asset_value, 'amount': amount, 'refer': refer, 'action': action_array
+    })
+    df['net'] = df['sumusd'] - df['refer'] - df['sumusd'].iloc[0]
+    return df
+
+def generate_actions_rebalance_daily(num_days: int) -> np.ndarray:
+    """Generates actions for rebalancing every day."""
+    return np.ones(num_days, dtype=np.int32)
+
+def generate_actions_perfect_foresight(prices: np.ndarray) -> np.ndarray:
+    """
+    Generates actions for a 'Perfect Foresight' strategy by rebalancing (action=1)
+    only when the current price is lower than the last rebalance price.
+    """
+    n = len(prices)
+    if n == 0: return np.array([], dtype=np.int32)
+    actions = np.zeros(n, dtype=np.int32)
+    actions[0] = 1  # Always buy on the first day
+    last_buy_price = prices[0]
+    for i in range(1, n):
+        if prices[i] < last_buy_price:
+            actions[i] = 1  # Rebalance at a new, lower price
+            last_buy_price = prices[i]
+        else:
+            actions[i] = 0  # Hold, as the price is higher than our last buy
+    return actions
+
+# --- End of new functions ---
 
 # [UPDATED] Fully JIT-compiled AND PARALLELIZED function
 @njit(parallel=True, cache=True)
 def _find_best_seed_numba_parallel(prices_window: np.ndarray, num_seeds_to_try: int) -> Tuple[int, float]:
     window_len = prices_window.shape[0]
-    
-    # สร้าง array เพื่อเก็บผลลัพธ์จากแต่ละเทรด
     nets = np.empty(num_seeds_to_try, dtype=np.float64)
     
-    # *** ใช้ prange เพื่อบอก Numba ให้ทำงานแบบขนาน ***
     for seed in prange(num_seeds_to_try):
-        # แต่ละเทรดจะทำงานในส่วนของตัวเองโดยไม่ยุ่งกัน
         np.random.seed(seed)
         actions_window = np.random.randint(0, 2, size=window_len).astype(np.int32)
-        
-        # เรียกใช้ฟังก์ชันจำลอง (ซึ่งก็ถูก JIT compile แล้ว)
         _, sumusd, _, _, _, refer = _calculate_simulation_numba(actions_window, prices_window)
         
         if len(sumusd) > 0:
@@ -104,19 +144,15 @@ def _find_best_seed_numba_parallel(prices_window: np.ndarray, num_seeds_to_try: 
         else:
             nets[seed] = -np.inf
 
-    # *** หลังจากที่ทุกเทรดทำงานเสร็จ ค่อยมารวบรวมผลลัพธ์ (Reduction) ***
-    # การทำแบบนี้จะปลอดภัย (thread-safe) และให้ Numba จัดการได้อย่างมีประสิทธิภาพ
     best_seed_idx = np.argmax(nets)
     max_net = nets[best_seed_idx]
     
-    # best_seed_idx ก็คือค่า seed ที่เราใช้ในลูป prange
     return int(best_seed_idx), max_net
 
 def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int) -> Tuple[int, float, np.ndarray]:
     window_len = len(prices_window)
     if window_len < 2: return 1, 0.0, np.ones(window_len, dtype=np.int32)
 
-    # เรียกใช้ฟังก์ชัน parallel ตัวใหม่
     best_seed, max_net = _find_best_seed_numba_parallel(prices_window, num_seeds_to_try)
 
     if best_seed >= 0:
@@ -203,7 +239,6 @@ def render_brute_force_tab():
             end_time = time.time(); st.success(f"Parallel Brute-Force เสร็จสิ้นใน {end_time - start_time:.2f} วินาที!")
             
             # --- Results Simulation ---
-            # Perfect Foresight needs to be here as it's not pre-calculated
             actions_max = generate_actions_perfect_foresight(prices)
             results = {
                 Strategy.BRUTE_FORCE_OPTIMIZER: run_simulation(prices.tolist(), actions_brute.tolist()),
