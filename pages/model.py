@@ -36,7 +36,6 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'end_date' not in st.session_state: st.session_state.end_date = datetime.now().date()
     if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 30)
     if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 2000000)
-    # พารามิเตอร์ใหม่!
     if 'action_probability' not in st.session_state: st.session_state.action_probability = defaults.get('action_prob', 0.15)
 
 
@@ -48,12 +47,13 @@ def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame
     try:
         data = yf.Ticker(ticker).history(start=start_date, end=end_date)[['Close']]
         if data.empty: return pd.DataFrame()
-        data.index = data.index.tz_convert('Asia/Bangkok')
+        if data.index.tz is None: data = data.tz_localize('UTC').tz_convert('Asia/Bangkok')
+        else: data = data.tz_convert('Asia/Bangkok')
         return data
     except Exception as e:
         st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {str(e)}"); return pd.DataFrame()
 
-# [QUANTUM LEAP] ฟังก์ชันแกนกลางที่รับ action_prob เข้ามาด้วย
+# [CORRECTED] ฟังก์ชันแกนกลางที่รับ action_prob เข้ามาด้วย
 @njit(cache=True)
 def _calculate_net_heuristic(seed: int, price_array: np.ndarray, action_prob: float, fix: float = 1500.0) -> float:
     n = price_array.shape[0]
@@ -67,11 +67,11 @@ def _calculate_net_heuristic(seed: int, price_array: np.ndarray, action_prob: fl
     cash_prev = fix
     
     for i in range(1, n):
-        # สร้างเลขสุ่ม
         state ^= (state << 13); state ^= (state >> 17); state ^= (state << 5)
         
-        # ตรวจสอบความน่าจะเป็นในการ Action
-        # เทียบกับเลข 0-9999 เพื่อสร้างความน่าจะเป็น
+        # <<< FIX: เพิ่มบรรทัดนี้ที่หายไป >>>
+        curr_price = price_array[i]
+
         random_val = state % 10000
         action = 1 if random_val < prob_threshold else 0
 
@@ -108,13 +108,11 @@ def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int, 
 
     best_seed, max_net = _find_best_seed_quantum_leap(prices_window, num_seeds_to_try, action_prob)
 
-    # สร้าง Action Sequence จาก Seed และ Probability ที่ดีที่สุด
     if best_seed >= 0:
         np.random.seed(best_seed)
-        # ใช้ np.random.choice เพื่อสร้างตามความน่าจะเป็นที่กำหนด
         p = np.array([1.0 - action_prob, action_prob])
         best_actions = np.random.choice(np.array([0, 1], dtype=np.int32), size=window_len, p=p)
-        best_actions[0] = 1 # บังคับซื้อวันแรกเสมอ
+        best_actions[0] = 1
     else: 
         best_seed, max_net, best_actions = 1, 0.0, np.ones(window_len, dtype=np.int32)
         
@@ -186,13 +184,12 @@ def generate_actions_perfect_foresight(prices: np.ndarray):
 # ==============================================================================
 def render_settings_tab(config: Dict[str, Any]):
     st.write("⚙️ **การตั้งค่าพารามิเตอร์**")
-    asset_list = config.get('assets'); st.session_state.test_ticker = st.selectbox("เลือก Ticker", options=asset_list, index=asset_list.index(st.session_state.test_ticker))
+    asset_list = config.get('assets'); st.session_state.test_ticker = st.selectbox("เลือก Ticker", options=asset_list, index=asset_list.index(st.session_state.test_ticker) if st.session_state.test_ticker in asset_list else 0)
     col1, col2 = st.columns(2)
     with col1: st.session_state.start_date = st.date_input("วันที่เริ่มต้น", value=st.session_state.start_date)
     with col2: st.session_state.end_date = st.date_input("วันที่สิ้นสุด", value=st.session_state.end_date)
     st.divider()
     st.subheader("พารามิเตอร์สำหรับ Quantum Leap Optimizer")
-    # [NEW UI ELEMENT]
     st.session_state.action_probability = st.slider(
         "🌌 โอกาสในการ Action (Action Probability)", 
         min_value=0.01, max_value=0.5, value=st.session_state.action_probability, step=0.01, format="%.0f%%",
