@@ -350,7 +350,7 @@ def render_settings_tab(config: Dict[str, Any]):
         st.info(f"ช่วงวันที่ที่เลือก: {st.session_state.start_date:%Y-%m-%d} ถึง {st.session_state.end_date:%Y-%m-%d}")
 
     st.session_state.window_size = st.number_input("ขนาด Window (วัน)", min_value=2, value=st.session_state.window_size)
-    st.session_state.num_seeds = st.number_input("จำนวน Seeds ต่อ Window", min_value=100, value=st.session_state.num_seeds, format="%d")
+    st.session_state.num_seeds = st.number_input("จำนวน Seeds/Params ต่อ Window", min_value=100, value=st.session_state.num_seeds, format="%d")
     st.session_state.max_workers = st.number_input("จำนวน Workers", min_value=1, max_value=16, value=st.session_state.max_workers)
 
 def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
@@ -489,13 +489,32 @@ def render_chaotic_test_tab():
         display_comparison_charts(results)
 
         st.write("📈 **สรุปผลการค้นหา Best Chaotic Seed**")
-        total_actions = df_windows['action_count'].sum()
-        total_net = df_windows['max_net'].sum()
+        
+        if not df_windows.empty:
+            total_net = df_windows['max_net'].sum()
+            
+            action_pct = np.mean(actions_chaotic) * 100 if len(actions_chaotic) > 0 else 0
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Windows", df_windows.shape[0])
-        col2.metric("Total Actions", f"{total_actions}/{num_days}")
-        col3.metric("Total Net (Sum)", f"${total_net:,.2f}")
+            best_window_row = df_windows.loc[df_windows['max_net'].idxmax()]
+            best_r = best_window_row['r_param']
+            best_x0 = best_window_row['x0_param']
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Net (Sum)", f"${total_net:,.2f}")
+            col2.metric(
+                "สมการที่ดีที่สุด (r, x)", 
+                f"({best_r:.4f}, {best_x0:.4f})",
+                help=f"จาก Window ที่มี Net Profit สูงสุด: ${best_window_row['max_net']:.2f}"
+            )
+            col3.metric("สัดส่วน Action=1", f"{action_pct:.2f}%")
+            col4.metric("Total Windows", df_windows.shape[0])
+            
+        else:
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Net (Sum)", "$0.00")
+            col2.metric("สมการที่ดีที่สุด (r, x)", "N/A")
+            col3.metric("สัดส่วน Action=1", "0.00%")
+            col4.metric("Total Windows", "0")
 
         st.dataframe(df_windows[['window_number', 'timeline', 'best_seed', 'r_param', 'x0_param', 'max_net', 'price_change_pct', 'action_count']], use_container_width=True)
         csv = df_windows.to_csv(index=False)
