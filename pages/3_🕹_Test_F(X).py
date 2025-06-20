@@ -500,4 +500,326 @@ def render_test_tab():
 def render_chaotic_test_tab():
     st.write("---")
     st.markdown("### 🌀 ทดสอบ Best Seed ด้วย Chaotic Generator (Logistic Map)")
-    st.info("กลยุทธ์นี้จะค้นหาค่าพารามิเตอร์ `r` และ `x0` ของ Logistic Map ที่ให้
+    st.info("กลยุทธ์นี้จะค้นหาค่าพารามิเตอร์ `r` และ `x0` ของ Logistic Map ที่ให้ผลตอบแทนดีที่สุดในแต่ละ Window แทนการใช้ Seed แบบสุ่มทั่วไป")
+    if st.button("🚀 เริ่มทดสอบ Best Chaotic Seed", type="primary", key="chaotic_test_button"):
+        if st.session_state.start_date >= st.session_state.end_date:
+            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'"); return
+        ticker = st.session_state.test_ticker; start_date_str = st.session_state.start_date.strftime('%Y-%m-%d'); end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
+        st.info(f"กำลังดึงข้อมูลสำหรับ **{ticker}** | {start_date_str} ถึง {end_date_str}")
+        ticker_data = get_ticker_data(ticker, start_date_str, end_date_str)
+        if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
+        prices = ticker_data['Close'].to_numpy(); num_days = len(prices)
+        with st.spinner("กำลังคำนวณกลยุทธ์ต่างๆ (Chaotic Search)..."):
+            actions_chaotic, df_windows = generate_actions_sliding_window_chaotic(ticker_data, st.session_state.window_size, st.session_state.num_seeds, st.session_state.max_workers)
+            actions_min = generate_actions_rebalance_daily(num_days)
+            # MODIFIED: Call with .tolist()
+            actions_max = generate_actions_perfect_foresight(prices.tolist())
+            results = {}; strategy_map = {Strategy.CHAOTIC_SLIDING_WINDOW: actions_chaotic.tolist(), Strategy.REBALANCE_DAILY: actions_min.tolist(), Strategy.PERFECT_FORESIGHT: actions_max.tolist()}
+            for strategy_name, actions in strategy_map.items():
+                df = run_simulation(prices.tolist(), actions)
+                if not df.empty: df.index = ticker_data.index[:len(df)]
+                results[strategy_name] = df
+        st.success("การทดสอบเสร็จสมบูรณ์!"); st.write("---"); display_comparison_charts(results)
+        st.write("📈 **สรุปผลการค้นหา Best Chaotic Seed**")
+        if not df_windows.empty:
+            total_net = df_windows['max_net'].sum(); action_pct = np.mean(actions_chaotic) * 100 if len(actions_chaotic) > 0 else 0
+            best_window_row = df_windows.loc[df_windows['max_net'].idxmax()]; best_r = best_window_row['r_param']; best_x0 = best_window_row['x0_param']
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Net (Sum)", f"${total_net:,.2f}"); col2.metric("สมการที่ดีที่สุด (r, x)", f"({best_r:.4f}, {best_x0:.4f})", help=f"จาก Window ที่มี Net Profit สูงสุด: ${best_window_row['max_net']:.2f}")
+            col3.metric("สัดส่วน Action=1", f"{action_pct:.2f}%"); col4.metric("Total Windows", df_windows.shape[0])
+        else:
+            col1, col2, col3, col4 = st.columns(4); col1.metric("Total Net (Sum)", "$0.00"); col2.metric("สมการที่ดีที่สุด (r, x)", "N/A"); col3.metric("สัดส่วน Action=1", "0.00%"); col4.metric("Total Windows", "0")
+        st.dataframe(df_windows[['window_number', 'timeline', 'best_seed', 'r_param', 'x0_param', 'max_net', 'price_change_pct', 'action_count']], use_container_width=True)
+        csv = df_windows.to_csv(index=False); st.download_button(label="📥 ดาวน์โหลด Chaotic Window Details (CSV)", data=csv, file_name=f'best_chaotic_seed_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
+
+def render_ga_test_tab():
+    st.write("---")
+    st.markdown("### 🧬 ทดสอบด้วย Genetic Algorithm Search")
+    st.info("กลยุทธ์นี้ใช้วิวัฒนาการเชิงคำนวณ (GA) เพื่อ 'พัฒนา' Action Sequence ที่ดีที่สุดในแต่ละ Window โดยสามารถควบคุมผลลัพธ์ได้ด้วย Master Seed")
+    if st.button("🚀 เริ่มทดสอบ Best Genetic Algorithm", type="primary", key="ga_test_button"):
+        if st.session_state.start_date >= st.session_state.end_date:
+            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'"); return
+        ticker = st.session_state.test_ticker; start_date_str = st.session_state.start_date.strftime('%Y-%m-%d'); end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
+        st.info(f"กำลังดึงข้อมูลสำหรับ **{ticker}** | {start_date_str} ถึง {end_date_str}")
+        ticker_data = get_ticker_data(ticker, start_date_str, end_date_str)
+        if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
+        prices = ticker_data['Close'].to_numpy(); num_days = len(prices)
+        with st.spinner("กำลังคำนวณกลยุทธ์ต่างๆ (GA Search)..."):
+            actions_ga, df_windows = generate_actions_sliding_window_ga(
+                ticker_data, st.session_state.window_size, st.session_state.ga_population_size,
+                st.session_state.ga_generations, master_seed=st.session_state.ga_master_seed)
+            actions_min = generate_actions_rebalance_daily(num_days)
+            # MODIFIED: Call with .tolist()
+            actions_max = generate_actions_perfect_foresight(prices.tolist())
+            results = {}; strategy_map = {Strategy.GENETIC_ALGORITHM: actions_ga.tolist(), Strategy.REBALANCE_DAILY: actions_min.tolist(), Strategy.PERFECT_FORESIGHT: actions_max.tolist()}
+            for strategy_name, actions in strategy_map.items():
+                df = run_simulation(prices.tolist(), actions)
+                if not df.empty: df.index = ticker_data.index[:len(df)]
+                results[strategy_name] = df
+        st.success("การทดสอบเสร็จสมบูรณ์!"); st.write("---"); display_comparison_charts(results)
+        st.write("📈 **สรุปผลการค้นหา Best GA Sequence**")
+        if not df_windows.empty:
+            total_net = df_windows['max_net'].sum(); total_actions = df_windows['action_count'].sum()
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Net (Sum)", f"${total_net:,.2f}"); col2.metric("Total Actions", f"{total_actions}/{num_days}"); col3.metric("Total Windows", df_windows.shape[0])
+        else:
+            col1, col2, col3 = st.columns(3); col1.metric("Total Net (Sum)", "$0.00"); col2.metric("Total Actions", "0/0"); col3.metric("Total Windows", "0")
+        st.dataframe(df_windows[['window_number', 'timeline', 'window_seed', 'max_net', 'price_change_pct', 'action_count', 'action_sequence']], use_container_width=True)
+        csv = df_windows.to_csv(index=False); st.download_button(label="📥 ดาวน์โหลด GA Window Details (CSV)", data=csv, file_name=f'best_ga_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
+
+def render_analytics_tab():
+    st.header("📊 Advanced Analytics Dashboard")
+    with st.container():
+        st.subheader("เลือกวิธีการนำเข้าข้อมูล:"); col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("##### 1. อัปโหลดไฟล์จากเครื่อง")
+            uploaded_file = st.file_uploader("อัปโหลดไฟล์ CSV ของคุณ", type=['csv'], key="local_uploader")
+            if uploaded_file is not None:
+                try: st.session_state.df_for_analysis = pd.read_csv(uploaded_file); st.success("✅ โหลดไฟล์สำเร็จ!")
+                except Exception as e: st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}"); st.session_state.df_for_analysis = None
+        with col2:
+            st.markdown("##### 2. หรือ โหลดจาก GitHub URL")
+            default_github_url = f"https://raw.githubusercontent.com/firstnattapon/streamlit-example-1/refs/heads/master/Seed_Sliding_Window/{st.session_state.test_ticker}.csv"
+            github_url = st.text_input("ป้อน GitHub URL ของไฟล์ CSV:", value=default_github_url, key="github_url_input")
+            if st.button("📥 โหลดข้อมูลจาก GitHub"):
+                if github_url:
+                    try:
+                        raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+                        with st.spinner("กำลังดาวน์โหลดข้อมูล..."): st.session_state.df_for_analysis = pd.read_csv(raw_url)
+                        st.success("✅ โหลดข้อมูลจาก GitHub สำเร็จ!")
+                    except Exception as e: st.error(f"❌ ไม่สามารถโหลดข้อมูลจาก URL ได้: {e}"); st.session_state.df_for_analysis = None
+                else: st.warning("กรุณาป้อน URL ของไฟล์ CSV")
+    st.divider()
+    if st.session_state.df_for_analysis is not None:
+        st.subheader("ผลการวิเคราะห์"); df_to_analyze = st.session_state.df_for_analysis
+        try:
+            required_cols_options = [['window_number', 'timeline', 'max_net', 'action_sequence']]
+            valid_file = False
+            for req_cols in required_cols_options:
+                if all(col in df_to_analyze.columns for col in req_cols): valid_file = True; break
+            if not valid_file: st.error(f"ไฟล์ CSV ไม่สมบูรณ์! ต้องมีคอลัมน์พื้นฐาน: 'window_number', 'timeline', 'max_net', 'action_sequence'"); return
+            df = df_to_analyze.copy()
+            if 'result' not in df.columns: df['result'] = np.where(df['max_net'] > 0, 'Win', 'Loss')
+            overview_tab, stitched_dna_tab = st.tabs(["🔬 ภาพรวมและสำรวจราย Window", "🧬 Stitched DNA Analysis"])
+            with overview_tab:
+                st.subheader("ภาพรวมประสิทธิภาพ (Overall Performance)")
+                gross_profit = df[df['max_net'] > 0]['max_net'].sum(); gross_loss = abs(df[df['max_net'] < 0]['max_net'].sum())
+                profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+                win_rate = (df['result'] == 'Win').mean() * 100
+                kpi_cols = st.columns(4)
+                kpi_cols[0].metric("Total Net Profit", f"${df['max_net'].sum():,.2f}"); kpi_cols[1].metric("Win Rate", f"{win_rate:.2f}%")
+                kpi_cols[2].metric("Profit Factor", f"{profit_factor:.2f}"); kpi_cols[3].metric("Total Windows", f"{df.shape[0]}")
+                st.subheader("สำรวจข้อมูลราย Window")
+                selected_window = st.selectbox('เลือก Window ที่ต้องการดูรายละเอียด:', options=df['window_number'], format_func=lambda x: f"Window #{x} (Timeline: {df.loc[df['window_number'] == x, 'timeline'].iloc[0]})")
+                if selected_window:
+                    window_data = df[df['window_number'] == selected_window].iloc[0]
+                    st.markdown(f"**รายละเอียดของ Window #{selected_window}**"); st.dataframe(window_data)
+            def safe_literal_eval(val):
+                if pd.isna(val): return []
+                if isinstance(val, list): return val
+                if isinstance(val, str) and val.strip().startswith('[') and val.strip().endswith(']'):
+                    try: return ast.literal_eval(val)
+                    except: return []
+                return []
+            with stitched_dna_tab:
+                st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
+                st.markdown("จำลองการเทรดจริงโดยนำ **`action_sequence`** จากแต่ละ Window มา 'เย็บ' ต่อกัน และเปรียบเทียบกับ Benchmark")
+                df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
+                df_sorted = df.sort_values('window_number')
+                stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
+                dna_cols = st.columns(2)
+                stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.test_ticker, key='stitch_ticker_input')
+                stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime.now().date() - pd.Timedelta(days=365), key='stitch_date_input')
+                if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", key='stitch_dna_btn'):
+                    if not stitched_actions: st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้")
+                    else:
+                        with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker}..."):
+                            sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now()))
+                            if sim_data.empty: st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
+                            else:
+                                prices = sim_data['Close'].to_numpy(); n_total = len(prices)
+                                final_actions_dna = stitched_actions[:n_total]
+                                df_dna = run_simulation(prices[:len(final_actions_dna)].tolist(), final_actions_dna)
+                                # MODIFIED: Call with .tolist()
+                                df_max = run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
+                                df_min = run_simulation(prices.tolist(), generate_actions_rebalance_daily(n_total).tolist())
+                                results_dna = {}
+                                if not df_dna.empty: df_dna.index = sim_data.index[:len(df_dna)]; results_dna['Stitched DNA'] = df_dna
+                                if not df_max.empty: df_max.index = sim_data.index[:len(df_max)]; results_dna[Strategy.PERFECT_FORESIGHT] = df_max
+                                if not df_min.empty: df_min.index = sim_data.index[:len(df_min)]; results_dna[Strategy.REBALANCE_DAILY] = df_min
+                                st.subheader("Performance Comparison (Net Profit)"); display_comparison_charts(results_dna)
+                                st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
+                                metric_cols = st.columns(3)
+                                final_net_max = results_dna.get(Strategy.PERFECT_FORESIGHT, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
+                                final_net_dna = results_dna.get('Stitched DNA', pd.DataFrame({'net': [0]}))['net'].iloc[-1]
+                                final_net_min = results_dna.get(Strategy.REBALANCE_DAILY, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
+                                metric_cols[0].metric("Max Performance", f"${final_net_max:,.2f}")
+                                metric_cols[1].metric("Stitched DNA Strategy", f"${final_net_dna:,.2f}", delta=f"{final_net_dna - final_net_min:,.2f} vs Min", delta_color="normal")
+                                metric_cols[2].metric("Min Performance", f"${final_net_min:,.2f}")
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล: {e}"); st.exception(e)
+
+def render_manual_seed_tab(config: Dict[str, Any]):
+    st.header("🌱 Manual Seed Strategy Comparator")
+    st.markdown("สร้างและเปรียบเทียบ Action Sequences โดยการตัดส่วนท้าย (`tail`) จาก Seed ที่กำหนด")
+
+    with st.container(border=True):
+        st.subheader("1. กำหนดค่า Input สำหรับการทดสอบ")
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            asset_list = config.get('assets', ['FFWM'])
+            try:
+                default_index = asset_list.index(st.session_state.get('manual_ticker_key', st.session_state.test_ticker))
+            except (ValueError, KeyError):
+                default_index = 0
+
+            manual_ticker = st.selectbox(
+                "เลือก Ticker",
+                options=asset_list,
+                index=default_index,
+                key="manual_ticker_key",
+                on_change=on_ticker_change_callback,
+                args=(config,)
+            )
+
+        with col2:
+            c1, c2 = st.columns(2)
+            default_start = st.session_state.start_date
+            default_end = st.session_state.end_date
+            manual_start_date = c1.date_input("วันที่เริ่มต้น (Start Date)", value=default_start, key="manual_start_compare_tail")
+            manual_end_date = c2.date_input("วันที่สิ้นสุด (End Date)", value=default_end, key="manual_end_compare_tail")
+
+        if manual_start_date >= manual_end_date:
+            st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
+
+        st.divider()
+
+        st.write("**กำหนดกลยุทธ์ (Seed/Size/Tail) ที่ต้องการเปรียบเทียบ:**")
+
+        for i, line in enumerate(st.session_state.manual_seed_lines):
+            cols = st.columns([1, 2, 2, 2])
+            cols[0].write(f"**Line {i+1}**")
+            line['seed'] = cols[1].number_input("Input Seed", value=line.get('seed', 1), min_value=0, key=f"seed_compare_tail_{i}")
+            line['size'] = cols[2].number_input("Size (ขนาด Sequence เริ่มต้น)", value=line.get('size', 60), min_value=1, key=f"size_compare_tail_{i}")
+            line['tail'] = cols[3].number_input("Tail (ส่วนท้ายที่จะใช้)", value=line.get('tail', 10), min_value=1, max_value=line.get('size', 60), key=f"tail_compare_tail_{i}")
+
+        b_col1, b_col2, _ = st.columns([1,1,4])
+        if b_col1.button("➕ เพิ่ม Line เปรียบเทียบ"):
+            st.session_state.manual_seed_lines.append({'seed': np.random.randint(1, 10000), 'size': 50, 'tail': 20})
+            st.rerun()
+
+        if b_col2.button("➖ ลบ Line สุดท้าย"):
+            if len(st.session_state.manual_seed_lines) > 1:
+                st.session_state.manual_seed_lines.pop()
+                st.rerun()
+            else:
+                st.warning("ต้องมีอย่างน้อย 1 line")
+
+    st.write("---")
+
+    if st.button("📈 เปรียบเทียบประสิทธิภาพ Seeds", type="primary", key="compare_manual_seeds_btn"):
+        if manual_start_date >= manual_end_date:
+            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
+
+        with st.spinner("กำลังดึงข้อมูลและจำลองการเทรด..."):
+            start_str = manual_start_date.strftime('%Y-%m-%d'); end_str = manual_end_date.strftime('%Y-%m-%d')
+            ticker_data = get_ticker_data(manual_ticker, start_str, end_str)
+
+            if ticker_data.empty:
+                st.error(f"ไม่พบข้อมูลสำหรับ {manual_ticker} ในช่วงวันที่ที่เลือก"); return
+
+            prices = ticker_data['Close'].to_numpy()
+            num_trading_days = len(prices)
+            st.info(f"📊 พบข้อมูลราคา {num_trading_days} วันทำการในช่วงที่เลือก")
+
+            results = {}
+            max_sim_len = 0
+
+            for i, line_info in enumerate(st.session_state.manual_seed_lines):
+                input_seed, size_seed, tail_seed = line_info['seed'], line_info['size'], line_info['tail']
+
+                if tail_seed > size_seed:
+                    st.error(f"Line {i+1}: Tail ({tail_seed}) ต้องไม่มากกว่า Size ({size_seed})"); return
+
+                rng_best = np.random.default_rng(input_seed)
+                full_actions = rng_best.integers(0, 2, size=size_seed)
+                actions_from_tail = full_actions[-tail_seed:].tolist()
+
+                sim_len = min(num_trading_days, len(actions_from_tail))
+                if sim_len == 0: continue
+
+                prices_to_sim, actions_to_sim = prices[:sim_len].tolist(), actions_from_tail[:sim_len]
+
+                df_line = run_simulation(prices_to_sim, actions_to_sim)
+                if not df_line.empty:
+                    df_line.index = ticker_data.index[:sim_len]
+                    strategy_name = f"Seed {input_seed} (Tail {tail_seed})"
+                    results[strategy_name] = df_line
+                    max_sim_len = max(max_sim_len, sim_len)
+
+            if not results:
+                st.error("ไม่สามารถสร้างผลลัพธ์จาก Seed ที่กำหนดได้"); return
+
+            if max_sim_len > 0:
+                prices_for_benchmark = prices[:max_sim_len]
+                # MODIFIED: Call with .tolist()
+                df_max = run_simulation(prices_for_benchmark.tolist(), generate_actions_perfect_foresight(prices_for_benchmark.tolist()).tolist())
+                df_min = run_simulation(prices_for_benchmark.tolist(), generate_actions_rebalance_daily(max_sim_len).tolist())
+                if not df_max.empty:
+                    df_max.index = ticker_data.index[:max_sim_len]; results[Strategy.PERFECT_FORESIGHT] = df_max
+                if not df_min.empty:
+                    df_min.index = ticker_data.index[:max_sim_len]; results[Strategy.REBALANCE_DAILY] = df_min
+
+            st.success("การเปรียบเทียบเสร็จสมบูรณ์!")
+            display_comparison_charts(results, chart_title="📊 Performance Comparison (Net Profit)")
+
+            st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
+            sorted_names = [name for name in results.keys() if name not in [Strategy.PERFECT_FORESIGHT, Strategy.REBALANCE_DAILY]]
+            display_order = [Strategy.PERFECT_FORESIGHT] + sorted(sorted_names) + [Strategy.REBALANCE_DAILY]
+
+            final_results_list = [{'name': name, 'net': results[name]['net'].iloc[-1]}
+                                  for name in display_order if name in results and not results[name].empty]
+
+            if final_results_list:
+                final_metrics_cols = st.columns(len(final_results_list))
+                for idx, item in enumerate(final_results_list):
+                    final_metrics_cols[idx].metric(item['name'], f"${item['net']:,.2f}")
+
+# ==============================================================================
+# 5. Main Application
+# ==============================================================================
+def main():
+    st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
+    st.markdown("🎯 Best Seed Sliding Window Tester (Multi-Strategy & Reproducible GA)")
+    st.caption("เครื่องมือทดสอบการหา Best Seed ด้วยวิธี Sliding Window (Refactored Version)")
+
+    config = load_config()
+    initialize_session_state(config)
+
+    tab_list = ["⚙️ การตั้งค่า", "🚀 Best Seed (Random)", "🌀 Best Seed (Chaotic)", "🧬 Best Seed (Genetic Algo)", "📊 Advanced Analytics", "🌱 Forward Rolling Comparator"]
+    tabs = st.tabs(tab_list)
+
+    with tabs[0]: render_settings_tab(config)
+    with tabs[1]: render_test_tab()
+    with tabs[2]: render_chaotic_test_tab()
+    with tabs[3]: render_ga_test_tab()
+    with tabs[4]: render_analytics_tab()
+    with tabs[5]: render_manual_seed_tab(config)
+
+    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด"):
+        st.markdown("""
+        **หลักการพื้นฐาน:** กลยุทธ์ทั้งหมดทำงานบนหลักการ "Sliding Window" คือแบ่งช่วงเวลาทั้งหมดออกเป็น "หน้าต่าง" เล็กๆ แล้วพยายามหา "รูปแบบการกระทำ" (Action Sequence) ที่ดีที่สุดสำหรับหน้าต่างนั้นๆ
+
+        **กลยุทธ์ที่ใช้ในการค้นหา:**
+        - **🚀 Best Seed (Random):** ค้นหาโดยการสุ่ม Action Sequence
+        - **🌀 Best Seed (Chaotic):** ใช้ "Logistic Map" ในการสร้าง Action Sequence
+        - **🧬 Best Seed (Genetic Algo):** ใช้วิธีการแบบ Genetic Algorithm เพื่อ "วิวัฒนาการ" ชุดคำตอบที่ดีที่สุดขึ้นมา **โดยสามารถควบคุมผลลัพธ์ให้ทำซ้ำได้ (Reproducible) ผ่านการตั้งค่า Master Seed**
+
+        **แท็บอื่นๆ:**
+        - **📊 Advanced Analytics:** ใช้วิเคราะห์ไฟล์ผลลัพธ์ (.csv) ที่ดาวน์โหลดจากการทดสอบ
+        - **🌱 Forward Rolling Comparator:** ใช้สร้างและเปรียบเทียบ Action Sequences จาก `Seed` ที่กำหนด โดยสามารถเลือกใช้เฉพาะส่วนท้าย (`tail`) ของ Sequence ที่สร้างขึ้นมาได้
+        """)
+
+if __name__ == "__main__":
+    main()
