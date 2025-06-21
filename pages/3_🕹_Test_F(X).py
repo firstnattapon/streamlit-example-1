@@ -47,8 +47,47 @@ def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame
     except Exception as e:
         st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {str(e)}"); return pd.DataFrame()
 
+# *** FIXED: Re-introduced the cumulative net calculation function ***
 @njit(cache=True)
-def _calculate_net_profit_numba(action_array: np.ndarray, price_array: np.ndarray, fix: int) -> float:
+def _calculate_cumulative_net_numba(action_array: np.ndarray, price_array: np.ndarray, fix: int) -> np.ndarray:
+    """Calculates the CUMULATIVE net profit for each day, for charting."""
+    n = len(action_array)
+    if n == 0 or len(price_array) == 0: return np.empty(0, dtype=np.float64)
+
+    action_array_calc = action_array.copy()
+    if n > 0: action_array_calc[0] = 1
+
+    cash = np.empty(n, dtype=np.float64)
+    sumusd = np.empty(n, dtype=np.float64)
+    amount = np.empty(n, dtype=np.float64)
+
+    initial_price = price_array[0]
+    amount[0] = fix / initial_price
+    cash[0] = fix
+    sumusd[0] = cash[0] + amount[0] * initial_price
+    
+    refer = -fix * np.log(initial_price / price_array)
+
+    for i in range(1, n):
+        curr_price = price_array[i]
+        prev_amount = amount[i-1]
+        
+        if action_array_calc[i] == 0: # Hold
+            amount[i] = prev_amount
+            buffer = 0.0
+        else: # Rebalance
+            amount[i] = fix / curr_price
+            buffer = prev_amount * curr_price - fix
+            
+        cash[i] = cash[i-1] + buffer
+        sumusd[i] = cash[i] + amount[i] * curr_price
+
+    net = sumusd - refer - sumusd[0]
+    return net
+
+@njit(cache=True)
+def _calculate_final_net_profit_numba(action_array: np.ndarray, price_array: np.ndarray, fix: int) -> float:
+    """Calculates only the FINAL net profit for fast optimization."""
     n = len(action_array)
     if n < 2: return 0.0
     action_array_calc = action_array.copy(); action_array_calc[0] = 1
@@ -73,65 +112,46 @@ def _calculate_net_profit_numba(action_array: np.ndarray, price_array: np.ndarra
 # --- Numba-accelerated Chaos Generators ---
 @njit(float64[:](int32, float64, float64), cache=True)
 def _generate_logistic_map(length, r, x0):
-    x_series = np.empty(length, dtype=np.float64)
-    x = x0
-    for i in range(length):
-        x = r * x * (1.0 - x)
-        x_series[i] = x
+    x_series = np.empty(length, dtype=np.float64); x = x0
+    for i in range(length): x = r * x * (1.0 - x); x_series[i] = x
     return x_series
 
 @njit(float64[:](int32, float64, float64), cache=True)
 def _generate_sine_map(length, r, x0):
-    x_series = np.empty(length, dtype=np.float64)
-    x = x0
-    for i in range(length):
-        x = r * math.sin(math.pi * x)
-        x_series[i] = x
+    x_series = np.empty(length, dtype=np.float64); x = x0
+    for i in range(length): x = r * math.sin(math.pi * x); x_series[i] = x
     return x_series
 
 @njit(float64[:](int32, float64, float64), cache=True)
 def _generate_tent_map(length, mu, x0):
-    x_series = np.empty(length, dtype=np.float64)
-    x = x0
-    for i in range(length):
-        x = mu * min(x, 1.0 - x)
-        x_series[i] = x
+    x_series = np.empty(length, dtype=np.float64); x = x0
+    for i in range(length): x = mu * min(x, 1.0 - x); x_series[i] = x
     return x_series
 
 def generate_actions_from_chaos(equation: str, length: int, param: float, x0: float) -> np.ndarray:
-    """สร้าง Action Sequence จากสมการ Chaos ที่เลือก"""
-    if equation == ChaosEquation.LOGISTIC_MAP:
-        x_series = _generate_logistic_map(length, param, x0)
-    elif equation == ChaosEquation.SINE_MAP:
-        x_series = _generate_sine_map(length, param, x0)
-    elif equation == ChaosEquation.TENT_MAP:
-        x_series = _generate_tent_map(length, param, x0)
-    else:
-        raise ValueError("Unknown chaos equation")
+    if equation == ChaosEquation.LOGISTIC_MAP: x_series = _generate_logistic_map(length, param, x0)
+    elif equation == ChaosEquation.SINE_MAP: x_series = _generate_sine_map(length, param, x0)
+    elif equation == ChaosEquation.TENT_MAP: x_series = _generate_tent_map(length, param, x0)
+    else: raise ValueError("Unknown chaos equation")
     
     actions = (x_series > 0.5).astype(np.int32)
     if length > 0: actions[0] = 1
     return actions
 
-# --- Optimizer ---
 def find_best_chaos_params(prices_window: np.ndarray, equation: str, num_params_to_try: int, fix: int) -> Dict:
-    """ค้นหาพารามิเตอร์ที่ดีที่สุดสำหรับสมการ Chaos ที่กำหนด"""
     window_len = len(prices_window)
     if window_len < 2: return {'best_param': 0, 'best_x0': 0, 'best_net': 0}
     
-    # Define parameter ranges for each equation
     if equation == ChaosEquation.LOGISTIC_MAP: param_range = (3.57, 4.0)
     elif equation == ChaosEquation.SINE_MAP: param_range = (0.7, 1.0)
     elif equation == ChaosEquation.TENT_MAP: param_range = (1.0, 2.0)
     else: param_range = (0, 1)
 
-    # Generate random parameters to test
     rng = np.random.default_rng()
     params_to_test = rng.uniform(param_range[0], param_range[1], num_params_to_try)
     x0s_to_test = rng.uniform(0.01, 0.99, num_params_to_try)
     
-    best_net = -np.inf
-    best_param, best_x0 = 0.0, 0.0
+    best_net, best_param, best_x0 = -np.inf, 0.0, 0.0
 
     with ThreadPoolExecutor() as executor:
         futures = {executor.submit(generate_actions_from_chaos, equation, window_len, p, x0): (p, x0) for p, x0 in zip(params_to_test, x0s_to_test)}
@@ -140,24 +160,19 @@ def find_best_chaos_params(prices_window: np.ndarray, equation: str, num_params_
             params_tuple = futures[future]
             try:
                 actions = future.result()
-                current_net = _calculate_net_profit_numba(actions, prices_window, fix)
+                current_net = _calculate_final_net_profit_numba(actions, prices_window, fix)
                 if current_net > best_net:
-                    best_net = current_net
-                    best_param, best_x0 = params_tuple
-            except Exception:
-                pass # Ignore errors from bad parameters
+                    best_net, (best_param, best_x0) = current_net, params_tuple
+            except Exception: pass
 
     return {'best_param': best_param, 'best_x0': best_x0, 'best_net': best_net}
 
-# --- Walk-Forward Strategy ---
 def generate_chaos_walk_forward(ticker_data: pd.DataFrame, equation: str, window_size: int, num_params: int, fix: int) -> Tuple[np.ndarray, pd.DataFrame]:
-    prices = ticker_data['Close'].to_numpy()
-    n = len(prices)
+    prices, n = ticker_data['Close'].to_numpy(), len(ticker_data)
     final_actions, window_details = np.array([], dtype=int), []
     num_windows = n // window_size
     progress_bar = st.progress(0)
     
-    # Initial actions for the first test window
     best_actions_for_next_window = np.ones(window_size, dtype=np.int32)
 
     for i in range(num_windows - 1):
@@ -167,23 +182,18 @@ def generate_chaos_walk_forward(ticker_data: pd.DataFrame, equation: str, window
         learn_prices, learn_dates = prices[learn_start:learn_end], ticker_data.index[learn_start:learn_end]
         test_prices, test_dates = prices[test_start:test_end], ticker_data.index[test_start:test_end]
         
-        # Learn from the past
         search_result = find_best_chaos_params(learn_prices, equation, num_params, fix)
         
-        # Test on the future (using results from previous loop)
         final_actions = np.concatenate((final_actions, best_actions_for_next_window))
-        walk_forward_net = _calculate_net_profit_numba(best_actions_for_next_window, test_prices, fix)
+        walk_forward_net = _calculate_final_net_profit_numba(best_actions_for_next_window, test_prices, fix)
         
         window_details.append({
-            'window_num': i + 1,
-            'learn_period': f"{learn_dates[0]:%Y-%m-%d} to {learn_dates[-1]:%Y-%m-%d}",
-            'best_param': round(search_result['best_param'], 4),
-            'best_x0': round(search_result['best_x0'], 4),
+            'window_num': i + 1, 'learn_period': f"{learn_dates[0]:%Y-%m-%d} to {learn_dates[-1]:%Y-%m-%d}",
+            'best_param': round(search_result['best_param'], 4), 'best_x0': round(search_result['best_x0'], 4),
             'test_period': f"{test_dates[0]:%Y-%m-%d} to {test_dates[-1]:%Y-%m-%d}",
             'walk_forward_net': round(walk_forward_net, 2)
         })
         
-        # Prepare actions for the *next* loop
         best_actions_for_next_window = generate_actions_from_chaos(
             equation, window_size, search_result['best_param'], search_result['best_x0']
         )
@@ -192,7 +202,6 @@ def generate_chaos_walk_forward(ticker_data: pd.DataFrame, equation: str, window
     progress_bar.empty()
     return final_actions, pd.DataFrame(window_details)
 
-# --- Benchmarks ---
 @njit(cache=True)
 def _generate_perfect_foresight_numba(price_arr: np.ndarray, fix: int) -> np.ndarray:
     n=len(price_arr);actions=np.zeros(n,np.int32)
@@ -214,14 +223,14 @@ def _generate_perfect_foresight_numba(price_arr: np.ndarray, fix: int) -> np.nda
 # ==============================================================================
 def render_settings_tab():
     st.write("⚙️ **พารามิเตอร์พื้นฐาน**")
-    c1, c2, c3 = st.columns(3)
+    c1,c2,c3=st.columns(3)
     c1.text_input("Ticker", key="test_ticker")
     c2.date_input("วันที่เริ่มต้น", key="start_date")
     c3.date_input("วันที่สิ้นสุด", key="end_date")
     
     st.divider()
     st.write("🧠 **พารามิเตอร์สำหรับโมเดล Chaotic System**")
-    s_c1, s_c2, s_c3 = st.columns(3)
+    s_c1,s_c2,s_c3=st.columns(3)
     s_c1.selectbox("เลือกสมการ Chaos", [ChaosEquation.LOGISTIC_MAP, ChaosEquation.SINE_MAP, ChaosEquation.TENT_MAP], key="selected_chaos_eq")
     s_c2.number_input("ขนาด Window (วัน)", min_value=10, key="window_size")
     s_c3.number_input("จำนวนพารามิเตอร์ที่จะทดสอบ", min_value=1000, step=1000, key="num_params_to_try")
@@ -234,7 +243,7 @@ def render_model_tab():
             ticker_data = get_ticker_data(st.session_state.test_ticker, str(st.session_state.start_date), str(st.session_state.end_date))
         if ticker_data.empty: return
         
-        prices_np, prices_list = ticker_data['Close'].to_numpy(), ticker_data['Close'].tolist()
+        prices_np = ticker_data['Close'].to_numpy()
         
         with st.spinner(f"กำลังค้นหาพารามิเตอร์ที่ดีที่สุดสำหรับ '{st.session_state.selected_chaos_eq}' แบบ Walk-Forward..."):
             actions_chaos, df_windows = generate_chaos_walk_forward(
@@ -244,32 +253,31 @@ def render_model_tab():
         st.success("วิเคราะห์เสร็จสมบูรณ์!")
 
         # Run simulations for comparison
+        chart_data = pd.DataFrame()
         results = {}
         with st.spinner("กำลังจำลองกลยุทธ์เพื่อเปรียบเทียบ..."):
             sim_len = len(actions_chaos)
             strategy_map = {
-                Strategy.CHAOS_WALK_FORWARD: actions_chaos.tolist(),
-                Strategy.PERFECT_FORESIGHT: _generate_perfect_foresight_numba(prices_np[:sim_len], st.session_state.fix_capital).tolist(),
-                Strategy.REBALANCE_DAILY: np.ones(sim_len, dtype=np.int32).tolist(),
+                Strategy.CHAOS_WALK_FORWARD: actions_chaos,
+                Strategy.PERFECT_FORESIGHT: _generate_perfect_foresight_numba(prices_np[:sim_len], st.session_state.fix_capital),
+                Strategy.REBALANCE_DAILY: np.ones(sim_len, dtype=np.int32),
             }
+            
             for name, actions in strategy_map.items():
-                net = _calculate_net_profit_numba(np.array(actions), prices_np[:sim_len], st.session_state.fix_capital)
-                # Create a simple dataframe for charting
-                results[name] = pd.DataFrame({'net': [net]}) # Storing final net for metric display
-                # For charting, we need a series. Let's run the full simulation to get the cumulative net.
-                # This is a bit inefficient but necessary for the line chart.
-                full_sim_net = _calculate_simulation_numba(np.array(actions, dtype=np.int32), prices_np[:sim_len], st.session_state.fix_capital)
-                results[f"{name}_chart"] = pd.DataFrame({'net': full_sim_net}, index=ticker_data.index[:sim_len])
-
+                # *** FIXED: Call the correct function for charting ***
+                cumulative_net = _calculate_cumulative_net_numba(actions, prices_np[:sim_len], st.session_state.fix_capital)
+                chart_data[name] = cumulative_net
+                # Store final net for metric display
+                results[name] = cumulative_net[-1] if len(cumulative_net) > 0 else 0
 
         # Display charts and metrics
-        chart_data = pd.DataFrame({name: df['net'] for name, df in results.items() if name.endswith('_chart')})
+        chart_data.index = ticker_data.index[:len(chart_data)]
         st.line_chart(chart_data)
 
         if not df_windows.empty:
             final_net_chaos = df_windows['walk_forward_net'].sum()
-            final_net_max = results[f"{Strategy.PERFECT_FORESIGHT}_chart"]['net'].iloc[-1]
-            final_net_min = results[f"{Strategy.REBALANCE_DAILY}_chart"]['net'].iloc[-1]
+            final_net_max = results.get(Strategy.PERFECT_FORESIGHT, 0)
+            final_net_min = results.get(Strategy.REBALANCE_DAILY, 0)
             
             col1, col2, col3 = st.columns(3)
             col1.metric(f"🥇 {Strategy.PERFECT_FORESIGHT}", f"${final_net_max:,.2f}")
