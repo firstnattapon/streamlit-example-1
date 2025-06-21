@@ -7,9 +7,10 @@ import thingspeak
 import json
 import streamlit.components.v1 as components
 
+# ตั้งค่าหน้าเว็บให้กว้างและมีไอคอน
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
 
-# === CONFIG LOADING ===
+# === CONFIG LOADING: โหลดการตั้งค่าสินทรัพย์ ===
 @st.cache_data
 def load_config(path='limit_fx_config.json'):
     """Loads the asset configuration from a JSON file."""
@@ -26,14 +27,14 @@ def load_config(path='limit_fx_config.json'):
 
 ASSETS = load_config()
 if not ASSETS:
-    st.stop()
+    st.stop() # หยุดการทำงานถ้าโหลด config ไม่สำเร็จ
 
 TICKERS = [a['symbol'] for a in ASSETS]
 
 
-# === DATA FETCHING & CALCULATION FUNCTIONS ===
+# === DATA FETCHING & CALCULATION FUNCTIONS: ฟังก์ชันดึงข้อมูลและคำนวณ ===
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600) # Cache ข้อมูลราคาเป็นเวลา 10 นาที
 def get_prices(tickers, start_date):
     """Fetches historical price data for a list of tickers."""
     df_list = []
@@ -52,7 +53,7 @@ def get_prices(tickers, start_date):
         return pd.DataFrame()
     return pd.concat(df_list, axis=1)
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300) # Cache ข้อมูลจาก ThingSpeak เป็นเวลา 5 นาที
 def get_act_from_thingspeak(channel_id, api_key, field):
     """Fetches the last value from a specific field in a specific ThingSpeak channel."""
     try:
@@ -67,10 +68,11 @@ def get_act_from_thingspeak(channel_id, api_key, field):
         st.error(f"Could not fetch data from ThingSpeak (Channel: {channel_id}, Field: {field}). Error: {e}")
         return 0
 
-@njit(fastmath=True)
+@njit(fastmath=True) # ใช้ Numba เพื่อเร่งความเร็วการคำนวณ
 def calculate_optimized(action_list, price_list, fix=1500):
+    """Optimized calculation loop for the trading strategy."""
     action_array = np.asarray(action_list, dtype=np.int32)
-    action_array[0] = 1
+    action_array[0] = 1 # บังคับให้วันแรกมีการซื้อเสมอ
     price_array = np.asarray(price_list, dtype=np.float64)
     n = len(action_array)
     amount = np.empty(n, dtype=np.float64)
@@ -78,7 +80,7 @@ def calculate_optimized(action_list, price_list, fix=1500):
     cash = np.empty(n, dtype=np.float64)
     asset_value = np.empty(n, dtype=np.float64)
     sumusd = np.empty(n, dtype=np.float64)
-    if price_array.shape[0] == 0: # Guard against empty price array
+    if price_array.shape[0] == 0: # ป้องกัน error ถ้า price_array ว่าง
         return buffer, sumusd, cash, asset_value, amount, np.empty(0, dtype=np.float64)
     initial_price = price_array[0]
     amount[0] = fix / initial_price
@@ -88,10 +90,10 @@ def calculate_optimized(action_list, price_list, fix=1500):
     refer = -fix * np.log(initial_price / price_array)
     for i in range(1, n):
         curr_price = price_array[i]
-        if action_array[i] == 0:
+        if action_array[i] == 0: # ถ้าไม่ทำ action
             amount[i] = amount[i-1]
             buffer[i] = 0
-        else:
+        else: # ถ้าทำ action
             amount[i] = fix / curr_price
             buffer[i] = amount[i-1] * curr_price - fix
         cash[i] = cash[i-1] + buffer[i]
@@ -99,8 +101,8 @@ def calculate_optimized(action_list, price_list, fix=1500):
         sumusd[i] = cash[i] + asset_value[i]
     return buffer, sumusd, cash, asset_value, amount, refer
 
-
 def get_max_action(price_list, fix=1500):
+    """Calculates the theoretical maximum profit action sequence."""
     prices = np.asarray(price_list, dtype=np.float64)
     n = len(prices)
     if n < 2:
@@ -129,8 +131,9 @@ def get_max_action(price_list, fix=1500):
     actions[0] = 1
     return actions
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600) # Cache ผลการคำนวณหลัก
 def Limit_fx(Ticker, act=-1):
+    """Main function to run the simulation for a single ticker."""
     filter_date = '2023-01-01 12:00:00+07:00'
     try:
         tickerData = yf.Ticker(Ticker)
@@ -147,11 +150,11 @@ def Limit_fx(Ticker, act=-1):
     if len(prices) == 0:
         return pd.DataFrame()
 
-    if act == -1:
+    if act == -1: # Strategy: always buy
         actions = np.ones(len(prices), dtype=np.int64)
-    elif act == -2:
+    elif act == -2: # Strategy: theoretical max
         actions = get_max_action(prices)
-    else:
+    else: # Strategy: from ThingSpeak (or random seed if used for testing)
         rng = np.random.default_rng(act)
         actions = rng.integers(0, 2, len(prices))
 
@@ -170,8 +173,9 @@ def Limit_fx(Ticker, act=-1):
     }, index=tickerData.index)
     return df
 
-# === UI FUNCTIONS ===
+# === UI FUNCTIONS: ฟังก์ชันสำหรับสร้าง UI ===
 def plot(Ticker, act):
+    """Generates and displays plots for a single asset tab."""
     df_min = Limit_fx(Ticker, act=-1)
     df_fx = Limit_fx(Ticker, act=act)
     df_max = Limit_fx(Ticker, act=-2)
@@ -196,6 +200,7 @@ def plot(Ticker, act):
         st.dataframe(df_min)
 
 def iframe(frame='', width=1500, height=800):
+    """Helper to embed an iframe."""
     components.iframe(frame, width=width, height=height, scrolling=True)
 
 # === MAIN APP LAYOUT ===
@@ -203,10 +208,11 @@ tab_names = TICKERS + ['Burn_Cash', 'Ref_index_Log', 'cf_log']
 tabs = st.tabs(tab_names)
 tab_dict = dict(zip(tab_names, tabs))
 
-# === MAIN ASSET TABS ===
+# === MAIN ASSET TABS: สร้างแท็บสำหรับแต่ละสินทรัพย์ ===
 for asset in ASSETS:
     symbol = asset['symbol']
     with tab_dict[symbol]:
+        st.header(f"Performance for {symbol}")
         act = get_act_from_thingspeak(
             channel_id=asset['channel_id'],
             api_key=asset['write_api_key'],
@@ -214,13 +220,13 @@ for asset in ASSETS:
         )
         plot(symbol, act)
 
-# === REF_INDEX_LOG TAB (FIXED) ===
+# === REF_INDEX_LOG TAB: แท็บดัชนีอ้างอิง ===
 with tab_dict['Ref_index_Log']:
     filter_date = '2023-01-01 12:00:00+07:00'
     prices_df = get_prices(TICKERS, filter_date)
 
     if not prices_df.empty:
-        # Create uniquely named dataframes for concatenation
+        # เตรียม DataFrame จากแต่ละ Ticker เพื่อนำมารวมกัน
         dfs_to_align = []
         for symbol in TICKERS:
             df_temp = Limit_fx(symbol, act=-1)
@@ -238,6 +244,7 @@ with tab_dict['Ref_index_Log']:
             if not price_cols or not sumusd_cols:
                  st.warning("Could not find price or sumusd columns after alignment.")
             else:
+                # คำนวณค่าต่างๆ
                 int_st = np.prod(df_sumusd_.iloc[0][price_cols])
                 initial_capital_per_stock = 3000
                 initial_capital_Ref_index_Log = initial_capital_per_stock * len(TICKERS)
@@ -255,32 +262,28 @@ with tab_dict['Ref_index_Log']:
                 net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
                 df_sumusd_['net'] = net_raw - net_at_index_0
                 
-                # <<<--- START OF FIX ---<<<
+                # --- ส่วนแสดงผลการวิเคราะห์ความเสี่ยง ---
                 st.header("Net Performance Risk Analysis")
                 st.info("Analyzes the portfolio's net performance (vs. benchmark) to identify periods of significant loss.")
                 
                 net_performance_series = df_sumusd_['net']
                 
-                # --- Risk Calculation ---
+                # คำนวณค่าความเสี่ยง
                 daily_net_change = net_performance_series.diff().fillna(0)
                 max_daily_loss = daily_net_change.min()
 
                 peak_to_trough_loss = 0
                 if not net_performance_series.empty:
                     peak_index = net_performance_series.idxmax()
-                    # Calculate drawdown from the absolute peak to the subsequent lowest point
                     peak_to_trough_loss = net_performance_series.loc[peak_index] - net_performance_series.loc[peak_index:].min()
-
 
                 max_30_day_loss = 0
                 if len(net_performance_series) >= 30:
-                    # Calculate the change over every 30-day rolling window
                     rolling_30_day_change = net_performance_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
                     max_30_day_loss = rolling_30_day_change.min()
                 
                 max_90_day_loss = 0
                 if len(net_performance_series) >= 90:
-                    # Calculate the change over every 90-day rolling window
                     rolling_90_day_change = net_performance_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
                     max_90_day_loss = rolling_90_day_change.min()
 
@@ -298,19 +301,18 @@ with tab_dict['Ref_index_Log']:
                 st.markdown("---")
                 
                 st.subheader("Cumulative Net Performance Over Time")
-                # >>>--- END OF FIX ---<<<
                 st.line_chart(df_sumusd_['net'])
                 with st.expander("View Data"):
                     st.dataframe(df_sumusd_)
     else:
         st.warning("Could not fetch sufficient price data for Ref_index_Log.")
 
-# === BURN_CASH TAB ===
+# === BURN_CASH TAB: แท็บวิเคราะห์การใช้เงินสด ===
 with tab_dict['Burn_Cash']:
-    # Create uniquely named dataframes for concatenation
+    # เตรียม DataFrame จากแต่ละ Ticker เพื่อนำมารวมกัน
     dfs_to_align = []
     for symbol in TICKERS:
-        df_temp = Limit_fx(symbol, act=-1)
+        df_temp = Limit_fx(symbol, act=-1) # ใช้ act=-1 เพื่อดู worst-case scenario
         if not df_temp.empty:
             renamed_df = df_temp[['buffer']].rename(columns={'buffer': f'buffer_{symbol}'})
             dfs_to_align.append(renamed_df)
@@ -326,7 +328,7 @@ with tab_dict['Burn_Cash']:
         st.header("Cash Burn Risk Analysis")
         st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
         
-        # --- Risk Calculation ---
+        # --- คำนวณค่าความเสี่ยง ---
         max_daily_burn = df_burn_cash['daily_burn'].min()
         cumulative_burn_series = df_burn_cash['cumulative_burn']
         
@@ -364,20 +366,23 @@ with tab_dict['Burn_Cash']:
         with st.expander("View Detailed Burn Data"):
             st.dataframe(df_burn_cash)
 
-# === CF_LOG TAB ===
+# === CF_LOG TAB: แท็บบันทึกและสูตร ===
 with tab_dict['cf_log']:
+    st.header("Calculation Formulas & Notes")
     st.markdown("""
-    - **Rebalance**: `-fix * ln(t0 / tn)`
-    - **Net Profit**: `sumusd - refer - sumusd[0]` (ต้นทุนเริ่มต้น)
-    - **Ref_index_Log**: `initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))`
-    - **Net in Ref_index_Log**: `(daily_sumusd - ref_log - total_initial_capital) - net_at_index_0`
-    - **Option P/L**: `(max(0, ราคาหุ้นปัจจุบัน - Strike) * contracts_or_shares) - (contracts_or_shares * premium_paid_per_share)`
+    - **Rebalance (Benchmark per asset)**: `-fix * ln(price_t0 / price_tn)`
+    - **Net Profit (per asset)**: `sumusd - refer - sumusd_t0`
+    - **Ref_index_Log (Portfolio Benchmark)**: `initial_capital_Ref_index_Log + (-1500 * ln(product_of_prices_t0 / product_of_prices_tn))`
+    - **Net in Ref_index_Log (Portfolio vs Benchmark)**: `(daily_sumusd - ref_log - total_initial_capital) - net_at_index_0`
+    - **Option P/L (Example)**: `(max(0, current_price - strike_price) * contracts) - (contracts * premium_paid)`
     ---
     """)
+    st.subheader("Monica AI Artifacts")
     iframe("https://monica.im/share/artifact?id=qpAkuKjBpuVz2cp9nNFRs3")
     st.markdown("---")
     iframe("https://monica.im/share/artifact?id=wEjeaMxVW6MgDDm3xAZatX")
     st.markdown("---")
     iframe("https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK")
     st.markdown("---")
+    st.subheader("Monica AI Chat")
     iframe("https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")
