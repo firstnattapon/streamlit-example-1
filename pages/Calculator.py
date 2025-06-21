@@ -8,7 +8,7 @@ from pathlib import Path
 import math # <-- ไม่ได้ใช้ในฟังก์ชันนี้แล้ว แต่เก็บไว้เผื่อใช้ที่อื่น
 
 # --- 1. การตั้งค่าและโหลด Configuration ---
-st.set_page_config(page_title="Calculator", page_icon="⌨️")
+st.set_page_config(page_title="Calculator", page_icon="⌨️" , layout= "centered" )
 
 @st.cache_data(ttl=300) # Cache config data for 5 minutes
 def load_config(filepath="calculator_config.json"):
