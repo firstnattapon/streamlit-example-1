@@ -6,7 +6,7 @@ import pandas as pd
 import yfinance as yf
 import json
 
-st.set_page_config(page_title="Add_CF", page_icon="🔥")
+st.set_page_config(page_title="Add_CF", page_icon="🔥", layout= "centered" )
 
 channel_id = 2394198
 write_api_key = 'OVZNYQBL57GJW5JF'
