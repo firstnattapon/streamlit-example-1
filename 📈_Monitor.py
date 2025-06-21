@@ -11,7 +11,7 @@ import concurrent.futures
 from threading import Lock
 import os
 
-st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide" , initial_sidebar_state  = "auto" )
 
 # ---------- CONFIGURATION ----------
 @st.cache_data
