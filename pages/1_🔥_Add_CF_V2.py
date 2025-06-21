@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 from typing import Dict, Any, Tuple, List
 
 # --- Page Configuration ---
-st.set_page_config(page_title="Add_CF_V1_with_Options", page_icon="🚀")
+st.set_page_config(page_title="Add_CF_V1_with_Options", page_icon="🚀", layout= "centered" )
 
 # --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS ---
 
