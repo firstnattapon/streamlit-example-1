@@ -1,31 +1,3 @@
-ด้านล่างคือ “โค้ดเต็ม” (single-file) ที่ประกอบด้วยส่วนสำคัญทั้งหมดสำหรับกลยุทธ์ใหม่ ​PCG64 Seed Search Optimizer — เขียนให้ copy ได้ครั้งเดียวโดยไม่ขาดตอน พร้อมคอมเมนต์อธิบายครบถ้วน
-
-````python
-"""
-pcg64_seed_optimizer.py
-----------------------------------------------------------
-โปรเจ็กต์สาธิตการสร้าง Action-Sequence ด้วยการค้นหา
-Random-Seed (PCG64) แบบรวดเร็ว/เสถียร บนโครงสร้าง
-Sliding-Window   ใช้ได้ทั้งรันเดี่ยว ๆ หรือ import เป็นโมดูล
-----------------------------------------------------------
-ความต้องการ (pip install ...)
-    numpy pandas numba streamlit (optional – แสดง progress bar)
-----------------------------------------------------------
-วิธีใช้ย่อ:
-    from pcg64_seed_optimizer import (
-        Strategy, generate_actions_sliding_window_rng
-    )
-
-    # สมมติ ticker_df คือ DataFrame มีคอลัมน์ 'Close' แล้ว
-    actions, detail_df = generate_actions_sliding_window_rng(
-        ticker_df,
-        window_size = 128,
-        iterations  = 50_000,
-        base_seed   = 2025,
-    )
-----------------------------------------------------------
-"""
-
 from __future__ import annotations
 
 import os
