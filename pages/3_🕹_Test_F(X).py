@@ -241,7 +241,6 @@ def _demo():
 
 
 if __name__ == "__main__":
-    warnings.filterwarnings("ignore", category=NumbaWarning)  # mute Numba cache msg
     try:
         from numba.core.errors import NumbaWarning
     except Exception:
