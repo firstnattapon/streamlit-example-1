@@ -220,7 +220,6 @@ with tab_dict['Ref_index_Log']:
     prices_df = get_prices(TICKERS, filter_date)
 
     if not prices_df.empty:
-        # <<<--- START OF FIX ---<<<
         # Create uniquely named dataframes for concatenation
         dfs_to_align = []
         for symbol in TICKERS:
@@ -256,16 +255,68 @@ with tab_dict['Ref_index_Log']:
                 net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
                 df_sumusd_['net'] = net_raw - net_at_index_0
                 
+                # <<<--- START OF FIX ---<<<
+                st.header("Net Performance Analysis (vs. Reference)")
+                st.info("Performance analysis of the portfolio's net value against the logarithmic reference index. 'Best' periods indicate maximum gains.")
+
+                net_series = df_sumusd_['net']
+
+                # --- CF (Cash Flow) Calculation ---
+                max_daily_cf = net_series.diff().max()
+                if pd.isna(max_daily_cf): max_daily_cf = 0
+
+                # Trough-to-Peak Gain (Max Run-up)
+                trough_to_peak_gain = 0
+                if not net_series.empty:
+                    trough_index = net_series.idxmin()
+                    peak_after_trough = net_series.loc[trough_index:].max()
+                    trough_value = net_series.loc[trough_index]
+                    if pd.notna(peak_after_trough) and pd.notna(trough_value):
+                         trough_to_peak_gain = peak_after_trough - trough_value
+                    else:
+                         trough_to_peak_gain = 0
+
+                # Best 30-day gain
+                max_30_day_cf = 0
+                if len(net_series) >= 30:
+                    rolling_30_day_change = net_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
+                    if not rolling_30_day_change.empty and rolling_30_day_change.notna().any():
+                        max_30_day_cf = rolling_30_day_change.max()
+                if pd.isna(max_30_day_cf): max_30_day_cf = 0
+                
+                # Best 90-day gain
+                max_90_day_cf = 0
+                if len(net_series) >= 90:
+                    rolling_90_day_change = net_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
+                    if not rolling_90_day_change.empty and rolling_90_day_change.notna().any():
+                        max_90_day_cf = rolling_90_day_change.max()
+                if pd.isna(max_90_day_cf): max_90_day_cf = 0
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("Short-Term CF")
+                    st.metric(label="💰 1-Day CF (Best Day)", value=f"{max_daily_cf:,.2f} USD")
+                    st.metric(label="💰 30-Day CF (Best Month)", value=f"{max_30_day_cf:,.2f} USD")
+
+                with col2:
+                    st.subheader("Medium to Long-Term CF")
+                    st.metric(label="💰 90-Day CF (Best Quarter)", value=f"{max_90_day_cf:,.2f} USD")
+                    st.metric(label="📈 Trough-to-Peak Gain (Max Run-up)", value=f"{trough_to_peak_gain:,.2f} USD")
+
+                st.markdown("---")
+                
+                st.subheader("Net Performance Over Time")
                 st.line_chart(df_sumusd_['net'])
                 with st.expander("View Data"):
                     st.dataframe(df_sumusd_)
-        # >>>--- END OF FIX ---<<<
+                # >>>--- END OF FIX ---<<<
+        else:
+             st.warning("Could not align dataframes. Not enough data available for the selected assets.")
     else:
         st.warning("Could not fetch sufficient price data for Ref_index_Log.")
 
 # === BURN_CASH TAB ===
 with tab_dict['Burn_Cash']:
-    # <<<--- START OF FIX ---<<<
     # Create uniquely named dataframes for concatenation
     dfs_to_align = []
     for symbol in TICKERS:
@@ -278,7 +329,6 @@ with tab_dict['Burn_Cash']:
         st.error("Cannot calculate burn cash due to missing data for all assets.")
     else:
         df_burn_cash = pd.concat(dfs_to_align, axis=1).ffill().dropna()
-        # >>>--- END OF FIX ---<<<
 
         df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
         df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
