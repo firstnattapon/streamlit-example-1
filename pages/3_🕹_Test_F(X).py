@@ -22,7 +22,6 @@ class Strategy:
     REBALANCE_DAILY = "Rebalance Daily (Min)"
     PERFECT_FORESIGHT = "Perfect Foresight (Max)"
     SLIDING_WINDOW = "Best Seed Sliding Window"
-    # ! NEW MODEL: เพิ่มชื่อกลยุทธ์ใหม่
     PROBABILISTIC_GREEDY = "Probabilistic Greedy (Seed-Based)"
 
 def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
@@ -40,7 +39,9 @@ def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
             "default_settings": {
                 "selected_ticker": "FFWM", "start_date": "2024-01-01", "window_size": 30,
                 "num_seeds": 10000, "max_workers": 8,
-                "prob_lookback": 20, "prob_sensitivity": 5, "prob_master_seed": 42
+                "prob_lookback": 20,
+                "prob_sensitivity": 5.0,  # ! FIX: เปลี่ยน 5 เป็น 5.0
+                "prob_master_seed": 42
             },
             "manual_seed_by_asset": {
                 "default": [{'seed': 999, 'size': 50, 'tail': 15}],
@@ -79,11 +80,11 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'max_workers' not in st.session_state:
         st.session_state.max_workers = defaults.get('max_workers', 8)
         
-    # ! NEW MODEL: เพิ่มพารามิเตอร์สำหรับ Probabilistic Greedy
     if 'prob_lookback' not in st.session_state:
         st.session_state.prob_lookback = defaults.get('prob_lookback', 20)
     if 'prob_sensitivity' not in st.session_state:
-        st.session_state.prob_sensitivity = defaults.get('prob_sensitivity', 5)
+        # ! FIX: ใช้ float() เพื่อบังคับชนิดข้อมูลและใส่ค่า default เป็น float
+        st.session_state.prob_sensitivity = float(defaults.get('prob_sensitivity', 5.0))
     if 'prob_master_seed' not in st.session_state:
         st.session_state.prob_master_seed = defaults.get('prob_master_seed', 42)
 
@@ -181,7 +182,6 @@ def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> 
 # 3. Strategy Action Generation
 # ==============================================================================
 
-# 3.1 Standard & Benchmark Strategies
 def generate_actions_rebalance_daily(num_days: int) -> np.ndarray:
     """สร้าง Action สำหรับกลยุทธ์ Rebalance ทุกวัน (Min Performance)"""
     return np.ones(num_days, dtype=np.int32)
@@ -206,7 +206,6 @@ def generate_actions_perfect_foresight(prices: List[float], fix: int = 1500) -> 
     actions[0] = 1
     return actions
 
-# ! NEW MODEL LOGIC
 def generate_actions_dynamic_probability(prices: np.ndarray, lookback_period: int, sensitivity: float, seed: int) -> np.ndarray:
     """
     สร้าง Action Sequence โดยใช้ความน่าจะเป็นที่แปรผันตามราคา
@@ -215,33 +214,23 @@ def generate_actions_dynamic_probability(prices: np.ndarray, lookback_period: in
     """
     n = len(prices)
     if n < lookback_period:
-        return np.ones(n, dtype=np.int32) # ถ้าข้อมูลน้อยไป ให้ rebalance ทุกวัน
+        return np.ones(n, dtype=np.int32) 
 
-    # 1. สร้าง "เครื่องปั่นตัวเลข" จาก Seed เพื่อให้คำนวณซ้ำได้
     rng = np.random.default_rng(seed)
     random_draws = rng.random(size=n)
-
-    # 2. คำนวณราคาอ้างอิง (Simple Moving Average)
+    
     price_series = pd.Series(prices)
     reference_prices = price_series.rolling(window=lookback_period, min_periods=1).mean().to_numpy()
-
-    # 3. คำนวณ "คะแนนความน่าสนใจ" (Vectorized for Speed)
-    #    คะแนนเป็นบวกเมื่อราคาปัจจุบันต่ำกว่าราคาอ้างอิง (น่าซื้อ)
+    
     score = (reference_prices - prices) / reference_prices
-
-    # 4. แปลงคะแนนเป็น "ความน่าจะเป็น" โดยใช้ Sigmoid function
-    #    'sensitivity' ควบคุมความชันของโค้ง (ยิ่งมาก ยิ่งตอบสนองรุนแรง)
     scaled_score = score * sensitivity
     probability = 1 / (1 + np.exp(-scaled_score))
 
-    # 5. ตัดสินใจ Action โดยเทียบเลขสุ่มกับความน่าจะเป็น
     actions = (random_draws < probability).astype(np.int32)
-    actions[0] = 1  # บังคับให้วันแรกซื้อเสมอ
+    actions[0] = 1
 
     return actions
 
-
-# 3.2 Standard Seed Generation (Original Logic)
 def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int, max_workers: int) -> Tuple[int, float, np.ndarray]:
     """ค้นหา Seed ที่ให้ค่า Net Profit สูงสุดสำหรับ Price Window ที่กำหนด (Parallel Processing)"""
     window_len = len(prices_window)
@@ -336,7 +325,6 @@ def render_settings_tab(config: Dict[str, Any]):
     st.session_state.max_workers = c3.number_input("จำนวน Workers (CPU Cores)", min_value=1, max_value=16, value=st.session_state.max_workers)
     
     st.divider()
-    # ! NEW MODEL: UI สำหรับ Probabilistic Greedy
     st.subheader("พารามิเตอร์สำหรับ 'Probabilistic Greedy Model'")
     p1, p2, p3 = st.columns(3)
     st.session_state.prob_lookback = p1.number_input("ช่วงวันดูย้อนหลัง (Lookback)", min_value=2, value=st.session_state.prob_lookback, help="จำนวนวันที่ใช้คำนวณราคาอ้างอิง (Moving Average)")
@@ -359,7 +347,6 @@ def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str
     st.write(chart_title)
     st.line_chart(chart_data)
 
-# ! NEW MODEL: UI Tab
 def render_probabilistic_greedy_tab():
     """แสดงผล UI สำหรับ Tab Probabilistic Greedy Model"""
     st.header("🎯 Probabilistic Greedy Model")
@@ -385,18 +372,15 @@ def render_probabilistic_greedy_tab():
         prices = ticker_data['Close'].to_numpy(); num_days = len(prices)
         
         with st.spinner("กำลังคำนวณและเปรียบเทียบกลยุทธ์..."):
-            # ! NEW MODEL: สร้าง Actions จากโมเดลใหม่
             actions_prob = generate_actions_dynamic_probability(
                 prices, 
                 st.session_state.prob_lookback, 
                 st.session_state.prob_sensitivity, 
                 st.session_state.prob_master_seed
             )
-            # สร้าง Actions สำหรับ Benchmark
             actions_max = generate_actions_perfect_foresight(prices.tolist())
             actions_min = generate_actions_rebalance_daily(num_days)
 
-            # รัน Simulation
             results = {}
             strategy_map = {
                 Strategy.PROBABILISTIC_GREEDY: actions_prob.tolist(),
@@ -473,7 +457,6 @@ def render_test_tab():
         csv = df_windows.to_csv(index=False)
         st.download_button(label="📥 ดาวน์โหลด Window Details (CSV)", data=csv, file_name=f'best_seed_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
 
-# --- (The rest of the UI functions like render_analytics_tab and render_manual_seed_tab remain largely unchanged) ---
 def render_analytics_tab():
     """แสดงผล UI สำหรับ Tab Advanced Analytics"""
     st.header("📊 Advanced Analytics Dashboard")
@@ -513,7 +496,6 @@ def render_analytics_tab():
         st.subheader("ผลการวิเคราะห์")
         df_to_analyze = st.session_state.df_for_analysis
         try:
-            # Check for necessary columns
             required_cols = ['window_number', 'timeline', 'max_net', 'action_sequence']
             if not all(col in df_to_analyze.columns for col in required_cols):
                 st.error(f"ไฟล์ CSV ไม่สมบูรณ์! ต้องมีคอลัมน์พื้นฐาน: {', '.join(required_cols)}")
@@ -578,9 +560,7 @@ def render_analytics_tab():
                             if sim_data.empty:
                                 st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
                             else:
-                                prices = sim_data['Close'].to_numpy()
-                                n_total = len(prices)
-                                
+                                prices = sim_data['Close'].to_numpy(); n_total = len(prices)
                                 final_actions_dna = stitched_actions[:n_total]
                                 df_dna = run_simulation(prices[:len(final_actions_dna)].tolist(), final_actions_dna)
                                 df_max = run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
@@ -588,14 +568,11 @@ def render_analytics_tab():
                                 
                                 results_dna = {}
                                 if not df_dna.empty:
-                                    df_dna.index = sim_data.index[:len(df_dna)]
-                                    results_dna['Stitched DNA'] = df_dna
+                                    df_dna.index = sim_data.index[:len(df_dna)]; results_dna['Stitched DNA'] = df_dna
                                 if not df_max.empty:
-                                    df_max.index = sim_data.index[:len(df_max)]
-                                    results_dna[Strategy.PERFECT_FORESIGHT] = df_max
+                                    df_max.index = sim_data.index[:len(df_max)]; results_dna[Strategy.PERFECT_FORESIGHT] = df_max
                                 if not df_min.empty:
-                                    df_min.index = sim_data.index[:len(df_min)]
-                                    results_dna[Strategy.REBALANCE_DAILY] = df_min
+                                    df_min.index = sim_data.index[:len(df_min)]; results_dna[Strategy.REBALANCE_DAILY] = df_min
                                     
                                 st.subheader("Performance Comparison (Net Profit)")
                                 display_comparison_charts(results_dna)
@@ -625,16 +602,14 @@ def render_manual_seed_tab(config: Dict[str, Any]):
             asset_list = config.get('assets', ['FFWM'])
             try:
                 default_index = asset_list.index(st.session_state.get('manual_ticker_key', st.session_state.test_ticker))
-            except (ValueError, KeyError):
-                default_index = 0
+            except (ValueError, KeyError): default_index = 0
             manual_ticker = st.selectbox("เลือก Ticker", options=asset_list, index=default_index, key="manual_ticker_key", on_change=on_ticker_change_callback, args=(config,))
         with col2:
             c1, c2 = st.columns(2)
             manual_start_date = c1.date_input("วันที่เริ่มต้น (Start Date)", value=st.session_state.start_date, key="manual_start_compare_tail")
             manual_end_date = c2.date_input("วันที่สิ้นสุด (End Date)", value=st.session_state.end_date, key="manual_end_compare_tail")
         
-        if manual_start_date >= manual_end_date:
-            st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
+        if manual_start_date >= manual_end_date: st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
         
         st.divider()
         st.write("**กำหนดกลยุทธ์ (Seed/Size/Tail) ที่ต้องการเปรียบเทียบ:**")
@@ -652,36 +627,27 @@ def render_manual_seed_tab(config: Dict[str, Any]):
             st.rerun()
         if b_col2.button("➖ ลบ Line สุดท้าย"):
             if len(st.session_state.manual_seed_lines) > 1:
-                st.session_state.manual_seed_lines.pop()
-                st.rerun()
+                st.session_state.manual_seed_lines.pop(); st.rerun()
             else:
                 st.warning("ต้องมีอย่างน้อย 1 line")
     
     st.write("---")
     if st.button("📈 เปรียบเทียบประสิทธิภาพ Seeds", type="primary", key="compare_manual_seeds_btn"):
-        if manual_start_date >= manual_end_date:
-            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง")
-            return
+        if manual_start_date >= manual_end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
             
         with st.spinner("กำลังดึงข้อมูลและจำลองการเทรด..."):
             start_str, end_str = manual_start_date.strftime('%Y-%m-%d'), manual_end_date.strftime('%Y-%m-%d')
             ticker_data = get_ticker_data(manual_ticker, start_str, end_str)
-            if ticker_data.empty:
-                st.error(f"ไม่พบข้อมูลสำหรับ {manual_ticker} ในช่วงวันที่ที่เลือก")
-                return
+            if ticker_data.empty: st.error(f"ไม่พบข้อมูลสำหรับ {manual_ticker} ในช่วงวันที่ที่เลือก"); return
 
-            prices = ticker_data['Close'].to_numpy()
-            num_trading_days = len(prices)
+            prices = ticker_data['Close'].to_numpy(); num_trading_days = len(prices)
             st.info(f"📊 พบข้อมูลราคา {num_trading_days} วันทำการในช่วงที่เลือก")
             
-            results = {}
-            max_sim_len = 0
+            results = {}; max_sim_len = 0
             
             for i, line_info in enumerate(st.session_state.manual_seed_lines):
                 input_seed, size_seed, tail_seed = line_info['seed'], line_info['size'], line_info['tail']
-                if tail_seed > size_seed:
-                    st.error(f"Line {i+1}: Tail ({tail_seed}) ต้องไม่มากกว่า Size ({size_seed})")
-                    return
+                if tail_seed > size_seed: st.error(f"Line {i+1}: Tail ({tail_seed}) ต้องไม่มากกว่า Size ({size_seed})"); return
                 
                 rng_best = np.random.default_rng(input_seed)
                 full_actions = rng_best.integers(0, 2, size=size_seed)
@@ -692,24 +658,19 @@ def render_manual_seed_tab(config: Dict[str, Any]):
                 
                 df_line = run_simulation(prices[:sim_len].tolist(), actions_from_tail[:sim_len])
                 if not df_line.empty:
-                    df_line.index = ticker_data.index[:sim_len]
-                    results[f"Seed {input_seed} (Tail {tail_seed})"] = df_line
+                    df_line.index = ticker_data.index[:sim_len]; results[f"Seed {input_seed} (Tail {tail_seed})"] = df_line
                     max_sim_len = max(max_sim_len, sim_len)
 
-            if not results:
-                st.error("ไม่สามารถสร้างผลลัพธ์จาก Seed ที่กำหนดได้")
-                return
+            if not results: st.error("ไม่สามารถสร้างผลลัพธ์จาก Seed ที่กำหนดได้"); return
             
             if max_sim_len > 0:
                 prices_for_benchmark = prices[:max_sim_len].tolist()
                 df_max = run_simulation(prices_for_benchmark, generate_actions_perfect_foresight(prices_for_benchmark).tolist())
                 df_min = run_simulation(prices_for_benchmark, generate_actions_rebalance_daily(max_sim_len).tolist())
                 if not df_max.empty:
-                    df_max.index = ticker_data.index[:max_sim_len]
-                    results[Strategy.PERFECT_FORESIGHT] = df_max
+                    df_max.index = ticker_data.index[:max_sim_len]; results[Strategy.PERFECT_FORESIGHT] = df_max
                 if not df_min.empty:
-                    df_min.index = ticker_data.index[:max_sim_len]
-                    results[Strategy.REBALANCE_DAILY] = df_min
+                    df_min.index = ticker_data.index[:max_sim_len]; results[Strategy.REBALANCE_DAILY] = df_min
             
             st.success("การเปรียบเทียบเสร็จสมบูรณ์!")
             display_comparison_charts(results, chart_title="📊 Performance Comparison (Net Profit)")
@@ -727,7 +688,6 @@ def render_manual_seed_tab(config: Dict[str, Any]):
                 for idx, item in enumerate(final_results_list):
                     final_metrics_cols[idx].metric(item['name'], f"${item['net']:,.2f}")
 
-
 # ==============================================================================
 # 5. Main Application
 # ==============================================================================
@@ -742,7 +702,6 @@ def main():
     config = load_config()
     initialize_session_state(config)
 
-    # ! UPDATED: ปรับปรุงรายการ Tab
     tab_list = [
         "⚙️ การตั้งค่า", 
         "🎯 Probabilistic Greedy Model",
@@ -753,7 +712,7 @@ def main():
     tabs = st.tabs(tab_list)
 
     with tabs[0]: render_settings_tab(config)
-    with tabs[1]: render_probabilistic_greedy_tab() # ! NEW
+    with tabs[1]: render_probabilistic_greedy_tab()
     with tabs[2]: render_test_tab()
     with tabs[3]: render_analytics_tab()
     with tabs[4]: render_manual_seed_tab(config)
