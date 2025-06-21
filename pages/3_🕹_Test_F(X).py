@@ -74,6 +74,17 @@ def _calculate_simulation_numba(action_array: np.ndarray, price_array: np.ndarra
     net = sumusd - refer - sumusd[0]
     return net
 
+def run_simulation(prices: List[float], actions: List[int], fix: int) -> pd.DataFrame:
+    """สร้าง DataFrame ผลลัพธ์จากการจำลองการเทรด"""
+    if not prices or not actions: return pd.DataFrame()
+    min_len = min(len(prices), len(actions))
+    prices, actions = prices[:min_len], actions[:min_len]
+
+    net = _calculate_simulation_numba(np.array(actions, dtype=np.int32), np.array(prices, dtype=np.float64), fix)
+    if len(net) == 0: return pd.DataFrame()
+
+    return pd.DataFrame({'net': np.round(net, 2)})
+
 @lru_cache(maxsize=32768)
 def get_actions_and_net(seed: int, length: int, price_tuple: Tuple[float, ...], fix: int) -> Tuple[float, np.ndarray]:
     """สร้าง actions และคำนวณ net profit สำหรับ seed ที่กำหนด (Cached)"""
@@ -99,41 +110,37 @@ def _evaluate_seed_batch(seeds_batch: np.ndarray, prices_tuple: Tuple[float, ...
 def find_best_seed_adaptively(prices_window: np.ndarray, total_seeds: int, exploration_ratio: float, fix: int) -> Dict[str, Any]:
     """ค้นหา Seed ที่ดีที่สุดด้วยกระบวนการ Adaptive Search"""
     window_len = len(prices_window)
-    if window_len < 2: return {'best_seed': 1, 'best_net': 0}
-    
+    if window_len < 2: return {'best_seed': 1, 'best_net': 0, 'focused_range': 'N/A'}
+
     num_exploration_seeds = int(total_seeds * exploration_ratio)
     num_exploitation_seeds = total_seeds - num_exploration_seeds
     prices_tuple = tuple(prices_window)
 
     # 1. Exploration Phase
     exploration_results = []
-    # Use a wide range for initial exploration
     exploration_seeds = np.random.randint(0, 2**32, size=num_exploration_seeds, dtype=np.uint32)
-    
+
     with ThreadPoolExecutor() as executor:
         futures = {executor.submit(_evaluate_seed_batch, np.array_split(exploration_seeds, executor._max_workers)[i], prices_tuple, fix, window_len) for i in range(executor._max_workers)}
         for future in as_completed(futures):
             exploration_results.extend(future.result())
 
-    if not exploration_results: return {'best_seed': 1, 'best_net': 0}
-    
+    if not exploration_results: return {'best_seed': 1, 'best_net': 0, 'focused_range': 'N/A'}
+
     # 2. Analyze & Focus
-    df_explore = pd.DataFrame(exploration_results, columns=['seed', 'net']).sort_values('net', ascending=False)
+    df_explore = pd.DataFrame(exploration_results, columns=['seed', 'net']).sort_values('net', ascending=False).reset_index(drop=True)
     top_10_percent_cutoff = df_explore['net'].quantile(0.9)
     top_seeds = df_explore[df_explore['net'] >= top_10_percent_cutoff]['seed']
-    
-    if len(top_seeds) < 2: # Not enough data to find a range, fall back to best found
+
+    if len(top_seeds) < 2:
         best_seed = int(df_explore.iloc[0]['seed'])
-        best_net = df_explore.iloc[0]['net']
-        return {'best_seed': best_seed, 'best_net': best_net}
-        
-    # Define the new promising range
-    min_promising_seed = int(top_seeds.min())
-    max_promising_seed = int(top_seeds.max())
+        best_net = float(df_explore.iloc[0]['net'])
+        return {'best_seed': best_seed, 'best_net': best_net, 'focused_range': 'Fallback'}
+
+    min_promising_seed, max_promising_seed = int(top_seeds.min()), int(top_seeds.max())
 
     # 3. Exploitation Phase
     exploitation_results = []
-    # Generate new seeds within the focused, promising range
     exploitation_seeds = np.random.randint(min_promising_seed, max_promising_seed + 1, size=num_exploitation_seeds, dtype=np.uint32)
 
     with ThreadPoolExecutor() as executor:
@@ -141,16 +148,23 @@ def find_best_seed_adaptively(prices_window: np.ndarray, total_seeds: int, explo
         for future in as_completed(futures):
             exploitation_results.extend(future.result())
 
-    # 4. Final Result
+    # 4. Final Result (SAFE VERSION)
     all_results_df = pd.concat([df_explore, pd.DataFrame(exploitation_results, columns=['seed', 'net'])]).drop_duplicates(subset=['seed'])
-    best_result_row = all_results_df.loc[all_results_df['net'].idxmax()]
-    
+    best_result_df = all_results_df.sort_values('net', ascending=False).head(1)
+
+    if best_result_df.empty:
+        return {'best_seed': 1, 'best_net': 0, 'focused_range': 'N/A'}
+
+    best_seed = int(best_result_df['seed'].iloc[0])
+    best_net = float(best_result_df['net'].iloc[0])
+
     return {
-        'best_seed': int(best_result_row['seed']),
-        'best_net': best_result_row['net'],
+        'best_seed': best_seed,
+        'best_net': best_net,
         'exploration_best_net': df_explore.iloc[0]['net'],
         'focused_range': f"{min_promising_seed:,} - {max_promising_seed:,}"
     }
+
 
 def generate_adaptive_walk_forward_strategy(ticker_data: pd.DataFrame, window_size: int, total_seeds: int, exploration_ratio: float, fix: int) -> Tuple[np.ndarray, pd.DataFrame]:
     """สร้าง Action Sequence โดยใช้ Adaptive Seed Search และ Walk-Forward Validation"""
@@ -162,35 +176,27 @@ def generate_adaptive_walk_forward_strategy(ticker_data: pd.DataFrame, window_si
     num_windows = n // window_size
     progress_bar = st.progress(0, text="เริ่มต้นการวิเคราะห์แบบ Walk-Forward...")
     
-    # Initialize with a default action sequence for the first testing window
     best_actions_for_next_window = np.ones(window_size, dtype=np.int32)
     
-    for i in range(num_windows):
+    for i in range(num_windows - 1): # We need a learning AND a testing window
         learn_start, learn_end = i * window_size, (i + 1) * window_size
         test_start, test_end = learn_end, learn_end + window_size
         
-        if test_end > n: break # Stop if the testing window is incomplete
-
-        # --- Learning Phase ---
         learn_prices = prices[learn_start:learn_end]
         learn_dates = ticker_data.index[learn_start:learn_end]
         search_result = find_best_seed_adaptively(learn_prices, total_seeds, exploration_ratio, fix)
         best_seed_found = search_result['best_seed']
         
-        # --- Testing Phase ---
         test_prices = prices[test_start:test_end]
         test_dates = ticker_data.index[test_start:test_end]
         
-        # Apply the actions from the *previous* learning phase to the current testing window
         final_actions = np.concatenate((final_actions, best_actions_for_next_window))
         
-        # Calculate the net profit of this walk-forward test
         test_net_array = _calculate_simulation_numba(best_actions_for_next_window, test_prices, fix)
         walk_forward_net = test_net_array[-1] if len(test_net_array) > 0 else 0
         
-        # Store details for this completed walk-forward step
         detail = {
-            'window_num': i,
+            'window_num': i + 1,
             'learn_period': f"{learn_dates[0]:%Y-%m-%d} to {learn_dates[-1]:%Y-%m-%d}",
             'best_seed_found': best_seed_found,
             'test_period': f"{test_dates[0]:%Y-%m-%d} to {test_dates[-1]:%Y-%m-%d}",
@@ -199,7 +205,6 @@ def generate_adaptive_walk_forward_strategy(ticker_data: pd.DataFrame, window_si
         }
         window_details_list.append(detail)
         
-        # Prepare the best actions from the *current* learning phase for the *next* testing window
         _, best_actions_for_next_window = get_actions_and_net(best_seed_found, window_size, tuple(learn_prices), fix)
         
         progress_bar.progress((i + 1) / (num_windows - 1), text=f"ประมวลผล Window {i+1}/{num_windows -1}...")
@@ -289,15 +294,19 @@ def render_model_tab():
         st.write("---")
         display_comparison_charts(results)
         
-        final_net_max = results[Strategy.PERFECT_FORESIGHT]['net'].iloc[-1]
-        final_net_ass = results[Strategy.ADAPTIVE_SEED_SEARCH]['net'].iloc[-1] if not results[Strategy.ADAPTIVE_SEED_SEARCH].empty else 0
-        final_net_min = results[Strategy.REBALANCE_DAILY]['net'].iloc[-1]
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric(f"🥇 {Strategy.PERFECT_FORESIGHT}", f"${final_net_max:,.2f}")
-        col2.metric(f"🧠 {Strategy.ADAPTIVE_SEED_SEARCH}", f"${final_net_ass:,.2f}", delta=f"{final_net_ass - final_net_min:,.2f} vs Min")
-        col3.metric(f"🥉 {Strategy.REBALANCE_DAILY}", f"${final_net_min:,.2f}")
-        
+        # Check if results are available before accessing them
+        if not results[Strategy.ADAPTIVE_SEED_SEARCH].empty:
+            final_net_max = results[Strategy.PERFECT_FORESIGHT]['net'].iloc[-1]
+            final_net_ass = results[Strategy.ADAPTIVE_SEED_SEARCH]['net'].iloc[-1]
+            final_net_min = results[Strategy.REBALANCE_DAILY]['net'].iloc[-1]
+            
+            col1, col2, col3 = st.columns(3)
+            col1.metric(f"🥇 {Strategy.PERFECT_FORESIGHT}", f"${final_net_max:,.2f}")
+            col2.metric(f"🧠 {Strategy.ADAPTIVE_SEED_SEARCH}", f"${final_net_ass:,.2f}", delta=f"{final_net_ass - final_net_min:,.2f} vs Min")
+            col3.metric(f"🥉 {Strategy.REBALANCE_DAILY}", f"${final_net_min:,.2f}")
+        else:
+            st.warning("ไม่สามารถคำนวณผลลัพธ์ของ Adaptive Seed Search ได้ อาจเนื่องมาจากข้อมูลไม่เพียงพอสำหรับ Walk-Forward")
+
         st.write("---")
         st.write("🔍 **รายละเอียดการค้นหาและทดสอบแบบ Walk-Forward ราย Window**")
         st.dataframe(df_windows[['window_num', 'learn_period', 'best_seed_found', 'test_period', 'walk_forward_net', 'focused_range']], use_container_width=True)
