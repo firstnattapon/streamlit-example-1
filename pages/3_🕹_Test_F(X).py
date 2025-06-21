@@ -20,17 +20,12 @@ class Strategy:
     CHAOS_WALK_FORWARD = "Chaotic System (Walk-Forward)"
 
 class ChaosEquation:
-    # Original 13
+    # ... (Equation names remain the same) ...
     LOGISTIC_MAP, SINE_MAP, TENT_MAP = "Logistic Map", "Sine Map", "Tent Map"
     GAUSS_MAP, CIRCLE_MAP, BERNOULLI_MAP = "Gauss Map", "Circle Map", "Bernoulli Map"
     SKEW_TENT_MAP, ITERATED_SINE, CUBIC_MAP = "Skew Tent Map", "Iterated Sine", "Cubic Map"
     BOUNCING_BALL, HENON_MAP_1D, IKEDA_MAP_1D, SINGER_MAP = "Bouncing Ball", "Hénon Map (1D)", "Ikeda Map (1D)", "Singer Map"
-    # New 5 Advanced
-    MAGNETIC_SNA = "Magnetic SNA"
-    TINKERBELL_MAP = "Tinkerbell Map"
-    GINGERBREADMAN = "Gingerbreadman Map"
-    CHIRIKOV_STANDARD = "Chirikov Standard Map"
-    # Fractional-Order is too complex for this implementation without a dedicated library
+    MAGNETIC_SNA, TINKERBELL_MAP, GINGERBREADMAN, CHIRIKOV_STANDARD = "Magnetic SNA", "Tinkerbell Map", "Gingerbreadman Map", "Chirikov Standard Map"
 
 EQ_PARAMS_INFO = {
     # name: (num_params, (range1), (range2), p1_name, p2_name, needs_memory)
@@ -44,14 +39,13 @@ EQ_PARAMS_INFO = {
     ChaosEquation.ITERATED_SINE: (1, (2.0, 3.0), None, "a", None, False),
     ChaosEquation.CUBIC_MAP: (1, (2.0, 2.7), None, "r", None, False),
     ChaosEquation.BOUNCING_BALL: (2, (0.1, 1.5), (1.0, 10.0), "a", "b", False),
-    ChaosEquation.HENON_MAP_1D: (2, (1.0, 1.4), (0.1, 0.3), "a", "b", True), # Memory
+    ChaosEquation.HENON_MAP_1D: (2, (1.0, 1.4), (0.1, 0.3), "a", "b", True),
     ChaosEquation.IKEDA_MAP_1D: (1, (0.5, 1.0), None, "u", None, False),
     ChaosEquation.SINGER_MAP: (1, (3.5, 4.0), None, "μ", None, False),
-    # Advanced
-    ChaosEquation.MAGNETIC_SNA: (1, (0.1, 1.5), None, "ε", None, True), # Memory
-    ChaosEquation.TINKERBELL_MAP: (2, (0.3, 0.9), (-0.9, -0.4), "a", "b", True), # Memory
-    ChaosEquation.GINGERBREADMAN: (1, (1.0, 1.5), None, "a", None, True), # Using a=1, b=1, c=param
-    ChaosEquation.CHIRIKOV_STANDARD: (1, (0.5, 4.0), None, "K", None, True), # Memory
+    ChaosEquation.MAGNETIC_SNA: (1, (0.1, 1.5), None, "ε", None, True),
+    ChaosEquation.TINKERBELL_MAP: (2, (0.3, 0.9), (-0.9, -0.4), "a", "b", True),
+    ChaosEquation.GINGERBREADMAN: (1, (1.0, 1.5), None, "a", None, True),
+    ChaosEquation.CHIRIKOV_STANDARD: (1, (0.5, 4.0), None, "K", None, True),
 }
 
 ALL_EQUATIONS = list(EQ_PARAMS_INFO.keys())
@@ -68,7 +62,7 @@ def initialize_session_state():
 # ==============================================================================
 # 2. Core Calculation & Data Functions
 # ==============================================================================
-# ... (get_ticker_data, _calculate_cumulative_net_numba, _calculate_final_net_profit_numba remain the same) ...
+# ... (get_ticker_data, _calculate_cumulative_net_numba, _calculate_final_net_profit_numba are unchanged) ...
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     try:
@@ -109,13 +103,12 @@ def _calculate_final_net_profit_numba(action_array:np.ndarray,price_array:np.nda
     refer_profit=-fix*math.log(price_array[0]/price_array[-1])
     return final_sumusd-(initial_sumusd+refer_profit)
 
-
 # ==============================================================================
-# 3. Chaotic Action Generation (Expanded)
+# 3. Chaotic Action Generation (Corrected)
 # ==============================================================================
 
-# --- Numba-accelerated Chaos Generators (18 total) ---
-# ... (The 13 generators from previous code remain the same) ...
+# --- Numba-accelerated Chaos Generators ---
+# ... (All 13 non-memory generators are unchanged) ...
 @njit(float64[:](int32, float64, float64), cache=True)
 def logistic_map(n, r, x):
     out = np.empty(n);
@@ -193,16 +186,6 @@ def bouncing_ball_map(n, a, b, x):
         out[i] = x
     return out
 
-@njit(float64[:](int32, float64, float64, float64, float64), cache=True)
-def henon_map_1d(n, a, b, x, x_prev):
-    out = np.empty(n)
-    for i in range(n):
-        x_new = 1 - a * x*x + b * x_prev
-        x_prev, x = x_curr, x_new
-        x_rescaled = (x+1.5)/3.0 # Rescale
-        out[i] = max(0.0, min(1.0, x_rescaled))
-    return out
-
 @njit(float64[:](int32, float64, float64), cache=True)
 def ikeda_map_1d(n, u, x):
     out = np.empty(n)
@@ -221,7 +204,17 @@ def singer_map(n, mu, x):
         out[i] = x
     return out
 
-# --- NEW ADVANCED GENERATORS ---
+# --- CORRECTED MEMORY-BASED GENERATORS ---
+@njit(float64[:](int32, float64, float64, float64, float64), cache=True)
+def henon_map_1d(n, a, b, x_curr, x_prev): # Use x_curr and x_prev for clarity
+    out = np.empty(n)
+    for i in range(n):
+        x_new = 1 - a * x_curr*x_curr + b * x_prev
+        x_prev, x_curr = x_curr, x_new # <-- The bug was here
+        x_rescaled = (x_curr + 1.5) / 3.0
+        out[i] = max(0.0, min(1.0, x_rescaled))
+    return out
+    
 @njit(float64[:](int32, float64, float64, float64), cache=True)
 def magnetic_sna_map(n, epsilon, x_init, theta_init):
     out = np.empty(n)
@@ -229,41 +222,39 @@ def magnetic_sna_map(n, epsilon, x_init, theta_init):
     for i in range(n):
         theta = (2.0 * theta) % 1.0
         x = (2.0 / math.pi) * math.atan(x + epsilon * math.cos(2 * math.pi * theta))
-        out[i] = (x + 1) / 2.0 # Rescale from [-1,1] to [0,1]
+        out[i] = (x + 1) / 2.0
     return out
 
 @njit(float64[:](int32, float64, float64, float64, float64), cache=True)
-def tinkerbell_map(n, a, b, x_init, y_init):
+def tinkerbell_map(n, a, b, x_curr, y_curr): # Corrected variable names
     out = np.empty(n)
-    x, y = x_init, y_init
     for i in range(n):
-        x_new = x*x - y*y + a*x + b*y
-        y_new = 2*x*y + 0.6*x - 0.9*y # Using a fixed 2D version for more interesting behavior
-        x, y = x_new, y_new
-        x_rescaled = (x + 1.5) / 2.5 # Rescale
+        x_new = x_curr*x_curr - y_curr*y_curr + a*x_curr + b*y_curr
+        y_new = 2*x_curr*y_curr + 0.6*x_curr - 0.9*y_curr
+        x_curr, y_curr = x_new, y_new # <-- Update state correctly
+        x_rescaled = (x_curr + 1.5) / 2.5
         out[i] = max(0.0, min(1.0, x_rescaled))
     return out
 
 @njit(float64[:](int32, float64, float64, float64), cache=True)
-def gingerbreadman_map(n, a, x_init, y_init):
+def gingerbreadman_map(n, a, x_curr, y_curr):
     out = np.empty(n)
-    x, y = x_init, y_init
     for i in range(n):
-        x_new = 1 - y + a * abs(x)
-        y_new = x
-        x, y = x_new, y_new
-        x_rescaled = (x + 20) / 40 # Rescale
+        x_new = 1 - y_curr + a * abs(x_curr)
+        y_new = x_curr
+        x_curr, y_curr = x_new, y_new
+        x_rescaled = (x_curr + 20) / 40
         out[i] = max(0.0, min(1.0, x_rescaled))
     return out
 
 @njit(float64[:](int32, float64, float64, float64), cache=True)
-def chirikov_standard_map(n, K, x_init, p_init):
+def chirikov_standard_map(n, K, x_curr, p_curr):
     out = np.empty(n)
-    x, p = x_init, p_init
     for i in range(n):
-        p = (p + K * math.sin(x)) % (2*math.pi)
-        x = (x + p) % (2*math.pi)
-        out[i] = x / (2*math.pi) # Already in [0,1]
+        p_new = (p_curr + K * math.sin(x_curr)) % (2*math.pi)
+        x_new = (x_curr + p_new) % (2*math.pi)
+        p_curr, x_curr = p_new, x_new
+        out[i] = x_curr / (2*math.pi)
     return out
 
 # --- Master Action Generator (Router) ---
@@ -271,32 +262,46 @@ def generate_actions_from_chaos(equation: str, length: int, params: tuple, x0: f
     p1 = params[0] if len(params) > 0 else 0.0
     p2 = params[1] if len(params) > 1 else 0.0
     
-    # Handle memory-based maps needing multiple initial values
-    if EQ_PARAMS_INFO[equation][5]: # needs_memory is True
+    # Generate initial values for memory-based maps from a single seed (x0)
+    if EQ_PARAMS_INFO[equation][5]:
         rng_init = np.random.default_rng(int(x0 * 1e6))
-        x_init0, x_init1 = rng_init.random(2)
+        init_vals = rng_init.random(2)
+        x_init, y_or_prev_init = init_vals[0], init_vals[1]
     else:
-        x_init0 = x0
+        x_init = x0
 
     # Router
-    if   equation == ChaosEquation.LOGISTIC_MAP:       x_series = logistic_map(length, p1, x_init0)
-    elif equation == ChaosEquation.SINE_MAP:           x_series = sine_map(length, p1, x_init0)
-    # ... (all other 11 non-memory maps) ...
-    elif equation == ChaosEquation.SINGER_MAP:         x_series = singer_map(length, p1, x_init0)
+    if   equation == ChaosEquation.LOGISTIC_MAP:       x_series = logistic_map(length, p1, x_init)
+    elif equation == ChaosEquation.SINE_MAP:           x_series = sine_map(length, p1, x_init)
+    elif equation == ChaosEquation.TENT_MAP:           x_series = tent_map(length, p1, x_init)
+    elif equation == ChaosEquation.GAUSS_MAP:          x_series = gauss_map(length, p1, p2, x_init)
+    elif equation == ChaosEquation.CIRCLE_MAP:         x_series = circle_map(length, p1, p2, x_init)
+    elif equation == ChaosEquation.BERNOULLI_MAP:      x_series = bernoulli_map(length, p1, x_init)
+    elif equation == ChaosEquation.SKEW_TENT_MAP:      x_series = skew_tent_map(length, p1, x_init)
+    elif equation == ChaosEquation.ITERATED_SINE:      x_series = iterated_sine(length, p1, x_init)
+    elif equation == ChaosEquation.CUBIC_MAP:          x_series = cubic_map(length, p1, x_init)
+    elif equation == ChaosEquation.BOUNCING_BALL:      x_series = bouncing_ball_map(length, p1, p2, x_init)
+    elif equation == ChaosEquation.IKEDA_MAP_1D:       x_series = ikeda_map_1d(length, p1, x_init)
+    elif equation == ChaosEquation.SINGER_MAP:         x_series = singer_map(length, p1, x_init)
     # Memory Maps
-    elif equation == ChaosEquation.HENON_MAP_1D:       x_series = henon_map_1d(length, p1, p2, x_init0, x_init1)
-    elif equation == ChaosEquation.MAGNETIC_SNA:       x_series = magnetic_sna_map(length, p1, x_init0, x_init1)
-    elif equation == ChaosEquation.TINKERBELL_MAP:     x_series = tinkerbell_map(length, p1, p2, x_init0, x_init1)
-    elif equation == ChaosEquation.GINGERBREADMAN:     x_series = gingerbreadman_map(length, p1, x_init0, x_init1)
-    elif equation == ChaosEquation.CHIRIKOV_STANDARD:  x_series = chirikov_standard_map(length, p1, x_init0, x_init1)
+    elif equation == ChaosEquation.HENON_MAP_1D:       x_series = henon_map_1d(length, p1, p2, x_init, y_or_prev_init)
+    elif equation == ChaosEquation.MAGNETIC_SNA:       x_series = magnetic_sna_map(length, p1, x_init, y_or_prev_init)
+    elif equation == ChaosEquation.TINKERBELL_MAP:     x_series = tinkerbell_map(length, p1, p2, x_init, y_or_prev_init)
+    elif equation == ChaosEquation.GINGERBREADMAN:     x_series = gingerbreadman_map(length, p1, x_init, y_or_prev_init)
+    elif equation == ChaosEquation.CHIRIKOV_STANDARD:  x_series = chirikov_standard_map(length, p1, x_init, y_or_prev_init)
     else: raise ValueError(f"Unknown or misconfigured chaos equation: {equation}")
     
     actions = (x_series > 0.5).astype(np.int32)
     if length > 0: actions[0] = 1
     return actions
 
-# --- Optimizer & Walk-Forward (remain largely the same, but now use the expanded router) ---
-# ... find_best_chaos_params, generate_chaos_walk_forward, _generate_perfect_foresight_numba ...
+# ==============================================================================
+# 4. Optimizer, Walk-Forward, and UI (Unchanged)
+# ==============================================================================
+# The rest of the code (find_best_chaos_params, generate_chaos_walk_forward,
+# _generate_perfect_foresight_numba, render_settings_tab, render_model_tab, main)
+# does not need to be changed as it's designed to be generic. I will include it for completeness.
+
 def find_best_chaos_params(prices_window: np.ndarray, equation: str, num_params_to_try: int, fix: int) -> Dict:
     window_len = len(prices_window);
     if window_len < 2: return {'best_params': (0,), 'best_x0': 0, 'best_net': 0}
@@ -381,10 +386,6 @@ def _generate_perfect_foresight_numba(price_arr: np.ndarray, fix: int) -> np.nda
     return actions
 
 
-# ==============================================================================
-# 4. UI Rendering Functions
-# ==============================================================================
-# ... (render_settings_tab and render_model_tab remain the same, they use the ALL_EQUATIONS list) ...
 def render_settings_tab():
     st.write("⚙️ **พารามิเตอร์พื้นฐาน**")
     c1,c2,c3=st.columns(3)
@@ -450,9 +451,6 @@ def render_model_tab():
         st.dataframe(df_windows)
 
 
-# ==============================================================================
-# 5. Main Application
-# ==============================================================================
 def main():
     st.set_page_config(page_title="Exotic Chaos Laboratory", page_icon="🌀", layout="wide")
     st.markdown("### 🌀 The Exotic Chaos Laboratory")
