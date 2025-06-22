@@ -246,8 +246,8 @@ def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int, 
         for seed in seed_batch:
             rng = np.random.default_rng(seed)
             actions_window = rng.integers(0, 2, size=window_len)
-            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(actions_window), prices_tuple)
-            net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+            res = calculate_optimized_cached(tuple(actions_window), prices_tuple)
+            net = res[1][-1] - res[5][-1] - res[1][0] if len(res[1]) > 0 else -np.inf
             results.append((seed, net))
         return results
 
@@ -338,8 +338,8 @@ def find_best_chaotic_seed(prices_window: np.ndarray, num_seeds_to_try: int, max
         results = []; prices_tuple = tuple(prices_window)
         for seed in seed_batch:
             actions_window = generate_actions_from_chaotic_seed(window_len, seed)
-            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(actions_window), prices_tuple)
-            net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+            res = calculate_optimized_cached(tuple(actions_window), prices_tuple)
+            net = res[1][-1] - res[5][-1] - res[1][0] if len(res[1]) > 0 else -np.inf
             results.append((seed, net))
         return results
 
@@ -406,18 +406,23 @@ def find_best_solution_ga(prices_window: np.ndarray, population_size: int, gener
     prices_tuple = tuple(prices_window)
 
     for _ in range(generations):
+        # --- Evaluation (FIXED) ---
         fitness_scores = []
         for chromosome in population:
-            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(chromosome), prices_tuple)
-            net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+            res = calculate_optimized_cached(tuple(chromosome), prices_tuple)
+            if len(res[1]) > 0:
+                net = res[1][-1] - res[5][-1] - res[1][0]
+            else:
+                net = -np.inf
             fitness_scores.append(net)
-        
         fitness_scores = np.array(fitness_scores)
         
+        # --- Selection ---
         num_parents = population_size // 2
         parent_indices = np.argsort(fitness_scores)[-num_parents:]
         parents = population[parent_indices]
         
+        # --- Crossover ---
         num_offspring = population_size - num_parents
         offspring = np.empty((num_offspring, window_len), dtype=np.int32)
         for k in range(num_offspring):
@@ -426,16 +431,21 @@ def find_best_solution_ga(prices_window: np.ndarray, population_size: int, gener
             offspring[k, :crossover_point] = parents[parent1_idx, :crossover_point]
             offspring[k, crossover_point:] = parents[parent2_idx, crossover_point:]
         
+        # --- Mutation ---
         mutation_mask = rng.random((num_offspring, window_len)) < mutation_rate
         offspring[mutation_mask] = 1 - offspring[mutation_mask]
         offspring[:, 0] = 1
         
         population[num_parents:] = offspring
 
+    # --- Final Evaluation (FIXED) ---
     final_fitness = []
     for chromosome in population:
-        _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(chromosome), prices_tuple)
-        net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+        res = calculate_optimized_cached(tuple(chromosome), prices_tuple)
+        if len(res[1]) > 0:
+            net = res[1][-1] - res[5][-1] - res[1][0]
+        else:
+            net = -np.inf
         final_fitness.append(net)
         
     best_idx = np.argmax(final_fitness)
@@ -475,35 +485,38 @@ def generate_actions_sliding_window_ga(ticker_data: pd.DataFrame, window_size: i
 def refine_solution_with_ga(prices_window: np.ndarray, initial_chromosome: np.ndarray, population_size: int, generations: int, seed: int, mutation_rate: float = 0.01, initial_population_mutation_rate: float = 0.1) -> Tuple[float, np.ndarray]:
     """
     ใช้ Genetic Algorithm เพื่อปรับปรุง (refine) 'action_sequence' ที่มีอยู่แล้ว
-    - `initial_chromosome`: action_sequence ที่ดีที่สุดที่ได้จาก Random Search
-    - `initial_population_mutation_rate`: อัตราการกลายพันธุ์เพื่อสร้างประชากรเริ่มต้นรอบๆ initial_chromosome
     """
     window_len = len(prices_window)
     if window_len < 2: return 0.0, np.ones(window_len, dtype=np.int32)
     
     rng = np.random.default_rng(seed)
 
-    # --- สร้างประชากรเริ่มต้นโดยใช้ initial_chromosome เป็นศูนย์กลาง ---
     population = np.tile(initial_chromosome, (population_size, 1))
     mutation_mask = rng.random((population_size, window_len)) < initial_population_mutation_rate
     population[mutation_mask] = 1 - population[mutation_mask]
-    population[0] = initial_chromosome # รับประกันว่า solution ดั้งเดิมยังอยู่
-    population[:, 0] = 1 # บังคับให้วันแรกต้องซื้อเสมอ
-    # --- จบส่วนการสร้างประชากรเริ่มต้น ---
+    population[0] = initial_chromosome
+    population[:, 0] = 1
     
     prices_tuple = tuple(prices_window)
 
-    # GA Loop (เหมือนเดิม)
     for _ in range(generations):
-        fitness_scores = np.array([
-            (lambda p=p: (res := calculate_optimized_cached(tuple(p), prices_tuple))[1][-1] - res[5][-1] - res[1][0] if len(res[1]) > 0 else -np.inf)()
-            for p in population
-        ])
+        # --- Evaluation (FIXED) ---
+        fitness_scores = []
+        for chromosome in population:
+            res = calculate_optimized_cached(tuple(chromosome), prices_tuple)
+            if len(res[1]) > 0:
+                net = res[1][-1] - res[5][-1] - res[1][0]
+            else:
+                net = -np.inf
+            fitness_scores.append(net)
+        fitness_scores = np.array(fitness_scores)
         
+        # --- Selection ---
         num_parents = population_size // 2
         parent_indices = np.argsort(fitness_scores)[-num_parents:]
         parents = population[parent_indices]
         
+        # --- Crossover ---
         num_offspring = population_size - num_parents
         offspring = np.empty((num_offspring, window_len), dtype=np.int32)
         for k in range(num_offspring):
@@ -512,16 +525,22 @@ def refine_solution_with_ga(prices_window: np.ndarray, initial_chromosome: np.nd
             offspring[k, :crossover_point] = parents[parent1_idx, :crossover_point]
             offspring[k, crossover_point:] = parents[parent2_idx, crossover_point:]
         
+        # --- Mutation ---
         mutation_mask = rng.random((num_offspring, window_len)) < mutation_rate
         offspring[mutation_mask] = 1 - offspring[mutation_mask]
         offspring[:, 0] = 1
         
         population[num_parents:] = offspring
 
-    final_fitness = np.array([
-        (lambda p=p: (res := calculate_optimized_cached(tuple(p), prices_tuple))[1][-1] - res[5][-1] - res[1][0] if len(res[1]) > 0 else -np.inf)()
-        for p in population
-    ])
+    # --- Final Evaluation (FIXED) ---
+    final_fitness = []
+    for chromosome in population:
+        res = calculate_optimized_cached(tuple(chromosome), prices_tuple)
+        if len(res[1]) > 0:
+            net = res[1][-1] - res[5][-1] - res[1][0]
+        else:
+            net = -np.inf
+        final_fitness.append(net)
         
     best_idx = np.argmax(final_fitness)
     return final_fitness[best_idx], population[best_idx]
@@ -544,13 +563,11 @@ def generate_actions_sliding_window_hybrid_ga(ticker_data: pd.DataFrame, window_
         progress_text = f"Window {i+1}/{num_windows} - Phase 1: Random Search..."
         progress_bar.progress((i + 0.0) / num_windows, text=progress_text)
         
-        # --- Phase 1: Random Seed Search ---
         initial_seed, initial_net, initial_actions = find_best_seed_for_window(prices_window, num_seeds_to_try, max_workers)
         
         progress_text = f"Window {i+1}/{num_windows} - Phase 2: GA Refinement (Initial Net: ${initial_net:.2f})..."
         progress_bar.progress((i + 0.5) / num_windows, text=progress_text)
 
-        # --- Phase 2: GA Refinement ---
         window_ga_seed = master_seed + i
         refined_net, refined_actions = refine_solution_with_ga(
             prices_window, initial_actions, population_size, generations, seed=window_ga_seed
@@ -598,8 +615,8 @@ def generate_actions_sliding_window_arithmetic(ticker_data: pd.DataFrame, window
             actions = (_sigmoid(latent_sequence) > 0.5).astype(np.int32)
             actions[0] = 1
 
-            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(actions), tuple(prices_window))
-            net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+            res = calculate_optimized_cached(tuple(actions), tuple(prices_window))
+            net = res[1][-1] - res[5][-1] - res[1][0] if len(res[1]) > 0 else -np.inf
 
             if net > best_net: best_net, best_actions, best_params = net, actions, {'a1': a1, 'd': d}
 
@@ -639,8 +656,8 @@ def generate_actions_sliding_window_geometric(ticker_data: pd.DataFrame, window_
             actions = (_sigmoid(latent_sequence) > 0.5).astype(np.int32)
             actions[0] = 1
 
-            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(actions), tuple(prices_window))
-            net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+            res = calculate_optimized_cached(tuple(actions), tuple(prices_window))
+            net = res[1][-1] - res[5][-1] - res[1][0] if len(res[1]) > 0 else -np.inf
 
             if net > best_net: best_net, best_actions, best_params = net, actions, {'a1': a1, 'r': r}
 
@@ -878,7 +895,7 @@ def render_hybrid_ga_tab():
         if not df_windows.empty:
             total_initial_net = df_windows['initial_max_net'].sum()
             total_refined_net = df_windows['refined_max_net'].sum()
-            improvement_pct = ((total_refined_net / total_initial_net) - 1) * 100 if total_initial_net > 0 else 0
+            improvement_pct = ((total_refined_net / total_initial_net) - 1) * 100 if total_initial_net != 0 else float('inf') if total_refined_net > 0 else 0
             
             col1, col2, col3 = st.columns(3)
             col1.metric("Total Net (Before GA)", f"${total_initial_net:,.2f}")
@@ -911,8 +928,8 @@ def render_arithmetic_tab():
                 Strategy.REBALANCE_DAILY: actions_min.tolist(),
                 Strategy.PERFECT_FORESIGHT: actions_max.tolist()
             }
-            for strategy_name, actions in strategy_map.items():
-                df = run_simulation(prices.tolist(), actions)
+            for strategy_name, actions_list in strategy_map.items():
+                df = run_simulation(prices.tolist(), actions_list)
                 if not df.empty: df.index = ticker_data.index[:len(df)]
                 results[strategy_name] = df
         
@@ -944,8 +961,8 @@ def render_geometric_tab():
                 Strategy.REBALANCE_DAILY: actions_min.tolist(),
                 Strategy.PERFECT_FORESIGHT: actions_max.tolist()
             }
-            for strategy_name, actions in strategy_map.items():
-                df = run_simulation(prices.tolist(), actions)
+            for strategy_name, actions_list in strategy_map.items():
+                df = run_simulation(prices.tolist(), actions_list)
                 if not df.empty: df.index = ticker_data.index[:len(df)]
                 results[strategy_name] = df
         
@@ -985,6 +1002,12 @@ def render_analytics_tab():
         st.subheader("ผลการวิเคราะห์")
         df_to_analyze = st.session_state.df_for_analysis
         try:
+            # Allow for different column names from different strategies
+            if 'final_action_sequence' in df_to_analyze.columns:
+                df_to_analyze.rename(columns={'final_action_sequence': 'action_sequence'}, inplace=True)
+            if 'refined_max_net' in df_to_analyze.columns:
+                 df_to_analyze.rename(columns={'refined_max_net': 'max_net'}, inplace=True)
+            
             required_cols = ['window_number', 'timeline', 'max_net']
             if 'action_sequence' not in df_to_analyze.columns:
                 st.info("คอลัมน์ 'action_sequence' ไม่พบในไฟล์, ฟีเจอร์ 'Stitched DNA Analysis' จะถูกปิดใช้งาน")
@@ -1180,13 +1203,13 @@ def main():
     with tabs[1]: render_test_tab()
     with tabs[2]: render_chaotic_test_tab()
     with tabs[3]: render_ga_test_tab()
-    with tabs[4]: render_hybrid_ga_tab() # ! NEW: Render Hybrid GA Tab
+    with tabs[4]: render_hybrid_ga_tab()
     with tabs[5]: render_arithmetic_tab()
     with tabs[6]: render_geometric_tab()
     with tabs[7]: render_analytics_tab()
     with tabs[8]: render_manual_seed_tab(config)
 
-    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (v.Optimized + Hybrid)"):
+    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (v.Hybrid-Fixed)"):
         st.markdown("""
         ### หลักการทำงานของเวอร์ชันนี้:
 
