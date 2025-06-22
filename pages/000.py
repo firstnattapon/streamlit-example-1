@@ -242,7 +242,8 @@ def generate_actions_hybrid_multi_mutation(
             if mutated_net > current_best_net:
                 current_best_net = mutated_net
                 current_best_actions = mutated_actions
-                successful_mutation_seeds.append(mutation_seed)
+                # ! MODIFIED: Convert numpy integer to standard python int for clean display
+                successful_mutation_seeds.append(int(mutation_seed))
 
         final_actions = np.concatenate((final_actions, current_best_actions))
         
