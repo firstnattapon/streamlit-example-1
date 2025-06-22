@@ -19,15 +19,16 @@ class Strategy:
     """คลาสสำหรับเก็บชื่อกลยุทธ์ต่างๆ เพื่อให้เรียกใช้ง่ายและลดข้อผิดพลาด"""
     REBALANCE_DAILY = "Rebalance Daily"
     PERFECT_FORESIGHT = "Perfect Foresight (Max)"
-    HYBRID_MULTI_MUTATION = "Hybrid (Multi-Mutation)" # ! UPDATED: เปลี่ยนชื่อกลยุทธ์
+    HYBRID_MULTI_MUTATION = "Hybrid (Multi-Mutation)"
 
 def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
+    # In a real app, this might load from a JSON file. For simplicity, it's a dict.
     return {
-        "assets": ["FFWM", "NEGG", "RIVN", "BTC-USD", "NVDA", "TSLA", "META"],
+        "assets": ["FFWM", "NEGG", "RIVN", "AGL", "APLS", "FLNC", "NVTS" , "QXO" ,"RXRX"],
         "default_settings": { 
             "selected_ticker": "FFWM", "start_date": "2024-01-01", 
             "window_size": 30, "num_seeds": 10000, "max_workers": 8,
-            "mutation_rate": 5.0, "num_mutations": 2 # ! NEW: เพิ่มจำนวนรอบการกลายพันธุ์
+            "mutation_rate": 5.0, "num_mutations": 2 
         }
     }
 
@@ -42,7 +43,6 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 10000)
     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
     if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 5.0)
-    # ! NEW: เพิ่มการตั้งค่าเริ่มต้นสำหรับจำนวนรอบการกลายพันธุ์
     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 2)
 
 # ==============================================================================
@@ -199,14 +199,13 @@ def find_best_mutation_for_sequence(
         
     return best_mutation_seed, max_mutated_net, final_mutated_actions
 
-# ! UPDATED: The Hybrid Multi-Mutation Strategy Core Function
 def generate_actions_hybrid_multi_mutation(
     ticker_data: pd.DataFrame, 
     window_size: int, 
     num_seeds: int, 
     max_workers: int, 
     mutation_rate_pct: float,
-    num_mutations: int # ! NEW: รับพารามิเตอร์จำนวนรอบการกลายพันธุ์
+    num_mutations: int
 ) -> Tuple[np.ndarray, pd.DataFrame]:
     
     prices = ticker_data['Close'].to_numpy()
@@ -226,7 +225,8 @@ def generate_actions_hybrid_multi_mutation(
         if len(prices_window) < 2: continue
         
         # --- Phase 1: Search for Best DNA (The Champion) ---
-        progress_bar.progress((i * progress_total_steps + 1) / (num_windows * progress_total_steps), text=f"Window {i+1}/{num_windows} - Phase 1: Searching for Best DNA...")
+        progress_text = f"Window {i+1}/{num_windows} - Phase 1: Searching for Best DNA..."
+        progress_bar.progress((i * progress_total_steps + 1) / (num_windows * progress_total_steps), text=progress_text)
         dna_seed, current_best_net, current_best_actions = find_best_seed_for_window(prices_window, num_seeds, max_workers)
         
         original_net_for_display = current_best_net
@@ -234,14 +234,13 @@ def generate_actions_hybrid_multi_mutation(
 
         # --- Phase 2: Multi-Round Mutation ---
         for mutation_round in range(num_mutations):
-            progress_bar.progress((i * progress_total_steps + 1 + mutation_round + 1) / (num_windows * progress_total_steps), text=f"Window {i+1}/{num_windows} - Mutation Round {mutation_round+1}/{num_mutations}...")
+            progress_text = f"Window {i+1}/{num_windows} - Mutation Round {mutation_round+1}/{num_mutations}..."
+            progress_bar.progress((i * progress_total_steps + 1 + mutation_round + 1) / (num_windows * progress_total_steps), text=progress_text)
             
-            # Find the best possible mutation for the CURRENT champion
             mutation_seed, mutated_net, mutated_actions = find_best_mutation_for_sequence(
                 current_best_actions, prices_window, num_seeds, mutation_rate, max_workers
             )
 
-            # If the mutated version is better, it becomes the new champion
             if mutated_net > current_best_net:
                 current_best_net = mutated_net
                 current_best_actions = mutated_actions
@@ -300,15 +299,65 @@ def render_settings_tab():
     
     c1, c2 = st.columns(2)
     st.session_state.mutation_rate = c1.slider("อัตราการกลายพันธุ์ (Mutation Rate) %", min_value=0.0, max_value=50.0, value=st.session_state.mutation_rate, step=0.5)
-    # ! NEW: UI สำหรับกำหนดจำนวนรอบการกลายพันธุ์
     st.session_state.num_mutations = c2.number_input("จำนวนรอบการกลายพันธุ์ (Multi-Mutation)", min_value=0, max_value=10, value=st.session_state.num_mutations, help="จำนวนครั้งที่จะพยายามพัฒนายีนส์ต่อจากตัวที่ดีที่สุดในแต่ละ Window")
 
 
-def render_hybrid_multi_mutation_tab(): # ! UPDATED: เปลี่ยนชื่อฟังก์ชัน
+def render_hybrid_multi_mutation_tab():
     st.write("---")
     st.markdown(f"### 🧬 {Strategy.HYBRID_MULTI_MUTATION}")
     st.info("กลยุทธ์นี้ทำงานโดย: 1. ค้นหา 'DNA' ที่ดีที่สุดในแต่ละ Window 2. นำ DNA นั้นมาพยายาม 'กลายพันธุ์' (Mutate) ซ้ำๆ เพื่อหาผลลัพธ์ที่ดีกว่าเดิม")
     
+    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (Multi-Mutation)"):
+        st.markdown(
+            """
+            แนวคิด **Hybrid (Multi-Mutation)** ได้รับแรงบันดาลใจจากกระบวนการ **วิวัฒนาการและการคัดเลือกสายพันธุ์ (Evolution & Selective Breeding)** โดยมีเป้าหมายเพื่อ "พัฒนา" รูปแบบการซื้อขาย (Actions) ที่ดีที่สุดให้ดียิ่งขึ้นไปอีกแบบซ้ำๆ ภายในแต่ละ Window
+
+            แทนที่จะเปรียบเทียบระหว่าง "DNA ดั้งเดิม" กับ "การกลายพันธุ์แค่ครั้งเดียว" กลยุทธ์นี้จะนำผู้ชนะ (Champion) มาผ่านกระบวนการกลายพันธุ์ซ้ำๆ หลายรอบ เพื่อค้นหาการปรับปรุงที่ดีขึ้นเรื่อยๆ
+
+            ---
+
+            #### 🧬 กระบวนการทำงานในแต่ละ Window:
+
+            1.  **เฟส 1: ค้นหา "แชมป์เปี้ยนตั้งต้น" (Initial Champion)**
+                *   โปรแกรมจะทำการสุ่ม Actions หรือ "DNA" ขึ้นมาตามจำนวน `num_seeds` ที่กำหนด
+                *   DNA ที่สร้างกำไร (Net Profit) ได้สูงสุด จะถูกคัดเลือกให้เป็น **"แชมป์เปี้ยนตัวแรก"**
+                *   `DNA_Original = argmax_{s in S_dna} [ Profit(Generate_DNA(s)) ]`
+
+            2.  **เฟส 2: กระบวนการ "กลายพันธุ์ต่อเนื่อง" (Iterative Mutation)**
+                *   โปรแกรมจะเริ่มลูปการกลายพันธุ์ตามจำนวนรอบ (`num_mutations`) ที่กำหนด
+                *   **ในแต่ละรอบ:**
+                    *   **สร้างผู้ท้าชิง:** นำ Actions ของ **"แชมป์เปี้ยนปัจจุบัน"** มาเป็นต้นแบบ แล้วค้นหารูปแบบการกลายพันธุ์ (Mutation Pattern) ที่ดีที่สุดเพื่อสร้าง "ผู้ท้าชิง" (Challenger)
+                    *   `Challenger = argmax_{s_m in S_mutation} [ Profit(Mutate(Current_Champion, s_m)) ]`
+                    *   **คัดเลือกผู้ที่แข็งแกร่งที่สุด (Survival of the Fittest):** เปรียบเทียบกำไรระหว่าง "ผู้ท้าชิง" กับ "แชมป์เปี้ยนปัจจุบัน"
+                        *   **ถ้าผู้ท้าชิงชนะ:** ผู้ท้าชิงจะกลายเป็น **"แชมป์เปี้ยนคนใหม่"** และจะถูกนำไปใช้เป็นต้นแบบในรอบการกลายพันธุ์ถัดไป
+                        *   **ถ้าแชมป์เปี้ยนปัจจุบันชนะ:** แชมป์เปี้ยนจะยังคงตำแหน่งเดิม และถูกนำไปใช้เป็นต้นแบบในรอบถัดไป
+            
+            3.  **เฟส 3: ผลลัพธ์สุดท้าย**
+                *   หลังจากผ่านกระบวนการกลายพันธุ์ครบทุกรอบแล้ว **"แชมป์เปี้ยนตัวสุดท้าย"** ที่รอดมาได้ คือ Actions ที่จะถูกนำไปใช้สำหรับ Window นั้นจริงๆ
+
+            ---
+            
+            #### ตัวอย่าง: (สมมติ `num_mutations = 2`)
+
+            1.  **ค้นหา DNA ดั้งเดิม:** พบว่า Seed `5784` ให้กำไรดีที่สุด `Net Profit = $1,200`
+                *   **แชมป์เปี้ยนปัจจุบัน:** Actions จาก Seed `5784` (Profit: $1,200)
+
+            2.  **Mutation รอบที่ 1:**
+                *   นำ Actions ของแชมป์เปี้ยน (Seed `5784`) ไปค้นหารูปแบบกลายพันธุ์ที่ดีที่สุด
+                *   พบว่า Mutation Seed `8871` สามารถพัฒนากำไรเป็น `$1,550` ได้
+                *   เนื่องจาก `$1,550 > $1,200` → ผู้ท้าชิงชนะ!
+                *   **แชมป์เปี้ยนคนใหม่:** Actions ที่กลายพันธุ์จาก Seed `8871` (Profit: $1,550)
+
+            3.  **Mutation รอบที่ 2:**
+                *   นำ Actions ของแชมป์เปี้ยนคนใหม่ (ที่มาจาก Mutation Seed `8871`) ไปค้นหารูปแบบกลายพันธุ์ที่ดีที่สุดอีกครั้ง
+                *   พบว่า Mutation Seed `10524` สามารถพัฒนากำไรต่อได้เป็น `$1,620`
+                *   เนื่องจาก `$1,620 > $1,550` → ผู้ท้าชิงชนะอีกครั้ง!
+                *   **แชมป์เปี้ยนคนใหม่:** Actions ที่กลายพันธุ์จาก Seed `10524` (Profit: $1,620)
+
+            4.  **จบกระบวนการ:** Actions สุดท้ายสำหรับ Window นี้คือ Actions ที่ให้กำไร `$1,620` ซึ่งเป็นผลลัพธ์จากการพัฒนาต่อยอดมา 2 รอบ
+            """
+        )
+
     if st.button(f"🚀 Start Hybrid Multi-Mutation", type="primary"):
         if st.session_state.start_date >= st.session_state.end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
         ticker = st.session_state.test_ticker
@@ -316,7 +365,6 @@ def render_hybrid_multi_mutation_tab(): # ! UPDATED: เปลี่ยนชื
             ticker_data = get_ticker_data(ticker, str(st.session_state.start_date), str(st.session_state.end_date))
             if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
             
-            # ! UPDATED: เรียกใช้ฟังก์ชันใหม่
             actions, df_windows = generate_actions_hybrid_multi_mutation(
                 ticker_data, st.session_state.window_size, st.session_state.num_seeds, 
                 st.session_state.max_workers, st.session_state.mutation_rate,
@@ -360,14 +408,12 @@ def main():
     config = load_config()
     initialize_session_state(config)
 
-    # ! UPDATED: เปลี่ยนชื่อ Tab
     tab_list = ["⚙️ การตั้งค่า", f"🧬 {Strategy.HYBRID_MULTI_MUTATION}"]
     tabs = st.tabs(tab_list)
 
     with tabs[0]:
         render_settings_tab()
     with tabs[1]:
-        # ! UPDATED: เรียกใช้ฟังก์ชัน render ของ Tab ใหม่
         render_hybrid_multi_mutation_tab()
 
 if __name__ == "__main__":
