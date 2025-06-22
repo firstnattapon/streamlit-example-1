@@ -1,4 +1,4 @@
-# v1 main (with v2 Arithmetic & Geometric Sequence tabs integrated)
+# Final Integrated Code (v1 + v2 Sequence Strategies)
 
 import pandas as pd
 import numpy as np
@@ -757,16 +757,17 @@ def render_test_tab():
         display_comparison_charts(results)
         
         st.write("📈 **สรุปผลการค้นหา Best Seed**")
-        total_actions = df_windows['action_count'].sum()
-        total_net = df_windows['max_net'].sum()
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Windows", df_windows.shape[0])
-        col2.metric("Total Actions", f"{total_actions}/{num_days}")
-        col3.metric("Total Net (Sum)", f"${total_net:,.2f}")
+        if not df_windows.empty:
+            total_actions = df_windows['action_count'].sum()
+            total_net = df_windows['max_net'].sum()
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Windows", df_windows.shape[0])
+            col2.metric("Total Actions", f"{total_actions}/{num_days}")
+            col3.metric("Total Net (Sum)", f"${total_net:,.2f}")
         
-        st.dataframe(df_windows[['window_number', 'timeline', 'best_seed', 'max_net', 'price_change_pct', 'action_count']], use_container_width=True)
-        csv = df_windows.to_csv(index=False)
-        st.download_button(label="📥 ดาวน์โหลด Window Details (CSV)", data=csv, file_name=f'best_seed_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
+            st.dataframe(df_windows[['window_number', 'timeline', 'best_seed', 'max_net', 'price_change_pct', 'action_count']], use_container_width=True)
+            csv = df_windows.to_csv(index=False)
+            st.download_button(label="📥 ดาวน์โหลด Window Details (CSV)", data=csv, file_name=f'best_seed_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
 
 def render_chaotic_test_tab():
     """แสดงผล UI สำหรับ Tab Best Seed (Chaotic)"""
@@ -1006,7 +1007,13 @@ def render_analytics_tab():
         df_to_analyze = st.session_state.df_for_analysis
         try:
             # Check for necessary columns
-            required_cols = ['window_number', 'timeline', 'max_net', 'action_sequence']
+            required_cols = ['window_number', 'timeline', 'max_net']
+            # Allow for optional action_sequence
+            if 'action_sequence' not in df_to_analyze.columns:
+                st.info("คอลัมน์ 'action_sequence' ไม่พบในไฟล์, ฟีเจอร์ 'Stitched DNA Analysis' จะถูกปิดใช้งาน")
+                df_to_analyze['action_sequence'] = [[] for _ in range(len(df_to_analyze))]
+
+
             if not all(col in df_to_analyze.columns for col in required_cols):
                 st.error(f"ไฟล์ CSV ไม่สมบูรณ์! ต้องมีคอลัมน์พื้นฐาน: {', '.join(required_cols)}")
                 return
@@ -1053,54 +1060,57 @@ def render_analytics_tab():
                 st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
                 st.markdown("จำลองการเทรดจริงโดยนำ **`action_sequence`** จากแต่ละ Window มา 'เย็บ' ต่อกัน และเปรียบเทียบกับ Benchmark")
                 
-                df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
-                df_sorted = df.sort_values('window_number')
-                stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
-                
-                dna_cols = st.columns(2)
-                stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.test_ticker, key='stitch_ticker_input')
-                stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime.now().date() - pd.Timedelta(days=365), key='stitch_date_input')
-                
-                if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", key='stitch_dna_btn'):
-                    if not stitched_actions:
-                        st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้")
-                    else:
-                        with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker}..."):
-                            sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now().date()))
-                            if sim_data.empty:
-                                st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
-                            else:
-                                prices = sim_data['Close'].to_numpy()
-                                n_total = len(prices)
-                                
-                                final_actions_dna = stitched_actions[:n_total]
-                                df_dna = run_simulation(prices[:len(final_actions_dna)].tolist(), final_actions_dna)
-                                df_max = run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
-                                df_min = run_simulation(prices.tolist(), generate_actions_rebalance_daily(n_total).tolist())
-                                
-                                results_dna = {}
-                                if not df_dna.empty:
-                                    df_dna.index = sim_data.index[:len(df_dna)]
-                                    results_dna['Stitched DNA'] = df_dna
-                                if not df_max.empty:
-                                    df_max.index = sim_data.index[:len(df_max)]
-                                    results_dna[Strategy.PERFECT_FORESIGHT] = df_max
-                                if not df_min.empty:
-                                    df_min.index = sim_data.index[:len(df_min)]
-                                    results_dna[Strategy.REBALANCE_DAILY] = df_min
+                if 'action_sequence' not in df.columns:
+                     st.warning("ไม่สามารถทำการวิเคราะห์ Stitched DNA ได้เนื่องจากไม่มีคอลัมน์ 'action_sequence' ในข้อมูลที่อัปโหลด")
+                else:
+                    df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
+                    df_sorted = df.sort_values('window_number')
+                    stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
+                    
+                    dna_cols = st.columns(2)
+                    stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.test_ticker, key='stitch_ticker_input')
+                    stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime.now().date() - pd.Timedelta(days=365), key='stitch_date_input')
+                    
+                    if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", key='stitch_dna_btn'):
+                        if not stitched_actions:
+                            st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้")
+                        else:
+                            with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker}..."):
+                                sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now().date()))
+                                if sim_data.empty:
+                                    st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
+                                else:
+                                    prices = sim_data['Close'].to_numpy()
+                                    n_total = len(prices)
                                     
-                                st.subheader("Performance Comparison (Net Profit)")
-                                display_comparison_charts(results_dna)
-                                
-                                st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
-                                metric_cols = st.columns(3)
-                                final_net_max = results_dna.get(Strategy.PERFECT_FORESIGHT, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
-                                final_net_dna = results_dna.get('Stitched DNA', pd.DataFrame({'net': [0]}))['net'].iloc[-1]
-                                final_net_min = results_dna.get(Strategy.REBALANCE_DAILY, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
-                                
-                                metric_cols[0].metric("Max Performance", f"${final_net_max:,.2f}")
-                                metric_cols[1].metric("Stitched DNA Strategy", f"${final_net_dna:,.2f}", delta=f"{final_net_dna - final_net_min:,.2f} vs Min", delta_color="normal")
-                                metric_cols[2].metric("Min Performance", f"${final_net_min:,.2f}")
+                                    final_actions_dna = stitched_actions[:n_total]
+                                    df_dna = run_simulation(prices[:len(final_actions_dna)].tolist(), final_actions_dna)
+                                    df_max = run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
+                                    df_min = run_simulation(prices.tolist(), generate_actions_rebalance_daily(n_total).tolist())
+                                    
+                                    results_dna = {}
+                                    if not df_dna.empty:
+                                        df_dna.index = sim_data.index[:len(df_dna)]
+                                        results_dna['Stitched DNA'] = df_dna
+                                    if not df_max.empty:
+                                        df_max.index = sim_data.index[:len(df_max)]
+                                        results_dna[Strategy.PERFECT_FORESIGHT] = df_max
+                                    if not df_min.empty:
+                                        df_min.index = sim_data.index[:len(df_min)]
+                                        results_dna[Strategy.REBALANCE_DAILY] = df_min
+                                        
+                                    st.subheader("Performance Comparison (Net Profit)")
+                                    display_comparison_charts(results_dna)
+                                    
+                                    st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
+                                    metric_cols = st.columns(3)
+                                    final_net_max = results_dna.get(Strategy.PERFECT_FORESIGHT, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
+                                    final_net_dna = results_dna.get('Stitched DNA', pd.DataFrame({'net': [0]}))['net'].iloc[-1]
+                                    final_net_min = results_dna.get(Strategy.REBALANCE_DAILY, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
+                                    
+                                    metric_cols[0].metric("Max Performance", f"${final_net_max:,.2f}")
+                                    metric_cols[1].metric("Stitched DNA Strategy", f"${final_net_dna:,.2f}", delta=f"{final_net_dna - final_net_min:,.2f} vs Min", delta_color="normal")
+                                    metric_cols[2].metric("Min Performance", f"${final_net_min:,.2f}")
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล: {e}")
             st.exception(e)
