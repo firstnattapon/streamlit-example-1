@@ -12,7 +12,7 @@ from typing import List, Tuple, Dict, Any
 from numba import njit
 
 # ==============================================================================
-# 1. Configuration & Constants (NO CHANGES)
+# 1. Configuration & Constants
 # ==============================================================================
 
 class Strategy:
@@ -61,7 +61,7 @@ def initialize_session_state(config: Dict[str, Any]):
 
 
 # ==============================================================================
-# 2. Core Calculation & Data Functions (With Numba Acceleration) (NO CHANGES)
+# 2. Core Calculation & Data Functions (With Numba Acceleration)
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -131,7 +131,7 @@ def _sigmoid(x: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-x))
 
 # ==============================================================================
-# 3. Strategy Action Generation (NO CHANGES)
+# 3. Strategy Action Generation
 # ==============================================================================
 
 # 3.1 Standard & Benchmark Strategies
@@ -160,6 +160,7 @@ def generate_actions_sliding_window_random(ticker_data: pd.DataFrame, window_siz
     num_windows = (n + window_size - 1) // window_size
     progress_bar = st.progress(0, text="ประมวลผล Random Search...")
 
+    # Shared function for parallel execution
     def evaluate_seed_batch(seed_batch: np.ndarray, prices_tuple: Tuple[float,...]) -> List[Tuple[int, float]]:
         results = []
         window_len = len(prices_tuple)
@@ -218,9 +219,10 @@ def generate_actions_sliding_window_arithmetic(ticker_data: pd.DataFrame, window
         rng = np.random.default_rng(master_seed + i)
         best_net, best_actions, best_params = -np.inf, np.ones(window_len, dtype=np.int32), {}
         
+        # Random Search for best (a1, d)
         for _ in range(num_samples):
-            a1 = rng.uniform(-5, 5)
-            d = rng.uniform(-1, 1)
+            a1 = rng.uniform(-5, 5) # Sample first term
+            d = rng.uniform(-1, 1)  # Sample common difference
             
             latent_sequence = a1 + indices[:window_len] * d
             actions = (_sigmoid(latent_sequence) > 0.5).astype(np.int32)
@@ -261,9 +263,10 @@ def generate_actions_sliding_window_geometric(ticker_data: pd.DataFrame, window_
         rng = np.random.default_rng(master_seed + i)
         best_net, best_actions, best_params = -np.inf, np.ones(window_len, dtype=np.int32), {}
         
+        # Random Search for best (a1, r)
         for _ in range(num_samples):
-            a1 = rng.uniform(-5, 5)
-            r = rng.uniform(0.8, 1.2)
+            a1 = rng.uniform(-5, 5)   # Sample first term
+            r = rng.uniform(0.8, 1.2) # Sample common ratio
             
             latent_sequence = a1 * (r ** indices[:window_len])
             actions = (_sigmoid(latent_sequence) > 0.5).astype(np.int32)
@@ -288,7 +291,7 @@ def generate_actions_sliding_window_geometric(ticker_data: pd.DataFrame, window_
     return final_actions, pd.DataFrame(window_details_list)
 
 # ==============================================================================
-# 4. UI Rendering Functions (CHANGED)
+# 4. UI Rendering Functions
 # ==============================================================================
 def render_settings_tab(config: Dict[str, Any]):
     st.write("⚙️ **การตั้งค่าพารามิเตอร์**")
@@ -307,6 +310,8 @@ def render_settings_tab(config: Dict[str, Any]):
     st.session_state.window_size = c1.number_input("ขนาด Window (วัน)", min_value=2, value=st.session_state.window_size)
     st.session_state.num_samples = c2.number_input("จำนวน Samples ต่อ Window", min_value=100, value=st.session_state.num_samples, format="%d", help="จำนวนการสุ่ม Seed หรือ Parameters ที่จะใช้ในแต่ละ Window")
     st.session_state.master_seed = c3.number_input("Master Seed", value=st.session_state.master_seed, format="%d", help="Seed หลักเพื่อผลลัพธ์ที่ทำซ้ำได้สำหรับโมเดล Arithmetic/Geometric")
+    # st.session_state.max_workers = c3.number_input("จำนวน Workers (CPU Cores)", min_value=1, max_value=16, value=st.session_state.max_workers, help="สำหรับ Random Search เท่านั้น")
+
 
 def display_comparison_charts(results: Dict[str, pd.DataFrame]):
     if not results: return
@@ -330,11 +335,13 @@ def display_comparison_charts(results: Dict[str, pd.DataFrame]):
     for i, name in enumerate(sorted_strategies):
         metric_cols[i].metric(name, f"${final_nets[name]:,.2f}")
 
+
 def run_and_display_results(strategy_func, strategy_name, ticker_data, df_cols):
     """Helper function to run a strategy and display results."""
     prices = ticker_data['Close'].to_numpy(); num_days = len(prices)
 
     with st.spinner(f"กำลังคำนวณกลยุทธ์ {strategy_name}..."):
+        # Call the appropriate strategy function with its required arguments
         if strategy_name == Strategy.SLIDING_WINDOW_RANDOM:
             actions, df_windows = strategy_func(ticker_data, st.session_state.window_size, st.session_state.num_samples, st.session_state.max_workers)
         else: # Arithmetic or Geometric
@@ -357,40 +364,27 @@ def run_and_display_results(strategy_func, strategy_name, ticker_data, df_cols):
     st.write(f"📈 **สรุปผลการค้นหาด้วย {strategy_name}**")
     st.dataframe(df_windows[df_cols], use_container_width=True)
 
-# --- UI Tab Functions ---
-
+# Main UI Tabs
 def render_random_search_tab(ticker_data):
     st.info("กลยุทธ์นี้จะ **'สุ่ม'** Action Sequence จำนวนมาก แล้วเลือกอันที่ให้ผลตอบแทนดีที่สุดในแต่ละ Window")
     if st.button("🚀 เริ่มทดสอบ Best Seed (Random Search)", type="primary"):
         run_and_display_results(generate_actions_sliding_window_random, Strategy.SLIDING_WINDOW_RANDOM, ticker_data,
                                 ['window_number', 'timeline', 'best_seed', 'max_net', 'action_count'])
 
-# NEW: Combined tab rendering function
-def render_sequence_models_tab(ticker_data):
-    """Renders the combined tab for Arithmetic and Geometric sequence models."""
-    st.write("โมเดลเหล่านี้จะสร้าง Action Sequence โดยการค้นหาพารามิเตอร์ที่ดีที่สุดสำหรับสมการทางคณิตศาสตร์ที่กำหนด แทนที่จะสุ่ม Action โดยตรง")
-    
-    st.divider()
-
-    # --- Arithmetic Section ---
-    st.subheader("📈 Arithmetic Sequence Model")
+def render_arithmetic_tab(ticker_data):
     st.info("กลยุทธ์นี้จะค้นหาพารามิเตอร์ของ **ลำดับเลขคณิต (`a1`, `d`)** ที่สร้าง Action ที่ดีที่สุดในแต่ละ Window")
-    if st.button("เริ่มทดสอบ Arithmetic Sequence", type="primary"):
+    if st.button("📈 เริ่มทดสอบ Arithmetic Sequence", type="primary"):
         run_and_display_results(generate_actions_sliding_window_arithmetic, Strategy.ARITHMETIC_SEQUENCE, ticker_data,
                                 ['window_number', 'timeline', 'max_net', 'best_a1', 'best_d', 'action_count'])
 
-    st.divider()
-
-    # --- Geometric Section ---
-    st.subheader("📉 Geometric Sequence Model")
+def render_geometric_tab(ticker_data):
     st.info("กลยุทธ์นี้จะค้นหาพารามิเตอร์ของ **ลำดับเรขาคณิต (`a1`, `r`)** ที่สร้าง Action ที่ดีที่สุดในแต่ละ Window")
-    if st.button("เริ่มทดสอบ Geometric Sequence", type="primary"):
+    if st.button("📉 เริ่มทดสอบ Geometric Sequence", type="primary"):
         run_and_display_results(generate_actions_sliding_window_geometric, Strategy.GEOMETRIC_SEQUENCE, ticker_data,
                                 ['window_number', 'timeline', 'max_net', 'best_a1', 'best_r', 'action_count'])
 
-
 # ==============================================================================
-# 5. Main Application (CHANGED)
+# 5. Main Application
 # ==============================================================================
 def main():
     st.set_page_config(page_title="Sequence Optimizer", page_icon="🎯", layout="wide")
@@ -400,9 +394,8 @@ def main():
     config = load_config()
     initialize_session_state(config)
 
-    # UPDATED: Changed tab list and variable names
-    tab_list = ["⚙️ การตั้งค่า", "🚀 Random Search", "📈📉 Sequence Models"]
-    tab_settings, tab_random, tab_sequence = st.tabs(tab_list)
+    tab_list = ["⚙️ การตั้งค่า", "🚀 Random Search", "📈 Arithmetic Seq", "📉 Geometric Seq"]
+    tab_settings, tab_random, tab_arithmetic, tab_geometric = st.tabs(tab_list)
 
     with tab_settings:
         render_settings_tab(config)
@@ -419,10 +412,10 @@ def main():
 
     with tab_random:
         render_random_search_tab(ticker_data)
-    
-    # UPDATED: Using the new combined tab
-    with tab_sequence:
-        render_sequence_models_tab(ticker_data)
+    with tab_arithmetic:
+        render_arithmetic_tab(ticker_data)
+    with tab_geometric:
+        render_geometric_tab(ticker_data)
 
     with st.expander("📖 คำอธิบายวิธีการทำงานของโมเดลใหม่"):
         st.markdown("""
@@ -442,7 +435,7 @@ def main():
             - **การค้นหา**: สุ่มหาค่า `a1` (พจน์เริ่มต้น) และ `r` (อัตราส่วนร่วม) ที่ดีที่สุด
             - **ลักษณะ**: สร้าง Action ที่มีแนวโน้มเปลี่ยนแปลงแบบ **ทวีคูณ** (เปลี่ยนแปลงช้าในช่วงแรกและเร็วขึ้นในช่วงหลัง หรือกลับกัน)
 
-        **ขั้นตอน**:
+        **共通ขั้นตอน**:
         - ในแต่ละ Window ระบบจะสุ่มหาพารามิเตอร์ (Seed, a1, d, a1, r) ตามจำนวน `Num Samples`
         - นำพารามิเตอร์ชุดที่ให้กำไร (Net Profit) สูงสุดมาใช้สำหรับ Window นั้น
         - การคำนวณกำไรหลักถูกเร่งความเร็วด้วย **Numba** เพื่อให้การทดสอบรวดเร็ว
