@@ -28,11 +28,9 @@ class Strategy:
     ORIGINAL_DNA = "Original DNA (from Seed)"
     EVOLVED_DNA = "Evolved DNA (by GA)"
 
-
 def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        with open(filepath, 'r', encoding='utf-8') as f: return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         st.warning(f"⚠️ ไม่พบหรือไฟล์ '{filepath}' ไม่ถูกต้อง จะใช้ค่าเริ่มต้นแทน")
         return {
@@ -68,7 +66,6 @@ def on_ticker_change_callback(config: Dict[str, Any]):
     default_presets = presets_by_asset.get("default", [{'seed': 999, 'size': 50, 'tail': 15}])
     st.session_state.manual_seed_lines = presets_by_asset.get(selected_ticker, default_presets)
 
-
 # ==============================================================================
 # 2. Core Calculation & Data Functions
 # ==============================================================================
@@ -87,21 +84,13 @@ def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame
 def _calculate_net_profit_numba(action_array: np.ndarray, price_array: np.ndarray, fix: int = 1500) -> float:
     n = len(action_array)
     if n == 0 or len(price_array) == 0 or n > len(price_array): return -np.inf
-
-    action_array_calc = action_array.copy()
-    action_array_calc[0] = 1
-    initial_price = price_array[0]
-    initial_capital = fix * 2.0
+    action_array_calc = action_array.copy(); action_array_calc[0] = 1
+    initial_price = price_array[0]; initial_capital = fix * 2.0
     refer_net = -fix * np.log(initial_price / price_array[n-1])
-    cash = float(fix)
-    amount = float(fix) / initial_price
-    
+    cash = float(fix); amount = float(fix) / initial_price
     for i in range(1, n):
         curr_price = price_array[i]
-        if action_array_calc[i] != 0:
-            cash += amount * curr_price - fix
-            amount = fix / curr_price
-            
+        if action_array_calc[i] != 0: cash += amount * curr_price - fix; amount = fix / curr_price
     final_sumusd = cash + (amount * price_array[n-1])
     net = final_sumusd - refer_net - initial_capital
     return net
@@ -109,39 +98,32 @@ def _calculate_net_profit_numba(action_array: np.ndarray, price_array: np.ndarra
 def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> pd.DataFrame:
     @njit
     def _full_sim_numba(action_arr, price_arr, fix_val):
-        n = len(action_arr)
-        empty = np.empty(0, dtype=np.float64)
+        n = len(action_arr); empty = np.empty(0, dtype=np.float64)
         if n == 0 or len(price_arr) == 0: return empty, empty, empty, empty, empty, empty
-        
         action_calc = action_arr.copy(); action_calc[0] = 1
         amount = np.empty(n, dtype=np.float64); buffer = np.zeros(n, dtype=np.float64)
         cash = np.empty(n, dtype=np.float64); asset_val = np.empty(n, dtype=np.float64)
         sumusd_val = np.empty(n, dtype=np.float64)
-        
         init_price = price_arr[0]; amount[0] = fix_val / init_price; cash[0] = fix_val
         asset_val[0] = amount[0] * init_price; sumusd_val[0] = cash[0] + asset_val[0]
         refer = -fix_val * np.log(init_price / price_arr[:n])
-        
         for i in range(1, n):
             curr_price = price_arr[i]
             if action_calc[i] == 0: amount[i] = amount[i-1]; buffer[i] = 0.0
             else: amount[i] = fix_val / curr_price; buffer[i] = amount[i-1] * curr_price - fix_val
-            cash[i] = cash[i-1] + buffer[i]; asset_val[i] = amount[i] * curr_price
-            sumusd_val[i] = cash[i] + asset_val[i]
+            cash[i] = cash[i-1] + buffer[i]; asset_val[i] = amount[i] * curr_price; sumusd_val[i] = cash[i] + asset_val[i]
         return buffer, sumusd_val, cash, asset_val, amount, refer
 
     if not prices or not actions: return pd.DataFrame()
     min_len = min(len(prices), len(actions))
-    prices_arr = np.array(prices[:min_len], dtype=np.float64)
-    actions_arr = np.array(actions[:min_len], dtype=np.int32)
+    prices_arr = np.array(prices[:min_len], dtype=np.float64); actions_arr = np.array(actions[:min_len], dtype=np.int32)
     buffer, sumusd, cash, asset_value, amount, refer = _full_sim_numba(actions_arr, prices_arr, fix)
     if len(sumusd) == 0: return pd.DataFrame()
     initial_capital = sumusd[0]
     return pd.DataFrame({
         'price': prices_arr, 'action': actions_arr, 'buffer': np.round(buffer, 2),
-        'sumusd': np.round(sumusd, 2), 'cash': np.round(cash, 2),
-        'asset_value': np.round(asset_value, 2), 'amount': np.round(amount, 2),
-        'refer': np.round(refer + initial_capital, 2),
+        'sumusd': np.round(sumusd, 2), 'cash': np.round(cash, 2), 'asset_value': np.round(asset_value, 2),
+        'amount': np.round(amount, 2), 'refer': np.round(refer + initial_capital, 2),
         'net': np.round(sumusd - refer - initial_capital, 2)
     })
 
@@ -149,7 +131,6 @@ def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> 
 # 3. Strategy Action Generation
 # ==============================================================================
 def generate_actions_rebalance_daily(num_days: int) -> np.ndarray: return np.ones(num_days, dtype=np.int32)
-
 def generate_actions_perfect_foresight(prices: List[float], fix: int = 1500) -> np.ndarray:
     price_arr = np.asarray(prices, dtype=np.float64); n = len(price_arr)
     if n < 2: return np.ones(n, dtype=int)
@@ -264,11 +245,11 @@ def generate_actions_sliding_window_hybrid_ga(ticker_data: pd.DataFrame, window_
     progress_bar.empty()
     return final_actions, pd.DataFrame(window_details_list)
 
-def evolve_sequence_with_ga(initial_sequence: np.ndarray, prices: np.ndarray, population_size: int, generations: int, ga_seed: int, mutation_rate: float = 0.01, initial_mutation_rate: float = 0.10, progress_bar=None) -> Tuple[np.ndarray, float]:
+def evolve_sequence_with_ga(initial_sequence: np.ndarray, prices: np.ndarray, population_size: int, generations: int, ga_seed: int, mutation_rate: float = 0.01, initial_population_mutation_rate: float = 0.10, progress_bar=None) -> Tuple[np.ndarray, float]:
     sequence_length = len(initial_sequence)
     rng = np.random.default_rng(ga_seed)
     population = np.tile(initial_sequence, (population_size, 1))
-    mutation_mask = rng.random(population.shape) < initial_mutation_rate
+    mutation_mask = rng.random(population.shape) < initial_population_mutation_rate
     population[mutation_mask] = 1 - population[mutation_mask]
     population[0] = initial_sequence; population[:, 0] = 1
     for gen in range(generations):
@@ -289,6 +270,57 @@ def evolve_sequence_with_ga(initial_sequence: np.ndarray, prices: np.ndarray, po
     final_fitness_scores = np.array([_calculate_net_profit_numba(chromo, prices) for chromo in population])
     best_idx = np.argmax(final_fitness_scores)
     return population[best_idx], final_fitness_scores[best_idx]
+
+# ! NEW: Function to find a seed that best matches a given sequence
+def find_seed_for_sequence(target_sequence: np.ndarray, num_seeds_to_try: int, max_workers: int) -> Tuple[int, float, np.ndarray]:
+    sequence_len = len(target_sequence)
+    
+    @njit
+    def calculate_similarity(seq1, seq2):
+        return np.sum(seq1 == seq2)
+
+    def evaluate_seed_batch(seed_batch: np.ndarray) -> List[Tuple[int, int]]:
+        results = []
+        for seed in seed_batch:
+            rng = np.random.default_rng(seed)
+            generated_sequence = rng.integers(0, 2, size=sequence_len, dtype=np.int32)
+            generated_sequence[0] = 1 # Ensure consistency
+            similarity = calculate_similarity(target_sequence, generated_sequence)
+            results.append((seed, similarity))
+        return results
+
+    best_seed, max_similarity = -1, -1
+    random_seeds = np.random.randint(1, 2**32 - 1, size=num_seeds_to_try) # Use a wider range of seeds
+    
+    batch_size = max(1, num_seeds_to_try // (max_workers * 4 if max_workers > 0 else 1))
+    seed_batches = [random_seeds[j:j+batch_size] for j in range(0, len(random_seeds), batch_size)]
+    
+    progress_bar = st.progress(0, text="Searching for Best Fit Seed...")
+    completed_futures = 0
+    total_futures = len(seed_batches)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(evaluate_seed_batch, batch) for batch in seed_batches]
+        for future in as_completed(futures):
+            for seed, similarity in future.result():
+                if similarity > max_similarity:
+                    max_similarity = similarity
+                    best_seed = seed
+            completed_futures += 1
+            progress_bar.progress(completed_futures / total_futures, text=f"Searching... Best Similarity: {max_similarity}/{sequence_len}")
+    
+    progress_bar.empty()
+    
+    if best_seed != -1:
+        rng_best = np.random.default_rng(best_seed)
+        best_fit_sequence = rng_best.integers(0, 2, size=sequence_len, dtype=np.int32)
+        best_fit_sequence[0] = 1
+        similarity_score = max_similarity / sequence_len
+    else:
+        best_fit_sequence = np.array([])
+        similarity_score = 0.0
+
+    return best_seed, similarity_score, best_fit_sequence
 
 # ==============================================================================
 # 4. UI Rendering Functions
@@ -390,72 +422,98 @@ def render_hybrid_ga_tab():
             st.download_button("📥 Download Details (CSV)", df_windows.to_csv(index=False), f'hybrid_ga_{ticker}.csv', 'text/csv')
 
 def render_evolve_dna_tab():
-    st.write("---")
-    st.markdown("### 🧬 Evolve DNA (GA)")
-    st.markdown("นำ `action_sequence` ที่สร้างจาก **Seed ต้นแบบ** มาเป็นจุดเริ่มต้นให้กับ **Genetic Algorithm (GA)** เพื่อค้นหา Sequence ที่ถูกปรับปรุงให้ดีที่สุดภายใต้สภาวะตลาดที่กำหนด")
+    st.write("---"); st.markdown("### 🧬 Evolve DNA (GA)"); st.markdown("นำ `action_sequence` ที่สร้างจาก **Seed ต้นแบบ** มาเป็นจุดเริ่มต้นให้กับ **Genetic Algorithm (GA)** เพื่อค้นหา Sequence ที่ถูกปรับปรุงให้ดีที่สุดภายใต้สภาวะตลาดที่กำหนด")
     with st.container(border=True):
-        st.subheader("1. กำหนด DNA ต้นแบบ (Blueprint)")
-        c1, c2 = st.columns(2)
+        st.subheader("1. กำหนด DNA ต้นแบบ (Blueprint)"); c1, c2 = st.columns(2)
         blueprint_seed = c1.number_input("Input Seed for Blueprint", value=16942, min_value=1, format="%d", key="blueprint_seed")
         blueprint_size = c2.number_input("Sequence Size (length of DNA)", value=60, min_value=10, key="blueprint_size")
     with st.container(border=True):
-        st.subheader("2. กำหนดพารามิเตอร์ Genetic Algorithm")
-        c1, c2, c3 = st.columns(3)
+        st.subheader("2. กำหนดพารามิเตอร์ Genetic Algorithm"); c1, c2, c3 = st.columns(3)
         ga_pop_size = c1.number_input("Population Size", value=2000, min_value=100, step=100, key="evolve_pop_size")
         ga_generations = c2.number_input("Generations", value=200, min_value=10, step=10, key="evolve_generations")
         ga_seed = c3.number_input("Master Seed for GA", value=42, format="%d", key="evolve_ga_seed")
     with st.container(border=True):
-        st.subheader("3. กำหนดสนามทดสอบ (Simulation Environment)")
-        c1, c2 = st.columns(2)
+        st.subheader("3. กำหนดสนามทดสอบ (Simulation Environment)"); c1, c2 = st.columns(2)
         sim_ticker = c1.selectbox("Ticker", options=load_config().get('assets', ['FFWM']), index=0, key="sim_ticker_evolve")
         sim_days_ago = c2.number_input("ใช้ข้อมูลย้อนหลัง (วันทำการ)", value=blueprint_size, min_value=blueprint_size, key="sim_days_evolve", help=f"ต้องมีค่าอย่างน้อยเท่ากับ Sequence Size ({blueprint_size})")
+    
+    if 'evolved_actions' not in st.session_state: st.session_state.evolved_actions = None
+
     if st.button("🧬 Start Evolution", type="primary", key="start_evolve_btn"):
+        st.session_state.evolved_actions = None # Reset previous result
         with st.spinner("กำลังเตรียมข้อมูลและวิวัฒนาการ DNA..."):
             rng_base = np.random.default_rng(blueprint_seed)
             initial_actions = rng_base.integers(0, 2, size=blueprint_size); initial_actions[0] = 1
             st.info(f"กำลังดึงข้อมูลราคา {sim_ticker} ย้อนหลัง {sim_days_ago} วันทำการ...")
-            end_date = pd.Timestamp.now().strftime('%Y-%m-%d')
-            start_date = (pd.Timestamp.now() - pd.Timedelta(days=sim_days_ago * 2)).strftime('%Y-%m-%d')
+            end_date = pd.Timestamp.now().strftime('%Y-%m-%d'); start_date = (pd.Timestamp.now() - pd.Timedelta(days=sim_days_ago * 2)).strftime('%Y-%m-%d')
             ticker_data = get_ticker_data(sim_ticker, start_date, end_date)
             if ticker_data.empty or len(ticker_data) < sim_days_ago: st.error(f"ไม่สามารถดึงข้อมูลราคาได้ครบ {sim_days_ago} วัน"); return
-            prices_full = ticker_data['Close'].to_numpy()[-sim_days_ago:]
-            prices_for_sim = prices_full[:blueprint_size]
+            prices_full = ticker_data['Close'].to_numpy()[-sim_days_ago:]; prices_for_sim = prices_full[:blueprint_size]
             initial_net = _calculate_net_profit_numba(initial_actions, prices_for_sim)
             evo_progress_bar = st.progress(0, text="Starting Evolution...")
             evolved_actions, final_net = evolve_sequence_with_ga(initial_actions, prices_for_sim, ga_pop_size, ga_generations, ga_seed, progress_bar=evo_progress_bar)
             evo_progress_bar.empty()
             st.info("กำลังจำลองผลลัพธ์เพื่อสร้างกราฟ...")
             results_evo = {}; sim_dates = ticker_data.index[-sim_days_ago:][:blueprint_size]
-            df_initial = run_simulation(prices_for_sim.tolist(), initial_actions.tolist())
-            df_evolved = run_simulation(prices_for_sim.tolist(), evolved_actions.tolist())
-            df_max = run_simulation(prices_for_sim.tolist(), generate_actions_perfect_foresight(prices_for_sim.tolist()).tolist())
-            df_min = run_simulation(prices_for_sim.tolist(), generate_actions_rebalance_daily(len(prices_for_sim)).tolist())
+            df_initial = run_simulation(prices_for_sim.tolist(), initial_actions.tolist()); df_evolved = run_simulation(prices_for_sim.tolist(), evolved_actions.tolist())
+            df_max = run_simulation(prices_for_sim.tolist(), generate_actions_perfect_foresight(prices_for_sim.tolist()).tolist()); df_min = run_simulation(prices_for_sim.tolist(), generate_actions_rebalance_daily(len(prices_for_sim)).tolist())
             if not df_initial.empty: df_initial.index = sim_dates; results_evo[Strategy.ORIGINAL_DNA] = df_initial
             if not df_evolved.empty: df_evolved.index = sim_dates; results_evo[Strategy.EVOLVED_DNA] = df_evolved
             if not df_max.empty: df_max.index = sim_dates; results_evo[Strategy.PERFECT_FORESIGHT] = df_max
             if not df_min.empty: df_min.index = sim_dates; results_evo[Strategy.REBALANCE_DAILY] = df_min
+            
+            # Store results in session state for the "Find Seed" button
+            st.session_state.evolution_results = {
+                "results_evo": results_evo, "initial_net": initial_net, "final_net": final_net,
+                "initial_actions": initial_actions, "evolved_actions": evolved_actions,
+                "blueprint_seed": blueprint_seed, "blueprint_size": blueprint_size
+            }
+        st.rerun() # Rerun to display results and the new button
+
+    if st.session_state.get("evolution_results"):
+        res = st.session_state.evolution_results
         st.success("กระบวนการวิวัฒนาการเสร็จสมบูรณ์!"); st.write("---")
-        st.subheader("📊 เปรียบเทียบประสิทธิภาพ (Net Profit)"); display_comparison_charts(results_evo)
+        st.subheader("📊 เปรียบเทียบประสิทธิภาพ (Net Profit)"); display_comparison_charts(res["results_evo"])
         st.subheader("📈 สรุปผลลัพธ์สุดท้าย"); metric_cols = st.columns(2)
-        metric_cols[0].metric(f"{Strategy.ORIGINAL_DNA} (Seed: {blueprint_seed})", f"${initial_net:,.2f}")
-        metric_cols[1].metric(f"{Strategy.EVOLVED_DNA} (GA)", f"${final_net:,.2f}", delta=f"{final_net - initial_net:,.2f}")
+        metric_cols[0].metric(f"{Strategy.ORIGINAL_DNA} (Seed: {res['blueprint_seed']})", f"${res['initial_net']:,.2f}")
+        metric_cols[1].metric(f"{Strategy.EVOLVED_DNA} (GA)", f"${res['final_net']:,.2f}", delta=f"{res['final_net'] - res['initial_net']:,.2f}")
         st.write("---"); st.subheader("🔬 รายละเอียดการเปลี่ยนแปลง DNA")
-        dna_detail_df = pd.DataFrame({'Position': range(blueprint_size), 'Original': initial_actions, 'Evolved': evolved_actions, 'Changed': initial_actions != evolved_actions})
+        dna_detail_df = pd.DataFrame({'Position': range(res["blueprint_size"]), 'Original': res["initial_actions"], 'Evolved': res["evolved_actions"], 'Changed': res["initial_actions"] != res["evolved_actions"]})
         st.dataframe(dna_detail_df, use_container_width=True, height=300)
         changes = dna_detail_df['Changed'].sum()
-        st.markdown(f"**จำนวนยีนที่เปลี่ยนแปลง:** `{changes}` จาก `{blueprint_size}` ตำแหน่ง ({changes/blueprint_size:.2%})")
+        st.markdown(f"**จำนวนยีนที่เปลี่ยนแปลง:** `{changes}` จาก `{res['blueprint_size']}` ตำแหน่ง ({changes/res['blueprint_size']:.2%})")
+
+        st.write("---")
+        st.subheader("🧬 วิศวกรรมย้อนกลับ: ค้นหา Seed สำหรับ Evolved DNA")
+        num_seeds_for_reverse = st.number_input("จำนวน Seeds ที่จะใช้ค้นหา", 10000, 1000000, 100000, 10000, key="reverse_seed_count")
+        if st.button("🔍 Find Best Fit Seed for Evolved DNA", type="primary"):
+            with st.spinner("Reverse engineering Evolved DNA to a new seed..."):
+                best_fit_seed, similarity_score, best_fit_sequence = find_seed_for_sequence(
+                    target_sequence=res["evolved_actions"],
+                    num_seeds_to_try=num_seeds_for_reverse,
+                    max_workers=st.session_state.max_workers
+                )
+            st.success("ค้นหา Seed ที่ใกล้เคียงที่สุดสำเร็จ!")
+            st.metric("Best Fit Seed", f"`{best_fit_seed}`", help="Seed นี้สามารถสร้าง DNA ที่เหมือน Evolved DNA ได้มากที่สุด")
+            st.metric("Similarity Score", f"{similarity_score:.2%}", help="เปอร์เซ็นต์ความเหมือนระหว่าง Evolved DNA และ DNA จาก Seed ใหม่")
+
+            if len(best_fit_sequence) > 0:
+                reverse_df = pd.DataFrame({
+                    'Position': range(res["blueprint_size"]),
+                    'Evolved DNA': res["evolved_actions"],
+                    f'DNA from Seed {best_fit_seed}': best_fit_sequence,
+                    'Match': res["evolved_actions"] == best_fit_sequence
+                })
+                st.dataframe(reverse_df, use_container_width=True, height=300)
 
 def render_analytics_tab():
     st.header("📊 Advanced Analytics Dashboard")
-    # ... (Analytics code can be added here later if needed)
     st.info("ฟีเจอร์นี้ถูกปิดใช้งานชั่วคราวเพื่อลดความซับซ้อนของแอป")
 
 def render_manual_seed_tab(config: Dict[str, Any]):
-    st.header("🌱 Forward Rolling Comparator")
-    st.markdown("สร้างและเปรียบเทียบ Action Sequences โดยการตัดส่วนท้าย (`tail`) จาก Seed ที่กำหนด")
+    st.header("🌱 Forward Rolling Comparator"); st.markdown("สร้างและเปรียบเทียบ Action Sequences โดยการตัดส่วนท้าย (`tail`) จาก Seed ที่กำหนด")
     with st.container(border=True):
-        st.subheader("1. กำหนดค่า Input")
-        col1, col2 = st.columns([1, 2])
+        st.subheader("1. กำหนดค่า Input"); col1, col2 = st.columns([1, 2])
         asset_list = config.get('assets', ['FFWM'])
         try: default_index = asset_list.index(st.session_state.get('manual_ticker_key', st.session_state.test_ticker))
         except (ValueError, KeyError): default_index = 0
@@ -476,37 +534,29 @@ def render_manual_seed_tab(config: Dict[str, Any]):
         if b_col2.button("➖ Remove Line"):
             if len(st.session_state.manual_seed_lines) > 1: st.session_state.manual_seed_lines.pop(); st.rerun()
             else: st.warning("ต้องมีอย่างน้อย 1 line")
-    st.write("---")
     if st.button("📈 เปรียบเทียบ Seeds", type="primary", key="compare_manual_seeds_btn"):
         if manual_start_date >= manual_end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
         with st.spinner("กำลังดึงข้อมูลและจำลองการเทรด..."):
             ticker_data = get_ticker_data(manual_ticker, str(manual_start_date), str(manual_end_date))
             if ticker_data.empty: st.error(f"ไม่พบข้อมูลสำหรับ {manual_ticker}"); return
-            prices = ticker_data['Close'].to_numpy()
-            results = {}; max_sim_len = 0
+            prices = ticker_data['Close'].to_numpy(); results = {}; max_sim_len = 0
             for i, line_info in enumerate(st.session_state.manual_seed_lines):
                 input_seed, size_seed, tail_seed = line_info['seed'], line_info['size'], line_info['tail']
                 if tail_seed > size_seed: st.error(f"Line {i+1}: Tail ({tail_seed}) ต้องไม่มากกว่า Size ({size_seed})"); return
-                rng = np.random.default_rng(input_seed)
-                actions = rng.integers(0, 2, size=size_seed)[-tail_seed:].tolist()
+                rng = np.random.default_rng(input_seed); actions = rng.integers(0, 2, size=size_seed)[-tail_seed:].tolist()
                 sim_len = min(len(prices), len(actions))
                 if sim_len == 0: continue
                 df_line = run_simulation(prices[:sim_len].tolist(), actions[:sim_len])
-                if not df_line.empty:
-                    df_line.index = ticker_data.index[:sim_len]
-                    results[f"Seed {input_seed} (Tail {tail_seed})"] = df_line
-                    max_sim_len = max(max_sim_len, sim_len)
+                if not df_line.empty: df_line.index = ticker_data.index[:sim_len]; results[f"Seed {input_seed} (Tail {tail_seed})"] = df_line; max_sim_len = max(max_sim_len, sim_len)
             if not results: st.error("ไม่สามารถสร้างผลลัพธ์ได้"); return
             if max_sim_len > 0:
                 prices_bench = prices[:max_sim_len].tolist()
-                df_max = run_simulation(prices_bench, generate_actions_perfect_foresight(prices_bench).tolist())
-                df_min = run_simulation(prices_bench, generate_actions_rebalance_daily(max_sim_len).tolist())
+                df_max = run_simulation(prices_bench, generate_actions_perfect_foresight(prices_bench).tolist()); df_min = run_simulation(prices_bench, generate_actions_rebalance_daily(max_sim_len).tolist())
                 if not df_max.empty: df_max.index = ticker_data.index[:max_sim_len]; results[Strategy.PERFECT_FORESIGHT] = df_max
                 if not df_min.empty: df_min.index = ticker_data.index[:max_sim_len]; results[Strategy.REBALANCE_DAILY] = df_min
             st.success("การเปรียบเทียบเสร็จสมบูรณ์!"); display_comparison_charts(results, chart_title="📊 Performance Comparison")
             final_results = [{'name': name, 'net': results[name]['net'].iloc[-1]} for name in results if not results[name].empty]
             if final_results: st.subheader("สรุปผลลัพธ์สุดท้าย"); st.dataframe(final_results)
-
 
 # ==============================================================================
 # 5. Main Application
@@ -541,11 +591,11 @@ def main():
 
     for i, tab_name in enumerate(tab_list):
         with tabs[i]:
-            # FIX: Check if the function needs 'config' argument
+            render_func = render_functions[tab_name]
             if tab_name in ["⚙️ การตั้งค่า", "🌱 Forward Rolling Comparator"]:
-                render_functions[tab_name](config)
+                render_func(config)
             else:
-                render_functions[tab_name]()
+                render_func()
 
 if __name__ == "__main__":
     main()
