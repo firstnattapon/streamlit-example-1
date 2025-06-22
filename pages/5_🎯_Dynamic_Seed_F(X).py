@@ -1,3 +1,5 @@
+# Final Integrated Code (v1 + v2 Sequence Strategies)
+
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -24,6 +26,10 @@ class Strategy:
     SLIDING_WINDOW = "Best Seed Sliding Window"
     CHAOTIC_SLIDING_WINDOW = "Chaotic Seed Sliding Window"
     GENETIC_ALGORITHM = "Genetic Algorithm Sliding Window"
+    # ! NEW: Added from v2
+    ARITHMETIC_SEQUENCE = "Arithmetic Sequence"
+    GEOMETRIC_SEQUENCE = "Geometric Sequence"
+
 
 def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
     """
@@ -36,12 +42,13 @@ def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
     except (FileNotFoundError, json.JSONDecodeError):
         st.warning(f"⚠️ ไม่พบหรือไฟล์ '{filepath}' ไม่ถูกต้อง จะใช้ค่าเริ่มต้นแทน")
         return {
-            "assets": ["FFWM", "NEGG", "RIVN", "BTC-USD", "NVDA"],
+            "assets": ["FFWM", "NEGG", "RIVN", "BTC-USD", "NVDA", "TSLA", "META"],
             "default_settings": {
                 "selected_ticker": "FFWM", "start_date": "2024-01-01", "window_size": 30,
                 "num_seeds": 10000, "max_workers": 8,
-                "ga_population_size": 50, "ga_generations": 20,
-                "ga_master_seed": 42
+                "ga_population_size": 50, "ga_generations": 20, "ga_master_seed": 42,
+                # ! NEW: Added from v2
+                "num_samples": 5000, "master_seed": 42
             },
             "manual_seed_by_asset": {
                 "default": [{'seed': 999, 'size': 50, 'tail': 15}],
@@ -90,6 +97,12 @@ def initialize_session_state(config: Dict[str, Any]):
         st.session_state.ga_generations = defaults.get('ga_generations', 20)
     if 'ga_master_seed' not in st.session_state:
         st.session_state.ga_master_seed = defaults.get('ga_master_seed', 42)
+
+    # ! NEW: Parameters for Arithmetic/Geometric Strategies from v2
+    if 'num_samples' not in st.session_state:
+        st.session_state.num_samples = defaults.get('num_samples', 5000)
+    if 'master_seed' not in st.session_state:
+        st.session_state.master_seed = defaults.get('master_seed', 42)
 
     if 'df_for_analysis' not in st.session_state:
         st.session_state.df_for_analysis = None
@@ -173,7 +186,7 @@ def _calculate_simulation_numba(action_array: np.ndarray, price_array: np.ndarra
 
     return buffer, sumusd, cash, asset_value, amount, refer
 
-@lru_cache(maxsize=8192) # เพิ่มขนาด cache เพื่อรองรับการเรียกที่หลากหลายขึ้น
+@lru_cache(maxsize=16384) # เพิ่มขนาด cache เพื่อรองรับการเรียกที่หลากหลายขึ้น
 def calculate_optimized_cached(action_tuple: Tuple[int, ...], price_tuple: Tuple[float, ...], fix: int = 1500) -> Tuple:
     """
     Wrapper function สำหรับเรียกฟังก์ชัน Numba โดยใช้ Cache
@@ -211,6 +224,11 @@ def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> 
         'net': np.round(sumusd - refer - initial_capital, 2)
     })
 
+# ! NEW: Helper for new sequence strategies, from v2
+@njit(cache=True)
+def _sigmoid(x: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-x))
+
 # ==============================================================================
 # 3. Strategy Action Generation
 # ==============================================================================
@@ -226,29 +244,16 @@ def generate_actions_perfect_foresight(prices: List[float], fix: int = 1500) -> 
     n = len(price_arr)
     if n < 2: return np.ones(n, dtype=int)
     
-    dp = np.zeros(n, dtype=np.float64) # dp[i] = max sumusd at day i
-    path = np.zeros(n, dtype=int)      # path[i] = a day j from which we rebalanced to get to i
-    dp[0] = float(fix * 2) # Initial sumusd
-
-    # Vectorized calculation for finding the best previous day to rebalance from
+    dp = np.zeros(n, dtype=np.float64); path = np.zeros(n, dtype=int); dp[0] = float(fix * 2)
     for i in range(1, n):
         j_indices = np.arange(i)
-        # Calculate profit if rebalancing from any previous day j to current day i
         profits = fix * ((price_arr[i] / price_arr[j_indices]) - 1)
         current_sumusd = dp[j_indices] + profits
-        
-        best_idx = np.argmax(current_sumusd)
-        dp[i] = current_sumusd[best_idx]
-        path[i] = j_indices[best_idx]
-        
-    # Reconstruct the actions from the path
-    actions = np.zeros(n, dtype=int)
-    current_day = np.argmax(dp) # Start from the day with the highest final sumusd
+        best_idx = np.argmax(current_sumusd); dp[i] = current_sumusd[best_idx]; path[i] = j_indices[best_idx]
+    actions = np.zeros(n, dtype=int); current_day = np.argmax(dp)
     while current_day > 0:
-        actions[current_day] = 1
-        current_day = path[current_day]
-    actions[0] = 1 # First day is always a buy
-    
+        actions[current_day] = 1; current_day = path[current_day]
+    actions[0] = 1
     return actions
 
 # 3.2 Standard Seed Generation (Original Logic from your sample)
@@ -546,6 +551,96 @@ def generate_actions_sliding_window_ga(ticker_data: pd.DataFrame, window_size: i
     progress_bar.empty()
     return final_actions, pd.DataFrame(window_details_list)
 
+# ! NEW: 3.5 Arithmetic Sequence Strategy (from v2)
+def generate_actions_sliding_window_arithmetic(ticker_data: pd.DataFrame, window_size: int, num_samples: int, master_seed: int) -> Tuple[np.ndarray, pd.DataFrame]:
+    prices = ticker_data['Close'].to_numpy(); n = len(prices)
+    final_actions = np.array([], dtype=np.int32); window_details_list = []
+    num_windows = (n + window_size - 1) // window_size
+    progress_bar = st.progress(0, text="ประมวลผล Arithmetic Sequence Search...")
+    st.write(f"📈 ค้นหาพารามิเตอร์ (a1, d) ที่ดีที่สุดในแต่ละ Window | {num_samples} samples/window")
+    
+    indices = np.arange(window_size)
+
+    for i, start_index in enumerate(range(0, n, window_size)):
+        end_index = min(start_index + window_size, n); prices_window = prices[start_index:end_index]
+        window_len = len(prices_window)
+        if window_len < 2: continue
+
+        rng = np.random.default_rng(master_seed + i)
+        best_net, best_actions, best_params = -np.inf, np.ones(window_len, dtype=np.int32), {}
+        
+        # Random Search for best (a1, d)
+        for _ in range(num_samples):
+            a1 = rng.uniform(-5, 5) # Sample first term
+            d = rng.uniform(-1, 1)  # Sample common difference
+            
+            latent_sequence = a1 + indices[:window_len] * d
+            actions = (_sigmoid(latent_sequence) > 0.5).astype(np.int32)
+            actions[0] = 1
+
+            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(actions), tuple(prices_window))
+            net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+
+            if net > best_net:
+                best_net, best_actions, best_params = net, actions, {'a1': a1, 'd': d}
+
+        final_actions = np.concatenate((final_actions, best_actions))
+        
+        start_date_str = ticker_data.index[start_index].strftime('%Y-%m-%d'); end_date_str = ticker_data.index[end_index-1].strftime('%Y-%m-%d')
+        window_details_list.append({'window_number': i + 1, 'timeline': f"{start_date_str} ถึง {end_date_str}",
+                                    'max_net': round(best_net, 2), 'best_a1': round(best_params.get('a1', 0), 4),
+                                    'best_d': round(best_params.get('d', 0), 4), 'action_count': int(np.sum(best_actions)),
+                                    'window_size': window_len, 'window_seed': master_seed + i})
+        progress_bar.progress((i + 1) / num_windows, text=f"Optimizing Window {i+1}/{num_windows}")
+        
+    progress_bar.empty()
+    return final_actions, pd.DataFrame(window_details_list)
+
+# ! NEW: 3.6 Geometric Sequence Strategy (from v2)
+def generate_actions_sliding_window_geometric(ticker_data: pd.DataFrame, window_size: int, num_samples: int, master_seed: int) -> Tuple[np.ndarray, pd.DataFrame]:
+    prices = ticker_data['Close'].to_numpy(); n = len(prices)
+    final_actions = np.array([], dtype=np.int32); window_details_list = []
+    num_windows = (n + window_size - 1) // window_size
+    progress_bar = st.progress(0, text="ประมวลผล Geometric Sequence Search...")
+    st.write(f"📉 ค้นหาพารามิเตอร์ (a1, r) ที่ดีที่สุดในแต่ละ Window | {num_samples} samples/window")
+
+    indices = np.arange(window_size)
+
+    for i, start_index in enumerate(range(0, n, window_size)):
+        end_index = min(start_index + window_size, n); prices_window = prices[start_index:end_index]
+        window_len = len(prices_window)
+        if window_len < 2: continue
+
+        rng = np.random.default_rng(master_seed + i)
+        best_net, best_actions, best_params = -np.inf, np.ones(window_len, dtype=np.int32), {}
+        
+        # Random Search for best (a1, r)
+        for _ in range(num_samples):
+            a1 = rng.uniform(-5, 5)   # Sample first term
+            r = rng.uniform(0.8, 1.2) # Sample common ratio
+            
+            latent_sequence = a1 * (r ** indices[:window_len])
+            actions = (_sigmoid(latent_sequence) > 0.5).astype(np.int32)
+            actions[0] = 1
+
+            _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(actions), tuple(prices_window))
+            net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+
+            if net > best_net:
+                best_net, best_actions, best_params = net, actions, {'a1': a1, 'r': r}
+
+        final_actions = np.concatenate((final_actions, best_actions))
+        
+        start_date_str = ticker_data.index[start_index].strftime('%Y-%m-%d'); end_date_str = ticker_data.index[end_index-1].strftime('%Y-%m-%d')
+        window_details_list.append({'window_number': i + 1, 'timeline': f"{start_date_str} ถึง {end_date_str}",
+                                    'max_net': round(best_net, 2), 'best_a1': round(best_params.get('a1', 0), 4),
+                                    'best_r': round(best_params.get('r', 0), 4), 'action_count': int(np.sum(best_actions)),
+                                    'window_size': window_len, 'window_seed': master_seed + i})
+        progress_bar.progress((i + 1) / num_windows, text=f"Optimizing Window {i+1}/{num_windows}")
+        
+    progress_bar.empty()
+    return final_actions, pd.DataFrame(window_details_list)
+
 
 # ==============================================================================
 # 4. UI Rendering Functions
@@ -573,12 +668,14 @@ def render_settings_tab(config: Dict[str, Any]):
     st.divider()
     st.subheader("พารามิเตอร์ทั่วไป")
     st.session_state.window_size = st.number_input("ขนาด Window (วัน)", min_value=2, value=st.session_state.window_size)
+    st.session_state.max_workers = st.number_input("จำนวน Workers (CPU Cores)", min_value=1, max_value=16, value=st.session_state.max_workers, help="ใช้สำหรับกลยุทธ์ Random และ Chaotic Search")
     
-    st.subheader("พารามิเตอร์สำหรับ Random/Chaotic Seed")
-    c1, c2 = st.columns(2)
-    st.session_state.num_seeds = c1.number_input("จำนวน Seeds/Params ต่อ Window", min_value=100, value=st.session_state.num_seeds, format="%d")
-    st.session_state.max_workers = c2.number_input("จำนวน Workers (CPU Cores)", min_value=1, max_value=16, value=st.session_state.max_workers)
-    
+    st.subheader("พารามิเตอร์สำหรับกลยุทธ์แบบ Search")
+    c1, c2, c3 = st.columns(3)
+    st.session_state.num_seeds = c1.number_input("จำนวน Seeds (Random/Chaotic)", min_value=100, value=st.session_state.num_seeds, format="%d")
+    st.session_state.num_samples = c2.number_input("จำนวน Samples (Sequence)", min_value=100, value=st.session_state.num_samples, format="%d", help="จำนวนการสุ่ม Parameter (a1, d, r) ในแต่ละ Window")
+    st.session_state.master_seed = c3.number_input("Master Seed (Sequence)", value=st.session_state.master_seed, format="%d", help="Seed หลักสำหรับกลยุทธ์ Sequence เพื่อผลลัพธ์ที่ทำซ้ำได้")
+
     st.subheader("พารามิเตอร์สำหรับ Genetic Algorithm")
     ga_c1, ga_c2, ga_c3 = st.columns(3)
     st.session_state.ga_population_size = ga_c1.number_input("ขนาดประชากร (Population Size)", min_value=10, value=st.session_state.ga_population_size)
@@ -660,16 +757,17 @@ def render_test_tab():
         display_comparison_charts(results)
         
         st.write("📈 **สรุปผลการค้นหา Best Seed**")
-        total_actions = df_windows['action_count'].sum()
-        total_net = df_windows['max_net'].sum()
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Windows", df_windows.shape[0])
-        col2.metric("Total Actions", f"{total_actions}/{num_days}")
-        col3.metric("Total Net (Sum)", f"${total_net:,.2f}")
+        if not df_windows.empty:
+            total_actions = df_windows['action_count'].sum()
+            total_net = df_windows['max_net'].sum()
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Windows", df_windows.shape[0])
+            col2.metric("Total Actions", f"{total_actions}/{num_days}")
+            col3.metric("Total Net (Sum)", f"${total_net:,.2f}")
         
-        st.dataframe(df_windows[['window_number', 'timeline', 'best_seed', 'max_net', 'price_change_pct', 'action_count']], use_container_width=True)
-        csv = df_windows.to_csv(index=False)
-        st.download_button(label="📥 ดาวน์โหลด Window Details (CSV)", data=csv, file_name=f'best_seed_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
+            st.dataframe(df_windows[['window_number', 'timeline', 'best_seed', 'max_net', 'price_change_pct', 'action_count']], use_container_width=True)
+            csv = df_windows.to_csv(index=False)
+            st.download_button(label="📥 ดาวน์โหลด Window Details (CSV)", data=csv, file_name=f'best_seed_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
 
 def render_chaotic_test_tab():
     """แสดงผล UI สำหรับ Tab Best Seed (Chaotic)"""
@@ -783,6 +881,92 @@ def render_ga_test_tab():
         csv = df_windows.to_csv(index=False)
         st.download_button(label="📥 ดาวน์โหลด GA Window Details (CSV)", data=csv, file_name=f'best_ga_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
 
+# ! NEW: UI Tab for Arithmetic Sequence (from v2)
+def render_arithmetic_tab():
+    """แสดงผล UI สำหรับ Tab Arithmetic Sequence"""
+    st.write("---")
+    st.markdown(f"### 📈 ทดสอบด้วย {Strategy.ARITHMETIC_SEQUENCE}")
+    st.info("กลยุทธ์นี้จะค้นหาพารามิเตอร์ของ **ลำดับเลขคณิต (`a1`, `d`)** ที่สร้าง Action ที่ดีที่สุดในแต่ละ Window")
+
+    if st.button(f"🚀 เริ่มทดสอบ {Strategy.ARITHMETIC_SEQUENCE}", type="primary", key="arithmetic_test_button"):
+        if st.session_state.start_date >= st.session_state.end_date:
+            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'"); return
+            
+        ticker = st.session_state.test_ticker; start_date_str = st.session_state.start_date.strftime('%Y-%m-%d'); end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
+        st.info(f"กำลังดึงข้อมูลสำหรับ **{ticker}** | {start_date_str} ถึง {end_date_str}")
+        ticker_data = get_ticker_data(ticker, start_date_str, end_date_str)
+        if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
+        
+        prices = ticker_data['Close'].to_numpy(); num_days = len(prices)
+        with st.spinner("กำลังคำนวณกลยุทธ์ต่างๆ (Arithmetic Search)..."):
+            actions, df_windows = generate_actions_sliding_window_arithmetic(
+                ticker_data, st.session_state.window_size, st.session_state.num_samples, st.session_state.master_seed
+            )
+            actions_min = generate_actions_rebalance_daily(num_days)
+            actions_max = generate_actions_perfect_foresight(prices.tolist())
+            
+            results = {}; strategy_map = {
+                Strategy.ARITHMETIC_SEQUENCE: actions.tolist(),
+                Strategy.REBALANCE_DAILY: actions_min.tolist(),
+                Strategy.PERFECT_FORESIGHT: actions_max.tolist()
+            }
+            for strategy_name, actions in strategy_map.items():
+                df = run_simulation(prices.tolist(), actions)
+                if not df.empty: df.index = ticker_data.index[:len(df)]
+                results[strategy_name] = df
+        
+        st.success("การทดสอบเสร็จสมบูรณ์!")
+        st.write("---")
+        display_comparison_charts(results)
+        
+        st.write(f"📈 **สรุปผลการค้นหาด้วย {Strategy.ARITHMETIC_SEQUENCE}**")
+        st.dataframe(df_windows[['window_number', 'timeline', 'max_net', 'best_a1', 'best_d', 'action_count']], use_container_width=True)
+        csv = df_windows.to_csv(index=False)
+        st.download_button(label="📥 ดาวน์โหลด Arithmetic Details (CSV)", data=csv, file_name=f'arithmetic_seq_{ticker}.csv', mime='text/csv')
+
+# ! NEW: UI Tab for Geometric Sequence (from v2)
+def render_geometric_tab():
+    """แสดงผล UI สำหรับ Tab Geometric Sequence"""
+    st.write("---")
+    st.markdown(f"### 📉 ทดสอบด้วย {Strategy.GEOMETRIC_SEQUENCE}")
+    st.info("กลยุทธ์นี้จะค้นหาพารามิเตอร์ของ **ลำดับเรขาคณิต (`a1`, `r`)** ที่สร้าง Action ที่ดีที่สุดในแต่ละ Window")
+
+    if st.button(f"🚀 เริ่มทดสอบ {Strategy.GEOMETRIC_SEQUENCE}", type="primary", key="geometric_test_button"):
+        if st.session_state.start_date >= st.session_state.end_date:
+            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'"); return
+            
+        ticker = st.session_state.test_ticker; start_date_str = st.session_state.start_date.strftime('%Y-%m-%d'); end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
+        st.info(f"กำลังดึงข้อมูลสำหรับ **{ticker}** | {start_date_str} ถึง {end_date_str}")
+        ticker_data = get_ticker_data(ticker, start_date_str, end_date_str)
+        if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
+        
+        prices = ticker_data['Close'].to_numpy(); num_days = len(prices)
+        with st.spinner("กำลังคำนวณกลยุทธ์ต่างๆ (Geometric Search)..."):
+            actions, df_windows = generate_actions_sliding_window_geometric(
+                ticker_data, st.session_state.window_size, st.session_state.num_samples, st.session_state.master_seed
+            )
+            actions_min = generate_actions_rebalance_daily(num_days)
+            actions_max = generate_actions_perfect_foresight(prices.tolist())
+            
+            results = {}; strategy_map = {
+                Strategy.GEOMETRIC_SEQUENCE: actions.tolist(),
+                Strategy.REBALANCE_DAILY: actions_min.tolist(),
+                Strategy.PERFECT_FORESIGHT: actions_max.tolist()
+            }
+            for strategy_name, actions in strategy_map.items():
+                df = run_simulation(prices.tolist(), actions)
+                if not df.empty: df.index = ticker_data.index[:len(df)]
+                results[strategy_name] = df
+        
+        st.success("การทดสอบเสร็จสมบูรณ์!")
+        st.write("---")
+        display_comparison_charts(results)
+        
+        st.write(f"📈 **สรุปผลการค้นหาด้วย {Strategy.GEOMETRIC_SEQUENCE}**")
+        st.dataframe(df_windows[['window_number', 'timeline', 'max_net', 'best_a1', 'best_r', 'action_count']], use_container_width=True)
+        csv = df_windows.to_csv(index=False)
+        st.download_button(label="📥 ดาวน์โหลด Geometric Details (CSV)", data=csv, file_name=f'geometric_seq_{ticker}.csv', mime='text/csv')
+
 def render_analytics_tab():
     """แสดงผล UI สำหรับ Tab Advanced Analytics"""
     st.header("📊 Advanced Analytics Dashboard")
@@ -823,7 +1007,13 @@ def render_analytics_tab():
         df_to_analyze = st.session_state.df_for_analysis
         try:
             # Check for necessary columns
-            required_cols = ['window_number', 'timeline', 'max_net', 'action_sequence']
+            required_cols = ['window_number', 'timeline', 'max_net']
+            # Allow for optional action_sequence
+            if 'action_sequence' not in df_to_analyze.columns:
+                st.info("คอลัมน์ 'action_sequence' ไม่พบในไฟล์, ฟีเจอร์ 'Stitched DNA Analysis' จะถูกปิดใช้งาน")
+                df_to_analyze['action_sequence'] = [[] for _ in range(len(df_to_analyze))]
+
+
             if not all(col in df_to_analyze.columns for col in required_cols):
                 st.error(f"ไฟล์ CSV ไม่สมบูรณ์! ต้องมีคอลัมน์พื้นฐาน: {', '.join(required_cols)}")
                 return
@@ -870,54 +1060,57 @@ def render_analytics_tab():
                 st.subheader("ทดสอบกลยุทธ์จาก 'Stitched' DNA")
                 st.markdown("จำลองการเทรดจริงโดยนำ **`action_sequence`** จากแต่ละ Window มา 'เย็บ' ต่อกัน และเปรียบเทียบกับ Benchmark")
                 
-                df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
-                df_sorted = df.sort_values('window_number')
-                stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
-                
-                dna_cols = st.columns(2)
-                stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.test_ticker, key='stitch_ticker_input')
-                stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime.now().date() - pd.Timedelta(days=365), key='stitch_date_input')
-                
-                if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", key='stitch_dna_btn'):
-                    if not stitched_actions:
-                        st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้")
-                    else:
-                        with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker}..."):
-                            sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now().date()))
-                            if sim_data.empty:
-                                st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
-                            else:
-                                prices = sim_data['Close'].to_numpy()
-                                n_total = len(prices)
-                                
-                                final_actions_dna = stitched_actions[:n_total]
-                                df_dna = run_simulation(prices[:len(final_actions_dna)].tolist(), final_actions_dna)
-                                df_max = run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
-                                df_min = run_simulation(prices.tolist(), generate_actions_rebalance_daily(n_total).tolist())
-                                
-                                results_dna = {}
-                                if not df_dna.empty:
-                                    df_dna.index = sim_data.index[:len(df_dna)]
-                                    results_dna['Stitched DNA'] = df_dna
-                                if not df_max.empty:
-                                    df_max.index = sim_data.index[:len(df_max)]
-                                    results_dna[Strategy.PERFECT_FORESIGHT] = df_max
-                                if not df_min.empty:
-                                    df_min.index = sim_data.index[:len(df_min)]
-                                    results_dna[Strategy.REBALANCE_DAILY] = df_min
+                if 'action_sequence' not in df.columns:
+                     st.warning("ไม่สามารถทำการวิเคราะห์ Stitched DNA ได้เนื่องจากไม่มีคอลัมน์ 'action_sequence' ในข้อมูลที่อัปโหลด")
+                else:
+                    df['action_sequence_list'] = df['action_sequence'].apply(safe_literal_eval)
+                    df_sorted = df.sort_values('window_number')
+                    stitched_actions = [action for seq in df_sorted['action_sequence_list'] for action in seq]
+                    
+                    dna_cols = st.columns(2)
+                    stitch_ticker = dna_cols[0].text_input("Ticker สำหรับจำลอง", value=st.session_state.test_ticker, key='stitch_ticker_input')
+                    stitch_start_date = dna_cols[1].date_input("วันที่เริ่มต้นจำลอง", value=datetime.now().date() - pd.Timedelta(days=365), key='stitch_date_input')
+                    
+                    if st.button("🧬 เริ่มการวิเคราะห์ Stitched DNA แบบเปรียบเทียบ", type="primary", key='stitch_dna_btn'):
+                        if not stitched_actions:
+                            st.error("ไม่สามารถสร้าง Action Sequence จากข้อมูลที่โหลดได้")
+                        else:
+                            with st.spinner(f"กำลังจำลองกลยุทธ์สำหรับ {stitch_ticker}..."):
+                                sim_data = get_ticker_data(stitch_ticker, str(stitch_start_date), str(datetime.now().date()))
+                                if sim_data.empty:
+                                    st.error("ไม่สามารถดึงข้อมูลสำหรับจำลองได้")
+                                else:
+                                    prices = sim_data['Close'].to_numpy()
+                                    n_total = len(prices)
                                     
-                                st.subheader("Performance Comparison (Net Profit)")
-                                display_comparison_charts(results_dna)
-                                
-                                st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
-                                metric_cols = st.columns(3)
-                                final_net_max = results_dna.get(Strategy.PERFECT_FORESIGHT, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
-                                final_net_dna = results_dna.get('Stitched DNA', pd.DataFrame({'net': [0]}))['net'].iloc[-1]
-                                final_net_min = results_dna.get(Strategy.REBALANCE_DAILY, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
-                                
-                                metric_cols[0].metric("Max Performance", f"${final_net_max:,.2f}")
-                                metric_cols[1].metric("Stitched DNA Strategy", f"${final_net_dna:,.2f}", delta=f"{final_net_dna - final_net_min:,.2f} vs Min", delta_color="normal")
-                                metric_cols[2].metric("Min Performance", f"${final_net_min:,.2f}")
+                                    final_actions_dna = stitched_actions[:n_total]
+                                    df_dna = run_simulation(prices[:len(final_actions_dna)].tolist(), final_actions_dna)
+                                    df_max = run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
+                                    df_min = run_simulation(prices.tolist(), generate_actions_rebalance_daily(n_total).tolist())
+                                    
+                                    results_dna = {}
+                                    if not df_dna.empty:
+                                        df_dna.index = sim_data.index[:len(df_dna)]
+                                        results_dna['Stitched DNA'] = df_dna
+                                    if not df_max.empty:
+                                        df_max.index = sim_data.index[:len(df_max)]
+                                        results_dna[Strategy.PERFECT_FORESIGHT] = df_max
+                                    if not df_min.empty:
+                                        df_min.index = sim_data.index[:len(df_min)]
+                                        results_dna[Strategy.REBALANCE_DAILY] = df_min
+                                        
+                                    st.subheader("Performance Comparison (Net Profit)")
+                                    display_comparison_charts(results_dna)
+                                    
+                                    st.subheader("สรุปผลลัพธ์สุดท้าย (Final Net Profit)")
+                                    metric_cols = st.columns(3)
+                                    final_net_max = results_dna.get(Strategy.PERFECT_FORESIGHT, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
+                                    final_net_dna = results_dna.get('Stitched DNA', pd.DataFrame({'net': [0]}))['net'].iloc[-1]
+                                    final_net_min = results_dna.get(Strategy.REBALANCE_DAILY, pd.DataFrame({'net': [0]}))['net'].iloc[-1]
+                                    
+                                    metric_cols[0].metric("Max Performance", f"${final_net_max:,.2f}")
+                                    metric_cols[1].metric("Stitched DNA Strategy", f"${final_net_dna:,.2f}", delta=f"{final_net_dna - final_net_min:,.2f} vs Min", delta_color="normal")
+                                    metric_cols[2].metric("Min Performance", f"${final_net_min:,.2f}")
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการวิเคราะห์ข้อมูล: {e}")
             st.exception(e)
@@ -1049,7 +1242,7 @@ def main():
     """
     st.set_page_config(page_title="Best Seed Sliding Window", page_icon="🎯", layout="wide")
     st.markdown("### 🎯 Best Seed Sliding Window Tester (Multi-Strategy & Numba Accelerated)")
-    st.caption("เครื่องมือทดสอบการหา Best Seed (Logic ดั้งเดิม + Core Calculation เร่งความเร็วด้วย Numba)")
+    st.caption("เครื่องมือทดสอบการหา Best Seed และ Sequence ที่ดีที่สุด (Core Calculation เร่งความเร็วด้วย Numba)")
 
     # โหลดการตั้งค่าและเตรียม Session State
     config = load_config()
@@ -1057,11 +1250,14 @@ def main():
 
     # สร้าง Tabs
     tab_list = [
-        "⚙️ การตั้งค่า", 
-        "🚀 Best Seed (Random)", 
-        "🌀 Best Seed (Chaotic)", 
-        "🧬 Best Seed (Genetic Algo)", 
-        "📊 Advanced Analytics", 
+        "⚙️ การตั้งค่า",
+        "🚀 Best Seed (Random)",
+        "🌀 Best Seed (Chaotic)",
+        "🧬 Best Seed (Genetic Algo)",
+        # ! NEW: Added from v2
+        "📈 Arithmetic Seq",
+        "📉 Geometric Seq",
+        "📊 Advanced Analytics",
         "🌱 Forward Rolling Comparator"
     ]
     tabs = st.tabs(tab_list)
@@ -1070,29 +1266,36 @@ def main():
     with tabs[1]: render_test_tab()
     with tabs[2]: render_chaotic_test_tab()
     with tabs[3]: render_ga_test_tab()
-    with tabs[4]: render_analytics_tab()
-    with tabs[5]: render_manual_seed_tab(config)
+    # ! NEW: Added from v2
+    with tabs[4]: render_arithmetic_tab()
+    with tabs[5]: render_geometric_tab()
+    with tabs[6]: render_analytics_tab()
+    with tabs[7]: render_manual_seed_tab(config)
 
-    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (v.Optimized)"):
+    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (v.Optimized + Sequence Models)"):
         st.markdown("""
         ### หลักการทำงานของเวอร์ชันนี้:
 
-        **เป้าหมาย: คง Logic เดิม 100% แต่ต้องการความเร็วสูงสุด**
+        **เป้าหมาย: คง Logic เดิม 100% แต่ต้องการความเร็วสูงสุด และเพิ่มโมเดลใหม่ๆ**
 
-        1.  **Logic ดั้งเดิม 100%**:
-            - ใช้ `ThreadPoolExecutor` ในการกระจายงานเพื่อค้นหา Best Seed พร้อมๆ กันหลาย CPU Core
-            - ใช้ `np.random.default_rng(seed)` ในการสร้าง `action sequence` จาก `seed` ที่กำหนด
+        1.  **Logic ดั้งเดิม (Random/Chaotic/GA)**:
+            - ใช้ `ThreadPoolExecutor` ในการกระจายงานเพื่อค้นหา Best Seed พร้อมๆ กันหลาย CPU Core (สำหรับ Random/Chaotic)
+            - ใช้ `np.random.default_rng(seed)` หรือ `Logistic Map` หรือ `Genetic Algorithm` ในการสร้าง `action sequence` จาก `seed` ที่กำหนด
             - **ดังนั้น Best Seed ที่หาได้จะตรงกับโค้ดต้นฉบับทุกประการ**
 
-        2.  **เร่งความเร็วที่แกนกลาง (Core Acceleration)**:
+        2.  **✨ โมเดลใหม่ (Sequence-based)**:
+            - **📈 Arithmetic Sequence**: สร้าง Action จากสมการลำดับเลขคณิต `Action(t) = sigmoid(a1 + t * d)` โดย `t` คือลำดับวันใน Window ระบบจะสุ่มหาค่า `a1` และ `d` ที่ดีที่สุด
+            - **📉 Geometric Sequence**: สร้าง Action จากสมการลำดับเรขาคณิต `Action(t) = sigmoid(a1 * r^t)` ระบบจะสุ่มหาค่า `a1` และ `r` ที่ดีที่สุด
+            - โมเดลเหล่านี้ช่วยสร้าง Action ที่มีรูปแบบ (Pattern) มากกว่าการสุ่มแบบอิสระ
+
+        3.  **⚡ Core Acceleration**:
             - ฟังก์ชันที่ทำงานช้าที่สุดคือ `_calculate_simulation_numba` ซึ่งเป็น Loop คำนวณผลการเทรดที่ต้องรันเป็นแสนๆ รอบ
             - ฟังก์ชันนี้ถูกเร่งความเร็วด้วย **Numba (`@njit`)** ซึ่งเป็น Just-In-Time Compiler ที่จะแปลงโค้ด Python ในส่วนนี้ให้เป็น Machine Code ที่ทำงานเร็วเทียบเท่าภาษา C
             - มีการใช้ `cache=True` ทำให้ Numba คอมไพล์โค้ดแค่ครั้งแรกเท่านั้น การรันครั้งถัดไปจะเร็วทันที
-
-        3.  **ผลลัพธ์**:
+        
+        4.  **ผลลัพธ์**:
             - ได้ทั้ง **ความถูกต้องของตรรกะ (Correctness)** เหมือนเดิม
             - และ **ความเร็วที่เพิ่มขึ้นอย่างมหาศาล (Performance)** จากการเร่งความเร็วเฉพาะส่วนที่เป็นคอขวด (Bottleneck) จริงๆ
-            - นี่คือการ Refactor ที่ดีที่สุดสำหรับกรณีนี้ เพราะเป็นการแก้ปัญหาที่ตรงจุดโดยไม่กระทบ Logic หลักของโปรแกรม
         """)
 
 if __name__ == "__main__":
