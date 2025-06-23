@@ -6,7 +6,7 @@ import thingspeak
 import json
 from pathlib import Path
 import math
-from typing import List, Dict, Any # <-- เพิ่มเข้ามาเพื่อรองรับ SimulationTracer
+from typing import List, Dict, Any
 
 # --- 0. คลาสสำหรับ Logic การสร้าง Action ใหม่ ---
 class SimulationTracer:
@@ -118,10 +118,22 @@ def average_cf(cf_config):
         api_key=cf_config['write_api_key'],
         fmt='json'
     )
-    field_data = client.get_field_last(field=f"{cf_config['field']}")
-    value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
-    adjusted_value = value - cf_config.get('offset', 0)
-    return adjusted_value / count_data
+    # *** แก้ไข: เปลี่ยน field ที่อ่านเพื่อไม่ให้ชนกับ f(x) ของ monitor ***
+    # สมมติว่า field สำหรับ average_cf คือ field 8 (หรือ field อื่นที่ไม่ได้ใช้)
+    # หากไม่มี field แยก ให้ปิดการใช้งานส่วนนี้ไปก่อน
+    try:
+        # field_data = client.get_field_last(field=f"8") # <--- สมมติว่าใช้ field 8
+        # value = int(eval(json.loads(field_data)[f"field8"]))
+        # adjusted_value = value - cf_config.get('offset', 0)
+        # return adjusted_value / count_data
+
+        # *** ทางออกชั่วคราว: หากยังไม่มี field แยก ให้ return 0 หรือค่าคงที่ไปก่อน ***
+        return 0 # <--- คืนค่า 0 เพื่อไม่ให้แสดงตัวเลขที่ผิดพลาด
+
+    except Exception as e:
+        st.warning(f"Could not calculate average_cf: {e}")
+        return 0
+
 
 @st.cache_data(ttl=60)
 def production_cost(ticker, t0, fix):
@@ -145,64 +157,61 @@ def production_cost(ticker, t0, fix):
         st.warning(f"Could not calculate Production for {ticker}: {e}")
         return None
 
-# --- 2.1. แก้ไขฟังก์ชัน monitor ให้ใช้ Logic Action ใหม่ ---
+# --- 2.1. แก้ไขฟังก์ชัน monitor ให้เติม action ในแถวอนาคตด้วย ---
 def monitor(channel_id, api_key, ticker, field, filter_date):
     """
-    Monitors an asset. Uses the new SimulationTracer logic for actions.
+    Monitors an asset. Uses the new SimulationTracer logic for actions
+    and correctly populates the action column for the entire display table.
     """
     thingspeak_client = thingspeak.Channel(id=channel_id, api_key=api_key, fmt='json')
     history = get_ticker_history(ticker)
     filtered_data = history[history.index >= filter_date].copy()
 
     # --- ส่วนที่ 1: ดึงค่า fx_js จาก ThingSpeak ---
-    fx_js = "0" # ค่าเริ่มต้นกรณีดึงข้อมูลไม่ได้
+    fx_js = "0"
     try:
         field_data = thingspeak_client.get_field_last(field=f'{field}')
-        # ดึงค่ามาเป็น string เพื่อรองรับตัวเลขยาวๆ
         fx_js = json.loads(field_data)[f"field{field}"]
-        if fx_js is None: # กรณีค่าใน field เป็น null
+        if fx_js is None:
             fx_js = "0"
-    except (json.JSONDecodeError, KeyError, TypeError, Exception):
-        # ถ้ามีปัญหาในการดึงข้อมูล ให้ใช้ค่าเริ่มต้น
+    except Exception:
         fx_js = "0"
         st.warning(f"Could not fetch or parse data from ThingSpeak for {ticker} (Field {field}). Using default value '0'.")
 
-
-    # --- ส่วนที่ 2: สร้าง DataFrame พื้นฐาน ---
+    # --- ส่วนที่ 2: สร้าง DataFrame พื้นฐาน (รวมอดีตและอนาคต) ---
     display_df = pd.DataFrame(index=['+0', "+1", "+2", "+3", "+4"])
     combined_df = pd.concat([filtered_data, display_df]).fillna("")
     combined_df['index'] = ""
-    combined_df['action'] = "" # สร้างคอลัมน์ action ว่างๆ ไว้ก่อน
+    combined_df['action'] = "" # เริ่มต้นด้วยคอลัมน์ action ว่าง
 
     if not filtered_data.empty:
         combined_df.loc[filtered_data.index, 'index'] = range(1, len(filtered_data) + 1)
 
-
-    # --- ส่วนที่ 3: สร้าง Action Sequence ด้วย Logic ใหม่ ---
+    # --- ส่วนที่ 3: *** แก้ไข Logic การใส่ Action ใหม่ทั้งหมด ***
+    # เราจะเติม action จาก "ท้ายตารางขึ้นมา" โดยใช้ action จาก "ท้าย array ที่สร้างได้"
+    # ซึ่งจะทำให้ทั้งแถวข้อมูลย้อนหลังและแถวอนาคต (+0, +1, ...) ถูกเติมอย่างถูกต้อง
     try:
-        # ใช้ SimulationTracer กับค่าที่ดึงมาจาก ThingSpeak
         tracer = SimulationTracer(encoded_string=str(fx_js))
         final_actions = tracer.run()
 
-        # นำ action ที่ได้ไปใส่ใน DataFrame
-        # โดยจะใส่ให้พอดีกับจำนวนข้อมูลย้อนหลังที่มีอยู่
-        if not filtered_data.empty:
-            num_history_rows = len(filtered_data)
-            num_actions_to_assign = min(num_history_rows, len(final_actions))
+        # จำนวน action ที่จะแสดงในตาราง (สูงสุด 7 แถว เพราะเราใช้ .tail(7))
+        rows_in_table = 7
+        num_actions_to_display = min(rows_in_table, len(final_actions))
 
-            # นำ action ส่วนท้ายสุดมาใช้กับข้อมูลล่าสุด
-            actions_to_assign = final_actions[-num_actions_to_assign:]
-            target_indices = filtered_data.index[-num_actions_to_assign:]
+        if num_actions_to_display > 0:
+            # เลือก action ส่วนท้ายสุดของ array ที่สร้างได้
+            actions_to_assign = final_actions[-num_actions_to_display:]
 
+            # เลือก index ของแถวส่วนท้ายสุดของตาราง (ซึ่งรวมทั้งอดีตและอนาคต)
+            target_indices = combined_df.index[-num_actions_to_display:]
+
+            # กำหนดค่า action ให้กับแถวเป้าหมาย
             combined_df.loc[target_indices, 'action'] = actions_to_assign
 
     except ValueError as e:
-        # หาก fx_js ที่ได้มามีรูปแบบไม่ถูกต้องสำหรับ SimulationTracer
         st.warning(f"Error generating actions for {ticker} with input '{fx_js}': {e}")
-        # คอลัมน์ action จะยังคงว่างเปล่าตามที่กำหนดไว้ข้างต้น
     except Exception as e:
         st.error(f"An unexpected error occurred during action generation for {ticker}: {e}")
-
 
     return combined_df.tail(7), fx_js
 
@@ -212,13 +221,15 @@ def main():
     """Main function to run the Streamlit app."""
     st.write('____')
 
+    # --- แก้ไข: ปิดการแสดงผล average_cf หรือตรวจสอบให้แน่ใจว่าใช้ field ที่ถูกต้อง ---
     avg_cf_config = CONFIG.get('average_cf_config')
     if avg_cf_config:
         cf_day = average_cf(avg_cf_config)
-        st.write(f"average_cf_day: {cf_day:.2f} USD  :  average_cf_mo: {cf_day * 30:.2f} USD")
-    else:
-        st.warning("`average_cf_config` not found in configuration file.")
-    st.write('____')
+        # ตรวจสอบก่อนแสดงผล เพื่อไม่ให้แสดงค่า 0.00 ที่ไม่สื่อความหมาย
+        if cf_day > 0:
+            st.write(f"average_cf_day: {cf_day:.2f} USD  :  average_cf_mo: {cf_day * 30:.2f} USD")
+            st.write('____')
+    # ไม่ต้องแสดง warning หากไม่มี config ส่วนนี้
 
     monitor_config = CONFIG.get('monitor_config', {})
     default_monitor_date = "2025-04-28 12:00:00+07:00"
@@ -235,7 +246,6 @@ def main():
             st.warning(f"Skipping an asset due to missing configuration: {asset_config}")
             continue
 
-        # monitor จะคืนค่า fx_js เป็น string ยาวๆ ตาม logic ใหม่
         df_7, fx_js = monitor(channel_id, api_key, ticker, monitor_field, monitor_filter_date)
 
         prod_cost = production_cost(
@@ -248,7 +258,6 @@ def main():
         prod_cost_now_display = f"{prod_cost[1]:.2f}" if prod_cost is not None else "N/A"
 
         st.write(ticker)
-        # แสดงค่า fx_js (string ยาวๆ) ที่ดึงมาได้
         st.write(f"f(x): {fx_js} ,   Production_max : {prod_cost_max_display}  , Production_now : {prod_cost_now_display}")
         st.table(df_7)
         st.write("_____")
