@@ -98,7 +98,6 @@ def buy(asset, fix_c=1500, Diff=60):
     return unit_price, adjust_qty, total
 
 def get_cached_price(ticker, max_age_seconds=30):
-    """Gets price from cache or fetches if stale/missing."""
     now = datetime.datetime.now()
     with _cache_lock:
         if (ticker in _price_cache and
@@ -113,8 +112,7 @@ def get_cached_price(ticker, max_age_seconds=30):
                 _cache_timestamp[ticker] = now
             return price
         return 0.0
-    except Exception:
-        return 0.0
+    except Exception: return 0.0
 
 # ============== 5. DATA FETCHING (Unchanged) ==============
 @st.cache_data(ttl=300)
@@ -136,10 +134,7 @@ def Monitor(asset_config, _clients_ref, start_date):
         df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
         df['action'] = rng.integers(2, size=len(df))
         return df.tail(7), fx_js
-    except Exception as e:
-        # Don't show error in main UI, log it or handle quietly
-        # st.warning(f"Could not fetch monitor data for {ticker}.")
-        return pd.DataFrame(), 0
+    except: return pd.DataFrame(), 0
 
 @st.cache_data(ttl=300)
 def fetch_all_monitor_data(configs, _clients_ref, start_date):
@@ -150,8 +145,7 @@ def fetch_all_monitor_data(configs, _clients_ref, start_date):
             ticker = future_to_ticker[future]
             try:
                 results[ticker] = future.result()
-            except Exception:
-                results[ticker] = (pd.DataFrame(), 0)
+            except: results[ticker] = (pd.DataFrame(), 0)
     return results
 
 def fetch_asset(asset_config, client):
@@ -182,19 +176,16 @@ st.markdown("---")
 
 # --- Global Control Panel ---
 with st.container():
-    col1, col2, col3, col4, col5 = st.columns([1.5, 1, 1, 1.5, 1.5])
+    col1, col2, col3, col4 = st.columns([1.5, 1, 1, 1.5])
     with col1:
         diff_value = st.number_input('Difference (Diff)', step=1, value=60, label_visibility="collapsed")
     with col2:
-        use_nex_day = st.toggle('Next Day')
+        use_nex_day = st.toggle('Next Day', help="Use signal for the next day.")
     with col3:
-        invert_signal = st.toggle('Invert', disabled=not use_nex_day)
+        invert_signal = st.toggle('Invert', disabled=not use_nex_day, help="Invert the next day's signal (SELL becomes BUY and vice-versa).")
     with col4:
         if st.button("🔄 Refresh Data", use_container_width=True):
             clear_all_caches()
-    with col5:
-        # Placeholder for future global controls
-        pass
 
 nex = 1 if use_nex_day else 0
 nex_day_sell = 1 if invert_signal else 0
@@ -223,9 +214,31 @@ for config in ASSET_CONFIGS:
         fix_value = config['fix_c']
         pl_value = portfolio_value - fix_value if last_asset > 0 else 0
         
-        # --- Header and Status Metrics ---
-        st.subheader(f"{asset_name} ({ticker})")
+        # --- Header with Manual Update Popover ---
+        header_cols = st.columns([0.8, 0.2])
+        with header_cols[0]:
+            st.subheader(f"{asset_name} ({ticker})")
+        with header_cols[1]:
+            # <<< นี่คือส่วนที่เพิ่มเข้ามา: Manual Update Popover >>>
+            with st.popover("📝 Edit", use_container_width=True):
+                st.markdown(f"**Update {ticker} Asset**")
+                new_val = st.number_input(
+                    "New asset value",
+                    value=last_asset,
+                    step=0.001,
+                    key=f"manual_input_{ticker}",
+                    label_visibility="collapsed"
+                )
+                if st.button("Update on ThingSpeak", key=f"manual_btn_{ticker}"):
+                    try:
+                        client = THINGSPEAK_CLIENTS[config['asset_field']['channel_id']]
+                        client.update({config['asset_field']['field']: new_val})
+                        st.toast(f"Updated {ticker} to {new_val}!", icon="✅")
+                        clear_all_caches()
+                    except Exception as e:
+                        st.error(f"Update failed: {e}")
         
+        # --- Status Metrics ---
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Current Asset", f"{last_asset:,.3f}")
         m2.metric("Current Price", f"{current_price:,.3f}")
@@ -235,25 +248,21 @@ for config in ASSET_CONFIGS:
         st.divider()
 
         # --- Trading Action Section ---
-        
-        # Determine if actions should be shown based on signal
         show_actions = False
         try:
             action_val = df_data.action.values[1 + nex]
             show_actions = bool(1 - action_val if nex_day_sell == 1 else action_val)
-        except (IndexError, AttributeError):
+        except:
             show_actions = False
 
         if not show_actions:
             st.info("Signal: **HOLD** (No action required)")
         else:
-            # Calculate BUY/SELL opportunities based on actual asset holdings
             sell_calc = sell(last_asset, fix_c=fix_value, Diff=diff_value)
             buy_calc = buy(last_asset, fix_c=fix_value, Diff=diff_value)
             
             sell_col, buy_col = st.columns(2)
             
-            # --- SELL ACTION COLUMN ---
             with sell_col:
                 st.markdown("**SELL Opportunity**")
                 st.markdown(f"**Price:** `{buy_calc[0]:,.2f}` | **Qty:** `{buy_calc[1]:,.3f}` | **Total:** `{buy_calc[2]:,.2f}`")
@@ -268,7 +277,6 @@ for config in ASSET_CONFIGS:
                     except Exception as e:
                         st.error(f"SELL failed: {e}")
 
-            # --- BUY ACTION COLUMN ---
             with buy_col:
                 st.markdown("**BUY Opportunity**")
                 st.markdown(f"**Price:** `{sell_calc[0]:,.2f}` | **Qty:** `{sell_calc[1]:,.3f}` | **Total:** `{sell_calc[2]:,.2f}`")
