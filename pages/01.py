@@ -132,7 +132,7 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     except (json.JSONDecodeError, KeyError, TypeError):
         fx_js = "0"
 
-    display_df = pd.DataFrame(index=['+0', "+1", "+2", "+3", "+4"])
+    display_df = pd.DataFrame(index=['0', "+1", "+2", "+3", "+4"])
     combined_df = pd.concat([filtered_data, display_df]).fillna("")
     
     combined_df['index'] = ""
