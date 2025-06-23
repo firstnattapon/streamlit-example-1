@@ -72,7 +72,7 @@ class SimulationTracer:
 st.set_page_config(page_title="Calculator", page_icon="⌨️" , layout= "centered" )
 
 @st.cache_data(ttl=300)
-def load_config(filepath="calculator_config.json"):
+def load_config(filepath="01.json"):
     """
     Loads the configuration from a JSON file with error handling.
     """
