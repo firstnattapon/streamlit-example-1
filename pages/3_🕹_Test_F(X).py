@@ -607,41 +607,76 @@ def render_hybrid_multi_mutation_tab():
             st.download_button("📥 Download Details (CSV)", df_windows.to_csv(index=False), f'hybrid_multi_mutation_{ticker}.csv', 'text/csv')
 
 def render_tracer_tab():
-    st.markdown("### 🔍 Action Sequence Tracer")
-    st.info("เครื่องมือนี้ใช้สำหรับถอดรหัสและจำลองกระบวนการสร้าง Action Sequence จาก 'Encoded String' ที่ได้จากการทดลอง เพื่อตรวจสอบและทำซ้ำผลลัพธ์")
+    st.markdown("### 🔍 Action Sequence Tracer & Encoder")
+    st.info("เครื่องมือนี้ใช้สำหรับ 1. **ถอดรหัส (Decode)** String เพื่อจำลองผลลัพธ์ และ 2. **เข้ารหัส (Encode)** พารามิเตอร์เพื่อสร้าง String")
 
+    st.markdown("---")
+    st.markdown("#### 1. ถอดรหัส (Decode) String")
+    
     encoded_string = st.text_input(
         "ป้อน Encoded String ที่นี่:",
         "2601539003899353023538143646",
-        help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds"
+        help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds",
+        key="decoder_input"
     )
 
     if st.button("Trace & Simulate", type="primary", key="tracer_button"):
         if not encoded_string:
             st.warning("กรุณาป้อน Encoded String")
-            return
+        else:
+            with st.spinner(f"กำลังถอดรหัสและจำลองสำหรับ: {encoded_string[:20]}..."):
+                try:
+                    tracer = SimulationTracer(encoded_string=encoded_string)
+                    st.success("ถอดรหัสสำเร็จ!")
+                    st.code(str(tracer), language='bash')
+                    final_actions = tracer.run()
+                    st.write("---")
+                    st.markdown("#### 🎉 ผลลัพธ์ Action Sequence สุดท้าย:")
+                    st.dataframe(pd.DataFrame(final_actions, columns=['Action']), use_container_width=True)
+                    st.write("Raw Array:")
+                    st.code(str(final_actions))
+                except ValueError as e:
+                    st.error(f"❌ เกิดข้อผิดพลาดในการประมวลผล: {e}")
 
-        with st.spinner(f"กำลังถอดรหัสและจำลองสำหรับ: {encoded_string[:20]}..."):
-            try:
-                # 1. Instantiate the tracer (decoding happens automatically)
-                tracer = SimulationTracer(encoded_string=encoded_string)
-                st.success("ถอดรหัสสำเร็จ!")
+    st.divider()
+    
+    st.markdown("#### 2. เข้ารหัส (Encode) พารามิเตอร์")
+    st.write("ป้อนพารามิเตอร์เพื่อสร้าง Encoded String สำหรับการทดลองซ้ำ")
 
-                # 2. Display decoded parameters
-                st.code(str(tracer), language='bash')
+    col1, col2 = st.columns(2)
+    with col1:
+        action_length_input = st.number_input("Action Length", min_value=1, value=60, key="enc_len", help="ความยาวของ action sequence")
+        dna_seed_input = st.number_input("DNA Seed", min_value=0, value=900, format="%d", key="enc_dna", help="Seed สำหรับสร้าง DNA ดั้งเดิม")
+    with col2:
+        mutation_rate_input = st.number_input("Mutation Rate (%)", min_value=0, value=5, key="enc_rate", help="อัตราการกลายพันธุ์เป็นเปอร์เซ็นต์ (เช่น 5 สำหรับ 5%)")
+        mutation_seeds_str = st.text_input(
+            "Mutation Seeds (คั่นด้วยจุลภาค ,)", 
+            "899, 530, 35, 814, 646", 
+            key="enc_seeds_str",
+            help="ชุดของ Seed สำหรับการกลายพันธุ์แต่ละรอบ คั่นด้วยเครื่องหมายจุลภาค"
+        )
+        
+    if st.button("Encode Parameters", key="encoder_button"):
+        try:
+            if mutation_seeds_str.strip():
+                # แปลงสตริงที่มีตัวเลขคั่นด้วยจุลภาคให้เป็น list ของ int
+                mutation_seeds_list = [int(s.strip()) for s in mutation_seeds_str.split(',')]
+            else:
+                mutation_seeds_list = [] # กรณีไม่มี mutation seeds
 
-                # 3. Run the simulation
-                final_actions = tracer.run()
+            # เรียกใช้ static method 'encode' จากคลาส SimulationTracer
+            generated_string = SimulationTracer.encode(
+                action_length=int(action_length_input),
+                mutation_rate=int(mutation_rate_input),
+                dna_seed=int(dna_seed_input),
+                mutation_seeds=mutation_seeds_list
+            )
+            
+            st.success("เข้ารหัสสำเร็จ! สามารถคัดลอก String ด้านล่างไปใช้ได้")
+            st.code(generated_string, language='text')
 
-                # 4. Display the final result
-                st.write("---")
-                st.markdown("#### 🎉 ผลลัพธ์ Action Sequence สุดท้าย:")
-                st.dataframe(pd.DataFrame(final_actions, columns=['Action']), use_container_width=True)
-                st.write("Raw Array:")
-                st.code(str(final_actions))
-
-            except ValueError as e:
-                st.error(f"❌ เกิดข้อผิดพลาดในการประมวลผล: {e}")
+        except (ValueError, TypeError) as e:
+            st.error(f"❌ เกิดข้อผิดพลาด: กรุณาตรวจสอบว่า Mutation Seeds เป็นตัวเลขที่คั่นด้วยจุลภาคเท่านั้น ({e})")
 
 # ==============================================================================
 # 6. Main Application
