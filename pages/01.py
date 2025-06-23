@@ -124,10 +124,13 @@ def production_cost(ticker, t0, fix):
         st.warning(f"Could not calculate Production for {ticker}: {e}")
         return None
 
+# ==============================================================================
+# ฟังก์ชัน monitor ที่แก้ไขใหม่ทั้งหมด
+# ==============================================================================
 def monitor(channel_id, api_key, ticker, field, filter_date):
     """
-    Monitors an asset. Uses the new SimulationTracer logic for actions
-    and correctly populates the action column for the entire display table.
+    Monitors an asset. Uses robust index handling to ensure correct alignment
+    between the display 'index' and the 'action' data.
     """
     thingspeak_client = thingspeak.Channel(id=channel_id, api_key=api_key, fmt='json')
     history = get_ticker_history(ticker)
@@ -148,29 +151,32 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     # รวมข้อมูลย้อนหลังและข้อมูลอนาคต
     combined_df = pd.concat([filtered_data, display_df]).fillna("")
     
-    # --- START: ส่วนที่แก้ไข ---
+    # --- START: ส่วนที่แก้ไขใหม่เพื่อความแม่นยำ ---
 
-    # 1. สร้างคอลัมน์ index และ action ที่ว่างเปล่าก่อน
-    combined_df['index'] = ""
+    # 1. Reset Index ของ DataFrame ให้เป็นตัวเลข 0, 1, 2, ...
+    # เพื่อให้การอ้างอิงตำแหน่งแถวแม่นยำและไม่สับสน
+    combined_df = combined_df.reset_index(drop=True)
+
+    # 2. สร้างคอลัมน์ 'index' สำหรับแสดงผล (ให้เริ่มนับจาก 1)
+    # โดยอิงจาก Index ใหม่ของ DataFrame (0, 1, 2,...)
+    combined_df['index'] = combined_df.index + 1
+    
+    # 3. สร้างคอลัมน์ 'action' และเติมค่าว่างไว้ก่อน
     combined_df['action'] = ""
-
-    # 2. สร้างเลข index ต่อเนื่องสำหรับทุกแถวใน combined_df
-    # ทำให้ทุกแถวมีเลขลำดับ ไม่เว้นแม้แต่แถวข้อมูลอนาคต (+0, +1, ...)
-    combined_df['index'] = range(1, len(combined_df) + 1)
 
     try:
         tracer = SimulationTracer(encoded_string=str(fx_js))
-        final_actions = tracer.run() # สมมติได้ array ขนาด 60 ออกมา
+        final_actions = tracer.run() # ผลลัพธ์เป็น NumPy array เช่น [act_0, act_1, ...]
 
-        # 3. นำ action ที่สร้างได้มาเติมลงในตารางตามลำดับที่สอดคล้องกับ index ใหม่
-        # โดยจะเติมได้มากที่สุดเท่ากับจำนวนแถวที่มี หรือจำนวน action ที่มี
+        # 4. กำหนดค่า action ให้กับแถวต่างๆ
+        # หาจำนวน action ที่จะใส่ (เลือกค่าน้อยกว่าระหว่างจำนวนแถวกับจำนวน action)
         num_actions_to_assign = min(len(combined_df), len(final_actions))
         
-        # นำ action ไปใส่ในคอลัมน์ 'action' ตั้งแต่แถวแรกสุด (ตำแหน่ง 0) ไปจนถึงแถวที่ num_actions_to_assign
-        # การใช้ .iloc ช่วยให้กำหนดค่าตามตำแหน่งแถวได้อย่างถูกต้อง
+        # นำ action ไปใส่ในคอลัมน์ 'action' ในช่วงแถวที่ถูกต้อง
+        # DataFrame index (0 ถึง n-1) จะตรงกับ Array index (0 ถึง n-1) พอดี
         if num_actions_to_assign > 0:
             actions_to_assign = final_actions[:num_actions_to_assign]
-            combined_df.iloc[:num_actions_to_assign, combined_df.columns.get_loc('action')] = actions_to_assign
+            combined_df.loc[0:num_actions_to_assign-1, 'action'] = actions_to_assign
 
     except ValueError as e:
         st.warning(f"Error generating actions for {ticker} with input '{fx_js}': {e}")
@@ -181,6 +187,7 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
 
     # คืนค่า 7 แถวสุดท้ายเพื่อแสดงผล
     return combined_df.tail(7), fx_js
+# ==============================================================================
 
 # --- 3. ส่วนแสดงผลหลัก (Main Display Logic) ---
 
