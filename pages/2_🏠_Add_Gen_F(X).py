@@ -238,15 +238,31 @@ def create_asset_tab_content(asset_config):
     # --- ส่วน Manual Add Gen ---
     gen_m_check = st.checkbox(f'{ticker}_Add_Gen_M', key=f"gen_m_{ticker}")
     if gen_m_check:
-        input_val = st.number_input(f'Insert a number for {ticker}', step=1, key=f"num_input_{ticker}")
+        # [แก้ไข] เปลี่ยนเป็น st.text_input เพื่อรองรับเลขจำนวนเต็มขนาดใหญ่
+        # The original st.number_input has a limit (~9e15), which caused the error.
+        # st.text_input sends the value as a string, and Python's `int()` can handle arbitrarily large integers.
+        input_val_str = st.text_input(
+            f'Insert a number for {ticker}',
+            key=f"text_input_{ticker}",
+            placeholder="Enter a large integer value"
+        )
         if st.button("Rerun_Gen_M", key=f"rerun_m_{ticker}"):
-            with st.spinner(f"Updating field {field} for {ticker}..."):
-                try:
-                    # [ปรับปรุง] ใช้ client ที่สร้างขึ้นสำหรับ Tab นี้
-                    client.update({f'field{field}': input_val})
-                    st.success(f"Updated {ticker} with value: {input_val}")
-                except Exception as e:
-                    st.error(f"Failed to update ThingSpeak: {e}")
+            try:
+                # แปลง string เป็น integer และตรวจสอบความถูกต้อง
+                # This will raise a ValueError if the string is not a valid integer.
+                input_val = int(input_val_str)
+                
+                with st.spinner(f"Updating field {field} for {ticker}..."):
+                    try:
+                        # ใช้ client ที่สร้างขึ้นสำหรับ Tab นี้
+                        client.update({f'field{field}': input_val})
+                        st.success(f"Updated {ticker} with value: {input_val}")
+                    except Exception as e:
+                        st.error(f"Failed to update ThingSpeak: {e}")
+
+            except ValueError:
+                # แจ้งเตือนถ้าผู้ใช้ใส่ข้อมูลที่ไม่ใช่ตัวเลข
+                st.error(f"Invalid input: '{input_val_str}'. Please enter a valid integer.")
 
     # # --- ส่วน Njit ---
     # njit_check = st.checkbox(f'{ticker}_njit', key=f"njit_{ticker}")
