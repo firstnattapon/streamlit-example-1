@@ -118,10 +118,13 @@ def get_cached_price(ticker, max_age_seconds=30):
     except Exception:
         return 0.0
 
-# ============== 5. DATA FETCHING (Unchanged) ==============
+# ============== 5. DATA FETCHING (Unchanged logic, but Monitor returns full df) ==============
 @st.cache_data(ttl=300)
 def Monitor(asset_config, _clients_ref, start_date):
-    """Fetches monitor data for a single ticker using its specific channel."""
+    """
+    Fetches monitor data for a single ticker using its specific channel.
+    NOW RETURNS THE FULL DATAFRAME.
+    """
     ticker = asset_config['ticker']
     try:
         monitor_field_config = asset_config['monitor_field']
@@ -144,7 +147,8 @@ def Monitor(asset_config, _clients_ref, start_date):
         df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
         df['action'] = rng.integers(2, size=len(df))
         
-        return df.tail(7), fx_js
+        # MODIFICATION: Return the full DataFrame, not just the tail.
+        return df, fx_js
     except Exception as e:
         st.error(f"Error in Monitor({ticker}): {e}")
         return pd.DataFrame(), 0
@@ -215,7 +219,9 @@ def render_asset_update_controls(configs, clients):
                     client.update({field_name: new_val})
                     st.success(f"Updated {ticker} to: {new_val} on Channel {asset_conf['channel_id']}")
                     st.toast(f"Success! {ticker} updated.", icon="✅")
-                    # No need to clear cache here, get_all_assets will fetch it again on next run
+                    # Clear asset cache to reflect the update immediately
+                    get_all_assets_from_thingspeak.clear()
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Failed to update {ticker}: {e}")
 
@@ -259,7 +265,9 @@ def render_asset_tab(config, monitor_data, last_asset, nex, nex_day_sell, diff_v
     
     # Determine if trading is active
     try:
-        action_val = df_data.action.values[1 + nex]
+        # MODIFICATION: The logic now looks at the tail of the full df_data to get the future signals,
+        # preserving the original behavior while allowing the full dataframe to be displayed.
+        action_val = df_data.tail(7).action.values[1 + nex]
         limit_order_default = bool(1 - action_val if nex_day_sell == 1 else action_val)
     except Exception:
         limit_order_default = False
@@ -312,8 +320,9 @@ def render_asset_tab(config, monitor_data, last_asset, nex, nex_day_sell, diff_v
                 except Exception as e:
                     st.error(f"Failed to execute BUY for {ticker}: {e}")
     
+    # MODIFICATION: This expander now correctly shows the full dataframe.
     with st.expander("Show Raw Monitor Data"):
-        st.dataframe(df_data)
+        st.dataframe(df_data, use_container_width=True)
 
 
 # ============== 7. MAIN APP EXECUTION ==============
