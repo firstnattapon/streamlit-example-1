@@ -1,4 +1,4 @@
-# 📈_Monitor.py (Updated with SimulationTracer)
+# 📈_Monitor.py (Updated with SimulationTracer and Raw Data Expander)
 import streamlit as st
 import numpy as np
 import datetime
@@ -10,7 +10,7 @@ from functools import lru_cache
 import concurrent.futures
 from threading import Lock
 import os
-from typing import List  # <-- เพิ่ม import สำหรับ SimulationTracer
+from typing import List
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide"  )
 
@@ -181,7 +181,6 @@ def get_cached_price(ticker, max_age=30):
 
 # ---------- DATA FETCHING ----------
 @st.cache_data(ttl=300)
-# --- MODIFIED FUNCTION ---
 def Monitor(asset_config, _clients_ref, start_date):
     """
     Fetches monitor data and generates actions using SimulationTracer.
@@ -239,7 +238,6 @@ def Monitor(asset_config, _clients_ref, start_date):
     except Exception as e:
         st.error(f"Error in Monitor function for {ticker}: {str(e)}")
         return pd.DataFrame(), "0"
-# --- END MODIFIED FUNCTION ---
 
 @st.cache_data(ttl=300)
 def fetch_all_monitor_data(configs, _clients_ref, start_date):
@@ -287,7 +285,7 @@ def get_all_assets_from_thingspeak(configs, _clients_ref):
                 st.error(f"Error fetching asset for ticker {ticker}: {str(e)}")
     return assets
 
-# ---------- UI SECTION (ไม่มีการเปลี่ยนแปลง) ----------
+# ---------- UI SECTION ----------
 def render_asset_inputs(configs, last_assets):
     cols = st.columns(len(configs))
     asset_inputs = {}
@@ -388,7 +386,7 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
 
-# ---------- MAIN LOGIC (ไม่มีการเปลี่ยนแปลง) ----------
+# ---------- MAIN LOGIC ----------
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
@@ -431,6 +429,13 @@ for config in ASSET_CONFIGS:
     
     st.write(f"**{ticker}** (f(x): `{fx_js_str}`)") # แสดง f(x) ที่หัวข้อ
     trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
+    
+    # --- START: โค้ดที่เพิ่มเข้ามาเพื่อแสดง Raw Data ---
+    with st.expander("Show Raw Data Action"):
+        # ใช้ use_container_width=True เพื่อให้ตารางเต็มความกว้างของคอลัมน์
+        st.dataframe(df_data, use_container_width=True)
+    # --- END: โค้ดที่เพิ่มเข้ามา ---
+        
     st.write("_____")
 
 if st.sidebar.button("RERUN"):
