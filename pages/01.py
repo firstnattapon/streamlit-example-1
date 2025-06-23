@@ -6,7 +6,7 @@ import thingspeak
 import json
 from pathlib import Path
 import math
-from typing import List, Dict, Any 
+from typing import List, Dict, Any
 
 # --- 0. คลาสสำหรับ Logic การสร้าง Action ใหม่ ---
 class SimulationTracer:
@@ -143,30 +143,43 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
         fx_js = "0"
         st.warning(f"Could not fetch or parse data from ThingSpeak for {ticker} (Field {field}). Using default value '0'.")
 
+    # สร้าง DataFrame สำหรับข้อมูลในอนาคต
     display_df = pd.DataFrame(index=['+0', "+1", "+2", "+3", "+4"])
+    # รวมข้อมูลย้อนหลังและข้อมูลอนาคต
     combined_df = pd.concat([filtered_data, display_df]).fillna("")
+    
+    # --- START: ส่วนที่แก้ไข ---
+
+    # 1. สร้างคอลัมน์ index และ action ที่ว่างเปล่าก่อน
     combined_df['index'] = ""
     combined_df['action'] = ""
 
-    if not filtered_data.empty:
-        combined_df.loc[filtered_data.index, 'index'] = range(1, len(filtered_data) + 1)
+    # 2. สร้างเลข index ต่อเนื่องสำหรับทุกแถวใน combined_df
+    # ทำให้ทุกแถวมีเลขลำดับ ไม่เว้นแม้แต่แถวข้อมูลอนาคต (+0, +1, ...)
+    combined_df['index'] = range(1, len(combined_df) + 1)
 
     try:
         tracer = SimulationTracer(encoded_string=str(fx_js))
-        final_actions = tracer.run()
-        rows_in_table = 7
-        num_actions_to_display = min(rows_in_table, len(final_actions))
+        final_actions = tracer.run() # สมมติได้ array ขนาด 60 ออกมา
 
-        if num_actions_to_display > 0:
-            actions_to_assign = final_actions[-num_actions_to_display:]
-            target_indices = combined_df.index[-num_actions_to_display:]
-            combined_df.loc[target_indices, 'action'] = actions_to_assign
+        # 3. นำ action ที่สร้างได้มาเติมลงในตารางตามลำดับที่สอดคล้องกับ index ใหม่
+        # โดยจะเติมได้มากที่สุดเท่ากับจำนวนแถวที่มี หรือจำนวน action ที่มี
+        num_actions_to_assign = min(len(combined_df), len(final_actions))
+        
+        # นำ action ไปใส่ในคอลัมน์ 'action' ตั้งแต่แถวแรกสุด (ตำแหน่ง 0) ไปจนถึงแถวที่ num_actions_to_assign
+        # การใช้ .iloc ช่วยให้กำหนดค่าตามตำแหน่งแถวได้อย่างถูกต้อง
+        if num_actions_to_assign > 0:
+            actions_to_assign = final_actions[:num_actions_to_assign]
+            combined_df.iloc[:num_actions_to_assign, combined_df.columns.get_loc('action')] = actions_to_assign
 
     except ValueError as e:
         st.warning(f"Error generating actions for {ticker} with input '{fx_js}': {e}")
     except Exception as e:
         st.error(f"An unexpected error occurred during action generation for {ticker}: {e}")
 
+    # --- END: ส่วนที่แก้ไข ---
+
+    # คืนค่า 7 แถวสุดท้ายเพื่อแสดงผล
     return combined_df.tail(7), fx_js
 
 # --- 3. ส่วนแสดงผลหลัก (Main Display Logic) ---
