@@ -6,7 +6,7 @@ import thingspeak
 import json
 from pathlib import Path
 import math
-from typing import List, Dict, Any
+from typing import List, Dict, Any 
 
 # --- 0. คลาสสำหรับ Logic การสร้าง Action ใหม่ ---
 class SimulationTracer:
@@ -102,39 +102,6 @@ def get_ticker_history(ticker_symbol):
     history.index = history.index.tz_convert(tz='Asia/Bangkok')
     return round(history, 3)
 
-def average_cf(cf_config):
-    """
-    Calculates average CF. Uses .get() for safety to prevent KeyErrors.
-    """
-    history = get_ticker_history(cf_config['ticker'])
-    default_date = "2024-01-01 12:00:00+07:00"
-    filter_date = cf_config.get('filter_date', default_date)
-    filtered_data = history[history.index >= filter_date]
-    count_data = len(filtered_data)
-    if count_data == 0:
-        return 0
-    client = thingspeak.Channel(
-        id=cf_config['channel_id'],
-        api_key=cf_config['write_api_key'],
-        fmt='json'
-    )
-    # *** แก้ไข: เปลี่ยน field ที่อ่านเพื่อไม่ให้ชนกับ f(x) ของ monitor ***
-    # สมมติว่า field สำหรับ average_cf คือ field 8 (หรือ field อื่นที่ไม่ได้ใช้)
-    # หากไม่มี field แยก ให้ปิดการใช้งานส่วนนี้ไปก่อน
-    try:
-        # field_data = client.get_field_last(field=f"8") # <--- สมมติว่าใช้ field 8
-        # value = int(eval(json.loads(field_data)[f"field8"]))
-        # adjusted_value = value - cf_config.get('offset', 0)
-        # return adjusted_value / count_data
-
-        # *** ทางออกชั่วคราว: หากยังไม่มี field แยก ให้ return 0 หรือค่าคงที่ไปก่อน ***
-        return 0 # <--- คืนค่า 0 เพื่อไม่ให้แสดงตัวเลขที่ผิดพลาด
-
-    except Exception as e:
-        st.warning(f"Could not calculate average_cf: {e}")
-        return 0
-
-
 @st.cache_data(ttl=60)
 def production_cost(ticker, t0, fix):
     """
@@ -157,7 +124,6 @@ def production_cost(ticker, t0, fix):
         st.warning(f"Could not calculate Production for {ticker}: {e}")
         return None
 
-# --- 2.1. แก้ไขฟังก์ชัน monitor ให้เติม action ในแถวอนาคตด้วย ---
 def monitor(channel_id, api_key, ticker, field, filter_date):
     """
     Monitors an asset. Uses the new SimulationTracer logic for actions
@@ -167,7 +133,6 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     history = get_ticker_history(ticker)
     filtered_data = history[history.index >= filter_date].copy()
 
-    # --- ส่วนที่ 1: ดึงค่า fx_js จาก ThingSpeak ---
     fx_js = "0"
     try:
         field_data = thingspeak_client.get_field_last(field=f'{field}')
@@ -178,34 +143,23 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
         fx_js = "0"
         st.warning(f"Could not fetch or parse data from ThingSpeak for {ticker} (Field {field}). Using default value '0'.")
 
-    # --- ส่วนที่ 2: สร้าง DataFrame พื้นฐาน (รวมอดีตและอนาคต) ---
     display_df = pd.DataFrame(index=['+0', "+1", "+2", "+3", "+4"])
     combined_df = pd.concat([filtered_data, display_df]).fillna("")
     combined_df['index'] = ""
-    combined_df['action'] = "" # เริ่มต้นด้วยคอลัมน์ action ว่าง
+    combined_df['action'] = ""
 
     if not filtered_data.empty:
         combined_df.loc[filtered_data.index, 'index'] = range(1, len(filtered_data) + 1)
 
-    # --- ส่วนที่ 3: *** แก้ไข Logic การใส่ Action ใหม่ทั้งหมด ***
-    # เราจะเติม action จาก "ท้ายตารางขึ้นมา" โดยใช้ action จาก "ท้าย array ที่สร้างได้"
-    # ซึ่งจะทำให้ทั้งแถวข้อมูลย้อนหลังและแถวอนาคต (+0, +1, ...) ถูกเติมอย่างถูกต้อง
     try:
         tracer = SimulationTracer(encoded_string=str(fx_js))
         final_actions = tracer.run()
-
-        # จำนวน action ที่จะแสดงในตาราง (สูงสุด 7 แถว เพราะเราใช้ .tail(7))
         rows_in_table = 7
         num_actions_to_display = min(rows_in_table, len(final_actions))
 
         if num_actions_to_display > 0:
-            # เลือก action ส่วนท้ายสุดของ array ที่สร้างได้
             actions_to_assign = final_actions[-num_actions_to_display:]
-
-            # เลือก index ของแถวส่วนท้ายสุดของตาราง (ซึ่งรวมทั้งอดีตและอนาคต)
             target_indices = combined_df.index[-num_actions_to_display:]
-
-            # กำหนดค่า action ให้กับแถวเป้าหมาย
             combined_df.loc[target_indices, 'action'] = actions_to_assign
 
     except ValueError as e:
@@ -220,16 +174,6 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
 def main():
     """Main function to run the Streamlit app."""
     st.write('____')
-
-    # --- แก้ไข: ปิดการแสดงผล average_cf หรือตรวจสอบให้แน่ใจว่าใช้ field ที่ถูกต้อง ---
-    avg_cf_config = CONFIG.get('average_cf_config')
-    if avg_cf_config:
-        cf_day = average_cf(avg_cf_config)
-        # ตรวจสอบก่อนแสดงผล เพื่อไม่ให้แสดงค่า 0.00 ที่ไม่สื่อความหมาย
-        if cf_day > 0:
-            st.write(f"average_cf_day: {cf_day:.2f} USD  :  average_cf_mo: {cf_day * 30:.2f} USD")
-            st.write('____')
-    # ไม่ต้องแสดง warning หากไม่มี config ส่วนนี้
 
     monitor_config = CONFIG.get('monitor_config', {})
     default_monitor_date = "2025-04-28 12:00:00+07:00"
