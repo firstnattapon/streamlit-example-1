@@ -5,7 +5,7 @@ import datetime
 import thingspeak
 import pandas as pd
 import yfinance as yf
-import json 
+import json
 from functools import lru_cache
 import concurrent.futures
 from threading import Lock
@@ -434,4 +434,4 @@ for config in ASSET_CONFIGS:
     st.write("_____")
 
 if st.sidebar.button("RERUN"):
-    clear_all_caches()
+    clear_all_caches() 
