@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Tuple, Dict, Any
 
 # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
-from numba import njit 
+from numba import njit
 
 # ==============================================================================
 # 1. Configuration & Constants
@@ -20,7 +20,7 @@ class Strategy:
     REBALANCE_DAILY = "Rebalance Daily"
     PERFECT_FORESIGHT = "Perfect Foresight (Max)"
     HYBRID_MULTI_MUTATION = "Hybrid (Multi-Mutation)"
-    ORIGINAL_DNA = "Original DNA (Pre-Mutation)" # เพิ่มเพื่อความชัดเจน
+    ORIGINAL_DNA = "Original DNA (Pre-Mutation)"
 
 def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
     # In a real app, this might load from a JSON file. For simplicity, it's a dict.
@@ -200,7 +200,6 @@ def find_best_mutation_for_sequence(
 
     return best_mutation_seed, max_mutated_net, final_mutated_actions
 
-# ! MODIFIED: Function now returns three items
 def generate_actions_hybrid_multi_mutation(
     ticker_data: pd.DataFrame,
     window_size: int,
@@ -212,7 +211,6 @@ def generate_actions_hybrid_multi_mutation(
 
     prices = ticker_data['Close'].to_numpy()
     n = len(prices)
-    # ! MODIFIED: Initialize two arrays to store actions
     final_actions = np.array([], dtype=int)
     original_actions_full = np.array([], dtype=int)
     window_details_list = []
@@ -233,7 +231,6 @@ def generate_actions_hybrid_multi_mutation(
         
         dna_seed, current_best_net, current_best_actions = find_best_seed_for_window(prices_window, num_seeds, max_workers)
         
-        # ! MODIFIED: Store the original best actions for this window
         original_actions_window = current_best_actions.copy()
         original_net_for_display = current_best_net
         successful_mutation_seeds = []
@@ -251,7 +248,6 @@ def generate_actions_hybrid_multi_mutation(
                 current_best_actions = mutated_actions
                 successful_mutation_seeds.append(int(mutation_seed))
 
-        # ! MODIFIED: Concatenate both sets of actions
         final_actions = np.concatenate((final_actions, current_best_actions))
         original_actions_full = np.concatenate((original_actions_full, original_actions_window))
 
@@ -267,7 +263,6 @@ def generate_actions_hybrid_multi_mutation(
         window_details_list.append(detail)
 
     progress_bar.empty()
-    # ! MODIFIED: Return both full action sequences
     return original_actions_full, final_actions, pd.DataFrame(window_details_list)
 
 # ==============================================================================
@@ -324,7 +319,6 @@ def render_hybrid_multi_mutation_tab():
             ticker_data = get_ticker_data(ticker, str(st.session_state.start_date), str(st.session_state.end_date))
             if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
 
-            # ! MODIFIED: Function now returns three items
             original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
                 ticker_data, st.session_state.window_size, st.session_state.num_seeds,
                 st.session_state.max_workers, st.session_state.mutation_rate,
@@ -333,7 +327,6 @@ def render_hybrid_multi_mutation_tab():
 
             prices = ticker_data['Close'].to_numpy()
             
-            # ! MODIFIED: Run simulation for Original DNA as well
             results = {
                 Strategy.HYBRID_MULTI_MUTATION: run_simulation(prices.tolist(), final_actions.tolist()),
                 Strategy.ORIGINAL_DNA: run_simulation(prices.tolist(), original_actions.tolist()),
@@ -345,8 +338,6 @@ def render_hybrid_multi_mutation_tab():
 
         st.success("การทดสอบเสร็จสมบูรณ์!");
         
-        # We can now decide which lines to show on the chart.
-        # To keep UI the same, we can pop the Original DNA before charting.
         chart_results = results.copy()
         chart_results.pop(Strategy.ORIGINAL_DNA)
         display_comparison_charts(chart_results)
@@ -355,7 +346,7 @@ def render_hybrid_multi_mutation_tab():
         st.write("### 📈 สรุปผลลัพธ์")
         
         if not df_windows.empty:
-            # ! MODIFIED: Get final compounded net for all three strategies
+            # Get final compounded net for all strategies
             perfect_df = results.get(Strategy.PERFECT_FORESIGHT)
             total_perfect_net = perfect_df['net'].iloc[-1] if perfect_df is not None and not perfect_df.empty else 0.0
             
@@ -364,14 +355,18 @@ def render_hybrid_multi_mutation_tab():
 
             original_df = results.get(Strategy.ORIGINAL_DNA)
             total_original_net = original_df['net'].iloc[-1] if original_df is not None and not original_df.empty else 0.0
-
-            # ! MODIFIED: Display the three requested metrics in one row
-            st.write("#### สรุปผลการดำเนินงานโดยรวม (Compounded Final Profit)")
-            col1, col2, col3 = st.columns(3)
             
-            col1.metric("Perfect Foresight (Final)", f"${total_perfect_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องแบบ Perfect Foresight (ทบต้น)")
-            col2.metric("Hybrid Strategy (Final)", f"${total_hybrid_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของกลยุทธ์ Hybrid ที่ผ่านการกลายพันธุ์แล้ว (ทบต้น)")
-            col3.metric("Original Profits (Final)", f"${total_original_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของ 'DNA ดั้งเดิม' ก่อนการกลายพันธุ์ (ทบต้น)")
+            rebalance_df = results.get(Strategy.REBALANCE_DAILY)
+            total_rebalance_net = rebalance_df['net'].iloc[-1] if rebalance_df is not None and not rebalance_df.empty else 0.0
+
+            # ! MODIFIED: Display the four requested metrics in one row
+            st.write("#### สรุปผลการดำเนินงานโดยรวม (Compounded Final Profit)")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            col1.metric("Perfect Foresight", f"${total_perfect_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องแบบ Perfect Foresight (ทบต้น)")
+            col2.metric("Hybrid Strategy", f"${total_hybrid_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของกลยุทธ์ Hybrid ที่ผ่านการกลายพันธุ์แล้ว (ทบต้น)")
+            col3.metric("Original Profits", f"${total_original_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของ 'DNA ดั้งเดิม' ก่อนการกลายพันธุ์ (ทบต้น)")
+            col4.metric("Rebalance Daily", f"${total_rebalance_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของกลยุทธ์ Rebalance Daily (ทบต้น)")
 
             st.write("---")
             st.write("#### 📝 รายละเอียดผลลัพธ์ราย Window")
