@@ -1,4 +1,3 @@
-# 📈_Monitor.py (index)
 import streamlit as st
 import numpy as np
 import datetime
@@ -14,7 +13,7 @@ from typing import List
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide")
 
-# --- START: โค้ดจาก action_simulationTracer.py (ไม่มีการเปลี่ยนแปลง) ---
+# --- START: โค้ดจาก action_simulationTracer.py ---
 class SimulationTracer:
     """
     คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
@@ -35,7 +34,6 @@ class SimulationTracer:
             self.mutation_seeds: List[int] = []
             self.mutation_rate_float: float = 0.0
             return
-
         decoded_numbers = []
         idx = 0
         try:
@@ -47,7 +45,6 @@ class SimulationTracer:
                 decoded_numbers.append(int(number_str))
         except (IndexError, ValueError):
             pass
-
         if len(decoded_numbers) < 3:
             self.action_length: int = 0
             self.mutation_rate: int = 0
@@ -55,7 +52,6 @@ class SimulationTracer:
             self.mutation_seeds: List[int] = []
             self.mutation_rate_float: float = 0.0
             return
-
         self.action_length: int = decoded_numbers[0]
         self.mutation_rate: int = decoded_numbers[1]
         self.dna_seed: int = decoded_numbers[2]
@@ -65,7 +61,6 @@ class SimulationTracer:
     def run(self) -> np.ndarray:
         if self.action_length <= 0:
             return np.array([])
-            
         dna_rng = np.random.default_rng(seed=self.dna_seed)
         current_actions = dna_rng.integers(0, 2, size=self.action_length)
         if self.action_length > 0:
@@ -84,7 +79,6 @@ class SimulationTracer:
 # ---------- CONFIGURATION ----------
 @st.cache_data
 def load_config(file_path='monitor_config.json'):
-    """Load configuration from a JSON file."""
     if not os.path.exists(file_path):
         st.error(f"Configuration file not found: {file_path}")
         return None
@@ -109,7 +103,6 @@ _cache_timestamp = {}
 
 @st.cache_resource
 def get_thingspeak_clients(configs):
-    """Creates and caches a dictionary of ThingSpeak clients based on the config."""
     clients = {}
     unique_channels = set()
     for config in configs:
@@ -117,7 +110,6 @@ def get_thingspeak_clients(configs):
         unique_channels.add((mon_conf['channel_id'], mon_conf['api_key']))
         asset_conf = config['asset_field']
         unique_channels.add((asset_conf['channel_id'], asset_conf['api_key']))
-
     for channel_id, api_key in unique_channels:
         try:
             clients[channel_id] = thingspeak.Channel(channel_id, api_key, fmt='json')
@@ -138,7 +130,7 @@ def clear_all_caches():
     st.success("🗑️ Clear ALL caches complete!")
     st.rerun()
 
-# ---------- CALCULATION UTILS (ไม่มีการเปลี่ยนแปลง) ----------
+# ---------- CALCULATION UTILS ----------
 @lru_cache(maxsize=128)
 def sell(asset, fix_c=1500, Diff=60):
     if asset == 0: return 0, 0, 0
@@ -171,7 +163,7 @@ def get_cached_price(ticker, max_age=30):
     except:
         return 0.0
 
-# ---------- DATA FETCHING (ไม่มีการเปลี่ยนแปลง) ----------
+# ---------- DATA FETCHING ----------
 @st.cache_data(ttl=300)
 def Monitor(asset_config, _clients_ref, start_date):
     ticker = asset_config['ticker']
@@ -202,10 +194,8 @@ def Monitor(asset_config, _clients_ref, start_date):
             if num_to_assign > 0:
                 action_col_idx = df.columns.get_loc('action')
                 df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
-        except ValueError as e:
-            st.warning(f"Tracer Error for {ticker} (input: '{fx_js_str}'): {e}")
         except Exception as e:
-            st.error(f"Unexpected Tracer Error for {ticker}: {e}")
+            st.warning(f"Tracer Error for {ticker}: {e}")
         return df.tail(7), fx_js_str
     except Exception as e:
         st.error(f"Error in Monitor function for {ticker}: {str(e)}")
@@ -237,7 +227,10 @@ def fetch_asset(asset_config, client):
 def get_all_assets_from_thingspeak(configs, _clients_ref):
     assets = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
-        future_to_ticker = {executor.submit(fetch_asset, asset['asset_field'], _clients_ref[asset['asset_field']['channel_id']]): asset['ticker'] for asset in configs if asset['asset_field']['channel_id'] in _clients_ref}
+        future_to_ticker = {
+            executor.submit(fetch_asset, asset['asset_field'], _clients_ref[asset['asset_field']['channel_id']]): asset['ticker']
+            for asset in configs if asset['asset_field']['channel_id'] in _clients_ref
+        }
         for future in concurrent.futures.as_completed(future_to_ticker):
             ticker = future_to_ticker[future]
             try:
@@ -246,10 +239,9 @@ def get_all_assets_from_thingspeak(configs, _clients_ref):
                 st.error(f"Error fetching asset for ticker {ticker}: {str(e)}")
     return assets
 
-# ---------- UI SECTION (RESTRUCTURED) ----------
-
+# ---------- UI SECTION - REFACTORED FOR COMPACTNESS ----------
 def render_asset_inputs(configs, last_assets):
-    """แสดงผลช่องกรอกข้อมูล Asset"""
+    st.subheader("Asset Overview")
     cols = st.columns(len(configs))
     asset_inputs = {}
     for i, config in enumerate(configs):
@@ -259,7 +251,8 @@ def render_asset_inputs(configs, last_assets):
             if config.get('option_config'):
                 option_val = config['option_config']['base_value']
                 label = config['option_config']['label']
-                real_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_real")
+                real_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_real", label_visibility="collapsed")
+                st.caption(f"{label}: {option_val + real_val:.3f}")
                 asset_inputs[ticker] = option_val + real_val
             else:
                 label = f'{ticker}_ASSET'
@@ -268,146 +261,131 @@ def render_asset_inputs(configs, last_assets):
     return asset_inputs
 
 def render_asset_update_controls(configs, clients):
-    """แสดงผลส่วนควบคุมการอัปเดต Asset บน ThingSpeak"""
     with st.expander("Update Assets on ThingSpeak"):
-        for config in configs:
-            ticker = config['ticker']
-            asset_conf = config['asset_field']
-            field_name = asset_conf['field']
-            
-            if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
-                add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
-                if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
-                    try:
-                        client = clients[asset_conf['channel_id']]
-                        client.update({field_name: add_val})
-                        st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
-                        clear_all_caches()
-                    except Exception as e:
-                        st.error(f"Failed to update {ticker}: {e}")
+        update_cols = st.columns(len(configs))
+        for i, config in enumerate(configs):
+            with update_cols[i]:
+                ticker = config['ticker']
+                asset_conf = config['asset_field']
+                field_name = asset_conf['field']
+                
+                if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
+                    add_val = st.number_input(f"New Val", step=0.001, value=0.0, key=f'input_{ticker}', label_visibility="collapsed")
+                    if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
+                        try:
+                            client = clients[asset_conf['channel_id']]
+                            client.update({field_name: add_val})
+                            st.write(f"Updated: {add_val}")
+                            clear_all_caches()
+                        except Exception as e:
+                            st.error(f"Update failed: {e}")
 
-def render_trading_controls(config, asset_last, df_data, calc, nex, Nex_day_sell, clients):
-    """แสดงผลส่วนควบคุมการซื้อขาย (Sell/Buy) ภายในคอลัมน์"""
+def display_compact_asset_terminal(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, clients, fx_js_str):
     ticker = config['ticker']
     asset_conf = config['asset_field']
     field_name = asset_conf['field']
-    
-    sell_calc, buy_calc = calc['sell'], calc['buy']
 
-    # --- ส่วนควบคุมการเทรด ---
-    sell_col, buy_col = st.columns(2)
+    # --- Header Row: Title & P/L ---
+    col_title, col_pl = st.columns([1, 2])
+    with col_title:
+        st.subheader(f"{ticker}")
+        st.caption(f"f(x): `{fx_js_str}`")
 
-    with sell_col:
-        st.subheader("Sell Side")
-        st.write(f"Amount: `{buy_calc[1]}` | Price: `{buy_calc[0]}` | Cost: `{buy_calc[2]}`")
-        if st.checkbox(f'sell_match_{ticker}', key=f'sell_match_check_{ticker}'):
-            if st.button(f"GO SELL {ticker}", key=f'btn_go_sell_{ticker}', type="primary", use_container_width=True):
-                try:
-                    client = clients[asset_conf['channel_id']]
-                    new_asset_val = asset_last - buy_calc[1]
-                    client.update({field_name: new_asset_val})
-                    st.success(f"SELL successful! New asset value: {new_asset_val}")
-                    clear_all_caches()
-                except Exception as e:
-                    st.error(f"Failed to SELL {ticker}: {e}")
-
-    with buy_col:
-        st.subheader("Buy Side")
-        st.write(f"Amount: `{sell_calc[1]}` | Price: `{sell_calc[0]}` | Cost: `{sell_calc[2]}`")
-        if st.checkbox(f'buy_match_{ticker}', key=f'buy_match_check_{ticker}'):
-            if st.button(f"GO BUY {ticker}", key=f'btn_go_buy_{ticker}', type="primary", use_container_width=True):
-                try:
-                    client = clients[asset_conf['channel_id']]
-                    new_asset_val = asset_last + sell_calc[1]
-                    client.update({field_name: new_asset_val})
-                    st.success(f"BUY successful! New asset value: {new_asset_val}")
-                    clear_all_caches()
-                except Exception as e:
-                    st.error(f"Failed to BUY {ticker}: {e}")
-
-def display_asset_card(config, asset_val, asset_last, df_data, fx_js_str, calc, nex, Nex_day_sell, clients):
-    """แสดงผลข้อมูลทั้งหมดของ Asset หนึ่งตัวในรูปแบบ Card"""
-    ticker = config['ticker']
-    
-    with st.container(border=True):
-        # --- 1. ส่วนหัวและข้อมูลสรุป ---
-        st.subheader(f"📈 {ticker}")
-        st.caption(f"f(x) Code: `{fx_js_str}`")
-
-        # --- 2. ส่วนแสดงผลราคาและ P/L ---
+    with col_pl:
         try:
             current_price = get_cached_price(ticker)
             if current_price > 0:
                 pv = current_price * asset_val
                 fix_value = config['fix_c']
                 pl_value = pv - fix_value
-                pl_percent = (pl_value / fix_value) * 100 if fix_value != 0 else 0
-                
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Current Price", f"{current_price:,.3f}")
-                m2.metric("Portfolio Value", f"{pv:,.2f}")
-                m3.metric(f"P/L (vs {fix_value:,})", f"{pl_value:,.2f}", f"{pl_percent:.2f}%")
+                pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
+                st.markdown(
+                    f"Price: **{current_price:,.3f}** | Value: **{pv:,.2f}** | P/L (vs {fix_value:,}) : <span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>",
+                    unsafe_allow_html=True
+                )
             else:
-                st.info(f"Price data for {ticker} is currently unavailable.")
-        except Exception as e:
-            st.warning(f"Could not retrieve price data for {ticker}: {e}")
+                st.info(f"Price for {ticker} unavailable.")
+        except Exception:
+            st.warning(f"Could not get price for {ticker}.")
+
+    # --- Master Trading Switch ---
+    def get_action_val():
+        try:
+            if df_data.empty or df_data.action.values[1 + nex] == "": return 0
+            val = df_data.action.values[1 + nex]
+            return 1 - val if Nex_day_sell == 1 else val
+        except Exception: return 0
+
+    limit_order = st.checkbox(f'Limit_Order_{ticker}', value=bool(get_action_val()), key=f'limit_order_{ticker}')
+    if not limit_order:
+        return
+
+    # --- Main Content: Trading Actions & Raw Data ---
+    col_trading, col_data = st.columns([3, 2])
+
+    with col_trading:
+        sell_calc, buy_calc = calc['sell'], calc['buy']
+
+        # Sell Section (Compact)
+        st.markdown("**SELL** Action (at `buy` price)")
+        c1, c2 = st.columns([3, 1])
+        c1.markdown(f"P: `{buy_calc[0]}` | A: `{buy_calc[1]}` | C: `{buy_calc[2]:,.2f}`")
+        if c2.checkbox(f'match', key=f'sell_match_{ticker}'):
+            if st.button(f"GO_SELL", key=f"GO_SELL_{ticker}", use_container_width=True):
+                try:
+                    client = clients[asset_conf['channel_id']]
+                    new_asset_val = asset_last - buy_calc[1]
+                    client.update({field_name: new_asset_val})
+                    st.success(f"Updated: {new_asset_val:.3f}")
+                    clear_all_caches()
+                except Exception as e:
+                    st.error(f"SELL Fail: {e}")
         
-        st.divider()
+        # Buy Section (Compact)
+        st.markdown("**BUY** Action (at `sell` price)")
+        c3, c4 = st.columns([3, 1])
+        c3.markdown(f"P: `{sell_calc[0]}` | A: `{sell_calc[1]}` | C: `{sell_calc[2]:,.2f}`")
+        if c4.checkbox(f'match', key=f'buy_match_{ticker}'):
+            if st.button(f"GO_BUY", key=f"GO_BUY_{ticker}", use_container_width=True):
+                try:
+                    client = clients[asset_conf['channel_id']]
+                    new_asset_val = asset_last + sell_calc[1]
+                    client.update({field_name: new_asset_val})
+                    st.success(f"Updated: {new_asset_val:.3f}")
+                    clear_all_caches()
+                except Exception as e:
+                    st.error(f"BUY Fail: {e}")
 
-        # --- 3. ส่วนควบคุมการเทรด ---
-        def get_action_val():
-            try:
-                if df_data.empty or df_data.action.values[1 + nex] == "": return 0
-                val = df_data.action.values[1 + nex]
-                return 1 - val if Nex_day_sell == 1 else val
-            except IndexError:
-                return 0
-
-        action_val = get_action_val()
-        limit_order = st.checkbox(f'Activate Trading for {ticker}', value=bool(action_val), key=f'limit_order_{ticker}')
-        
-        if limit_order:
-            render_trading_controls(config, asset_last, df_data, calc, nex, Nex_day_sell, clients)
-
-        # --- 4. ส่วนข้อมูลดิบ ---
-        with st.expander("Show Raw Action Data"):
-            st.dataframe(df_data, use_container_width=True)
+    with col_data:
+        with st.expander("Show Raw Data Action"):
+            st.dataframe(df_data, use_container_width=True, height=280)
 
 # ---------- MAIN LOGIC ----------
-# --- Fetch initial data ---
+# --- Fetch all data first ---
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-# --- Top-level controls ---
-st.header("📈 Trading Monitor Dashboard")
-
+# --- Global Control Bar ---
+st.header("📈 Monitor Dashboard")
 nex, Nex_day_sell = 0, 0
 with st.container(border=True):
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        Nex_day_ = st.checkbox('Activate Next Day Mode')
-        if Nex_day_:
-            nex_col, Nex_day_sell_col, _ = st.columns(3)
-            if nex_col.button("Nex_day"): nex = 1
-            if Nex_day_sell_col.button("Nex_day_sell"):
-                nex, Nex_day_sell = 1, 1
-            st.info(f"Mode: nex_value = {nex} | Nex_day_sell = {Nex_day_sell}")
+    cols = st.columns([1, 1, 1, 1, 3])
+    Nex_day_ = cols[0].checkbox('Next Day')
+    if Nex_day_:
+        if cols[1].button("Nex_day"): nex = 1
+        if cols[2].button("Nex_day_sell"): nex, Nex_day_sell = 1, 1
     
-    with c2:
-         x_2 = st.number_input('Diff', step=1, value=60)
+    x_2 = cols[3].number_input('Diff', step=1, value=60)
+    Start = cols[4].checkbox('Start (Show Asset Update Panel)')
 
-    Start = st.checkbox('Show System Controls')
-    if Start:
-        render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
+# --- Display Controls based on "Start" ---
+if Start:
+    render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-st.divider()
-
-# --- Asset input section ---
-st.subheader("Asset Configuration")
+# --- Render asset inputs and calculate trading values ---
 asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
-st.divider()
+st.markdown("---")
 
-# --- Calculations ---
 calculations = {}
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
@@ -418,17 +396,19 @@ for config in ASSET_CONFIGS:
         'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
     }
 
-# --- Main loop to display each asset card ---
-st.header("Asset Details & Trading")
+# --- Main loop to display each asset's terminal ---
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
     df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
     asset_last = last_assets_all.get(ticker, 0.0)
     asset_val = asset_inputs.get(ticker, 0.0)
     calc = calculations.get(ticker, {})
-    
-    display_asset_card(config, asset_val, asset_last, df_data, fx_js_str, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
 
-# --- Sidebar Controls ---
+    display_compact_asset_terminal(
+        config, asset_val, asset_last, df_data, calc,
+        nex, Nex_day_sell, THINGSPEAK_CLIENTS, fx_js_str
+    )
+    st.markdown("---")
+
 if st.sidebar.button("RERUN & Clear Caches"):
     clear_all_caches()
