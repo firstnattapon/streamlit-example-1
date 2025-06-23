@@ -6,7 +6,7 @@ import thingspeak
 import json
 from pathlib import Path
 import math
-from typing import List, Dict, Any 
+from typing import List, Dict, Any
 
 # --- 0. คลาสสำหรับ Logic การสร้าง Action ใหม่ ---
 class SimulationTracer:
@@ -125,12 +125,12 @@ def production_cost(ticker, t0, fix):
         return None
 
 # ==============================================================================
-# ฟังก์ชัน monitor ที่แก้ไขใหม่: ลบคอลัมน์ index ออกไป
+# ฟังก์ชัน monitor ที่แก้ไขใหม่: เพิ่มคอลัมน์ index ที่นับจาก 0
 # ==============================================================================
 def monitor(channel_id, api_key, ticker, field, filter_date):
     """
-    Monitors an asset, keeping the original display format (Date index, Close, Action)
-    while ensuring correct data alignment using positional indexing.
+    Monitors an asset. Adds a new 'index' column starting from 0,
+    and ensures correct alignment of 'action' data.
     """
     thingspeak_client = thingspeak.Channel(id=channel_id, api_key=api_key, fmt='json')
     history = get_ticker_history(ticker)
@@ -151,17 +151,23 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     
     # --- START: ส่วนที่แก้ไข ---
 
-    # 1. ลบคอลัมน์ 'index' ออกไปเลย ไม่ต้องสร้างแล้ว
-    
-    # 2. สร้างคอลัมน์ 'action' ที่ว่างเปล่า
+    # 1. สร้างคอลัมน์ใหม่ที่ต้องการ: index และ action
+    combined_df['index'] = ""
     combined_df['action'] = ""
+
+    # 2. จัดลำดับคอลัมน์ใหม่เพื่อให้ 'index' มาก่อน
+    # โดยยังคงรักษาคอลัมน์ 'Close' ที่มีอยู่เดิมไว้
+    combined_df = combined_df[['index', 'Close', 'action']]
+
+    # 3. เติมข้อมูลในคอลัมน์ 'index' โดยให้นับจาก 0
+    combined_df['index'] = range(len(combined_df))
 
     try:
         tracer = SimulationTracer(encoded_string=str(fx_js))
         final_actions = tracer.run()
 
-        # 3. กำหนดค่า action โดยใช้ .iloc ซึ่งอ้างอิงตาม "ตำแหน่ง" ของแถว
-        # วิธีนี้จะทำงานถูกต้องเสมอ ไม่ว่า Index ของ DataFrame จะเป็นอะไรก็ตาม
+        # 4. เติมข้อมูลในคอลัมน์ 'action' โดยใช้ .iloc เพื่อความแม่นยำ
+        # ตรรกะนี้ยังคงเดิม เพราะทำงานได้ถูกต้องอยู่แล้ว
         num_to_assign = min(len(combined_df), len(final_actions))
         
         if num_to_assign > 0:
