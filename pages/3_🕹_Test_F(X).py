@@ -28,7 +28,7 @@ def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
         "default_settings": {
             "selected_ticker": "FFWM", "start_date": "2024-01-01",
             "window_size": 30, "num_seeds": 1000, "max_workers": 8,
-            "mutation_rate": 10.0, "num_mutations": 10
+            "mutation_rate": 10.0, "num_mutations": 5
         }
     }
 
