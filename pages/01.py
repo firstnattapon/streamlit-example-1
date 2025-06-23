@@ -58,7 +58,7 @@ class SimulationTracer:
 st.set_page_config(page_title="Calculator", page_icon="⌨️" , layout= "centered" )
 
 @st.cache_data(ttl=300)
-def load_config(filepath="calculator_config.json"):
+def load_config(filepath="01.json"):
     config_path = Path(filepath)
     if not config_path.is_file():
         st.error(f"Error: Configuration file not found at '{filepath}'")
