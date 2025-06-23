@@ -1,4 +1,4 @@
-# 📈_Monitor.py (Updated with SimulationTracer and Raw Data Expander)
+# 📈_Monitor.py (Updated with SimulationTracer, Raw Data Expander, and 0-based index)
 import streamlit as st
 import numpy as np
 import datetime
@@ -15,7 +15,6 @@ from typing import List
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide"  )
 
 # --- START: โค้ดจาก action_simulationTracer.py ---
-# --- เพิ่มคลาส SimulationTracer เข้ามาในไฟล์นี้ ---
 class SimulationTracer:
     """
     คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
@@ -32,8 +31,6 @@ class SimulationTracer:
     def _decode_and_set_attributes(self):
         encoded_string = self.encoded_string
         if not encoded_string.isdigit():
-            # หากข้อมูลที่ได้จาก ThingSpeak ไม่ใช่ตัวเลข ให้ใช้ค่าเริ่มต้นแทนเพื่อไม่ให้แอปพัง
-            # st.warning(f"Tracer Input '{encoded_string}' is not numeric. Using default values.")
             self.action_length: int = 0
             self.mutation_rate: int = 0
             self.dna_seed: int = 0
@@ -51,11 +48,9 @@ class SimulationTracer:
                 idx += length_of_number
                 decoded_numbers.append(int(number_str))
         except (IndexError, ValueError):
-             # หากรูปแบบผิดพลาด ให้ใช้ค่าเท่าที่ถอดรหัสได้
-            pass # Continue with what was decoded
+            pass
 
         if len(decoded_numbers) < 3:
-            # st.warning(f"Decoded data '{decoded_numbers}' is incomplete. Using default values.")
             self.action_length: int = 0
             self.mutation_rate: int = 0
             self.dna_seed: int = 0
@@ -70,7 +65,6 @@ class SimulationTracer:
         self.mutation_rate_float: float = self.mutation_rate / 100.0
 
     def run(self) -> np.ndarray:
-        # ถ้าไม่มี action_length ก็ไม่ต้องทำอะไร
         if self.action_length <= 0:
             return np.array([])
             
@@ -197,7 +191,6 @@ def Monitor(asset_config, _clients_ref, start_date):
         if start_date:
             tickerData = tickerData[tickerData.index >= start_date]
         
-        # ดึง encoded string จาก ThingSpeak
         fx_js_str = "0"
         try:
             field_data = client.get_field_last(field=str(field_num))
@@ -207,31 +200,27 @@ def Monitor(asset_config, _clients_ref, start_date):
         except (json.JSONDecodeError, KeyError, TypeError):
             fx_js_str = "0"
 
-        # สร้าง DataFrame โครงสร้าง
-        tickerData['index'] = [i+1 for i in range(len(tickerData))]
+        # --- MODIFIED LINE: สร้างคอลัมน์ index ให้เริ่มจาก 0 ---
+        tickerData['index'] = list(range(len(tickerData)))
+        # --------------------------------------------------------
+
         dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
         df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
-        df['action'] = "" # <-- เตรียมคอลัมน์ action ไว้
+        df['action'] = ""
 
-        # --- INTEGRATION POINT: ใช้ SimulationTracer แทนการสุ่ม ---
         try:
-            # สร้าง instance ของ Tracer ด้วย encoded string ที่ได้มา
             tracer = SimulationTracer(encoded_string=fx_js_str)
-            # รันเพื่อสร้าง action sequence
             final_actions = tracer.run()
             
-            # นำ action ที่ได้ไปใส่ใน DataFrame
             num_to_assign = min(len(df), len(final_actions))
             if num_to_assign > 0:
                 action_col_idx = df.columns.get_loc('action')
                 df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
         
         except ValueError as e:
-            # แสดง warning หาก encoded string มีปัญหา แต่ไม่หยุดการทำงานของแอป
             st.warning(f"Tracer Error for {ticker} (input: '{fx_js_str}'): {e}")
         except Exception as e:
             st.error(f"Unexpected Tracer Error for {ticker}: {e}")
-        # --- END OF INTEGRATION ---
 
         return df.tail(7), fx_js_str
     
@@ -329,7 +318,6 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
 
     def get_action_val():
         try:
-            # ตรวจสอบว่า df_data และ action ไม่ใช่ค่าว่าง
             if df_data.empty or df_data.action.values[1 + nex] == "":
                 return 0
                 
@@ -421,22 +409,18 @@ for config in ASSET_CONFIGS:
 
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
-    # แก้ไขการรับค่าจาก monitor_data_all เล็กน้อยให้รองรับกรณีมี fx_js_str
     df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
     asset_last = last_assets_all.get(ticker, 0.0)
     asset_val = asset_inputs.get(ticker, 0.0)
     calc = calculations.get(ticker, {})
     
-    st.write(f"**{ticker}** (f(x): `{fx_js_str}`)") # แสดง f(x) ที่หัวข้อ
+    st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
     trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
     
-    # --- START: โค้ดที่เพิ่มเข้ามาเพื่อแสดง Raw Data ---
     with st.expander("Show Raw Data Action"):
-        # ใช้ use_container_width=True เพื่อให้ตารางเต็มความกว้างของคอลัมน์
         st.dataframe(df_data, use_container_width=True)
-    # --- END: โค้ดที่เพิ่มเข้ามา ---
         
     st.write("_____")
 
 if st.sidebar.button("RERUN"):
-    clear_all_caches() 
+    clear_all_caches()
