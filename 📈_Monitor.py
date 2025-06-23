@@ -1,4 +1,4 @@
-# 📈_Monitor.py (Updated)
+# 📈_Monitor.py (Updated with SimulationTracer, Raw Data Expander, and 0-based index)
 import streamlit as st
 import numpy as np
 import datetime
@@ -10,8 +10,78 @@ from functools import lru_cache
 import concurrent.futures
 from threading import Lock
 import os
+from typing import List
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide"  )
+
+# --- START: โค้ดจาก action_simulationTracer.py ---
+class SimulationTracer:
+    """
+    คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
+    ไปจนถึงการจำลองกระบวนการกลายพันธุ์ของ action sequence
+    """
+    def __init__(self, encoded_string: str):
+        self.encoded_string: str = encoded_string
+        # ทำให้แน่ใจว่าค่าที่เข้ามาเป็นสตริงเสมอ
+        if not isinstance(self.encoded_string, str):
+            self.encoded_string = str(self.encoded_string)
+
+        self._decode_and_set_attributes()
+
+    def _decode_and_set_attributes(self):
+        encoded_string = self.encoded_string
+        if not encoded_string.isdigit():
+            self.action_length: int = 0
+            self.mutation_rate: int = 0
+            self.dna_seed: int = 0
+            self.mutation_seeds: List[int] = []
+            self.mutation_rate_float: float = 0.0
+            return
+
+        decoded_numbers = []
+        idx = 0
+        try:
+            while idx < len(encoded_string):
+                length_of_number = int(encoded_string[idx])
+                idx += 1
+                number_str = encoded_string[idx : idx + length_of_number]
+                idx += length_of_number
+                decoded_numbers.append(int(number_str))
+        except (IndexError, ValueError):
+            pass
+
+        if len(decoded_numbers) < 3:
+            self.action_length: int = 0
+            self.mutation_rate: int = 0
+            self.dna_seed: int = 0
+            self.mutation_seeds: List[int] = []
+            self.mutation_rate_float: float = 0.0
+            return
+
+        self.action_length: int = decoded_numbers[0]
+        self.mutation_rate: int = decoded_numbers[1]
+        self.dna_seed: int = decoded_numbers[2]
+        self.mutation_seeds: List[int] = decoded_numbers[3:]
+        self.mutation_rate_float: float = self.mutation_rate / 100.0
+
+    def run(self) -> np.ndarray:
+        if self.action_length <= 0:
+            return np.array([])
+            
+        dna_rng = np.random.default_rng(seed=self.dna_seed)
+        current_actions = dna_rng.integers(0, 2, size=self.action_length)
+        if self.action_length > 0:
+            current_actions[0] = 1
+        for m_seed in self.mutation_seeds:
+            mutation_rng = np.random.default_rng(seed=m_seed)
+            mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
+            current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
+            if self.action_length > 0:
+                current_actions[0] = 1
+        return current_actions
+
+# --- END: โค้ดจาก action_simulationTracer.py ---
+
 
 # ---------- CONFIGURATION ----------
 @st.cache_data
@@ -19,11 +89,10 @@ def load_config(file_path='monitor_config.json'):
     """Load configuration from a JSON file."""
     if not os.path.exists(file_path):
         st.error(f"Configuration file not found: {file_path}")
-        return None #<-- แก้ไข: คืนค่า None หากไม่พบไฟล์
+        return None
     with open(file_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
-#<-- แก้ไข: โหลดและแยกส่วนคอนฟิก
 CONFIG_DATA = load_config()
 if not CONFIG_DATA:
     st.stop()
@@ -34,7 +103,6 @@ GLOBAL_START_DATE = CONFIG_DATA.get('global_settings', {}).get('start_date')
 if not ASSET_CONFIGS:
     st.error("No 'assets' list found in monitor_config.json")
     st.stop()
-#<-- สิ้นสุดส่วนที่แก้ไข
 
 # ---------- GLOBAL CACHE & CLIENT MANAGEMENT ----------
 _cache_lock = Lock()
@@ -43,17 +111,12 @@ _cache_timestamp = {}
 
 @st.cache_resource
 def get_thingspeak_clients(configs):
-    """
-    Creates and caches a dictionary of ThingSpeak clients based on the config.
-    Returns a dict mapping {channel_id: client_object}.
-    """
+    """Creates and caches a dictionary of ThingSpeak clients based on the config."""
     clients = {}
     unique_channels = set()
     for config in configs:
-        # Add monitor channel details
         mon_conf = config['monitor_field']
         unique_channels.add((mon_conf['channel_id'], mon_conf['api_key']))
-        # Add asset channel details
         asset_conf = config['asset_field']
         unique_channels.add((asset_conf['channel_id'], asset_conf['api_key']))
 
@@ -64,7 +127,6 @@ def get_thingspeak_clients(configs):
             st.error(f"Failed to create client for Channel ID {channel_id}: {e}")
     return clients
 
-# Get all required clients once
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
 def clear_all_caches():
@@ -113,46 +175,63 @@ def get_cached_price(ticker, max_age=30):
 
 # ---------- DATA FETCHING ----------
 @st.cache_data(ttl=300)
-#<-- แก้ไข: รับพารามิเตอร์ start_date
 def Monitor(asset_config, _clients_ref, start_date):
-    """Fetches monitor data for a single ticker using its specific channel."""
+    """
+    Fetches monitor data and generates actions using SimulationTracer.
+    """
     ticker = asset_config['ticker']
     try:
         monitor_field_config = asset_config['monitor_field']
-        
         client = _clients_ref[monitor_field_config['channel_id']]
         field_num = monitor_field_config['field']
-        
+
         tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-        
-        #<-- แก้ไข: ใช้ start_date ส่วนกลางที่รับเข้ามา
+
         if start_date:
             tickerData = tickerData[tickerData.index >= start_date]
         
-        fx_raw = client.get_field_last(field=str(field_num))
-        fx_js = int(json.loads(fx_raw)[f"field{field_num}"])
-        
-        rng = np.random.default_rng(fx_js)
-        
-        tickerData['index'] = [i+1 for i in range(len(tickerData))]
+        fx_js_str = "0"
+        try:
+            field_data = client.get_field_last(field=str(field_num))
+            retrieved_val = json.loads(field_data)[f"field{field_num}"]
+            if retrieved_val is not None:
+                fx_js_str = str(retrieved_val)
+        except (json.JSONDecodeError, KeyError, TypeError):
+            fx_js_str = "0"
+
+        # --- MODIFIED LINE: สร้างคอลัมน์ index ให้เริ่มจาก 0 ---
+        tickerData['index'] = list(range(len(tickerData)))
+        # --------------------------------------------------------
+
         dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
-        
         df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
+        df['action'] = ""
+
+        try:
+            tracer = SimulationTracer(encoded_string=fx_js_str)
+            final_actions = tracer.run()
+            
+            num_to_assign = min(len(df), len(final_actions))
+            if num_to_assign > 0:
+                action_col_idx = df.columns.get_loc('action')
+                df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
         
-        df['action'] = rng.integers(2, size=len(df))
-        
-        return df.tail(7), fx_js
+        except ValueError as e:
+            st.warning(f"Tracer Error for {ticker} (input: '{fx_js_str}'): {e}")
+        except Exception as e:
+            st.error(f"Unexpected Tracer Error for {ticker}: {e}")
+
+        return df.tail(7), fx_js_str
+    
     except Exception as e:
         st.error(f"Error in Monitor function for {ticker}: {str(e)}")
-        return pd.DataFrame(), 0
+        return pd.DataFrame(), "0"
 
 @st.cache_data(ttl=300)
-#<-- แก้ไข: รับพารามิเตอร์ start_date
 def fetch_all_monitor_data(configs, _clients_ref, start_date):
     results = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
-        #<-- แก้ไข: ส่ง start_date ไปยังฟังก์ชัน Monitor
         future_to_ticker = {
             executor.submit(Monitor, asset, _clients_ref, start_date): asset['ticker']
             for asset in configs
@@ -163,7 +242,7 @@ def fetch_all_monitor_data(configs, _clients_ref, start_date):
                 results[ticker] = future.result()
             except Exception as e:
                 st.error(f"Error fetching monitor data for {ticker}: {str(e)}")
-                results[ticker] = (pd.DataFrame(), 0)
+                results[ticker] = (pd.DataFrame(), "0")
     return results
 
 def fetch_asset(asset_config, client):
@@ -239,10 +318,11 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
 
     def get_action_val():
         try:
-            if len(df_data) > 1 + nex:
-                val = df_data.action.values[1 + nex]
-                return 1 - val if Nex_day_sell == 1 else val
-            return 0
+            if df_data.empty or df_data.action.values[1 + nex] == "":
+                return 0
+                
+            val = df_data.action.values[1 + nex]
+            return 1 - val if Nex_day_sell == 1 else val
         except Exception:
             return 0
 
@@ -295,7 +375,6 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
                 st.error(f"Failed to BUY {ticker}: {e}")
 
 # ---------- MAIN LOGIC ----------
-#<-- แก้ไข: ส่ง GLOBAL_START_DATE ไปยังฟังก์ชัน
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
@@ -330,12 +409,17 @@ for config in ASSET_CONFIGS:
 
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
-    df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), 0))
+    df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
     asset_last = last_assets_all.get(ticker, 0.0)
     asset_val = asset_inputs.get(ticker, 0.0)
     calc = calculations.get(ticker, {})
     
+    st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
     trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
+    
+    with st.expander("Show Raw Data Action"):
+        st.dataframe(df_data, use_container_width=True)
+        
     st.write("_____")
 
 if st.sidebar.button("RERUN"):
