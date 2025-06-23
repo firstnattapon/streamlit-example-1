@@ -152,7 +152,9 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     except Exception as e:
         st.error(f"An unexpected error occurred during action generation for {ticker}: {e}")
 
-    return combined_df.tail(7), fx_js
+    # --- แก้ไขตรงนี้: คืนค่า DataFrame ทั้งหมด ไม่ใช่แค่ .tail(7) ---
+    return combined_df, fx_js
+    # -------------------------------------------------------------
 # ==============================================================================
 
 # --- 3. ส่วนแสดงผลหลัก (Main Display Logic) ---
@@ -182,7 +184,8 @@ def main():
             st.warning(f"Skipping an asset due to missing configuration: {asset_config}")
             continue
 
-        df_7, fx_js = monitor(channel_id, api_key, ticker, monitor_field, monitor_filter_date)
+        # --- เปลี่ยนจาก df_7 เป็น asset_df เพื่อความชัดเจน ---
+        asset_df, fx_js = monitor(channel_id, api_key, ticker, monitor_field, monitor_filter_date)
         
         prod_cost = production_cost(
             ticker=ticker,
@@ -196,8 +199,8 @@ def main():
         st.write(ticker)
         st.write(f"f(x): {fx_js} ,   Production_max : {prod_cost_max_display}  , Production_now : {prod_cost_now_display}")
         
-        # --- เปลี่ยนจาก st.table เป็น st.dataframe ---
-        st.dataframe(df_7)
+        # --- เปลี่ยนการแสดงผลเป็น asset_df ทั้งหมด ---
+        st.dataframe(asset_df)
         # --------------------------------------------
 
         st.write("_____")
