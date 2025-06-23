@@ -6,7 +6,7 @@ import streamlit as st
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Tuple, Dict, Any
-
+ 
 # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
 from numba import njit
  
@@ -28,7 +28,7 @@ def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
         "assets": ["FFWM", "NEGG", "RIVN", "AGL", "APLS", "FLNC", "NVTS" , "QXO" ,"RXRX"],
         "default_settings": {
             "selected_ticker": "FFWM", "start_date": "2024-01-01",
-            "window_size": 30, "num_seeds": 1000, "max_workers": 8,
+            "window_size": 30, "num_seeds": 1000, "max_workers": 1,
             "mutation_rate": 10.0, "num_mutations": 5
         }
     }
@@ -266,7 +266,117 @@ def generate_actions_hybrid_multi_mutation(
     return original_actions_full, final_actions, pd.DataFrame(window_details_list)
 
 # ==============================================================================
-# 4. UI Rendering Functions
+# 4. Simulation Tracer Class (for the new tab)
+# ==============================================================================
+
+class SimulationTracer:
+    """
+    คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
+    ไปจนถึงการจำลองกระบวนการกลายพันธุ์ของ action sequence
+    """
+    
+    def __init__(self, encoded_string: str):
+        """
+        Constructor ของคลาส รับสตริงที่เข้ารหัสและทำการถอดรหัสทันที
+        
+        Args:
+            encoded_string (str): สตริงที่เข้ารหัสพารามิเตอร์ทั้งหมดไว้
+        
+        Raises:
+            ValueError: หากรูปแบบของสตริงไม่ถูกต้อง
+        """
+        self.encoded_string: str = encoded_string
+        
+        # ถอดรหัสและตั้งค่าพารามิเตอร์เป็น attributes ของ instance
+        self._decode_and_set_attributes()
+
+    def _decode_and_set_attributes(self):
+        """
+        [Internal Method] ถอดรหัสสตริงและกำหนดค่าให้กับ attributes ของคลาส
+        """
+        encoded_string = self.encoded_string
+        if not isinstance(encoded_string, str) or not encoded_string.isdigit():
+            raise ValueError("Input ต้องเป็นสตริงที่ประกอบด้วยตัวเลขเท่านั้น")
+
+        decoded_numbers = []
+        idx = 0
+        while idx < len(encoded_string):
+            try:
+                # อ่านความยาวของตัวเลข (ตัวอักษรแรกสุดในแต่ละ block)
+                length_of_number = int(encoded_string[idx])
+                idx += 1
+                
+                # อ่านตัวเลขตามความยาวที่ได้มา
+                number_str = encoded_string[idx : idx + length_of_number]
+                idx += length_of_number
+                
+                decoded_numbers.append(int(number_str))
+            except (IndexError, ValueError):
+                raise ValueError(f"รูปแบบของสตริงไม่ถูกต้องที่ตำแหน่ง {idx}")
+
+        if len(decoded_numbers) < 3:
+            raise ValueError("ข้อมูลในสตริงไม่ครบถ้วน (ต้องการอย่างน้อย 3 ค่า)")
+
+        # กำหนดค่าที่ถอดรหัสแล้วให้กับ instance attributes
+        self.action_length: int = decoded_numbers[0]
+        self.mutation_rate: int = decoded_numbers[1]
+        self.dna_seed: int = decoded_numbers[2]
+        self.mutation_seeds: List[int] = decoded_numbers[3:]
+        
+        # เตรียมค่า mutation rate ที่เป็น float ไว้ล่วงหน้า
+        self.mutation_rate_float: float = self.mutation_rate / 100.0
+
+    def run(self) -> np.ndarray:
+        """
+        รันการจำลองกระบวนการกลายพันธุ์โดยใช้พารามิเตอร์ที่ถูกถอดรหัสไว้
+        
+        Returns:
+            np.ndarray: action sequence สุดท้ายหลังจากการกลายพันธุ์ทั้งหมด
+        """
+        # สร้าง DNA ดั้งเดิมจาก dna_seed
+        dna_rng = np.random.default_rng(seed=self.dna_seed)
+        current_actions = dna_rng.integers(0, 2, size=self.action_length)
+        current_actions[0] = 1  # บังคับใช้กฎวันแรก
+
+        # วนลูปการกลายพันธุ์แต่ละรอบ
+        for m_seed in self.mutation_seeds:
+            mutation_rng = np.random.default_rng(seed=m_seed)
+            mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
+            
+            # ดำเนินการกลายพันธุ์ (สลับค่า 0/1) และบังคับกฎวันแรกอีกครั้ง
+            current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
+            current_actions[0] = 1
+
+        return current_actions
+        
+    def __str__(self) -> str:
+        """
+        กำหนดรูปแบบการแสดงผลเมื่อ print(object) เพื่อให้ดูข้อมูลพารามิเตอร์ได้ง่าย
+        """
+        return (
+            "✅ พารามิเตอร์ที่ถอดรหัสสำเร็จ:\n"
+            f"- action_length: {self.action_length}\n"
+            f"- mutation_rate: {self.mutation_rate} ({self.mutation_rate_float:.2f})\n"
+            f"- dna_seed: {self.dna_seed}\n"
+            f"- mutation_seeds: {self.mutation_seeds}"
+        )
+
+    @staticmethod
+    def encode(
+        action_length: int,
+        mutation_rate: int,
+        dna_seed: int,
+        mutation_seeds: List[int]
+    ) -> str:
+        """
+        [Utility Method] เข้ารหัสชุดพารามิเตอร์ให้เป็นสตริงยาวเดียว
+        """
+        all_numbers = [action_length, mutation_rate, dna_seed] + mutation_seeds
+        encoded_parts = [f"{len(str(num))}{num}" for num in all_numbers]
+        return "".join(encoded_parts)
+
+# ==============================================================================
+# 5. UI Rendering Functions
 # ==============================================================================
 def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
     if not results: st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
@@ -496,8 +606,80 @@ def render_hybrid_multi_mutation_tab():
             st.dataframe(df_windows, use_container_width=True)
             st.download_button("📥 Download Details (CSV)", df_windows.to_csv(index=False), f'hybrid_multi_mutation_{ticker}.csv', 'text/csv')
 
+def render_tracer_tab():
+    st.markdown("### 🔍 Action Sequence Tracer & Encoder")
+    st.info("เครื่องมือนี้ใช้สำหรับ 1. **ถอดรหัส (Decode)** String เพื่อจำลองผลลัพธ์ และ 2. **เข้ารหัส (Encode)** พารามิเตอร์เพื่อสร้าง String")
+
+    st.markdown("---")
+    st.markdown("#### 1. ถอดรหัส (Decode) String")
+    
+    encoded_string = st.text_input(
+        "ป้อน Encoded String ที่นี่:",
+        "2601539003899353023538143646",
+        help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds",
+        key="decoder_input"
+    )
+
+    if st.button("Trace & Simulate", type="primary", key="tracer_button"):
+        if not encoded_string:
+            st.warning("กรุณาป้อน Encoded String")
+        else:
+            with st.spinner(f"กำลังถอดรหัสและจำลองสำหรับ: {encoded_string[:20]}..."):
+                try:
+                    tracer = SimulationTracer(encoded_string=encoded_string)
+                    st.success("ถอดรหัสสำเร็จ!")
+                    st.code(str(tracer), language='bash')
+                    final_actions = tracer.run()
+                    st.write("---")
+                    st.markdown("#### 🎉 ผลลัพธ์ Action Sequence สุดท้าย:")
+                    st.dataframe(pd.DataFrame(final_actions, columns=['Action']), use_container_width=True)
+                    st.write("Raw Array:")
+                    st.code(str(final_actions))
+                except ValueError as e:
+                    st.error(f"❌ เกิดข้อผิดพลาดในการประมวลผล: {e}")
+
+    st.divider()
+    
+    st.markdown("#### 2. เข้ารหัส (Encode) พารามิเตอร์")
+    st.write("ป้อนพารามิเตอร์เพื่อสร้าง Encoded String สำหรับการทดลองซ้ำ")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        action_length_input = st.number_input("Action Length", min_value=1, value=60, key="enc_len", help="ความยาวของ action sequence")
+        dna_seed_input = st.number_input("DNA Seed", min_value=0, value=900, format="%d", key="enc_dna", help="Seed สำหรับสร้าง DNA ดั้งเดิม")
+    with col2:
+        mutation_rate_input = st.number_input("Mutation Rate (%)", min_value=0, value=10, key="enc_rate", help="อัตราการกลายพันธุ์เป็นเปอร์เซ็นต์ (เช่น 5 สำหรับ 5%)")
+        mutation_seeds_str = st.text_input(
+            "Mutation Seeds (คั่นด้วยจุลภาค ,)", 
+            "899, 530, 35, 814, 646", 
+            key="enc_seeds_str",
+            help="ชุดของ Seed สำหรับการกลายพันธุ์แต่ละรอบ คั่นด้วยเครื่องหมายจุลภาค"
+        )
+        
+    if st.button("Encode Parameters", key="encoder_button"):
+        try:
+            if mutation_seeds_str.strip():
+                # แปลงสตริงที่มีตัวเลขคั่นด้วยจุลภาคให้เป็น list ของ int
+                mutation_seeds_list = [int(s.strip()) for s in mutation_seeds_str.split(',')]
+            else:
+                mutation_seeds_list = [] # กรณีไม่มี mutation seeds
+
+            # เรียกใช้ static method 'encode' จากคลาส SimulationTracer
+            generated_string = SimulationTracer.encode(
+                action_length=int(action_length_input),
+                mutation_rate=int(mutation_rate_input),
+                dna_seed=int(dna_seed_input),
+                mutation_seeds=mutation_seeds_list
+            )
+            
+            st.success("เข้ารหัสสำเร็จ! สามารถคัดลอก String ด้านล่างไปใช้ได้")
+            st.code(generated_string, language='text')
+
+        except (ValueError, TypeError) as e:
+            st.error(f"❌ เกิดข้อผิดพลาด: กรุณาตรวจสอบว่า Mutation Seeds เป็นตัวเลขที่คั่นด้วยจุลภาคเท่านั้น ({e})")
+
 # ==============================================================================
-# 5. Main Application
+# 6. Main Application
 # ==============================================================================
 def main():
     st.markdown("### 🧬 Hybrid Strategy Lab (Multi-Mutation)")
@@ -506,13 +688,15 @@ def main():
     config = load_config()
     initialize_session_state(config)
 
-    tab_list = ["⚙️ การตั้งค่า", f"🧬 {Strategy.HYBRID_MULTI_MUTATION}"]
+    tab_list = ["⚙️ การตั้งค่า", f"🧬 {Strategy.HYBRID_MULTI_MUTATION}", "🔍 Tracer"]
     tabs = st.tabs(tab_list)
 
     with tabs[0]:
         render_settings_tab()
     with tabs[1]:
         render_hybrid_multi_mutation_tab()
+    with tabs[2]:
+        render_tracer_tab()
 
 if __name__ == "__main__":
     main()
