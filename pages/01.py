@@ -6,7 +6,7 @@ import thingspeak
 import json
 from pathlib import Path
 import math
-from typing import List, Dict, Any
+from typing import List, Dict, Any 
 
 # --- 0. คลาสสำหรับ Logic การสร้าง Action ใหม่ ---
 class SimulationTracer:
