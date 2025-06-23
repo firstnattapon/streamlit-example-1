@@ -2,8 +2,8 @@
   "average_cf_config": {
     "ticker": "FFWM",
     "field": 1,
-    "channel_id": 2394198,
-    "write_api_key": "OVZNYQBL57GJW5JF",
+    "channel_id": 2995882,
+    "write_api_key": "D84EIDKGJC7237O9",
     "offset": 1760.36,
     "filter_date": "2025-04-01 12:00:00+07:00"
   },
@@ -13,9 +13,9 @@
   "assets": [
     {
       "ticker": "FFWM",
-      "monitor_field": 2,
-      "channel_id": 2385118,
-      "write_api_key": "IPSG3MMMBJEB9DY8",
+      "monitor_field": 1,
+      "channel_id": 2995882,
+      "write_api_key": "D84EIDKGJC7237O9",
       "production_params": {
         "t0": 6.88,
         "fix": 1500.0
@@ -23,9 +23,9 @@
     },
     {
       "ticker": "NEGG",
-      "monitor_field": 3,
-      "channel_id": 2385118,
-      "write_api_key": "IPSG3MMMBJEB9DY8",
+      "monitor_field": 2,
+      "channel_id": 2995882,
+      "write_api_key": "D84EIDKGJC7237O9",
       "production_params": {
         "t0": 25.2,
         "fix": 1500.0
@@ -33,9 +33,9 @@
     },
     {
       "ticker": "RIVN",
-      "monitor_field": 4,
-      "channel_id": 2385118,
-      "write_api_key": "IPSG3MMMBJEB9DY8",
+      "monitor_field": 3,
+      "channel_id": 2995882,
+      "write_api_key": "D84EIDKGJC7237O9",
       "production_params": {
         "t0": 10.07,
         "fix": 1500.0
@@ -43,9 +43,9 @@
     },
     {
       "ticker": "APLS",
-      "monitor_field": 5,
-      "channel_id": 2385118,
-      "write_api_key": "IPSG3MMMBJEB9DY8",
+      "monitor_field": 4,
+      "channel_id": 2995882,
+      "write_api_key": "D84EIDKGJC7237O9",
       "production_params": {
         "t0": 39.61,
         "fix": 1500.0
@@ -53,9 +53,9 @@
     },
     {
       "ticker": "NVTS",
-      "monitor_field": 6,
-      "channel_id": 2385118,
-      "write_api_key": "IPSG3MMMBJEB9DY8",
+      "monitor_field": 5,
+      "channel_id": 2995882,
+      "write_api_key": "D84EIDKGJC7237O9",
       "production_params": {
         "t0": 3.05,
         "fix": 1500.0
@@ -63,9 +63,9 @@
     },
     {
       "ticker": "QXO",
-      "monitor_field": 7,
-      "channel_id": 2385118,
-      "write_api_key": "IPSG3MMMBJEB9DY8",
+      "monitor_field": 6,
+      "channel_id": 2995882,
+      "write_api_key": "D84EIDKGJC7237O9",
       "production_params": {
         "t0": 19.0,
         "fix": 1500.0
@@ -73,9 +73,9 @@
     },
     {
       "ticker": "RXRX",
-      "monitor_field": 8,
-      "channel_id": 2385118,
-      "write_api_key": "IPSG3MMMBJEB9DY8",
+      "monitor_field": 7,
+      "channel_id": 2995882,
+      "write_api_key": "D84EIDKGJC7237O9",
       "production_params": {
         "t0": 5.4,
         "fix": 1500.0
@@ -83,9 +83,9 @@
     },
     {
       "ticker": "AGL",
-      "monitor_field": 1,
-      "channel_id": 2385118,
-      "write_api_key": "IPSG3MMMBJEB9DY8",
+      "monitor_field": 8,
+      "channel_id": 2995882,
+      "write_api_key": "D84EIDKGJC7237O9",
       "production_params": {
         "t0": 3.0,
         "fix": 1500.0
