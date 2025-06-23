@@ -47,10 +47,8 @@ def average_cf(cf_config):
     Calculates average CF. Uses .get() for safety to prevent KeyErrors.
     """
     history = get_ticker_history(cf_config['ticker'])
-
     default_date = "2024-01-01 12:00:00+07:00"
     filter_date = cf_config.get('filter_date', default_date)
-
     filtered_data = history[history.index >= filter_date]
     count_data = len(filtered_data)
 
@@ -63,10 +61,8 @@ def average_cf(cf_config):
         fmt='json'
     )
     field_data = client.get_field_last(field=f"{cf_config['field']}")
-
     value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
     adjusted_value = value - cf_config.get('offset', 0)
-
     return adjusted_value / count_data
 
 @st.cache_data(ttl=60)
@@ -78,57 +74,43 @@ def production_cost(ticker, t0, fix):
     """
     if t0 <= 0 or fix == 0:
         return None
-
     try:
-        # 1. ดึงราคาปัจจุบัน
         ticker_info = yf.Ticker(ticker)
         current_price = ticker_info.fast_info['lastPrice']
-
-        # 2. ป้องกันการหารด้วยศูนย์ หรือ log ของค่าที่ไม่ใช่บวก
         if current_price <= 0:
             st.warning(f"Cannot calculate production for {ticker}: Current price is {current_price}, which is invalid for the formula.")
             return None
-
-        # 3. คำนวณตามสมการใหม่
-        # สมมติราคาต่ำสุดที่เป็นไปได้คือ 0.01 เพื่อคำนวณค่า Max Production
         max_production_value = (fix * -1) * math.log(t0 / 0.01)
         now_production_value = (fix * -1) * math.log(t0 / current_price)
-
         return max_production_value, now_production_value
-
     except Exception as e:
         st.warning(f"Could not calculate Production for {ticker}: {e}")
         return None
 
-# --- 2.1. แก้ไขฟังก์ชัน monitor เพื่อให้ทำงานกับ st.dataframe ได้ดีขึ้น ---
+# --- 2.1. แก้ไขฟังก์ชัน monitor เพื่อแสดงข้อมูลทั้งหมดและจัดเรียง ---
 def monitor(channel_id, api_key, ticker, field, filter_date):
     """
-    Monitors an asset. Creates a DataFrame suitable for st.dataframe.
-    Now robust to missing data and uses a clearer column name.
+    Monitors an asset, shows the FULL history from the filter date,
+    and sorts it chronologically with predictions at the end.
     """
     thingspeak_client = thingspeak.Channel(id=channel_id, api_key=api_key, fmt='json')
     history = get_ticker_history(ticker)
-
-    # กรองข้อมูล
     filtered_data = history[history.index >= filter_date].copy()
 
-    # ดึงข้อมูลจาก Thingspeak
     try:
         field_data = thingspeak_client.get_field_last(field=f'{field}')
         fx_js = int(json.loads(field_data)[f"field{field}"])
     except (json.JSONDecodeError, KeyError, TypeError):
         fx_js = 0
 
-    # สร้าง DataFrame สำหรับแสดงผล
     # 1. เพิ่มคอลัมน์ 'ลำดับ' สำหรับข้อมูลที่มีอยู่
     if not filtered_data.empty:
         filtered_data['ลำดับ'] = range(1, len(filtered_data) + 1)
     else:
-        # ทำให้คอลัมน์ 'ลำดับ' มีอยู่เสมอแม้ไม่มีข้อมูล
         filtered_data['ลำดับ'] = pd.Series(dtype='object')
 
     # 2. สร้างแถวว่างสำหรับข้อมูลในอนาคต
-    future_rows_index = [f"+{i}" for i in range(5)] # +0, +1, +2, +3, +4
+    future_rows_index = [f"+{i}" for i in range(5)]
     future_df = pd.DataFrame(index=future_rows_index, columns=filtered_data.columns)
 
     # 3. รวมข้อมูลอดีตและอนาคต
@@ -138,15 +120,21 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     rng = np.random.default_rng(fx_js)
     combined_df['action'] = rng.integers(2, size=len(combined_df))
 
-    # 5. เลือกเฉพาะ 7 แถวสุดท้ายและจัดเรียงคอลัมน์
-    display_df = combined_df[['ลำดับ', 'Close', 'action']].tail(7).fillna("")
+    # 5. [ 핵심 수정 ] จัดเรียงตามคอลัมน์ 'ลำดับ'
+    #    - แถวที่มีตัวเลขในคอลัมน์ 'ลำดับ' จะถูกเรียงจากน้อยไปมาก
+    #    - แถวที่ไม่มีข้อมูล (NaN) จะถูกย้ายไปไว้ท้ายสุดโดยอัตโนมัติ
+    combined_df = combined_df.sort_values(by='ลำดับ', na_position='last')
+
+    # 6. [ 핵심 수정 ] เลือกคอลัมน์สำหรับแสดงผล (โดยไม่ใช้ .tail(7))
+    display_df = combined_df[['ลำดับ', 'Close', 'action']].fillna("")
     
-    # 6. จัดรูปแบบคอลัมน์ 'Close' ให้สวยงาม
-    if 'Close' in display_df:
-        # แปลงเป็นตัวเลข ถ้าแปลงไม่ได้ให้เป็น NaT แล้วจัดรูปแบบ
-        display_df['Close'] = pd.to_numeric(display_df['Close'], errors='coerce').apply(
-            lambda x: f"{x:.2f}" if pd.notna(x) else ""
-        )
+    # 7. จัดรูปแบบคอลัมน์ให้สวยงาม
+    # จัดรูปแบบ 'ลำดับ' ให้เป็นจำนวนเต็ม (ถ้ามีข้อมูล)
+    display_df['ลำดับ'] = display_df['ลำดับ'].apply(lambda x: int(x) if x != "" else "")
+    # จัดรูปแบบ 'Close' ให้เป็นทศนิยม 2 ตำแหน่ง (ถ้ามีข้อมูล)
+    display_df['Close'] = pd.to_numeric(display_df['Close'], errors='coerce').apply(
+        lambda x: f"{x:.2f}" if pd.notna(x) else ""
+    )
 
     return display_df, fx_js
 
@@ -180,7 +168,7 @@ def main():
             st.warning(f"Skipping an asset due to missing configuration: {asset_config}")
             continue
 
-        df_7, fx_js = monitor(channel_id, api_key, ticker, monitor_field, monitor_filter_date)
+        df_full, fx_js = monitor(channel_id, api_key, ticker, monitor_field, monitor_filter_date)
 
         prod_cost = production_cost(
             ticker=ticker,
@@ -194,8 +182,8 @@ def main():
         st.write(ticker)
         st.write(f"f(x): {fx_js} ,   Production_max : {prod_cost_max_display}  , Production_now : {prod_cost_now_display}")
         
-        # --- 3.1. เปลี่ยนจาก st.table เป็น st.dataframe ---
-        st.dataframe(df_7, use_container_width=True)
+        # แสดง DataFrame ทั้งหมดที่จัดเรียงแล้ว
+        st.dataframe(df_full, use_container_width=True)
         
         st.write("_____")
 
