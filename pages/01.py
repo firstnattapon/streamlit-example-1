@@ -138,32 +138,24 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     combined_df['index'] = ""
     combined_df['action'] = ""
     combined_df = combined_df[['index', 'Close', 'action']]
-    
-    # --- แก้ไขตรงนี้: สร้าง index ให้เรียงจากมากไปน้อย ---
-    total_rows = len(combined_df)
-    combined_df['index'] = range(total_rows - 1, -1, -1)
-    # ----------------------------------------------------
+    combined_df['index'] = range(len(combined_df))
 
     try:
         tracer = SimulationTracer(encoded_string=fx_js)
         final_actions = tracer.run()
-        
-        # เนื่องจาก DataFrame ถูกสร้างขึ้นมาแล้ว เราต้องเรียง actions ให้สอดคล้องกับ index ใหม่ (ที่เรียงจากมากไปน้อย)
-        # แต่ในที่นี้ การกำหนด action จากบนลงล่างยังคงถูกต้องตามหลักการเดิม
-        # เพราะแถวบนสุด (index สูงสุด) คือข้อมูลล่าสุด และเราต้องการให้ action[0] อยู่ที่แถวบนสุด
         num_to_assign = min(len(combined_df), len(final_actions))
         if num_to_assign > 0:
             action_col_idx = combined_df.columns.get_loc('action')
             combined_df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
-            
     except ValueError as e:
         st.warning(f"Error generating actions for {ticker} with input '{fx_js}': {e}")
     except Exception as e:
         st.error(f"An unexpected error occurred during action generation for {ticker}: {e}")
 
+    # --- แก้ไขตรงนี้: คืนค่า DataFrame ทั้งหมด ไม่ใช่แค่ .tail(7) ---
     return combined_df, fx_js
+    # -------------------------------------------------------------
 # ==============================================================================
-
 
 # --- 3. ส่วนแสดงผลหลัก (Main Display Logic) ---
 def main():
@@ -192,6 +184,7 @@ def main():
             st.warning(f"Skipping an asset due to missing configuration: {asset_config}")
             continue
 
+        # --- เปลี่ยนจาก df_7 เป็น asset_df เพื่อความชัดเจน ---
         asset_df, fx_js = monitor(channel_id, api_key, ticker, monitor_field, monitor_filter_date)
         
         prod_cost = production_cost(
@@ -206,7 +199,9 @@ def main():
         st.write(ticker)
         st.write(f"f(x): {fx_js} ,   Production_max : {prod_cost_max_display}  , Production_now : {prod_cost_now_display}")
         
+        # --- เปลี่ยนการแสดงผลเป็น asset_df ทั้งหมด ---
         st.dataframe(asset_df)
+        # --------------------------------------------
 
         st.write("_____")
 
