@@ -648,7 +648,7 @@ def render_tracer_tab():
         action_length_input = st.number_input("Action Length", min_value=1, value=60, key="enc_len", help="ความยาวของ action sequence")
         dna_seed_input = st.number_input("DNA Seed", min_value=0, value=900, format="%d", key="enc_dna", help="Seed สำหรับสร้าง DNA ดั้งเดิม")
     with col2:
-        mutation_rate_input = st.number_input("Mutation Rate (%)", min_value=0, value=5, key="enc_rate", help="อัตราการกลายพันธุ์เป็นเปอร์เซ็นต์ (เช่น 5 สำหรับ 5%)")
+        mutation_rate_input = st.number_input("Mutation Rate (%)", min_value=0, value=10, key="enc_rate", help="อัตราการกลายพันธุ์เป็นเปอร์เซ็นต์ (เช่น 5 สำหรับ 5%)")
         mutation_seeds_str = st.text_input(
             "Mutation Seeds (คั่นด้วยจุลภาค ,)", 
             "899, 530, 35, 814, 646", 
