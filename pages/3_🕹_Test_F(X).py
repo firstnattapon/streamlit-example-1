@@ -568,18 +568,27 @@ def render_hybrid_multi_mutation_tab():
             }
             for name, df in results.items():
                 if not df.empty: df.index = ticker_data.index[:len(df)]
+            
+            # ! MODIFIED: Store results in session state for later use
+            st.session_state.simulation_results = results
+            st.session_state.df_windows_details = df_windows
+            st.session_state.ticker_data_cache = ticker_data
 
-        st.success("การทดสอบเสร็จสมบูรณ์!");
+
+    # --- Display results section (This now runs outside the button click to persist UI) ---
+    if 'simulation_results' in st.session_state:
+        st.success("การทดสอบเสร็จสมบูรณ์!")
         
-        chart_results = results.copy()
-        chart_results.pop(Strategy.ORIGINAL_DNA)
+        results = st.session_state.simulation_results
+        chart_results = {k: v for k, v in results.items() if k != Strategy.ORIGINAL_DNA}
         display_comparison_charts(chart_results)
 
         st.divider()
         st.write("### 📈 สรุปผลลัพธ์")
         
+        df_windows = st.session_state.get('df_windows_details', pd.DataFrame())
+        
         if not df_windows.empty:
-            # Get final compounded net for all strategies
             perfect_df = results.get(Strategy.PERFECT_FORESIGHT)
             total_perfect_net = perfect_df['net'].iloc[-1] if perfect_df is not None and not perfect_df.empty else 0.0
             
@@ -592,10 +601,8 @@ def render_hybrid_multi_mutation_tab():
             rebalance_df = results.get(Strategy.REBALANCE_DAILY)
             total_rebalance_net = rebalance_df['net'].iloc[-1] if rebalance_df is not None and not rebalance_df.empty else 0.0
 
-            # ! MODIFIED: Display the four requested metrics in one row
             st.write("#### สรุปผลการดำเนินงานโดยรวม (Compounded Final Profit)")
             col1, col2, col3, col4 = st.columns(4)
-            
             col1.metric("Perfect Foresight", f"${total_perfect_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องแบบ Perfect Foresight (ทบต้น)")
             col2.metric("Hybrid Strategy", f"${total_hybrid_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของกลยุทธ์ Hybrid ที่ผ่านการกลายพันธุ์แล้ว (ทบต้น)")
             col3.metric("Original Profits", f"${total_original_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของ 'DNA ดั้งเดิม' ก่อนการกลายพันธุ์ (ทบต้น)")
@@ -603,33 +610,62 @@ def render_hybrid_multi_mutation_tab():
 
             st.write("---")
             st.write("#### 📝 รายละเอียดผลลัพธ์ราย Window")
-            
-            # Create a version of the dataframe for display with a checkbox column
-            df_display = df_windows.copy()
-            df_display.insert(0, "Select", True)
+            st.dataframe(df_windows, use_container_width=True)
+            ticker = st.session_state.get('test_ticker', 'TICKER')
+            st.download_button("📥 Download Details (CSV)", df_windows.to_csv(index=False), f'hybrid_multi_mutation_{ticker}.csv', 'text/csv')
 
-            # Use st.data_editor to make the checkbox interactive
-            st.data_editor(
-                df_display,
-                column_config={
-                    "Select": st.column_config.CheckboxColumn(
-                        "Select",
-                        help="เลือก Window เพื่อนำไปวิเคราะห์ต่อ (ฟีเจอร์ยังไม่ถูกนำมาใช้)",
-                        default=True,
-                    )
-                },
-                use_container_width=True,
-                hide_index=True,
-                key="window_selector"
-            )
+            # ! NEW FEATURE: Section to encode a specific window's data
+            st.divider()
+            st.markdown("#### 🎁 Generate Encoded String from Window Result")
+            st.info("เลือกหมายเลข Window จากตารางด้านบนเพื่อสร้าง Encoded String สำหรับนำไปใช้ในแท็บ 'Tracer'")
 
-            # The download button uses the original, unmodified dataframe
-            st.download_button(
-                "📥 Download Details (CSV)", 
-                df_windows.to_csv(index=False).encode('utf-8'),
-                f'hybrid_multi_mutation_{ticker}.csv', 
-                'text/csv'
-            )
+            c1, c2 = st.columns([1, 3])
+            with c1:
+                max_window = len(df_windows)
+                window_to_encode = st.number_input(
+                    "Select Window #", min_value=1, max_value=max_window, value=1, key="window_encoder_input"
+                )
+
+            with c2:
+                st.write("") # for vertical alignment
+                st.write("")
+                if st.button("Encode Selected Window", key="window_encoder_button"):
+                    try:
+                        window_data = df_windows.iloc[window_to_encode - 1]
+                        
+                        # Extract parameters
+                        dna_seed = int(window_data['dna_seed'])
+                        mutation_rate = int(st.session_state.mutation_rate)
+
+                        # Safely parse mutation_seeds string like '[90, 219]' or 'None'
+                        mutation_seeds_str = window_data['mutation_seeds']
+                        mutation_seeds = []
+                        if mutation_seeds_str not in ["None", "[]"]:
+                            cleaned_str = mutation_seeds_str.strip('[]')
+                            if cleaned_str:
+                                mutation_seeds = [int(s.strip()) for s in cleaned_str.split(',')]
+
+                        # Calculate the precise action_length for this window
+                        total_days = len(st.session_state.ticker_data_cache)
+                        window_size = st.session_state.window_size
+                        start_index = (window_to_encode - 1) * window_size
+                        action_length = min(window_size, total_days - start_index)
+                        
+                        # Call the static encoder method
+                        encoded_string = SimulationTracer.encode(
+                            action_length=action_length,
+                            mutation_rate=mutation_rate,
+                            dna_seed=dna_seed,
+                            mutation_seeds=mutation_seeds
+                        )
+                        
+                        st.success(f"**Encoded String for Window #{window_to_encode}:**")
+                        st.code(encoded_string, language='text')
+
+                    except (IndexError, KeyError):
+                        st.error(f"ไม่สามารถหาข้อมูลสำหรับ Window #{window_to_encode} ได้")
+                    except Exception as e:
+                        st.error(f"เกิดข้อผิดพลาดระหว่างการเข้ารหัส: {e}")
 
 def render_tracer_tab():
     st.markdown("### 🔍 Action Sequence Tracer & Encoder")
@@ -640,7 +676,7 @@ def render_tracer_tab():
     
     encoded_string = st.text_input(
         "ป้อน Encoded String ที่นี่:",
-        "2601539003899353023538143646",
+        "26021034252903219354832053493",
         help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds",
         key="decoder_input"
     )
