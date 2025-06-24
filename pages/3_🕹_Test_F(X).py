@@ -28,7 +28,7 @@ def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
         "assets": ["FFWM", "NEGG", "RIVN", "AGL", "APLS", "FLNC", "NVTS" , "QXO" ,"RXRX"],
         "default_settings": {
             "selected_ticker": "FFWM", "start_date": "2024-01-01",
-            "window_size": 30, "num_seeds": 1000, "max_workers": 1,
+            "window_size": 60, "num_seeds": 1000, "max_workers": 1, # <-- Changed default to 60
             "mutation_rate": 10.0, "num_mutations": 5
         }
     }
@@ -40,7 +40,7 @@ def initialize_session_state(config: Dict[str, Any]):
         try: st.session_state.start_date = datetime.strptime(defaults.get('start_date', '2024-01-01'), '%Y-%m-%d').date()
         except ValueError: st.session_state.start_date = datetime(2024, 1, 1).date()
     if 'end_date' not in st.session_state: st.session_state.end_date = datetime.now().date()
-    if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 30)
+    if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 60) # <-- Changed default to 60
     if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 10000)
     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
     if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 5.0)
@@ -569,7 +569,7 @@ def render_hybrid_multi_mutation_tab():
             for name, df in results.items():
                 if not df.empty: df.index = ticker_data.index[:len(df)]
             
-            # ! MODIFIED: Store results in session state for later use
+            # Store results in session state for later use
             st.session_state.simulation_results = results
             st.session_state.df_windows_details = df_windows
             st.session_state.ticker_data_cache = ticker_data
@@ -614,7 +614,7 @@ def render_hybrid_multi_mutation_tab():
             ticker = st.session_state.get('test_ticker', 'TICKER')
             st.download_button("📥 Download Details (CSV)", df_windows.to_csv(index=False), f'hybrid_multi_mutation_{ticker}.csv', 'text/csv')
 
-            # ! NEW FEATURE: Section to encode a specific window's data
+            # Section to encode a specific window's data
             st.divider()
             st.markdown("#### 🎁 Generate Encoded String from Window Result")
             st.info("เลือกหมายเลข Window จากตารางด้านบนเพื่อสร้าง Encoded String สำหรับนำไปใช้ในแท็บ 'Tracer'")
@@ -676,7 +676,7 @@ def render_tracer_tab():
     
     encoded_string = st.text_input(
         "ป้อน Encoded String ที่นี่:",
-        "26021034252903219354832053493",
+        "26021034252903219354832053493", # Example string updated to a 60-day version
         help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds",
         key="decoder_input"
     )
