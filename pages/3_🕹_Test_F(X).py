@@ -28,7 +28,7 @@ def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
         "assets": ["FFWM", "NEGG", "RIVN", "AGL", "APLS", "FLNC", "NVTS" , "QXO" ,"RXRX"],
         "default_settings": {
             "selected_ticker": "FFWM", "start_date": "2024-01-01",
-            "window_size": 60, "num_seeds": 1000, "max_workers": 1, # <-- Changed default to 60
+            "window_size": 30 , "num_seeds": 1000, "max_workers": 1, 
             "mutation_rate": 10.0, "num_mutations": 5
         }
     }
@@ -40,11 +40,11 @@ def initialize_session_state(config: Dict[str, Any]):
         try: st.session_state.start_date = datetime.strptime(defaults.get('start_date', '2024-01-01'), '%Y-%m-%d').date()
         except ValueError: st.session_state.start_date = datetime(2024, 1, 1).date()
     if 'end_date' not in st.session_state: st.session_state.end_date = datetime.now().date()
-    if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 60) # <-- Changed default to 60
+    if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 30 )  
     if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 10000)
     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
-    if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 5.0)
-    if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 2)
+    if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 10.0)
+    if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
 
 # ==============================================================================
 # 2. Core Calculation & Data Functions
@@ -631,7 +631,7 @@ def render_hybrid_multi_mutation_tab():
                     total_days = len(st.session_state.ticker_data_cache)
                     window_size = st.session_state.window_size
                     start_index = (window_to_encode - 1) * window_size
-                    default_action_length = min(window_size, total_days - start_index)
+                    default_action_length = min(window_size, total_days - start_index) * 2  # Action Length
                 except (KeyError, TypeError):
                     default_action_length = st.session_state.get('window_size', 60)
 
