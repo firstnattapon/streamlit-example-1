@@ -12,7 +12,7 @@ from threading import Lock
 import os
 from typing import List
 
-st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide" , initial_sidebar_state ("expanded")
+st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide" , initial_sidebar_state =  ("expanded"))
 
 # --- START: โค้ดจาก action_simulationTracer.py ---
 class SimulationTracer:
