@@ -86,7 +86,7 @@ def get_ticker_history(ticker_symbol):
 
 def average_cf(cf_config):
     history = get_ticker_history(cf_config['ticker'])
-    default_date = "2024-01-01 12:00:00+07:00"
+    default_date = "2024-06-18 12:00:00+07:00"
     filter_date = cf_config.get('filter_date_cf', default_date)
     filtered_data = history[history.index >= filter_date]
     count_data = len(filtered_data)
@@ -95,7 +95,7 @@ def average_cf(cf_config):
     client = thingspeak.Channel(id=cf_config['channel_id'], api_key=cf_config['write_api_key'], fmt='json')
     field_data = client.get_field_last(field=f"{cf_config['field']}")
     value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
-    adjusted_value = value - cf_config.get('offset', 0)
+    adjusted_value = value -  (cf_config.get('offset', 0))
     return adjusted_value / count_data
 
 @st.cache_data(ttl=60)
@@ -165,6 +165,7 @@ def main():
     if avg_cf_config:
         cf_day = average_cf(avg_cf_config)
         st.write(f"average_cf_day: {cf_day:.2f} USD  :  average_cf_mo: {cf_day * 30:.2f} USD")
+        st.write(f"cf_day")
     else:
         st.warning("`average_cf_config` not found in configuration file.")
     st.write('____')
