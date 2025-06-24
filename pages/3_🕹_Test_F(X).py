@@ -10,6 +10,81 @@ from typing import List
 
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
 
+# --- START: โค้ดจาก action ---
+class SimulationTracer:
+    """
+    คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
+    ไปจนถึงการจำลองกระบวนการกลายพันธุ์ของ action sequence
+    """
+    def __init__(self, encoded_string: str):
+        self.encoded_string: str = encoded_string
+        # ทำให้แน่ใจว่าค่าที่เข้ามาเป็นสตริงเสมอ
+        if not isinstance(self.encoded_string, str):
+            self.encoded_string = str(self.encoded_string)
+
+        self._decode_and_set_attributes()
+
+    def _decode_and_set_attributes(self):
+        encoded_string = self.encoded_string
+        if not encoded_string.isdigit():
+            self.action_length: int = 0
+            self.mutation_rate: int = 0
+            self.dna_seed: int = 0
+            self.mutation_seeds: List[int] = []
+            self.mutation_rate_float: float = 0.0
+            return
+
+        decoded_numbers = []
+        idx = 0
+        try:
+            while idx < len(encoded_string):
+                length_of_number = int(encoded_string[idx])
+                idx += 1
+                number_str = encoded_string[idx : idx + length_of_number]
+                idx += length_of_number
+                decoded_numbers.append(int(number_str))
+        except (IndexError, ValueError):
+            # If parsing fails, reset to safe empty values
+            self.action_length: int = 0
+            self.mutation_rate: int = 0
+            self.dna_seed: int = 0
+            self.mutation_seeds: List[int] = []
+            self.mutation_rate_float: float = 0.0
+            return
+
+        if len(decoded_numbers) < 3:
+            self.action_length: int = 0
+            self.mutation_rate: int = 0
+            self.dna_seed: int = 0
+            self.mutation_seeds: List[int] = []
+            self.mutation_rate_float: float = 0.0
+            return
+
+        self.action_length: int = decoded_numbers[0]
+        self.mutation_rate: int = decoded_numbers[1]
+        self.dna_seed: int = decoded_numbers[2]
+        self.mutation_seeds: List[int] = decoded_numbers[3:]
+        self.mutation_rate_float: float = self.mutation_rate / 100.0
+
+    def run(self) -> np.ndarray:
+        if self.action_length <= 0:
+            return np.array([])
+            
+        dna_rng = np.random.default_rng(seed=self.dna_seed)
+        current_actions = dna_rng.integers(0, 2, size=self.action_length)
+        if self.action_length > 0:
+            current_actions[0] = 1
+        for m_seed in self.mutation_seeds:
+            mutation_rng = np.random.default_rng(seed=m_seed)
+            mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
+            current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
+            if self.action_length > 0:
+                current_actions[0] = 1
+        return current_actions
+
+# --- END: โค้ดจาก action ---
+
+
 # === CONFIG LOADING ===
 @st.cache_data
 def load_config(path='limit_fx_config.json'):
@@ -30,76 +105,6 @@ if not ASSETS:
     st.stop()
 
 TICKERS = [a['symbol'] for a in ASSETS]
-
-
-# === ACTION GENERATION CLASS (NEW) ===
-class SimulationTracer:
-    """
-    A class to encapsulate the entire process from decoding parameters
-    to simulating the mutation process of an action sequence.
-    """
-    def __init__(self, encoded_string: str):
-        self.encoded_string: str = encoded_string
-        # Ensure the input is always a string
-        if not isinstance(self.encoded_string, str):
-            self.encoded_string = str(self.encoded_string)
-
-        self._decode_and_set_attributes()
-
-    def _decode_and_set_attributes(self):
-        """[Internal] Decodes the string and assigns values to class attributes."""
-        encoded_string = self.encoded_string
-        # Initialize with default "empty" values
-        self.action_length: int = 0
-        self.mutation_rate: int = 0
-        self.dna_seed: int = 0
-        self.mutation_seeds: List[int] = []
-        self.mutation_rate_float: float = 0.0
-
-        if not encoded_string.isdigit():
-            return
-
-        decoded_numbers = []
-        idx = 0
-        try:
-            while idx < len(encoded_string):
-                length_of_number = int(encoded_string[idx])
-                idx += 1
-                number_str = encoded_string[idx : idx + length_of_number]
-                idx += length_of_number
-                decoded_numbers.append(int(number_str))
-        except (IndexError, ValueError):
-            pass # Fail silently, attributes will remain 0
-
-        if len(decoded_numbers) < 3:
-            return # Not enough data, attributes will remain 0
-
-        self.action_length: int = decoded_numbers[0]
-        self.mutation_rate: int = decoded_numbers[1]
-        self.dna_seed: int = decoded_numbers[2]
-        self.mutation_seeds: List[int] = decoded_numbers[3:]
-        self.mutation_rate_float: float = self.mutation_rate / 100.0
-
-    def run(self) -> np.ndarray:
-        """
-        Runs the mutation simulation process using the decoded parameters.
-        Returns the final action sequence after all mutations.
-        """
-        if self.action_length <= 0:
-            return np.array([])
-            
-        dna_rng = np.random.default_rng(seed=self.dna_seed)
-        current_actions = dna_rng.integers(0, 2, size=self.action_length)
-        if self.action_length > 0:
-            current_actions[0] = 1
-
-        for m_seed in self.mutation_seeds:
-            mutation_rng = np.random.default_rng(seed=m_seed)
-            mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
-            current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
-            if self.action_length > 0:
-                current_actions[0] = 1 # Re-apply first day rule after each mutation
-        return current_actions
 
 
 # === DATA FETCHING & CALCULATION FUNCTIONS ===
@@ -125,20 +130,18 @@ def get_prices(tickers, start_date):
 
 @st.cache_data(ttl=300)
 def get_act_from_thingspeak(channel_id, api_key, field):
-    """Fetches the last value (as a string) from a specific field in a specific ThingSpeak channel."""
+    """Fetches the last value (as a string) from a specific field in a ThingSpeak channel."""
     try:
         client = thingspeak.Channel(channel_id, api_key, fmt='json')
         act_json = client.get_field_last(field=str(field))
-        data = json.loads(act_json)
-        value = data.get(f"field{field}")
+        value = json.loads(act_json).get(f"field{field}")
         if value is None:
-            st.warning(f"Field {field} on channel {channel_id} returned null. Using default value '0'.")
-            return '0'
-        # The value is the encoded string. Ensure it's returned as a string.
+            st.warning(f"Field {field} on channel {channel_id} returned null. Using fallback strategy (always buy).")
+            return "-1" # Fallback value for "always buy"
         return str(value).strip()
     except Exception as e:
-        st.error(f"Could not fetch data from ThingSpeak (Channel: {channel_id}, Field: {field}). Error: {e}")
-        return '0' # Return a default safe string.
+        st.error(f"Could not fetch data from ThingSpeak (Channel: {channel_id}, Field: {field}). Using fallback. Error: {e}")
+        return "-1" # Fallback on any exception
 
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=1500):
@@ -203,7 +206,7 @@ def get_max_action(price_list, fix=1500):
     return actions
 
 @st.cache_data(ttl=600)
-def Limit_fx(Ticker, act=-1):
+def Limit_fx(Ticker, act="-1"):
     filter_date = '2023-01-01 12:00:00+07:00'
     try:
         tickerData = yf.Ticker(Ticker)
@@ -220,34 +223,36 @@ def Limit_fx(Ticker, act=-1):
     if len(prices) == 0:
         return pd.DataFrame()
 
-    if act == -1:
+    act_str = str(act)
+    if act_str == "-1":
         actions = np.ones(len(prices), dtype=np.int64)
-    elif act == -2:
+    elif act_str == "-2":
         actions = get_max_action(prices)
     else:
-        # This block now handles the encoded string from ThingSpeak
+        # Use SimulationTracer for encoded string actions
         try:
-            tracer = SimulationTracer(encoded_string=str(act))
-            
-            # IMPORTANT: The tracer has its own action_length from the encoded string.
-            # We must override it with the actual length of the historical price data
-            # to ensure the generated action sequence has the correct dimensions.
-            tracer.action_length = len(prices)
-            actions = tracer.run()
+            tracer = SimulationTracer(encoded_string=act_str)
+            generated_actions = tracer.run()
 
-            # Safeguard: if the run fails (e.g., due to invalid string decode),
-            # it returns an empty array. We fall back to the default strategy.
-            if actions.size == 0:
-                if str(act) != '0': # Don't warn for the default '0' fallback value
-                    st.warning(f"Could not generate actions from string '{act}'. It may be invalid. Defaulting to 'Rebalance Daily'.")
+            if generated_actions.size == 0:
+                st.warning(f"Invalid action string '{act_str}' or zero length. Defaulting to 'always buy'.")
                 actions = np.ones(len(prices), dtype=np.int64)
-
+            else:
+                # Handle potential length mismatch between generated actions and historical prices
+                num_prices = len(prices)
+                num_actions = len(generated_actions)
+                if num_actions != num_prices:
+                    actions = np.ones(num_prices, dtype=np.int64) # Default to 'buy' for padding
+                    copy_len = min(num_actions, num_prices)
+                    actions[:copy_len] = generated_actions[:copy_len]
+                else:
+                    actions = generated_actions
         except Exception as e:
-            # Catch any other unexpected errors during tracing.
-            st.error(f"An unexpected error occurred while processing action string '{act}': {e}. Defaulting to 'Rebalance Daily'.")
+            st.error(f"Error during SimulationTracer execution for '{act_str}': {e}. Defaulting to 'always buy'.")
             actions = np.ones(len(prices), dtype=np.int64)
 
     buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
+    if sumusd.size == 0: return pd.DataFrame() # handle case where calculation returns empty
     initial_capital = sumusd[0]
     df = pd.DataFrame({
         'price': prices,
@@ -264,9 +269,9 @@ def Limit_fx(Ticker, act=-1):
 
 # === UI FUNCTIONS ===
 def plot(Ticker, act):
-    df_min = Limit_fx(Ticker, act=-1)
+    df_min = Limit_fx(Ticker, act="-1")
     df_fx = Limit_fx(Ticker, act=act)
-    df_max = Limit_fx(Ticker, act=-2)
+    df_max = Limit_fx(Ticker, act="-2")
 
     if df_min.empty or df_fx.empty or df_max.empty:
         st.error(f"Could not generate plot for {Ticker} due to missing data.")
@@ -308,14 +313,14 @@ for asset in ASSETS:
 
 # === REF_INDEX_LOG TAB (FIXED) ===
 with tab_dict['Ref_index_Log']:
-    filter_date = '2024-01-01 12:00:00+07:00'
+    filter_date = '2023-01-01 12:00:00+07:00'
     prices_df = get_prices(TICKERS, filter_date)
 
     if not prices_df.empty:
         # Create uniquely named dataframes for concatenation
         dfs_to_align = []
         for symbol in TICKERS:
-            df_temp = Limit_fx(symbol, act=-1)
+            df_temp = Limit_fx(symbol, act="-1")
             if not df_temp.empty:
                 renamed_df = df_temp[['sumusd']].rename(columns={'sumusd': f'sumusd_{symbol}'})
                 dfs_to_align.append(renamed_df)
@@ -342,7 +347,7 @@ with tab_dict['Ref_index_Log']:
                 df_sumusd_['ref_log'] = df_sumusd_.apply(calculate_ref_log, axis=1)
                 df_sumusd_['daily_sumusd'] = df_sumusd_[sumusd_cols].sum(axis=1)
 
-                total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in TICKERS if not Limit_fx(symbol, act=-1).empty])
+                total_initial_capital = sum([Limit_fx(symbol, act="-1").sumusd.iloc[0] for symbol in TICKERS if not Limit_fx(symbol, act="-1").empty])
                 net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
                 net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
                 df_sumusd_['net'] = net_raw - net_at_index_0
@@ -412,7 +417,7 @@ with tab_dict['Burn_Cash']:
     # Create uniquely named dataframes for concatenation
     dfs_to_align = []
     for symbol in TICKERS:
-        df_temp = Limit_fx(symbol, act=-1)
+        df_temp = Limit_fx(symbol, act="-1")
         if not df_temp.empty:
             renamed_df = df_temp[['buffer']].rename(columns={'buffer': f'buffer_{symbol}'})
             dfs_to_align.append(renamed_df)
