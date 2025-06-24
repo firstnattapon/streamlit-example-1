@@ -32,28 +32,31 @@ if not ASSETS:
 TICKERS = [a['symbol'] for a in ASSETS]
 
 
-# --- START: โค้ดจาก action ---
+# === ACTION GENERATION CLASS (NEW) ===
 class SimulationTracer:
     """
-    คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
-    ไปจนถึงการจำลองกระบวนการกลายพันธุ์ของ action sequence
+    A class to encapsulate the entire process from decoding parameters
+    to simulating the mutation process of an action sequence.
     """
     def __init__(self, encoded_string: str):
         self.encoded_string: str = encoded_string
-        # ทำให้แน่ใจว่าค่าที่เข้ามาเป็นสตริงเสมอ
+        # Ensure the input is always a string
         if not isinstance(self.encoded_string, str):
             self.encoded_string = str(self.encoded_string)
 
         self._decode_and_set_attributes()
 
     def _decode_and_set_attributes(self):
+        """[Internal] Decodes the string and assigns values to class attributes."""
         encoded_string = self.encoded_string
+        # Initialize with default "empty" values
+        self.action_length: int = 0
+        self.mutation_rate: int = 0
+        self.dna_seed: int = 0
+        self.mutation_seeds: List[int] = []
+        self.mutation_rate_float: float = 0.0
+
         if not encoded_string.isdigit():
-            self.action_length: int = 0
-            self.mutation_rate: int = 0
-            self.dna_seed: int = 0
-            self.mutation_seeds: List[int] = []
-            self.mutation_rate_float: float = 0.0
             return
 
         decoded_numbers = []
@@ -66,16 +69,10 @@ class SimulationTracer:
                 idx += length_of_number
                 decoded_numbers.append(int(number_str))
         except (IndexError, ValueError):
-            # In case of decoding error, stop processing
-            pass
+            pass # Fail silently, attributes will remain 0
 
         if len(decoded_numbers) < 3:
-            self.action_length: int = 0
-            self.mutation_rate: int = 0
-            self.dna_seed: int = 0
-            self.mutation_seeds: List[int] = []
-            self.mutation_rate_float: float = 0.0
-            return
+            return # Not enough data, attributes will remain 0
 
         self.action_length: int = decoded_numbers[0]
         self.mutation_rate: int = decoded_numbers[1]
@@ -84,22 +81,25 @@ class SimulationTracer:
         self.mutation_rate_float: float = self.mutation_rate / 100.0
 
     def run(self) -> np.ndarray:
+        """
+        Runs the mutation simulation process using the decoded parameters.
+        Returns the final action sequence after all mutations.
+        """
         if self.action_length <= 0:
             return np.array([])
-
+            
         dna_rng = np.random.default_rng(seed=self.dna_seed)
         current_actions = dna_rng.integers(0, 2, size=self.action_length)
         if self.action_length > 0:
             current_actions[0] = 1
+
         for m_seed in self.mutation_seeds:
             mutation_rng = np.random.default_rng(seed=m_seed)
             mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
             current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
             if self.action_length > 0:
-                current_actions[0] = 1
+                current_actions[0] = 1 # Re-apply first day rule after each mutation
         return current_actions
-
-# --- END: โค้ดจาก action ---
 
 
 # === DATA FETCHING & CALCULATION FUNCTIONS ===
@@ -125,18 +125,20 @@ def get_prices(tickers, start_date):
 
 @st.cache_data(ttl=300)
 def get_act_from_thingspeak(channel_id, api_key, field):
-    """Fetches the last value from a specific field in a specific ThingSpeak channel."""
+    """Fetches the last value (as a string) from a specific field in a specific ThingSpeak channel."""
     try:
         client = thingspeak.Channel(channel_id, api_key, fmt='json')
         act_json = client.get_field_last(field=str(field))
-        value = json.loads(act_json).get(f"field{field}")
+        data = json.loads(act_json)
+        value = data.get(f"field{field}")
         if value is None:
             st.warning(f"Field {field} on channel {channel_id} returned null. Using default value '0'.")
-            return "0"
-        return str(value)
+            return '0'
+        # The value is the encoded string. Ensure it's returned as a string.
+        return str(value).strip()
     except Exception as e:
         st.error(f"Could not fetch data from ThingSpeak (Channel: {channel_id}, Field: {field}). Error: {e}")
-        return "0"
+        return '0' # Return a default safe string.
 
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=1500):
@@ -223,26 +225,27 @@ def Limit_fx(Ticker, act=-1):
     elif act == -2:
         actions = get_max_action(prices)
     else:
-        # Use SimulationTracer for action generation from encoded string
-        tracer = SimulationTracer(str(act))
-        generated_actions = tracer.run()
+        # This block now handles the encoded string from ThingSpeak
+        try:
+            tracer = SimulationTracer(encoded_string=str(act))
+            
+            # IMPORTANT: The tracer has its own action_length from the encoded string.
+            # We must override it with the actual length of the historical price data
+            # to ensure the generated action sequence has the correct dimensions.
+            tracer.action_length = len(prices)
+            actions = tracer.run()
 
-        num_prices = len(prices)
-        num_generated = len(generated_actions)
+            # Safeguard: if the run fails (e.g., due to invalid string decode),
+            # it returns an empty array. We fall back to the default strategy.
+            if actions.size == 0:
+                if str(act) != '0': # Don't warn for the default '0' fallback value
+                    st.warning(f"Could not generate actions from string '{act}'. It may be invalid. Defaulting to 'Rebalance Daily'.")
+                actions = np.ones(len(prices), dtype=np.int64)
 
-        # Adapt the length of generated_actions to match the historical price data
-        if num_generated >= num_prices:
-            # If tracer generated enough (or more) actions, truncate them
-            actions = generated_actions[:num_prices]
-        else:
-            # If not enough actions were generated, create an array and pad with 0s (no action)
-            actions = np.zeros(num_prices, dtype=np.int64)
-            if num_generated > 0:
-                actions[:num_generated] = generated_actions
-
-        # Ensure the first action is always 1, consistent with the strategy's requirement
-        if num_prices > 0:
-            actions[0] = 1
+        except Exception as e:
+            # Catch any other unexpected errors during tracing.
+            st.error(f"An unexpected error occurred while processing action string '{act}': {e}. Defaulting to 'Rebalance Daily'.")
+            actions = np.ones(len(prices), dtype=np.int64)
 
     buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
     initial_capital = sumusd[0]
@@ -296,12 +299,12 @@ tab_dict = dict(zip(tab_names, tabs))
 for asset in ASSETS:
     symbol = asset['symbol']
     with tab_dict[symbol]:
-        act_string = get_act_from_thingspeak(
+        act = get_act_from_thingspeak(
             channel_id=asset['channel_id'],
             api_key=asset['write_api_key'],
             field=asset['field']
         )
-        plot(symbol, act_string)
+        plot(symbol, act)
 
 # === REF_INDEX_LOG TAB (FIXED) ===
 with tab_dict['Ref_index_Log']:
@@ -316,14 +319,14 @@ with tab_dict['Ref_index_Log']:
             if not df_temp.empty:
                 renamed_df = df_temp[['sumusd']].rename(columns={'sumusd': f'sumusd_{symbol}'})
                 dfs_to_align.append(renamed_df)
-
+        
         if dfs_to_align:
             aligned_dfs = [prices_df] + dfs_to_align
             df_sumusd_ = pd.concat(aligned_dfs, axis=1).ffill().dropna()
 
             price_cols = [col for col in df_sumusd_.columns if '_price' in col]
             sumusd_cols = [col for col in df_sumusd_.columns if 'sumusd_' in col]
-
+            
             if not price_cols or not sumusd_cols:
                  st.warning("Could not find price or sumusd columns after alignment.")
             else:
@@ -343,7 +346,8 @@ with tab_dict['Ref_index_Log']:
                 net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
                 net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
                 df_sumusd_['net'] = net_raw - net_at_index_0
-
+                
+                # <<<--- START OF MODIFICATION ---<<<
                 st.header("Net Performance Analysis (vs. Reference)")
                 st.info("Performance analysis of the portfolio's net value against the logarithmic reference index. 'Worst' periods indicate maximum losses, while 'Trough-to-Peak' shows the maximum possible gain from a low point.")
 
@@ -353,7 +357,7 @@ with tab_dict['Ref_index_Log']:
                 min_daily_cf = net_series.diff().min()
                 if pd.isna(min_daily_cf): min_daily_cf = 0
 
-                # Trough-to-Peak Gain (Max Run-up)
+                # Trough-to-Peak Gain (Max Run-up) - This remains unchanged as requested
                 trough_to_peak_gain = 0
                 if not net_series.empty:
                     trough_index = net_series.idxmin()
@@ -371,7 +375,7 @@ with tab_dict['Ref_index_Log']:
                     if not rolling_30_day_change.empty and rolling_30_day_change.notna().any():
                         min_30_day_cf = rolling_30_day_change.min()
                 if pd.isna(min_30_day_cf): min_30_day_cf = 0
-
+                
                 # Worst 90-day gain (Min Gain / Max Loss)
                 min_90_day_cf = 0
                 if len(net_series) >= 90:
@@ -392,11 +396,12 @@ with tab_dict['Ref_index_Log']:
                     st.metric(label="📈 Trough-to-Peak Gain (Max Run-up)", value=f"{trough_to_peak_gain:,.2f} USD")
 
                 st.markdown("---")
-
+                
                 st.subheader("Net Performance Over Time")
                 st.line_chart(df_sumusd_['net'])
                 with st.expander("View Data"):
                     st.dataframe(df_sumusd_)
+                # >>>--- END OF MODIFICATION ---<<<
         else:
              st.warning("Could not align dataframes. Not enough data available for the selected assets.")
     else:
@@ -411,7 +416,7 @@ with tab_dict['Burn_Cash']:
         if not df_temp.empty:
             renamed_df = df_temp[['buffer']].rename(columns={'buffer': f'buffer_{symbol}'})
             dfs_to_align.append(renamed_df)
-
+    
     if not dfs_to_align:
         st.error("Cannot calculate burn cash due to missing data for all assets.")
     else:
@@ -419,14 +424,14 @@ with tab_dict['Burn_Cash']:
 
         df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
         df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
-
+        
         st.header("Cash Burn Risk Analysis")
         st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
-
+        
         # --- Risk Calculation ---
         max_daily_burn = df_burn_cash['daily_burn'].min()
         cumulative_burn_series = df_burn_cash['cumulative_burn']
-
+        
         peak_to_trough_burn = 0
         if not cumulative_burn_series.empty:
             peak_index = cumulative_burn_series.idxmax()
@@ -436,28 +441,28 @@ with tab_dict['Burn_Cash']:
         if len(cumulative_burn_series) >= 30:
             rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
             max_30_day_burn = rolling_30_day_change.min()
-
+        
         max_90_day_burn = 0
         if len(cumulative_burn_series) >= 90:
             rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
             max_90_day_burn = rolling_90_day_change.min()
-
+        
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("Short-Term Risk")
             st.metric(label="🔥 1-Day Burn (Worst Day)", value=f"{max_daily_burn:,.2f} USD")
             st.metric(label="🔥 30-Day Burn (Worst Month)", value=f"{max_30_day_burn:,.2f} USD")
-
+        
         with col2:
             st.subheader("Medium to Long-Term Risk")
             st.metric(label="🔥 90-Day Burn (Worst Quarter)", value=f"{max_90_day_burn:,.2f} USD")
             st.metric(label="🏔️ Peak-to-Trough Burn (Max Drawdown)", value=f"{peak_to_trough_burn:,.2f} USD")
 
         st.markdown("---")
-
+        
         st.subheader("Cumulative Cash Burn Over Time")
         st.line_chart(df_burn_cash['cumulative_burn'])
-
+        
         with st.expander("View Detailed Burn Data"):
             st.dataframe(df_burn_cash)
 
