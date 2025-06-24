@@ -97,7 +97,7 @@ def average_cf(cf_config):
     value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
     adjusted_value = value -  (cf_config.get('offset', 0))
     # return adjusted_value / count_data
-    return   (cf_config.get('offset', 0))
+    return  value
 
 @st.cache_data(ttl=60)
 def production_cost(ticker, t0, fix):
