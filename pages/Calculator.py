@@ -164,7 +164,14 @@ def main():
     avg_cf_config = CONFIG.get('average_cf_config')
     if avg_cf_config:
         cf_day , count_data , adjusted_value   = average_cf(avg_cf_config)
-        st.write(f"Net: {adjusted_value:.2f} USD  : {count_data:} DAY : Average_cf_day: {cf_day:.2f} USD  : Average_cf_mo: {cf_day * 30:.2f} USD")
+        # st.write(f"Net: {adjusted_value:.2f} USD : {count_data:} DAY : Average_cf_day: {cf_day:.2f} USD  : Average_cf_mo: {cf_day * 30:.2f} USD")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric(label="Net (USD)", value=f"{adjusted_value:.2f}")
+        col2.metric(label="Days", value=f"{count_data}")
+        col3.metric(label="Average CF/Day (USD)", value=f"{cf_day:.2f}")
+        col4.metric(label="Average CF/Month (USD)", value=f"{cf_day * 30:.2f}")
+
+    
     else:
         st.warning("`average_cf_config` not found in configuration file.")
     st.write('____')
