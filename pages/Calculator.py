@@ -165,7 +165,7 @@ def main():
     if avg_cf_config:
         cf_day = average_cf(avg_cf_config)
         st.write(f"average_cf_day: {cf_day:.2f} USD  :  average_cf_mo: {cf_day * 30:.2f} USD")
-        st.write(f"cf_day")
+        st.write("{}".format(cf_day))
     else:
         st.warning("`average_cf_config` not found in configuration file.")
     st.write('____')
