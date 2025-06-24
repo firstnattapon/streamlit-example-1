@@ -6,85 +6,19 @@ import streamlit as st
 import thingspeak
 import json
 import streamlit.components.v1 as components
-from typing import List, Union
 
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
-
-# --- START: SimulationTracer Class ---
-class SimulationTracer:
-    """
-    คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
-    ไปจนถึงการจำลองกระบวนการกลายพันธุ์ของ action sequence
-    """
-    def __init__(self, encoded_string: str):
-        self.encoded_string: str = encoded_string
-        if not isinstance(self.encoded_string, str):
-            self.encoded_string = str(self.encoded_string)
-        self._decode_and_set_attributes()
-
-    def _decode_and_set_attributes(self):
-        encoded_string = self.encoded_string
-        if not encoded_string.isdigit():
-            self._reset_attributes()
-            return
-
-        decoded_numbers = []
-        idx = 0
-        try:
-            while idx < len(encoded_string):
-                length_of_number = int(encoded_string[idx])
-                idx += 1
-                number_str = encoded_string[idx : idx + length_of_number]
-                idx += length_of_number
-                decoded_numbers.append(int(number_str))
-        except (IndexError, ValueError):
-            self._reset_attributes()
-            return
-
-        if len(decoded_numbers) < 3:
-            self._reset_attributes()
-            return
-
-        self.action_length: int = decoded_numbers[0]
-        self.mutation_rate: int = decoded_numbers[1]
-        self.dna_seed: int = decoded_numbers[2]
-        self.mutation_seeds: List[int] = decoded_numbers[3:]
-        self.mutation_rate_float: float = self.mutation_rate / 100.0
-
-    def _reset_attributes(self):
-        self.action_length: int = 0
-        self.mutation_rate: int = 0
-        self.dna_seed: int = 0
-        self.mutation_seeds: List[int] = []
-        self.mutation_rate_float: float = 0.0
-
-    def run(self) -> np.ndarray:
-        if self.action_length <= 0:
-            return np.array([])
-            
-        dna_rng = np.random.default_rng(seed=self.dna_seed)
-        current_actions = dna_rng.integers(0, 2, size=self.action_length)
-        if self.action_length > 0:
-            current_actions[0] = 1
-        for m_seed in self.mutation_seeds:
-            mutation_rng = np.random.default_rng(seed=m_seed)
-            mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
-            current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
-            if self.action_length > 0:
-                current_actions[0] = 1
-        return current_actions
-
-# --- END: SimulationTracer Class ---
 
 # === CONFIG LOADING ===
 @st.cache_data
 def load_config(path='limit_fx_config.json'):
+    """Loads the asset configuration from a JSON file."""
     try:
         with open(path, 'r') as f:
             config = json.load(f)
         return config['assets']
     except FileNotFoundError:
-        st.error(f"Configuration file '{path}' not found.")
+        st.error(f"Configuration file '{path}' not found. Please ensure it exists in the correct directory.")
         return None
     except (json.JSONDecodeError, KeyError) as e:
         st.error(f"Error reading or parsing '{path}': {e}")
@@ -96,9 +30,12 @@ if not ASSETS:
 
 TICKERS = [a['symbol'] for a in ASSETS]
 
+
 # === DATA FETCHING & CALCULATION FUNCTIONS ===
+
 @st.cache_data(ttl=600)
 def get_prices(tickers, start_date):
+    """Fetches historical price data for a list of tickers."""
     df_list = []
     for ticker in tickers:
         try:
@@ -116,42 +53,19 @@ def get_prices(tickers, start_date):
     return pd.concat(df_list, axis=1)
 
 @st.cache_data(ttl=300)
-def get_act_from_thingspeak(channel_id, api_key, field) -> Union[str, np.ndarray]:
-    """
-    Fetches data from ThingSpeak. It can now handle both encoded strings and full action arrays.
-    Returns:
-        - np.ndarray if the value is a full action array string.
-        - str for encoded strings or fallback values.
-    """
+def get_act_from_thingspeak(channel_id, api_key, field):
+    """Fetches the last value from a specific field in a specific ThingSpeak channel."""
     try:
         client = thingspeak.Channel(channel_id, api_key, fmt='json')
         act_json = client.get_field_last(field=str(field))
-        value_str = json.loads(act_json).get(f"field{field}")
-        
-        if value_str is None:
-            st.warning(f"Field {field} on channel {channel_id} is null. Using fallback (always buy).")
-            return "-1"
-
-        value_str = value_str.strip()
-        
-        # ** NEW LOGIC: Check if it's a full action array **
-        if value_str.startswith('[') and value_str.endswith(']'):
-            try:
-                # Convert string like '[1 0 1 ... 1]' to numpy array
-                cleaned_str = value_str.strip('[]').replace('\n', ' ')
-                actions_array = np.fromstring(cleaned_str, dtype=int, sep=' ')
-                st.success(f"Successfully parsed a full action array of length {len(actions_array)} from ThingSpeak.")
-                return actions_array
-            except Exception as e:
-                st.error(f"Failed to parse action array from ThingSpeak: {e}. Using fallback.")
-                return "-1"
-        
-        # If not an array, return it as a string (for SimulationTracer or fallback)
-        return value_str
-        
+        value = json.loads(act_json).get(f"field{field}")
+        if value is None:
+            st.warning(f"Field {field} on channel {channel_id} returned null. Using default value 0.")
+            return 0
+        return int(value)
     except Exception as e:
         st.error(f"Could not fetch data from ThingSpeak (Channel: {channel_id}, Field: {field}). Error: {e}")
-        return "-1"
+        return 0
 
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=1500):
@@ -164,7 +78,7 @@ def calculate_optimized(action_list, price_list, fix=1500):
     cash = np.empty(n, dtype=np.float64)
     asset_value = np.empty(n, dtype=np.float64)
     sumusd = np.empty(n, dtype=np.float64)
-    if price_array.shape[0] == 0:
+    if price_array.shape[0] == 0: # Guard against empty price array
         return buffer, sumusd, cash, asset_value, amount, np.empty(0, dtype=np.float64)
     initial_price = price_array[0]
     amount[0] = fix / initial_price
@@ -185,22 +99,30 @@ def calculate_optimized(action_list, price_list, fix=1500):
         sumusd[i] = cash[i] + asset_value[i]
     return buffer, sumusd, cash, asset_value, amount, refer
 
+
 def get_max_action(price_list, fix=1500):
     prices = np.asarray(price_list, dtype=np.float64)
     n = len(prices)
-    if n < 2: return np.ones(n, dtype=int)
+    if n < 2:
+        return np.ones(n, dtype=int)
     dp = np.zeros(n, dtype=np.float64)
     path = np.zeros(n, dtype=int)
-    dp[0] = float(fix * 2)
+    initial_capital = float(fix * 2)
+    dp[0] = initial_capital
     for i in range(1, n):
-        j_indices = np.arange(i)
-        profits = fix * ((prices[i] / prices[j_indices]) - 1)
-        current_sumusd = dp[j_indices] + profits
-        best_idx = np.argmax(current_sumusd)
-        dp[i] = current_sumusd[best_idx]
-        path[i] = j_indices[best_idx]
+        max_prev_sumusd = 0
+        best_j = 0
+        for j in range(i):
+            profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1)
+            current_sumusd = dp[j] + profit_from_j_to_i
+            if current_sumusd > max_prev_sumusd:
+                max_prev_sumusd = current_sumusd
+                best_j = j
+        dp[i] = max_prev_sumusd
+        path[i] = best_j
     actions = np.zeros(n, dtype=int)
-    current_day = np.argmax(dp)
+    last_action_day = np.argmax(dp)
+    current_day = last_action_day
     while current_day > 0:
         actions[current_day] = 1
         current_day = path[current_day]
@@ -208,80 +130,51 @@ def get_max_action(price_list, fix=1500):
     return actions
 
 @st.cache_data(ttl=600)
-def Limit_fx(Ticker: str, act: Union[str, np.ndarray] = "-1"):
+def Limit_fx(Ticker, act=-1):
     filter_date = '2023-01-01 12:00:00+07:00'
     try:
         tickerData = yf.Ticker(Ticker)
-        history = tickerData.history(period='max')[['Close']]
-        if history.empty: return pd.DataFrame()
-        history.index = history.index.tz_convert(tz='Asia/Bangkok')
-        history = history[history.index >= filter_date]
-        prices = np.array(history.Close.values, dtype=np.float64)
+        tickerData = tickerData.history(period='max')[['Close']]
+        if tickerData.empty:
+            return pd.DataFrame()
+        tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
+        tickerData = tickerData[tickerData.index >= filter_date]
+        prices = np.array(tickerData.Close.values, dtype=np.float64)
     except Exception as e:
         st.warning(f"Could not get yfinance data for {Ticker}: {e}")
         return pd.DataFrame()
 
-    if len(prices) == 0: return pd.DataFrame()
+    if len(prices) == 0:
+        return pd.DataFrame()
 
-    num_prices = len(prices)
-    actions = np.ones(num_prices, dtype=np.int64) # Default
-
-    if isinstance(act, np.ndarray):
-        # ** NEW: Directly use the full action array if provided **
-        actions = act
-    elif isinstance(act, str):
-        if act == "-1":
-            actions = np.ones(num_prices, dtype=np.int64)
-        elif act == "-2":
-            actions = get_max_action(prices)
-        else:
-            # Use SimulationTracer for encoded string actions
-            try:
-                tracer = SimulationTracer(encoded_string=act)
-                generated_actions = tracer.run()
-                if generated_actions.size > 0:
-                    actions = generated_actions
-                else:
-                    st.warning(f"Invalid action string '{act}'. Defaulting to 'always buy'.")
-            except Exception as e:
-                st.error(f"Error during SimulationTracer for '{act}': {e}. Defaulting to 'always buy'.")
-
-    # --- Final check for length mismatch and padding ---
-    if len(actions) != num_prices:
-        st.warning(f"Action sequence length ({len(actions)}) does not match price history length ({num_prices}). Truncating or padding actions.")
-        final_actions = np.ones(num_prices, dtype=np.int64) # Pad with 'buy'
-        copy_len = min(len(actions), num_prices)
-        final_actions[:copy_len] = actions[:copy_len]
+    if act == -1:
+        actions = np.ones(len(prices), dtype=np.int64)
+    elif act == -2:
+        actions = get_max_action(prices)
     else:
-        final_actions = actions
+        rng = np.random.default_rng(act)
+        actions = rng.integers(0, 2, len(prices))
 
-    buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(final_actions, prices)
-    if sumusd.size == 0: return pd.DataFrame()
-    
+    buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
     initial_capital = sumusd[0]
     df = pd.DataFrame({
         'price': prices,
-        'action': final_actions,
-        'buffer': buffer, 'sumusd': sumusd, 'cash': cash,
-        'asset_value': asset_value, 'amount': amount,
+        'action': actions,
+        'buffer': buffer,
+        'sumusd': sumusd,
+        'cash': cash,
+        'asset_value': asset_value,
+        'amount': amount,
         'refer': refer + initial_capital,
         'net': sumusd - refer - initial_capital
-    }, index=history.index)
+    }, index=tickerData.index)
     return df
 
 # === UI FUNCTIONS ===
 def plot(Ticker, act):
-    # Determine label for the main strategy line
-    if isinstance(act, np.ndarray):
-        fx_label = 'fx_Hybrid_Full'
-    elif isinstance(act, str) and len(act) > 10:
-        fx_label = f'fx_{act[:10]}...'
-    else:
-        fx_label = f'fx_{act}'
-        
-    df_min = Limit_fx(Ticker, act="-1")
+    df_min = Limit_fx(Ticker, act=-1)
     df_fx = Limit_fx(Ticker, act=act)
-    df_max = Limit_fx(Ticker, act="-2")
+    df_max = Limit_fx(Ticker, act=-2)
 
     if df_min.empty or df_fx.empty or df_max.empty:
         st.error(f"Could not generate plot for {Ticker} due to missing data.")
@@ -289,7 +182,7 @@ def plot(Ticker, act):
 
     chart_data = pd.DataFrame({
         'min': df_min.net,
-        fx_label: df_fx.net,
+        f'fx_{act}': df_fx.net,
         'max': df_max.net
     }, index=df_min.index)
     st.write('Refer_Log')
@@ -299,17 +192,18 @@ def plot(Ticker, act):
     st.write('Burn_Cash (Cumulative)')
     st.line_chart(df_plot_burn)
 
-    with st.expander("Detailed Data (Full Hybrid Strategy)"):
-        st.dataframe(df_fx)
+    with st.expander("Detailed Data (Min Action)"):
+        st.dataframe(df_min)
 
 def iframe(frame='', width=1500, height=800):
     components.iframe(frame, width=width, height=height, scrolling=True)
 
-# === MAIN APP LAYOUT (UNCHANGED) ===
+# === MAIN APP LAYOUT ===
 tab_names = TICKERS + ['Burn_Cash', 'Ref_index_Log', 'cf_log']
 tabs = st.tabs(tab_names)
 tab_dict = dict(zip(tab_names, tabs))
 
+# === MAIN ASSET TABS ===
 for asset in ASSETS:
     symbol = asset['symbol']
     with tab_dict[symbol]:
@@ -320,16 +214,16 @@ for asset in ASSETS:
         )
         plot(symbol, act)
 
-# ... (The rest of the code for 'Ref_index_Log', 'Burn_Cash', and 'cf_log' tabs remains exactly the same) ...
-# === REF_INDEX_LOG TAB (UNCHANGED) ===
+# === REF_INDEX_LOG TAB (FIXED) ===
 with tab_dict['Ref_index_Log']:
     filter_date = '2023-01-01 12:00:00+07:00'
     prices_df = get_prices(TICKERS, filter_date)
 
     if not prices_df.empty:
+        # Create uniquely named dataframes for concatenation
         dfs_to_align = []
         for symbol in TICKERS:
-            df_temp = Limit_fx(symbol, act="-1")
+            df_temp = Limit_fx(symbol, act=-1)
             if not df_temp.empty:
                 renamed_df = df_temp[['sumusd']].rename(columns={'sumusd': f'sumusd_{symbol}'})
                 dfs_to_align.append(renamed_df)
@@ -356,18 +250,22 @@ with tab_dict['Ref_index_Log']:
                 df_sumusd_['ref_log'] = df_sumusd_.apply(calculate_ref_log, axis=1)
                 df_sumusd_['daily_sumusd'] = df_sumusd_[sumusd_cols].sum(axis=1)
 
-                total_initial_capital = sum([Limit_fx(symbol, act="-1").sumusd.iloc[0] for symbol in TICKERS if not Limit_fx(symbol, act="-1").empty])
+                total_initial_capital = sum([Limit_fx(symbol, act=-1).sumusd.iloc[0] for symbol in TICKERS if not Limit_fx(symbol, act=-1).empty])
                 net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
                 net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
                 df_sumusd_['net'] = net_raw - net_at_index_0
                 
+                # <<<--- START OF MODIFICATION ---<<<
                 st.header("Net Performance Analysis (vs. Reference)")
                 st.info("Performance analysis of the portfolio's net value against the logarithmic reference index. 'Worst' periods indicate maximum losses, while 'Trough-to-Peak' shows the maximum possible gain from a low point.")
 
                 net_series = df_sumusd_['net']
+
+                # --- CF (Cash Flow) Calculation for Worst Periods ---
                 min_daily_cf = net_series.diff().min()
                 if pd.isna(min_daily_cf): min_daily_cf = 0
 
+                # Trough-to-Peak Gain (Max Run-up) - This remains unchanged as requested
                 trough_to_peak_gain = 0
                 if not net_series.empty:
                     trough_index = net_series.idxmin()
@@ -375,18 +273,22 @@ with tab_dict['Ref_index_Log']:
                     trough_value = net_series.loc[trough_index]
                     if pd.notna(peak_after_trough) and pd.notna(trough_value):
                          trough_to_peak_gain = peak_after_trough - trough_value
+                    else:
+                         trough_to_peak_gain = 0
 
+                # Worst 30-day gain (Min Gain / Max Loss)
                 min_30_day_cf = 0
                 if len(net_series) >= 30:
                     rolling_30_day_change = net_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-                    if rolling_30_day_change.notna().any():
+                    if not rolling_30_day_change.empty and rolling_30_day_change.notna().any():
                         min_30_day_cf = rolling_30_day_change.min()
                 if pd.isna(min_30_day_cf): min_30_day_cf = 0
                 
+                # Worst 90-day gain (Min Gain / Max Loss)
                 min_90_day_cf = 0
                 if len(net_series) >= 90:
                     rolling_90_day_change = net_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-                    if rolling_90_day_change.notna().any():
+                    if not rolling_90_day_change.empty and rolling_90_day_change.notna().any():
                         min_90_day_cf = rolling_90_day_change.min()
                 if pd.isna(min_90_day_cf): min_90_day_cf = 0
 
@@ -402,20 +304,23 @@ with tab_dict['Ref_index_Log']:
                     st.metric(label="📈 Trough-to-Peak Gain (Max Run-up)", value=f"{trough_to_peak_gain:,.2f} USD")
 
                 st.markdown("---")
+                
                 st.subheader("Net Performance Over Time")
                 st.line_chart(df_sumusd_['net'])
                 with st.expander("View Data"):
                     st.dataframe(df_sumusd_)
+                # >>>--- END OF MODIFICATION ---<<<
         else:
              st.warning("Could not align dataframes. Not enough data available for the selected assets.")
     else:
         st.warning("Could not fetch sufficient price data for Ref_index_Log.")
 
-# === BURN_CASH TAB (UNCHANGED) ===
+# === BURN_CASH TAB ===
 with tab_dict['Burn_Cash']:
+    # Create uniquely named dataframes for concatenation
     dfs_to_align = []
     for symbol in TICKERS:
-        df_temp = Limit_fx(symbol, act="-1")
+        df_temp = Limit_fx(symbol, act=-1)
         if not df_temp.empty:
             renamed_df = df_temp[['buffer']].rename(columns={'buffer': f'buffer_{symbol}'})
             dfs_to_align.append(renamed_df)
@@ -431,6 +336,7 @@ with tab_dict['Burn_Cash']:
         st.header("Cash Burn Risk Analysis")
         st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
         
+        # --- Risk Calculation ---
         max_daily_burn = df_burn_cash['daily_burn'].min()
         cumulative_burn_series = df_burn_cash['cumulative_burn']
         
@@ -442,14 +348,12 @@ with tab_dict['Burn_Cash']:
         max_30_day_burn = 0
         if len(cumulative_burn_series) >= 30:
             rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-            if rolling_30_day_change.notna().any():
-                max_30_day_burn = rolling_30_day_change.min()
+            max_30_day_burn = rolling_30_day_change.min()
         
         max_90_day_burn = 0
         if len(cumulative_burn_series) >= 90:
             rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-            if rolling_90_day_change.notna().any():
-                max_90_day_burn = rolling_90_day_change.min()
+            max_90_day_burn = rolling_90_day_change.min()
         
         col1, col2 = st.columns(2)
         with col1:
@@ -463,13 +367,14 @@ with tab_dict['Burn_Cash']:
             st.metric(label="🏔️ Peak-to-Trough Burn (Max Drawdown)", value=f"{peak_to_trough_burn:,.2f} USD")
 
         st.markdown("---")
+        
         st.subheader("Cumulative Cash Burn Over Time")
         st.line_chart(df_burn_cash['cumulative_burn'])
         
         with st.expander("View Detailed Burn Data"):
             st.dataframe(df_burn_cash)
 
-# === CF_LOG TAB (UNCHANGED) ===
+# === CF_LOG TAB ===
 with tab_dict['cf_log']:
     st.markdown("""
     - **Rebalance**: `-fix * ln(t0 / tn)`
