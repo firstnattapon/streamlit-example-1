@@ -625,6 +625,24 @@ def render_hybrid_multi_mutation_tab():
                 window_to_encode = st.number_input(
                     "Select Window #", min_value=1, max_value=max_window, value=1, key="window_encoder_input"
                 )
+                
+                # Calculate the default action length for the selected window
+                try:
+                    total_days = len(st.session_state.ticker_data_cache)
+                    window_size = st.session_state.window_size
+                    start_index = (window_to_encode - 1) * window_size
+                    default_action_length = min(window_size, total_days - start_index)
+                except (KeyError, TypeError):
+                    default_action_length = st.session_state.get('window_size', 60)
+
+                # Add the Action Length input, pre-filled with the calculated value
+                action_length_for_encoder = st.number_input(
+                    "Action Length", 
+                    min_value=1, 
+                    value=default_action_length, 
+                    key="action_length_for_encoder",
+                    help="ความยาวของ action sequence สำหรับ window ที่เลือก (คำนวณอัตโนมัติ)"
+                )
 
             with c2:
                 st.write("") # for vertical alignment
@@ -645,15 +663,12 @@ def render_hybrid_multi_mutation_tab():
                             if cleaned_str:
                                 mutation_seeds = [int(s.strip()) for s in cleaned_str.split(',')]
 
-                        # Calculate the precise action_length for this window
-                        total_days = len(st.session_state.ticker_data_cache)
-                        window_size = st.session_state.window_size
-                        start_index = (window_to_encode - 1) * window_size
-                        action_length = min(window_size, total_days - start_index)
+                        # Use the value from the dedicated input field
+                        action_length_to_use = int(action_length_for_encoder)
                         
                         # Call the static encoder method
                         encoded_string = SimulationTracer.encode(
-                            action_length=action_length,
+                            action_length=action_length_to_use,
                             mutation_rate=mutation_rate,
                             dna_seed=dna_seed,
                             mutation_seeds=mutation_seeds
