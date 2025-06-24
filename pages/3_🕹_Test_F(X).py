@@ -308,7 +308,7 @@ for asset in ASSETS:
 
 # === REF_INDEX_LOG TAB (FIXED) ===
 with tab_dict['Ref_index_Log']:
-    filter_date = '2023-01-01 12:00:00+07:00'
+    filter_date = '2024-01-01 12:00:00+07:00'
     prices_df = get_prices(TICKERS, filter_date)
 
     if not prices_df.empty:
