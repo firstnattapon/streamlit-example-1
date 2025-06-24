@@ -28,7 +28,7 @@ def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
         "assets": ["FFWM", "NEGG", "RIVN", "AGL", "APLS", "FLNC", "NVTS" , "QXO" ,"RXRX"],
         "default_settings": {
             "selected_ticker": "FFWM", "start_date": "2024-01-01",
-            "window_size": 30, "num_seeds": 1000, "max_workers": 1,
+            "window_size": 30 , "num_seeds": 1000, "max_workers": 1, 
             "mutation_rate": 10.0, "num_mutations": 5
         }
     }
@@ -40,11 +40,11 @@ def initialize_session_state(config: Dict[str, Any]):
         try: st.session_state.start_date = datetime.strptime(defaults.get('start_date', '2024-01-01'), '%Y-%m-%d').date()
         except ValueError: st.session_state.start_date = datetime(2024, 1, 1).date()
     if 'end_date' not in st.session_state: st.session_state.end_date = datetime.now().date()
-    if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 30)
+    if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 30 )  
     if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 10000)
     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
-    if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 5.0)
-    if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 2)
+    if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 10.0)
+    if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
 
 # ==============================================================================
 # 2. Core Calculation & Data Functions
@@ -568,18 +568,27 @@ def render_hybrid_multi_mutation_tab():
             }
             for name, df in results.items():
                 if not df.empty: df.index = ticker_data.index[:len(df)]
+            
+            # Store results in session state for later use
+            st.session_state.simulation_results = results
+            st.session_state.df_windows_details = df_windows
+            st.session_state.ticker_data_cache = ticker_data
 
-        st.success("การทดสอบเสร็จสมบูรณ์!");
+
+    # --- Display results section (This now runs outside the button click to persist UI) ---
+    if 'simulation_results' in st.session_state:
+        st.success("การทดสอบเสร็จสมบูรณ์!")
         
-        chart_results = results.copy()
-        chart_results.pop(Strategy.ORIGINAL_DNA)
+        results = st.session_state.simulation_results
+        chart_results = {k: v for k, v in results.items() if k != Strategy.ORIGINAL_DNA}
         display_comparison_charts(chart_results)
 
         st.divider()
         st.write("### 📈 สรุปผลลัพธ์")
         
+        df_windows = st.session_state.get('df_windows_details', pd.DataFrame())
+        
         if not df_windows.empty:
-            # Get final compounded net for all strategies
             perfect_df = results.get(Strategy.PERFECT_FORESIGHT)
             total_perfect_net = perfect_df['net'].iloc[-1] if perfect_df is not None and not perfect_df.empty else 0.0
             
@@ -592,10 +601,8 @@ def render_hybrid_multi_mutation_tab():
             rebalance_df = results.get(Strategy.REBALANCE_DAILY)
             total_rebalance_net = rebalance_df['net'].iloc[-1] if rebalance_df is not None and not rebalance_df.empty else 0.0
 
-            # ! MODIFIED: Display the four requested metrics in one row
             st.write("#### สรุปผลการดำเนินงานโดยรวม (Compounded Final Profit)")
             col1, col2, col3, col4 = st.columns(4)
-            
             col1.metric("Perfect Foresight", f"${total_perfect_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องแบบ Perfect Foresight (ทบต้น)")
             col2.metric("Hybrid Strategy", f"${total_hybrid_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของกลยุทธ์ Hybrid ที่ผ่านการกลายพันธุ์แล้ว (ทบต้น)")
             col3.metric("Original Profits", f"${total_original_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของ 'DNA ดั้งเดิม' ก่อนการกลายพันธุ์ (ทบต้น)")
@@ -604,7 +611,76 @@ def render_hybrid_multi_mutation_tab():
             st.write("---")
             st.write("#### 📝 รายละเอียดผลลัพธ์ราย Window")
             st.dataframe(df_windows, use_container_width=True)
+            ticker = st.session_state.get('test_ticker', 'TICKER')
             st.download_button("📥 Download Details (CSV)", df_windows.to_csv(index=False), f'hybrid_multi_mutation_{ticker}.csv', 'text/csv')
+
+            # Section to encode a specific window's data
+            st.divider()
+            st.markdown("#### 🎁 Generate Encoded String from Window Result")
+            st.info("เลือกหมายเลข Window จากตารางด้านบนเพื่อสร้าง Encoded String สำหรับนำไปใช้ในแท็บ 'Tracer'")
+
+            c1, c2 = st.columns([1, 3])
+            with c1:
+                max_window = len(df_windows)
+                window_to_encode = st.number_input(
+                    "Select Window #", min_value=1, max_value=max_window, value=1, key="window_encoder_input"
+                )
+                
+                # Calculate the default action length for the selected window
+                try:
+                    total_days = len(st.session_state.ticker_data_cache)
+                    window_size = st.session_state.window_size
+                    start_index = (window_to_encode - 1) * window_size
+                    default_action_length = min(window_size, total_days - start_index) * 2  # Action Length
+                except (KeyError, TypeError):
+                    default_action_length = st.session_state.get('window_size', 60)
+
+                # Add the Action Length input, pre-filled with the calculated value
+                action_length_for_encoder = st.number_input(
+                    "Action Length", 
+                    min_value=1, 
+                    value=default_action_length, 
+                    key="action_length_for_encoder",
+                    help="ความยาวของ action sequence สำหรับ window ที่เลือก (คำนวณอัตโนมัติ)"
+                )
+
+            with c2:
+                st.write("") # for vertical alignment
+                st.write("")
+                if st.button("Encode Selected Window", key="window_encoder_button"):
+                    try:
+                        window_data = df_windows.iloc[window_to_encode - 1]
+                        
+                        # Extract parameters
+                        dna_seed = int(window_data['dna_seed'])
+                        mutation_rate = int(st.session_state.mutation_rate)
+
+                        # Safely parse mutation_seeds string like '[90, 219]' or 'None'
+                        mutation_seeds_str = window_data['mutation_seeds']
+                        mutation_seeds = []
+                        if mutation_seeds_str not in ["None", "[]"]:
+                            cleaned_str = mutation_seeds_str.strip('[]')
+                            if cleaned_str:
+                                mutation_seeds = [int(s.strip()) for s in cleaned_str.split(',')]
+
+                        # Use the value from the dedicated input field
+                        action_length_to_use = int(action_length_for_encoder)
+                        
+                        # Call the static encoder method
+                        encoded_string = SimulationTracer.encode(
+                            action_length=action_length_to_use,
+                            mutation_rate=mutation_rate,
+                            dna_seed=dna_seed,
+                            mutation_seeds=mutation_seeds
+                        )
+                        
+                        st.success(f"**Encoded String for Window #{window_to_encode}:**")
+                        st.code(encoded_string, language='text')
+
+                    except (IndexError, KeyError):
+                        st.error(f"ไม่สามารถหาข้อมูลสำหรับ Window #{window_to_encode} ได้")
+                    except Exception as e:
+                        st.error(f"เกิดข้อผิดพลาดระหว่างการเข้ารหัส: {e}")
 
 def render_tracer_tab():
     st.markdown("### 🔍 Action Sequence Tracer & Encoder")
@@ -615,7 +691,7 @@ def render_tracer_tab():
     
     encoded_string = st.text_input(
         "ป้อน Encoded String ที่นี่:",
-        "2601539003899353023538143646",
+        "26021034252903219354832053493", # Example string updated to a 60-day version
         help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds",
         key="decoder_input"
     )
