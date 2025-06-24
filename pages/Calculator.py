@@ -87,7 +87,7 @@ def get_ticker_history(ticker_symbol):
 def average_cf(cf_config):
     history = get_ticker_history(cf_config['ticker'])
     default_date = "2024-01-01 12:00:00+07:00"
-    filter_date = cf_config.get('filter_date', default_date)
+    filter_date = cf_config.get('filter_date_cf', default_date)
     filtered_data = history[history.index >= filter_date]
     count_data = len(filtered_data)
     if count_data == 0:
