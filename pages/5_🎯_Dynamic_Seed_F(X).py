@@ -1,4 +1,4 @@
-# Final Integrated Code (v1 + v2 Sequence Strategies)
+# Final
 
 import pandas as pd
 import numpy as np
@@ -29,6 +29,8 @@ class Strategy:
     # ! NEW: Added from v2
     ARITHMETIC_SEQUENCE = "Arithmetic Sequence"
     GEOMETRIC_SEQUENCE = "Geometric Sequence"
+    # ! NEW: Added from Test version
+    LFSR_SEARCH = "LFSR (Characteristic Poly)"
 
 
 def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
@@ -551,7 +553,116 @@ def generate_actions_sliding_window_ga(ticker_data: pd.DataFrame, window_size: i
     progress_bar.empty()
     return final_actions, pd.DataFrame(window_details_list)
 
-# ! NEW: 3.5 Arithmetic Sequence Strategy (from v2)
+# ! NEW: 3.5 LFSR (Characteristic Polynomial) Strategy (INTEGRATED)
+@njit(cache=True)
+def _generate_lfsr_actions_numba(length: int, seed: int, taps: np.ndarray) -> np.ndarray:
+    """
+    สร้าง Action Sequence โดยใช้หลักการ Linear Feedback Shift Register (LFSR)
+    เร่งความเร็วด้วย Numba
+    """
+    if length == 0: return np.empty(0, dtype=np.int32)
+    state_len = max(length, 32)
+    state = np.zeros(state_len, dtype=np.int32)
+
+    for i in range(32):
+        if (seed >> i) & 1:
+            state[i] = 1
+
+    if length > 32:
+        for n in range(32, length):
+            nxt_bit = 0
+            for k in taps:
+                nxt_bit ^= state[n - k]
+            state[n] = nxt_bit
+    
+    actions = state[:length].copy()
+    if length > 0: actions[0] = 1
+    return actions
+
+def evaluate_lfsr_batch(prices_tuple: Tuple[float, ...], num_samples_in_batch: int, batch_seed: int) -> List[Tuple[float, np.ndarray, Dict]]:
+    """ประมวลผลการสุ่มหา LFSR parameters ที่ดีที่สุดใน 1 batch (สำหรับ Parallel Processing)"""
+    results = []
+    rng = np.random.default_rng(batch_seed)
+    possible_taps = np.arange(1, 33, dtype=np.int32)
+    window_len = len(prices_tuple)
+
+    for _ in range(num_samples_in_batch):
+        seed_val = rng.integers(0, 2**32, dtype=np.uint32)
+        num_taps = rng.integers(4, 9) # สุ่มจำนวน tap ระหว่าง 4-8
+        taps_val = rng.choice(possible_taps, size=num_taps, replace=False)
+        taps_val.sort()
+
+        actions = _generate_lfsr_actions_numba(window_len, int(seed_val), taps_val)
+        
+        _, sumusd, _, _, _, refer = calculate_optimized_cached(tuple(actions), prices_tuple)
+        net = sumusd[-1] - refer[-1] - sumusd[0] if len(sumusd) > 0 else -np.inf
+        
+        params = {'seed': seed_val, 'taps': taps_val.tolist()}
+        results.append((net, actions, params))
+        
+    return results
+
+def find_best_lfsr_for_window(prices_window: np.ndarray, num_samples: int, max_workers: int, window_seed: int) -> Tuple[float, np.ndarray, Dict]:
+    """ค้นหา LFSR parameters (seed, taps) ที่ให้กำไรสูงสุดใน 1 window"""
+    window_len = len(prices_window)
+    if window_len < 2: return 0.0, np.ones(window_len, dtype=np.int32), {}
+
+    best_net_for_window = -np.inf
+    best_actions_for_window = np.ones(window_len, dtype=np.int32)
+    best_params_for_window = {}
+    
+    rng_for_batches = np.random.default_rng(window_seed)
+    batch_size = max(1, num_samples // (max_workers * 4 if max_workers > 0 else 1))
+    num_batches = (num_samples + batch_size - 1) // batch_size
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        batch_seeds = rng_for_batches.integers(0, 2**32, size=num_batches)
+        futures = {executor.submit(evaluate_lfsr_batch, tuple(prices_window), batch_size, seed) for seed in batch_seeds}
+        
+        for future in as_completed(futures):
+            try:
+                for net, actions, params in future.result():
+                    if net > best_net_for_window:
+                        best_net_for_window = net
+                        best_actions_for_window = actions
+                        best_params_for_window = params
+            except Exception as exc:
+                st.warning(f"A batch in LFSR search generated an exception: {exc}")
+
+    return best_net_for_window, best_actions_for_window, best_params_for_window
+
+def generate_actions_sliding_window_lfsr(ticker_data: pd.DataFrame, window_size: int, num_samples: int, master_seed: int, max_workers: int) -> Tuple[np.ndarray, pd.DataFrame]:
+    """สร้าง Action Sequence ทั้งหมดโดยใช้กลยุทธ์ LFSR Sliding Window"""
+    prices = ticker_data['Close'].to_numpy(); n = len(prices)
+    final_actions = np.array([], dtype=np.int32); window_details_list = []
+    num_windows = (n + window_size - 1) // window_size
+    progress_bar = st.progress(0, text="กำลังประมวลผล LFSR Search...")
+    st.write(f"🧬 ค้นหา LFSR (Seed, Taps) ที่ดีที่สุดในแต่ละ Window | {num_samples} samples/window")
+    st.write(f"⚡ ใช้ Parallel Processing: {max_workers} workers")
+
+    for i, start_index in enumerate(range(0, n, window_size)):
+        end_index = min(start_index + window_size, n); prices_window = prices[start_index:end_index]
+        if len(prices_window) < 2: continue
+
+        window_seed = master_seed + i
+        best_net, best_actions, best_params = find_best_lfsr_for_window(prices_window, num_samples, max_workers, window_seed)
+        final_actions = np.concatenate((final_actions, best_actions))
+        
+        start_date_str = ticker_data.index[start_index].strftime('%Y-%m-%d'); end_date_str = ticker_data.index[end_index-1].strftime('%Y-%m-%d')
+        window_details_list.append({
+            'window_number': i + 1, 'timeline': f"{start_date_str} ถึง {end_date_str}",
+            'max_net': round(best_net, 2), 
+            'best_seed': int(best_params.get('seed', 0)),
+            'best_taps': str(best_params.get('taps', [])), 
+            'action_count': int(np.sum(best_actions)),
+            'window_size': len(prices_window), 'window_seed': window_seed
+        })
+        progress_bar.progress((i + 1) / num_windows, text=f"ประมวลผล Window {i+1}/{num_windows}")
+        
+    progress_bar.empty()
+    return final_actions, pd.DataFrame(window_details_list)
+
+# ! NEW: 3.6 Arithmetic Sequence Strategy (from v2)
 def generate_actions_sliding_window_arithmetic(ticker_data: pd.DataFrame, window_size: int, num_samples: int, master_seed: int) -> Tuple[np.ndarray, pd.DataFrame]:
     prices = ticker_data['Close'].to_numpy(); n = len(prices)
     final_actions = np.array([], dtype=np.int32); window_details_list = []
@@ -596,7 +707,7 @@ def generate_actions_sliding_window_arithmetic(ticker_data: pd.DataFrame, window
     progress_bar.empty()
     return final_actions, pd.DataFrame(window_details_list)
 
-# ! NEW: 3.6 Geometric Sequence Strategy (from v2)
+# ! NEW: 3.7 Geometric Sequence Strategy (from v2)
 def generate_actions_sliding_window_geometric(ticker_data: pd.DataFrame, window_size: int, num_samples: int, master_seed: int) -> Tuple[np.ndarray, pd.DataFrame]:
     prices = ticker_data['Close'].to_numpy(); n = len(prices)
     final_actions = np.array([], dtype=np.int32); window_details_list = []
@@ -673,8 +784,8 @@ def render_settings_tab(config: Dict[str, Any]):
     st.subheader("พารามิเตอร์สำหรับกลยุทธ์แบบ Search")
     c1, c2, c3 = st.columns(3)
     st.session_state.num_seeds = c1.number_input("จำนวน Seeds (Random/Chaotic)", min_value=100, value=st.session_state.num_seeds, format="%d")
-    st.session_state.num_samples = c2.number_input("จำนวน Samples (Sequence)", min_value=100, value=st.session_state.num_samples, format="%d", help="จำนวนการสุ่ม Parameter (a1, d, r) ในแต่ละ Window")
-    st.session_state.master_seed = c3.number_input("Master Seed (Sequence)", value=st.session_state.master_seed, format="%d", help="Seed หลักสำหรับกลยุทธ์ Sequence เพื่อผลลัพธ์ที่ทำซ้ำได้")
+    st.session_state.num_samples = c2.number_input("จำนวน Samples (Sequence/LFSR)", min_value=100, value=st.session_state.num_samples, format="%d", help="จำนวนการสุ่ม Parameter (a1,d,r) หรือ (Seed,Taps) ในแต่ละ Window")
+    st.session_state.master_seed = c3.number_input("Master Seed (Sequence/LFSR)", value=st.session_state.master_seed, format="%d", help="Seed หลักสำหรับกลยุทธ์ Sequence/LFSR เพื่อผลลัพธ์ที่ทำซ้ำได้")
 
     st.subheader("พารามิเตอร์สำหรับ Genetic Algorithm")
     ga_c1, ga_c2, ga_c3 = st.columns(3)
@@ -880,6 +991,50 @@ def render_ga_test_tab():
         st.dataframe(df_windows[['window_number', 'timeline', 'window_seed', 'max_net', 'price_change_pct', 'action_count', 'action_sequence']], use_container_width=True)
         csv = df_windows.to_csv(index=False)
         st.download_button(label="📥 ดาวน์โหลด GA Window Details (CSV)", data=csv, file_name=f'best_ga_{ticker}_{st.session_state.window_size}w.csv', mime='text/csv')
+
+# ! NEW: UI Tab for LFSR Strategy (INTEGRATED)
+def render_lfsr_tab():
+    """แสดงผล UI สำหรับ Tab LFSR (Characteristic Polynomial)"""
+    st.write("---")
+    st.markdown(f"### 🧬 ทดสอบด้วย {Strategy.LFSR_SEARCH}")
+    st.info("กลยุทธ์นี้จะค้นหา **Seed (สถานะเริ่มต้น 32-bit)** และ **Taps (สมการ Recurrence)** ของ LFSR ที่ให้ผลตอบแทนดีที่สุดในแต่ละ Window")
+
+    if st.button(f"🚀 เริ่มทดสอบ {Strategy.LFSR_SEARCH}", type="primary", key="lfsr_test_button"):
+        if st.session_state.start_date >= st.session_state.end_date:
+            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้องในแท็บ 'การตั้งค่า'"); return
+            
+        ticker = st.session_state.test_ticker; start_date_str = st.session_state.start_date.strftime('%Y-%m-%d'); end_date_str = st.session_state.end_date.strftime('%Y-%m-%d')
+        st.info(f"กำลังดึงข้อมูลสำหรับ **{ticker}** | {start_date_str} ถึง {end_date_str}")
+        ticker_data = get_ticker_data(ticker, start_date_str, end_date_str)
+        if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
+        
+        prices = ticker_data['Close'].to_numpy(); num_days = len(prices)
+        with st.spinner("กำลังคำนวณกลยุทธ์ต่างๆ (LFSR Search)..."):
+            actions, df_windows = generate_actions_sliding_window_lfsr(
+                ticker_data, st.session_state.window_size, st.session_state.num_samples,
+                st.session_state.master_seed, st.session_state.max_workers
+            )
+            actions_min = generate_actions_rebalance_daily(num_days)
+            actions_max = generate_actions_perfect_foresight(prices.tolist())
+            
+            results = {}; strategy_map = {
+                Strategy.LFSR_SEARCH: actions.tolist(),
+                Strategy.REBALANCE_DAILY: actions_min.tolist(),
+                Strategy.PERFECT_FORESIGHT: actions_max.tolist()
+            }
+            for strategy_name, actions_list in strategy_map.items():
+                df = run_simulation(prices.tolist(), actions_list)
+                if not df.empty: df.index = ticker_data.index[:len(df)]
+                results[strategy_name] = df
+        
+        st.success("การทดสอบเสร็จสมบูรณ์!")
+        st.write("---")
+        display_comparison_charts(results)
+        
+        st.write(f"📈 **สรุปผลการค้นหาด้วย {Strategy.LFSR_SEARCH}**")
+        st.dataframe(df_windows[['window_number', 'timeline', 'max_net', 'best_seed', 'best_taps', 'action_count']], use_container_width=True)
+        csv = df_windows.to_csv(index=False)
+        st.download_button(label="📥 ดาวน์โหลด LFSR Details (CSV)", data=csv, file_name=f'lfsr_seq_{ticker}.csv', mime='text/csv')
 
 # ! NEW: UI Tab for Arithmetic Sequence (from v2)
 def render_arithmetic_tab():
@@ -1254,7 +1409,7 @@ def main():
         "🚀 Best Seed (Random)",
         "🌀 Best Seed (Chaotic)",
         "🧬 Best Seed (Genetic Algo)",
-        # ! NEW: Added from v2
+        "🧬 LFSR (Characteristic Poly)", # ! INTEGRATED
         "📈 Arithmetic Seq",
         "📉 Geometric Seq",
         "📊 Advanced Analytics",
@@ -1266,36 +1421,33 @@ def main():
     with tabs[1]: render_test_tab()
     with tabs[2]: render_chaotic_test_tab()
     with tabs[3]: render_ga_test_tab()
-    # ! NEW: Added from v2
-    with tabs[4]: render_arithmetic_tab()
-    with tabs[5]: render_geometric_tab()
-    with tabs[6]: render_analytics_tab()
-    with tabs[7]: render_manual_seed_tab(config)
+    with tabs[4]: render_lfsr_tab() # ! INTEGRATED
+    with tabs[5]: render_arithmetic_tab()
+    with tabs[6]: render_geometric_tab()
+    with tabs[7]: render_analytics_tab()
+    with tabs[8]: render_manual_seed_tab(config)
 
-    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (v.Optimized + Sequence Models)"):
+    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (v.Optimized + Multi-Strategy)"):
         st.markdown("""
         ### หลักการทำงานของเวอร์ชันนี้:
 
-        **เป้าหมาย: คง Logic เดิม 100% แต่ต้องการความเร็วสูงสุด และเพิ่มโมเดลใหม่ๆ**
+        **เป้าหมาย: รวมกลยุทธ์หลากหลายรูปแบบเข้าด้วยกัน โดยยังคงความเร็วสูงสุด**
 
-        1.  **Logic ดั้งเดิม (Random/Chaotic/GA)**:
-            - ใช้ `ThreadPoolExecutor` ในการกระจายงานเพื่อค้นหา Best Seed พร้อมๆ กันหลาย CPU Core (สำหรับ Random/Chaotic)
-            - ใช้ `np.random.default_rng(seed)` หรือ `Logistic Map` หรือ `Genetic Algorithm` ในการสร้าง `action sequence` จาก `seed` ที่กำหนด
-            - **ดังนั้น Best Seed ที่หาได้จะตรงกับโค้ดต้นฉบับทุกประการ**
+        1.  **⚡ Core Acceleration**:
+            - ฟังก์ชันที่ทำงานช้าที่สุดคือ `_calculate_simulation_numba` ซึ่งเป็น Loop คำนวณผลการเทรด
+            - ฟังก์ชันนี้ถูกเร่งความเร็วด้วย **Numba (`@njit`)** ซึ่งจะแปลงโค้ด Python ในส่วนนี้ให้เป็น Machine Code ที่ทำงานเร็วเทียบเท่าภาษา C
+            - กลยุทธ์ที่ต้องค้นหา (Search) เช่น Random, Chaotic, GA, LFSR, และ Sequence-based จะใช้ `ThreadPoolExecutor` ในการกระจายงานเพื่อค้นหาพร้อมๆ กันหลาย CPU Core
 
-        2.  **✨ โมเดลใหม่ (Sequence-based)**:
+        2.  **กลยุทธ์ที่ใช้ในการสร้าง Action Sequence**:
+            - **Random/Chaotic/GA**: กลยุทธ์ดั้งเดิมที่ใช้ `np.random.default_rng(seed)`, `Logistic Map`, หรือ `Genetic Algorithm` ในการสร้าง `action sequence` จาก `seed` ที่กำหนด
+            - **🧬 LFSR (Characteristic Poly)**: ประยุกต์ใช้หลักการ Linear Feedback Shift Register โดยจะค้นหา **Seed (สถานะเริ่มต้น)** และ **Taps (สมการเวียนเกิด)** ที่ดีที่สุดเพื่อสร้าง Action ที่มีโครงสร้างซับซ้อน
             - **📈 Arithmetic Sequence**: สร้าง Action จากสมการลำดับเลขคณิต `Action(t) = sigmoid(a1 + t * d)` โดย `t` คือลำดับวันใน Window ระบบจะสุ่มหาค่า `a1` และ `d` ที่ดีที่สุด
             - **📉 Geometric Sequence**: สร้าง Action จากสมการลำดับเรขาคณิต `Action(t) = sigmoid(a1 * r^t)` ระบบจะสุ่มหาค่า `a1` และ `r` ที่ดีที่สุด
-            - โมเดลเหล่านี้ช่วยสร้าง Action ที่มีรูปแบบ (Pattern) มากกว่าการสุ่มแบบอิสระ
 
-        3.  **⚡ Core Acceleration**:
-            - ฟังก์ชันที่ทำงานช้าที่สุดคือ `_calculate_simulation_numba` ซึ่งเป็น Loop คำนวณผลการเทรดที่ต้องรันเป็นแสนๆ รอบ
-            - ฟังก์ชันนี้ถูกเร่งความเร็วด้วย **Numba (`@njit`)** ซึ่งเป็น Just-In-Time Compiler ที่จะแปลงโค้ด Python ในส่วนนี้ให้เป็น Machine Code ที่ทำงานเร็วเทียบเท่าภาษา C
-            - มีการใช้ `cache=True` ทำให้ Numba คอมไพล์โค้ดแค่ครั้งแรกเท่านั้น การรันครั้งถัดไปจะเร็วทันที
-        
-        4.  **ผลลัพธ์**:
+        3.  **ผลลัพธ์**:
             - ได้ทั้ง **ความถูกต้องของตรรกะ (Correctness)** เหมือนเดิม
             - และ **ความเร็วที่เพิ่มขึ้นอย่างมหาศาล (Performance)** จากการเร่งความเร็วเฉพาะส่วนที่เป็นคอขวด (Bottleneck) จริงๆ
+            - สามารถเปรียบเทียบประสิทธิภาพของกลยุทธ์การสร้าง Sequence ที่แตกต่างกันได้อย่างครบถ้วน
         """)
 
 if __name__ == "__main__":
