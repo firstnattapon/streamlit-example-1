@@ -6,7 +6,7 @@ import streamlit as st
 import thingspeak
 import json
 import streamlit.components.v1 as components
-from typing import List
+from typing import List 
 
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
 
