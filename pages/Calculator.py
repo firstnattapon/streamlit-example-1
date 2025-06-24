@@ -96,8 +96,7 @@ def average_cf(cf_config):
     field_data = client.get_field_last(field=f"{cf_config['field']}")
     value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
     adjusted_value = value -  (cf_config.get('offset', 0))
-    # return adjusted_value / count_data
-    return  count_data
+    return adjusted_value / count_data
 
 @st.cache_data(ttl=60)
 def production_cost(ticker, t0, fix):
@@ -166,7 +165,6 @@ def main():
     if avg_cf_config:
         cf_day = average_cf(avg_cf_config)
         st.write(f"average_cf_day: {cf_day:.2f} USD  :  average_cf_mo: {cf_day * 30:.2f} USD")
-        st.write("{}".format(cf_day)) # new 
     else:
         st.warning("`average_cf_config` not found in configuration file.")
     st.write('____')
