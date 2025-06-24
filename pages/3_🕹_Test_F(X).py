@@ -6,6 +6,7 @@ import streamlit as st
 import thingspeak
 import json
 import streamlit.components.v1 as components
+from typing import List
 
 st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
 
@@ -29,6 +30,73 @@ if not ASSETS:
     st.stop()
 
 TICKERS = [a['symbol'] for a in ASSETS]
+
+
+# === ACTION GENERATION LOGIC (NEW) ===
+class SimulationTracer:
+    """
+    A class to encapsulate the entire process, from decoding parameters
+    to simulating the mutation process of an action sequence.
+    """
+    def __init__(self, encoded_string: str):
+        self.encoded_string: str = encoded_string
+        # Ensure the input is always a string
+        if not isinstance(self.encoded_string, str):
+            self.encoded_string = str(self.encoded_string)
+
+        self._decode_and_set_attributes()
+
+    def _decode_and_set_attributes(self):
+        encoded_string = self.encoded_string
+        if not encoded_string.isdigit():
+            self.action_length: int = 0
+            self.mutation_rate: int = 0
+            self.dna_seed: int = 0
+            self.mutation_seeds: List[int] = []
+            self.mutation_rate_float: float = 0.0
+            return
+
+        decoded_numbers = []
+        idx = 0
+        try:
+            while idx < len(encoded_string):
+                length_of_number = int(encoded_string[idx])
+                idx += 1
+                number_str = encoded_string[idx : idx + length_of_number]
+                idx += length_of_number
+                decoded_numbers.append(int(number_str))
+        except (IndexError, ValueError):
+            pass
+
+        if len(decoded_numbers) < 3:
+            self.action_length: int = 0
+            self.mutation_rate: int = 0
+            self.dna_seed: int = 0
+            self.mutation_seeds: List[int] = []
+            self.mutation_rate_float: float = 0.0
+            return
+
+        self.action_length: int = decoded_numbers[0]
+        self.mutation_rate: int = decoded_numbers[1]
+        self.dna_seed: int = decoded_numbers[2]
+        self.mutation_seeds: List[int] = decoded_numbers[3:]
+        self.mutation_rate_float: float = self.mutation_rate / 100.0
+
+    def run(self) -> np.ndarray:
+        if self.action_length <= 0:
+            return np.array([])
+            
+        dna_rng = np.random.default_rng(seed=self.dna_seed)
+        current_actions = dna_rng.integers(0, 2, size=self.action_length)
+        if self.action_length > 0:
+            current_actions[0] = 1
+        for m_seed in self.mutation_seeds:
+            mutation_rng = np.random.default_rng(seed=m_seed)
+            mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
+            current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
+            if self.action_length > 0:
+                current_actions[0] = 1
+        return current_actions
 
 
 # === DATA FETCHING & CALCULATION FUNCTIONS ===
@@ -61,11 +129,11 @@ def get_act_from_thingspeak(channel_id, api_key, field):
         value = json.loads(act_json).get(f"field{field}")
         if value is None:
             st.warning(f"Field {field} on channel {channel_id} returned null. Using default value 0.")
-            return 0
-        return int(value)
+            return "0"
+        return str(value) # Return as string for SimulationTracer
     except Exception as e:
         st.error(f"Could not fetch data from ThingSpeak (Channel: {channel_id}, Field: {field}). Error: {e}")
-        return 0
+        return "0"
 
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=1500):
@@ -130,7 +198,7 @@ def get_max_action(price_list, fix=1500):
     return actions
 
 @st.cache_data(ttl=600)
-def Limit_fx(Ticker, act=-1):
+def Limit_fx(Ticker, act):
     filter_date = '2023-01-01 12:00:00+07:00'
     try:
         tickerData = yf.Ticker(Ticker)
@@ -152,13 +220,26 @@ def Limit_fx(Ticker, act=-1):
     elif act == -2:
         actions = get_max_action(prices)
     else:
-        rng = np.random.default_rng(act)
-        actions = rng.integers(0, 2, len(prices))
+        # Use the new SimulationTracer to generate actions
+        tracer = SimulationTracer(str(act))
+        # Override the decoded length with the actual length of the price data
+        tracer.action_length = len(prices)
+        actions = tracer.run()
+        # Ensure 'actions' is not empty if 'prices' is not empty
+        if len(actions) == 0 and len(prices) > 0:
+            actions = np.ones(len(prices), dtype=np.int64) # Fallback
 
-    buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
+    # Slice prices to match actions length, as calculate_optimized uses len(actions)
+    prices_sliced = prices[:len(actions)]
+    
+    buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices_sliced)
+    
+    if len(sumusd) == 0:
+        return pd.DataFrame()
+
     initial_capital = sumusd[0]
     df = pd.DataFrame({
-        'price': prices,
+        'price': prices_sliced,
         'action': actions,
         'buffer': buffer,
         'sumusd': sumusd,
@@ -167,7 +248,7 @@ def Limit_fx(Ticker, act=-1):
         'amount': amount,
         'refer': refer + initial_capital,
         'net': sumusd - refer - initial_capital
-    }, index=tickerData.index)
+    }, index=tickerData.index[:len(actions)])
     return df
 
 # === UI FUNCTIONS ===
@@ -207,12 +288,17 @@ tab_dict = dict(zip(tab_names, tabs))
 for asset in ASSETS:
     symbol = asset['symbol']
     with tab_dict[symbol]:
-        act = get_act_from_thingspeak(
+        # Fetch 'act' which is now an encoded string for the tracer
+        act_value = get_act_from_thingspeak(
             channel_id=asset['channel_id'],
             api_key=asset['write_api_key'],
             field=asset['field']
         )
-        plot(symbol, act)
+        if act_value.isdigit():
+             plot(symbol, act=act_value)
+        else: # Handle case where thingspeak might return non-numeric error strings
+             st.warning(f"Invalid action seed '{act_value}' from ThingSpeak for {symbol}. Using fallback.")
+             plot(symbol, act=-1) # Use a default like 'always buy'
 
 # === REF_INDEX_LOG TAB (FIXED) ===
 with tab_dict['Ref_index_Log']:
