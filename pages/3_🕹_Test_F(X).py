@@ -405,9 +405,10 @@ for config in ASSET_CONFIGS:
         'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
     }
 
-# --- START: REFACTORED SECTION TO USE TABS ---
-# 1. Pre-calculate data needed for tab labels
-tab_labels = []
+# --- START: REFACTORED SECTION TO USE VERTICAL RADIO BUTTONS ---
+
+# 1. Pre-calculate data and generate labels for the radio buttons
+radio_labels = []
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
     asset_val = asset_inputs.get(ticker, 0.0)
@@ -415,17 +416,17 @@ for config in ASSET_CONFIGS:
     df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
 
     # --- Calculate Action and determine its Emoji color ---
-    action_emoji = "⚪" # Default: White circle for N/A
+    action_emoji = "⚪" # Default
     try:
         if not df_data.empty and df_data.action.values[1 + nex] != "":
             raw_action = df_data.action.values[1 + nex]
             final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
             if final_action == 1:
-                action_emoji = "🟢" # Green for action 1
+                action_emoji = "🟢"
             elif final_action == 0:
-                action_emoji = "🔴" # Red for action 0
-    except (IndexError, TypeError, ValueError):
-        pass # Keep default emoji if action not available
+                action_emoji = "🔴"
+    except Exception:
+        pass
 
     # --- Calculate P/L ---
     pl_value = 0.0
@@ -435,32 +436,48 @@ for config in ASSET_CONFIGS:
             pv = current_price * asset_val
             pl_value = pv - fix_c
     except Exception:
-        pass # Keep default values if price fetch fails
+        pass
 
-    # 2. Format the label string with plain text and emojis
+    # --- Format the label string ---
     label = f"{ticker} {action_emoji} | P/L: {pl_value:,.2f}"
-    tab_labels.append(label)
+    radio_labels.append(label)
 
-# 3. Create tabs with the new, informative labels
-tabs = st.tabs(tab_labels)
+# Create a dictionary for quick lookup of config by ticker
+configs_by_ticker = {c['ticker']: c for c in ASSET_CONFIGS}
 
-# 4. Iterate through tabs and populate content (logic remains the same)
-for i, config in enumerate(ASSET_CONFIGS):
-    with tabs[i]:
-        ticker = config['ticker']
-        df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
-        asset_last = last_assets_all.get(ticker, 0.0)
-        asset_val = asset_inputs.get(ticker, 0.0)
-        calc = calculations.get(ticker, {})
+# 2. Create the vertical radio button list
+# Use label_visibility="collapsed" to hide the main "Select Asset" title
+selected_label = st.radio(
+    "Select Asset",
+    radio_labels,
+    label_visibility="collapsed"
+)
+
+# 3. Display the content for ONLY the selected asset
+if selected_label:
+    # Extract the ticker from the start of the label string
+    selected_ticker = selected_label.split()[0]
+    
+    # Find the corresponding configuration
+    config = configs_by_ticker.get(selected_ticker)
+
+    if config:
+        # Retrieve pre-fetched and pre-calculated data for the selected asset
+        df_data, fx_js_str = monitor_data_all.get(selected_ticker, (pd.DataFrame(), "0"))
+        asset_last = last_assets_all.get(selected_ticker, 0.0)
+        asset_val = asset_inputs.get(selected_ticker, 0.0)
+        calc = calculations.get(selected_ticker, {})
         
-        st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
+        # Render the UI for the selected asset (the logic here is identical to the old version)
+        st.write(f"**{selected_ticker}** (f(x): `{fx_js_str}`)")
         trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
         
         with st.expander("Show Raw Data Action"):
             st.dataframe(df_data, use_container_width=True)
             
         st.write("_____")
-# --- END: REFACTORED SECTION TO USE TABS ---
+
+# --- END: REFACTORED SECTION ---
 
 
 if st.sidebar.button("RERUN"):
