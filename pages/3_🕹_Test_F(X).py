@@ -1,4 +1,4 @@
-# 📈_Monitor.py  
+# 📈_Monitor.py
 import streamlit as st
 import numpy as np
 import datetime
@@ -90,8 +90,16 @@ def load_config(file_path='monitor_config.json'):
     if not os.path.exists(file_path):
         st.error(f"Configuration file not found: {file_path}")
         return None
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        st.error(f"Error decoding JSON from {file_path}: {e}")
+        return None
+    except Exception as e:
+        st.error(f"Error reading configuration file {file_path}: {e}")
+        return None
+
 
 CONFIG_DATA = load_config()
 if not CONFIG_DATA:
@@ -170,7 +178,7 @@ def get_cached_price(ticker, max_age=30):
             _price_cache[ticker] = price
             _cache_timestamp[ticker] = now
         return price
-    except:
+    except Exception:
         return 0.0
 
 # ---------- DATA FETCHING ----------
@@ -197,7 +205,7 @@ def Monitor(asset_config, _clients_ref, start_date):
             retrieved_val = json.loads(field_data)[f"field{field_num}"]
             if retrieved_val is not None:
                 fx_js_str = str(retrieved_val)
-        except (json.JSONDecodeError, KeyError, TypeError):
+        except (json.JSONDecodeError, KeyError, TypeError, thingspeak.ThingSpeakError):
             fx_js_str = "0"
 
         tickerData['index'] = list(range(len(tickerData)))
@@ -249,7 +257,7 @@ def fetch_asset(asset_config, client):
         field_name = asset_config['field']
         data = client.get_field_last(field=field_name)
         return float(json.loads(data)[field_name])
-    except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError, thingspeak.ThingSpeakError):
         return 0.0
 
 @st.cache_data(ttl=60)
@@ -270,24 +278,27 @@ def get_all_assets_from_thingspeak(configs, _clients_ref):
                 assets[ticker] = future.result()
             except Exception as e:
                 st.error(f"Error fetching asset for ticker {ticker}: {str(e)}")
+                assets[ticker] = 0.0
     return assets
 
 # ---------- UI SECTION ----------
 def render_asset_inputs(configs, last_assets):
-    cols = st.columns(len(configs))
+    num_cols = len(configs)
+    cols = st.columns(num_cols)
     asset_inputs = {}
     for i, config in enumerate(configs):
         with cols[i]:
             ticker = config['ticker']
             last_asset_val = last_assets.get(ticker, 0.0)
+            
             if config.get('option_config'):
                 option_val = config['option_config']['base_value']
                 label = config['option_config']['label']
-                real_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_real")
+                real_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_real", format="%.2f")
                 asset_inputs[ticker] = option_val + real_val
             else:
                 label = f'{ticker}_ASSET'
-                asset_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_asset")
+                asset_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_asset", format="%.2f")
                 asset_inputs[ticker] = asset_val
     return asset_inputs
 
@@ -304,7 +315,7 @@ def render_asset_update_controls(configs, clients):
                     try:
                         client = clients[asset_conf['channel_id']]
                         client.update({field_name: add_val})
-                        st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
+                        st.success(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
                         clear_all_caches()
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
@@ -318,10 +329,9 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
         try:
             if df_data.empty or df_data.action.values[1 + nex] == "":
                 return 0
-                
-            val = df_data.action.values[1 + nex]
+            val = int(df_data.action.values[1 + nex])
             return 1 - val if Nex_day_sell == 1 else val
-        except Exception:
+        except (IndexError, ValueError):
             return 0
 
     action_val = get_action_val()
@@ -329,16 +339,18 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
     if not limit_order:
         return
 
-    sell_calc, buy_calc = calc['sell'], calc['buy']
+    buy_calc, sell_calc = calc['buy'], calc['sell'] # Swapped logic to match display
+    
+    # Sell section (uses buy_calc logic from original code)
     st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
-    col1, col2, col3 = st.columns(3)
-    if col3.checkbox(f'sell_match_{ticker}'):
-        if col3.button(f"GO_SELL_{ticker}"):
+    _, _, col3 = st.columns(3)
+    if col3.checkbox(f'sell_match_{ticker}', key=f"sell_match_check_{ticker}"):
+        if col3.button(f"GO_SELL_{ticker}", key=f"go_sell_btn_{ticker}"):
             try:
                 client = clients[asset_conf['channel_id']]
                 new_asset_val = asset_last - buy_calc[1]
                 client.update({field_name: new_asset_val})
-                col3.write(f"Updated: {new_asset_val}")
+                col3.success(f"Updated: {new_asset_val}")
                 clear_all_caches()
             except Exception as e:
                 st.error(f"Failed to SELL {ticker}: {e}")
@@ -359,15 +371,16 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
     except Exception:
         st.warning(f"Could not retrieve price data for {ticker}.")
 
-    col4, col5, col6 = st.columns(3)
+    # Buy section (uses sell_calc logic from original code)
     st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
-    if col6.checkbox(f'buy_match_{ticker}'):
-        if col6.button(f"GO_BUY_{ticker}"):
+    _, _, col6 = st.columns(3)
+    if col6.checkbox(f'buy_match_{ticker}', key=f"buy_match_check_{ticker}"):
+        if col6.button(f"GO_BUY_{ticker}", key=f"go_buy_btn_{ticker}"):
             try:
                 client = clients[asset_conf['channel_id']]
                 new_asset_val = asset_last + sell_calc[1]
                 client.update({field_name: new_asset_val})
-                col6.write(f"Updated: {new_asset_val}")
+                col6.success(f"Updated: {new_asset_val}")
                 clear_all_caches()
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
@@ -392,7 +405,10 @@ Start = control_cols[0].checkbox('start')
 if Start:
     render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
+# --- START: MODIFIED SECTION ---
+with st.expander("Asset Holdings", expanded=True):
+    asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
+# --- END: MODIFIED SECTION ---
 st.write("_____")
 
 calculations = {}
@@ -419,13 +435,13 @@ for config in ASSET_CONFIGS:
     action_emoji = "⚪"
     try:
         if not df_data.empty and df_data.action.values[1 + nex] != "":
-            raw_action = df_data.action.values[1 + nex]
+            raw_action = int(df_data.action.values[1 + nex])
             final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
             if final_action == 1:
-                action_emoji = "🟢"
+                action_emoji = "🟢" # Buy
             elif final_action == 0:
-                action_emoji = "🔴"
-    except Exception:
+                action_emoji = "🔴" # Sell
+    except (IndexError, ValueError):
         pass
 
     # --- Calculate P/L ---
