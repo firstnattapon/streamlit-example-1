@@ -421,30 +421,29 @@ for config in ASSET_CONFIGS:
             raw_action = df_data.action.values[1 + nex]
             final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
             if final_action == 1:
-                action_emoji = "🟢"
+                action_emoji = "🟢" # Green for action 1
             elif final_action == 0:
-                action_emoji = "🔴"
+                action_emoji = "🔴" # Red for action 0
     except (IndexError, TypeError, ValueError):
         pass # Keep default emoji if action not available
 
-    # --- Calculate P/L and determine its text color ---
+    # --- Calculate P/L and determine its Emoji color ---
     pl_value = 0.0
-    pl_color = "gray" # Default color
+    pl_emoji = "⚪" # Default: White circle
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0 and asset_val > 0:
             pv = current_price * asset_val
             pl_value = pv - fix_c
             if pl_value > 0:
-                pl_color = "green"
+                pl_emoji = "🟢" # Green for positive P/L
             elif pl_value < 0:
-                pl_color = "red"
+                pl_emoji = "🔴" # Red for negative P/L
     except Exception:
         pass # Keep default values if price fetch fails
 
-    # 2. Format the P/L string with Markdown for color and combine all parts
-    pl_markdown = f"<span style='color:{pl_color};'>P/L: {pl_value:,.2f}</span>"
-    label = f"{ticker} {action_emoji} | {pl_markdown}"
+    # 2. Format the label string with plain text and emojis
+    label = f"{ticker} Action: {action_emoji} | P/L: {pl_emoji} {pl_value:,.2f}"
     tab_labels.append(label)
 
 # 3. Create tabs with the new, informative labels
