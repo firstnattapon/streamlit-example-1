@@ -413,7 +413,7 @@ def main():
 
     # --- 3. RENDER MAIN DASHBOARD ---
     with st.expander("📈 Trading Dashboard", expanded=True):
-        tab_labels = [f"{asset['ticker']} {asset['action_emoji']} | P/L: {asset['pl_value']:,.2f}" for asset in processed_assets]
+        tab_labels = [f"{asset['ticker']} {asset['action_emoji']} |" for asset in processed_assets]
         tabs = st.tabs(tab_labels)
         
         for i, asset_data in enumerate(processed_assets):
