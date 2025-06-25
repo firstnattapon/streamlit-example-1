@@ -390,12 +390,6 @@ def main():
                 elif final_action == 0: action_emoji = "🔴"  # Sell
         except (IndexError, ValueError): pass
 
-        # Calculate P/L for tab label
-        pl_value = 0.0
-        current_price = get_cached_price(ticker)
-        if current_price > 0 and asset_val > 0:
-            pl_value = (current_price * asset_val) - config['fix_c']
-        
         processed_assets.append({
             "config": config,
             "ticker": ticker,
@@ -407,23 +401,22 @@ def main():
                 'buy': buy(asset_val, config['fix_c'], diff_val),
                 'sell': sell(asset_val, config['fix_c'], diff_val)
             },
-            "action_emoji": action_emoji,
-            "pl_value": pl_value
+            "action_emoji": action_emoji
         })
 
     # --- 3. RENDER MAIN DASHBOARD ---
-    with st.expander("📈 Trading Dashboard", expanded=True):
-        tab_labels = [f"{asset['ticker']} {asset['action_emoji']} |" for asset in processed_assets]
-        tabs = st.tabs(tab_labels)
-        
-        for i, asset_data in enumerate(processed_assets):
-            with tabs[i]:
-                st.write(f"**{asset_data['ticker']}** (f(x): `{asset_data['fx_js_str']}`)")
-                trading_section(asset_data, nex, nex_day_sell, thingspeak_clients)
-                
-                st.write("_____")
-                with st.expander("Show Raw Data Action"):
-                    st.dataframe(asset_data['df_data'], use_container_width=True)
+    st.header("📈 Trading Dashboard")
+    tab_labels = [f"{asset['ticker']} {asset['action_emoji']} |" for asset in processed_assets]
+    tabs = st.tabs(tab_labels)
+    
+    for i, asset_data in enumerate(processed_assets):
+        with tabs[i]:
+            st.write(f"**{asset_data['ticker']}** (f(x): `{asset_data['fx_js_str']}`)")
+            trading_section(asset_data, nex, nex_day_sell, thingspeak_clients)
+            
+            st.write("_____")
+            with st.expander("Show Raw Data Action"):
+                st.dataframe(asset_data['df_data'], use_container_width=True)
 
     if st.sidebar.button("RERUN"):
         clear_all_caches()
