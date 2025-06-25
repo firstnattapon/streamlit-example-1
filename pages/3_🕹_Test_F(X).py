@@ -6,12 +6,12 @@ import pandas as pd
 import yfinance as yf
 import json
 from functools import lru_cache
-from threading import Lock 
+from threading import Lock
 import os
 from typing import List, Dict, Any
 import asyncio
 import aiohttp
-import thingspeak # Keep this for the synchronous update part
+import thingspeak
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
@@ -295,7 +295,7 @@ def main():
             elif final_action == 0: action_emoji = "🔴"
         except: pass
         current_price = get_cached_price(ticker)
-        pl_value = (current_price * asset_val) - config['fix_c'] if current_price > 0 else 0.0
+        pl_value = (current_price * asset_val) - config['fix_c'] if current_price > 0 and asset_val > 0 else 0.0
         processed_assets.append({
             "config": config, "ticker": ticker, "df_data": df_data, "fx_js_str": fx_js_str,
             "asset_last": last_assets_all.get(ticker, 0.0), "asset_val": asset_val,
