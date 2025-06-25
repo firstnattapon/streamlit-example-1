@@ -59,7 +59,7 @@ class SimulationTracer:
     def run(self) -> np.ndarray:
         if self.action_length <= 0:
             return np.array([])
-            
+
         dna_rng = np.random.default_rng(seed=self.dna_seed)
         current_actions = dna_rng.integers(0, 2, size=self.action_length)
         if self.action_length > 0:
@@ -161,12 +161,12 @@ def get_cached_price(ticker: str, max_age_seconds: int = 30) -> float:
         return 0.0
 
 # ---------- DATA FETCHING LOGIC (REFACTORED FOR PERFORMANCE) ----------
-def _fetch_monitor_data_worker(asset_config: Dict, _clients_ref: Dict, start_date: str) -> (pd.DataFrame, str):
+def _fetch_monitor_data_worker(asset_config: Dict, clients_ref: Dict, start_date: str) -> (pd.DataFrame, str):
     """(Worker Function) Fetches monitor data for a single asset. Not cached directly."""
     ticker = asset_config['ticker']
     try:
         monitor_field_config = asset_config['monitor_field']
-        client = _clients_ref[monitor_field_config['channel_id']]
+        client = clients_ref[monitor_field_config['channel_id']]
         field_num = monitor_field_config['field']
 
         ticker_data = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
@@ -205,8 +205,11 @@ def _fetch_monitor_data_worker(asset_config: Dict, _clients_ref: Dict, start_dat
         return pd.DataFrame(), "0"
 
 @st.cache_data(ttl=300)
-def fetch_all_monitor_data(configs: List[Dict], clients_ref: Dict, start_date: str) -> Dict[str, Any]:
+def fetch_all_monitor_data(configs: List[Dict], start_date: str) -> Dict[str, Any]:
     """(Cached) Fetches all monitor data concurrently and caches the entire result set."""
+    # *** FIX: Get clients from @st.cache_resource inside the function ***
+    clients_ref = get_thingspeak_clients(configs)
+    
     results = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
         future_to_ticker = {
@@ -234,8 +237,11 @@ def _fetch_asset_helper(asset_config: Dict, clients_ref: Dict) -> float:
         return 0.0
 
 @st.cache_data(ttl=60)
-def get_all_assets_from_thingspeak(configs: List[Dict], clients_ref: Dict) -> Dict[str, float]:
+def get_all_assets_from_thingspeak(configs: List[Dict]) -> Dict[str, float]:
     """(Cached) Fetches all asset values from ThingSpeak concurrently and caches the result."""
+    # *** FIX: Get clients from @st.cache_resource inside the function ***
+    clients_ref = get_thingspeak_clients(configs)
+    
     assets = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
         future_to_ticker = {
@@ -353,6 +359,7 @@ def main():
     asset_configs = config_data['assets']
     global_start_date = config_data.get('global_settings', {}).get('start_date')
     
+    # *** FIX: Don't pass clients to cached functions later, they will get them internally ***
     thingspeak_clients = get_thingspeak_clients(asset_configs)
     
     # --- 1. RENDER CONTROLS AND GET USER INPUTS ---
@@ -374,20 +381,19 @@ def main():
             render_asset_update_controls(asset_configs, thingspeak_clients)
 
         with st.expander("Asset Holdings", expanded=True):
-            # ***PERFORMANCE IMPROVEMENT: Call new cached function***
-            last_assets_all = get_all_assets_from_thingspeak(asset_configs, thingspeak_clients)
+            # *** FIX: Call cached function without the unhashable clients argument ***
+            last_assets_all = get_all_assets_from_thingspeak(asset_configs)
             asset_inputs = render_asset_inputs(asset_configs, last_assets_all)
 
     st.write("_____")
 
     # --- 2. FETCH & PROCESS ALL DATA ---
-    # ***PERFORMANCE IMPROVEMENT: Call new cached function***
-    monitor_data_all = fetch_all_monitor_data(asset_configs, thingspeak_clients, global_start_date)
-    
+    # *** FIX: Call cached function without the unhashable clients argument ***
+    monitor_data_all = fetch_all_monitor_data(asset_configs, global_start_date)
+    last_assets_all = get_all_assets_from_thingspeak(asset_configs) # Get from cache again
+
     processed_assets = []
-    # Fetch all prices concurrently before the loop to avoid multiple calls inside the loop
     all_prices = {config['ticker']: get_cached_price(config['ticker']) for config in asset_configs}
-    last_assets_all = get_all_assets_from_thingspeak(asset_configs, thingspeak_clients) # Get from cache again
 
     for config in asset_configs:
         ticker = config['ticker']
