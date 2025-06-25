@@ -479,6 +479,7 @@ with st.expander("📈 Trading Dashboard", expanded=True):
 
     # 4. Iterate through tabs and populate content
     for i, config in enumerate(ASSET_CONFIGS):
+        st.write("_____")
         with tabs[i]:
             ticker = config['ticker']
             df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
