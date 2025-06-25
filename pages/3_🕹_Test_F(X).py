@@ -390,48 +390,35 @@ monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLO
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
 # --- START: REFACTORED CONTROL SECTION ---
-# 1. กำหนดค่าเริ่มต้นให้กับตัวแปรที่จะถูกแก้ไขโดยส่วนควบคุม
-#    เพื่อให้ตัวแปรเหล่านี้พร้อมใช้งานสำหรับส่วนที่เหลือของโปรแกรม
 nex, Nex_day_sell = 0, 0
 
-# 2. สร้าง expander หลักเพียงอันเดียวเพื่อรวมส่วนควบคุมทั้งหมด
 with st.expander("⚙️ Controls & Asset Setup", expanded=True):
     
-    # 3. จัดการส่วนควบคุมที่ต้องวางในแนวนอน (Diff, start)
-    #    โดยสร้าง st.columns ภายใน expander เพื่อรักษา layout เดิม
     control_cols = st.columns(8)
-    x_2 = control_cols[7].number_input('Diff', step=1, value=60) # Item 2: Diff
-    Start = control_cols[0].checkbox('start') # Item 3: start
+    x_2 = control_cols[7].number_input('Diff', step=1, value=60) 
+    Start = control_cols[0].checkbox('start')
 
-    # 4. จัดกลุ่ม Logic ของ nex_day (Item 1: nex_day)
     Nex_day_ = st.checkbox('nex_day')
     if Nex_day_:
-        # ใช้ columns เพื่อจัดวางปุ่มให้ดูเรียบร้อย
         nex_col, sell_col, _ = st.columns([1, 1, 6]) 
         if nex_col.button("Nex_day"):
             nex = 1
         if sell_col.button("Nex_day_sell"):
             nex, Nex_day_sell = 1, 1
         
-        # แสดงสถานะของค่า nex และ Nex_day_sell
         status_text = f"nex value = {nex}"
         if Nex_day_sell:
             status_text += f" | Nex_day_sell = {Nex_day_sell}"
         st.write(status_text)
     
-    st.write("---") # เส้นคั่นเพื่อความสวยงาม
+    st.write("---") 
 
-    # 5. จัดการ Logic ของ 'start' ที่จะแสดงส่วนควบคุมการอัปเดต Asset (Item 3: start)
     if Start:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-    # 6. ส่วนสำหรับกรอกข้อมูล Asset (Item 4: Asset Holdings)
-    #    ใช้ expander ซ้อนข้างในเพื่อจัดกลุ่มให้ชัดเจน
     with st.expander("Asset Holdings", expanded=True):
         asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
 
-# เนื่องจาก Streamlit จะรันสคริปต์ใหม่ทั้งหมดทุกครั้งที่มีการโต้ตอบ
-# ตัวแปร `asset_inputs` ที่ถูกสร้างขึ้นภายใน expander จะพร้อมใช้งานสำหรับโค้ดส่วนที่เหลือเสมอ
 st.write("_____")
 # --- END: REFACTORED CONTROL SECTION ---
 
@@ -446,64 +433,64 @@ for config in ASSET_CONFIGS:
         'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
     }
 
-# --- START: REFACTORED SECTION TO USE st.tabs FOR PERFORMANCE ---
 
-# 1. Pre-calculate data needed for tab labels
-tab_labels = []
-for config in ASSET_CONFIGS:
-    ticker = config['ticker']
-    asset_val = asset_inputs.get(ticker, 0.0)
-    fix_c = config['fix_c']
-    df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
-
-    # --- Calculate Action and determine its Emoji color ---
-    action_emoji = "⚪"
-    try:
-        if not df_data.empty and df_data.action.values[1 + nex] != "":
-            raw_action = int(df_data.action.values[1 + nex])
-            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
-            if final_action == 1:
-                action_emoji = "🟢" # Buy
-            elif final_action == 0:
-                action_emoji = "🔴" # Sell
-    except (IndexError, ValueError):
-        pass
-
-    # --- Calculate P/L ---
-    pl_value = 0.0
-    try:
-        current_price = get_cached_price(ticker)
-        if current_price > 0 and asset_val > 0:
-            pv = current_price * asset_val
-            pl_value = pv - fix_c
-    except Exception:
-        pass
-
-    # 2. Format the label string
-    label = f"{ticker} {action_emoji} | P/L: {pl_value:,.2f}"
-    tab_labels.append(label)
-
-# 3. Create tabs with the new, informative labels
-tabs = st.tabs(tab_labels)
-
-# 4. Iterate through tabs and populate content
-for i, config in enumerate(ASSET_CONFIGS):
-    with tabs[i]:
+# --- START: ASSET TABS WRAPPED IN EXPANDER ---
+with st.expander("📈 Trading Dashboard", expanded=True):
+    # 1. Pre-calculate data needed for tab labels
+    tab_labels = []
+    for config in ASSET_CONFIGS:
         ticker = config['ticker']
-        df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
-        asset_last = last_assets_all.get(ticker, 0.0)
         asset_val = asset_inputs.get(ticker, 0.0)
-        calc = calculations.get(ticker, {})
-        
-        st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
-        trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
-        
-        with st.expander("Show Raw Data Action"):
-            st.dataframe(df_data, use_container_width=True)
-            
-        st.write("_____")
+        fix_c = config['fix_c']
+        df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
 
-# --- END: REFACTORED SECTION ---
+        # --- Calculate Action and determine its Emoji color ---
+        action_emoji = "⚪"
+        try:
+            if not df_data.empty and df_data.action.values[1 + nex] != "":
+                raw_action = int(df_data.action.values[1 + nex])
+                final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
+                if final_action == 1:
+                    action_emoji = "🟢" # Buy
+                elif final_action == 0:
+                    action_emoji = "🔴" # Sell
+        except (IndexError, ValueError):
+            pass
+
+        # --- Calculate P/L ---
+        pl_value = 0.0
+        try:
+            current_price = get_cached_price(ticker)
+            if current_price > 0 and asset_val > 0:
+                pv = current_price * asset_val
+                pl_value = pv - fix_c
+        except Exception:
+            pass
+
+        # 2. Format the label string
+        label = f"{ticker} {action_emoji} | P/L: {pl_value:,.2f}"
+        tab_labels.append(label)
+
+    # 3. Create tabs with the new, informative labels
+    tabs = st.tabs(tab_labels)
+
+    # 4. Iterate through tabs and populate content
+    for i, config in enumerate(ASSET_CONFIGS):
+        with tabs[i]:
+            ticker = config['ticker']
+            df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
+            asset_last = last_assets_all.get(ticker, 0.0)
+            asset_val = asset_inputs.get(ticker, 0.0)
+            calc = calculations.get(ticker, {})
+            
+            st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
+            trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
+            
+            with st.expander("Show Raw Data Action"):
+                st.dataframe(df_data, use_container_width=True)
+                
+            st.write("_____")
+# --- END: ASSET TABS WRAPPED IN EXPANDER ---
 
 
 if st.sidebar.button("RERUN"):
