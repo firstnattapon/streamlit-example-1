@@ -417,19 +417,17 @@ for config in ASSET_CONFIGS:
     # --- START: MODIFICATION FOR EMOJI ---
     action_emoji = ""
     try:
-        # Check if data is available and the action value is not empty
         if not df_data.empty and df_data.action.values[1 + nex] != "":
             raw_action = int(df_data.action.values[1 + nex])
-            # Determine final action based on Nex_day_sell flag
             final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
             if final_action == 1:
-                action_emoji = " 🟢"  # Buy
+                action_emoji = "🟢 "  # Buy, with a space
             elif final_action == 0:
-                action_emoji = " 🔴"  # Sell
+                action_emoji = "🔴 "  # Sell, with a space
     except (IndexError, ValueError):
-        action_emoji = "" # No emoji if data is unavailable or not a number
+        action_emoji = "" 
     
-    st.write(f"**{ticker}** (f(x): `{fx_js_str}`){action_emoji}")
+    st.write(f"{action_emoji}**{ticker}** (f(x): `{fx_js_str}`)")
     # --- END: MODIFICATION FOR EMOJI ---
 
     trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
