@@ -1,4 +1,4 @@
-# 📈_Monitor.py
+# pages/3_🕹_Test_F(X).py
 import streamlit as st
 import numpy as np
 import datetime
@@ -160,10 +160,9 @@ def get_cached_price(ticker: str, max_age_seconds: int = 30) -> float:
     except Exception:
         return 0.0
 
-# ---------- DATA FETCHING LOGIC ----------
-@st.cache_data(ttl=300)
-def fetch_monitor_data(asset_config: Dict, _clients_ref: Dict, start_date: str) -> (pd.DataFrame, str):
-    """Fetches monitor data and generates actions using SimulationTracer for a single asset."""
+# ---------- DATA FETCHING LOGIC (REFACTORED FOR PERFORMANCE) ----------
+def _fetch_monitor_data_worker(asset_config: Dict, _clients_ref: Dict, start_date: str) -> (pd.DataFrame, str):
+    """(Worker Function) Fetches monitor data for a single asset. Not cached directly."""
     ticker = asset_config['ticker']
     try:
         monitor_field_config = asset_config['monitor_field']
@@ -183,7 +182,7 @@ def fetch_monitor_data(asset_config: Dict, _clients_ref: Dict, start_date: str) 
             if retrieved_val is not None:
                 fx_js_str = str(retrieved_val)
         except (json.JSONDecodeError, KeyError, TypeError, thingspeak.ThingSpeakError):
-            pass # Keep default "0"
+            pass
 
         ticker_data['index'] = range(len(ticker_data))
         dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
@@ -202,15 +201,16 @@ def fetch_monitor_data(asset_config: Dict, _clients_ref: Dict, start_date: str) 
         return df.tail(7), fx_js_str
     
     except Exception as e:
-        st.error(f"Error in fetch_monitor_data for {ticker}: {e}")
+        st.error(f"Error in _fetch_monitor_data_worker for {ticker}: {e}")
         return pd.DataFrame(), "0"
 
-def fetch_all_data_concurrently(fetch_function, configs, clients_ref, *args):
-    """Generic concurrent executor for fetching data."""
+@st.cache_data(ttl=300)
+def fetch_all_monitor_data(configs: List[Dict], clients_ref: Dict, start_date: str) -> Dict[str, Any]:
+    """(Cached) Fetches all monitor data concurrently and caches the entire result set."""
     results = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
         future_to_ticker = {
-            executor.submit(fetch_function, asset, clients_ref, *args): asset['ticker']
+            executor.submit(_fetch_monitor_data_worker, asset, clients_ref, start_date): asset['ticker']
             for asset in configs
         }
         for future in concurrent.futures.as_completed(future_to_ticker):
@@ -219,22 +219,39 @@ def fetch_all_data_concurrently(fetch_function, configs, clients_ref, *args):
                 results[ticker] = future.result()
             except Exception as e:
                 st.error(f"Error in concurrent task for {ticker}: {e}")
-                results[ticker] = (pd.DataFrame(), "0") if fetch_function == fetch_monitor_data else 0.0
+                results[ticker] = (pd.DataFrame(), "0")
     return results
 
-def _fetch_asset_helper(asset_config, clients_ref):
-    """Helper to fetch a single asset value for concurrency."""
-    asset_field_conf = asset_config['asset_field']
-    client = clients_ref.get(asset_field_conf['channel_id'])
+def _fetch_asset_helper(asset_config: Dict, clients_ref: Dict) -> float:
+    """(Worker Function) Helper to fetch a single asset value."""
+    client = clients_ref.get(asset_config['channel_id'])
     if not client: return 0.0
     try:
-        field_name = asset_field_conf['field']
+        field_name = asset_config['field']
         data = client.get_field_last(field=field_name)
         return float(json.loads(data)[field_name])
     except (json.JSONDecodeError, KeyError, ValueError, TypeError, thingspeak.ThingSpeakError):
         return 0.0
 
-# ---------- UI COMPONENTS ----------
+@st.cache_data(ttl=60)
+def get_all_assets_from_thingspeak(configs: List[Dict], clients_ref: Dict) -> Dict[str, float]:
+    """(Cached) Fetches all asset values from ThingSpeak concurrently and caches the result."""
+    assets = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
+        future_to_ticker = {
+            executor.submit(_fetch_asset_helper, asset['asset_field'], clients_ref): asset['ticker']
+            for asset in configs
+        }
+        for future in concurrent.futures.as_completed(future_to_ticker):
+            ticker = future_to_ticker[future]
+            try:
+                assets[ticker] = future.result()
+            except Exception as e:
+                st.error(f"Error fetching asset for ticker {ticker}: {e}")
+                assets[ticker] = 0.0
+    return assets
+
+# ---------- UI COMPONENTS (Unchanged) ----------
 def render_asset_inputs(configs, last_assets):
     """Renders the number input widgets for asset holdings."""
     cols = st.columns(len(configs))
@@ -275,7 +292,6 @@ def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict
     asset_conf = config['asset_field']
     df_data = asset_data['df_data']
     
-    # Determine the action for the limit order checkbox
     try:
         if df_data.empty or df_data.action.values[1 + nex] == "":
             action_val = 0
@@ -288,13 +304,9 @@ def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict
     if not st.checkbox(f'Limit_Order_{ticker}', value=bool(action_val), key=f'limit_order_{ticker}'):
         return
 
-    # Unpack pre-calculated values
-    # NOTE: The original logic uses 'buy_calc' for the sell section and vice-versa.
-    # This behavior is preserved for logical consistency with the original script.
     sell_calc, buy_calc = asset_data['calculations']['buy'], asset_data['calculations']['sell']
     asset_last, asset_val = asset_data['asset_last'], asset_data['asset_val']
     
-    # --- Sell Section ---
     st.write('sell', '    ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     _, _, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}', key=f"sell_match_check_{ticker}"):
@@ -308,7 +320,6 @@ def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict
             except Exception as e:
                 st.error(f"Failed to SELL {ticker}: {e}")
 
-    # --- P/L Display ---
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -322,7 +333,6 @@ def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict
     except Exception:
         st.warning(f"Could not retrieve price data for {ticker}.")
 
-    # --- Buy Section ---
     st.write('buy', '   ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
     _, _, col6 = st.columns(3)
     if col6.checkbox(f'buy_match_{ticker}', key=f"buy_match_check_{ticker}"):
@@ -343,7 +353,6 @@ def main():
     asset_configs = config_data['assets']
     global_start_date = config_data.get('global_settings', {}).get('start_date')
     
-    # Initialize Thingspeak Clients
     thingspeak_clients = get_thingspeak_clients(asset_configs)
     
     # --- 1. RENDER CONTROLS AND GET USER INPUTS ---
@@ -365,34 +374,37 @@ def main():
             render_asset_update_controls(asset_configs, thingspeak_clients)
 
         with st.expander("Asset Holdings", expanded=True):
-            # Fetch last known assets to pre-fill inputs
-            last_assets_all = fetch_all_data_concurrently(_fetch_asset_helper, asset_configs, thingspeak_clients)
+            # ***PERFORMANCE IMPROVEMENT: Call new cached function***
+            last_assets_all = get_all_assets_from_thingspeak(asset_configs, thingspeak_clients)
             asset_inputs = render_asset_inputs(asset_configs, last_assets_all)
 
     st.write("_____")
 
     # --- 2. FETCH & PROCESS ALL DATA ---
-    monitor_data_all = fetch_all_data_concurrently(fetch_monitor_data, asset_configs, thingspeak_clients, global_start_date)
+    # ***PERFORMANCE IMPROVEMENT: Call new cached function***
+    monitor_data_all = fetch_all_monitor_data(asset_configs, thingspeak_clients, global_start_date)
     
     processed_assets = []
+    # Fetch all prices concurrently before the loop to avoid multiple calls inside the loop
+    all_prices = {config['ticker']: get_cached_price(config['ticker']) for config in asset_configs}
+    last_assets_all = get_all_assets_from_thingspeak(asset_configs, thingspeak_clients) # Get from cache again
+
     for config in asset_configs:
         ticker = config['ticker']
         df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
         asset_val = asset_inputs.get(ticker, 0.0)
         
-        # Determine action emoji for tab label
         action_emoji = "⚪"
         try:
             if not df_data.empty and df_data.action.values[1 + nex] != "":
                 raw_action = int(df_data.action.values[1 + nex])
                 final_action = 1 - raw_action if nex_day_sell == 1 else raw_action
-                if final_action == 1: action_emoji = "🟢"  # Buy
-                elif final_action == 0: action_emoji = "🔴"  # Sell
+                if final_action == 1: action_emoji = "🟢"
+                elif final_action == 0: action_emoji = "🔴"
         except (IndexError, ValueError): pass
 
-        # Calculate P/L for tab label
         pl_value = 0.0
-        current_price = get_cached_price(ticker)
+        current_price = all_prices.get(ticker, 0.0)
         if current_price > 0 and asset_val > 0:
             pl_value = (current_price * asset_val) - config['fix_c']
         
