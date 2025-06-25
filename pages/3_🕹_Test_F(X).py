@@ -489,9 +489,9 @@ with st.expander("📈 Trading Dashboard", expanded=True):
             st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
             trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
             
+            st.write("_____")
             with st.expander("Show Raw Data Action"):
                 st.dataframe(df_data, use_container_width=True)
                 
-
 if st.sidebar.button("RERUN"):
     clear_all_caches()
