@@ -427,23 +427,18 @@ for config in ASSET_CONFIGS:
     except (IndexError, TypeError, ValueError):
         pass # Keep default emoji if action not available
 
-    # --- Calculate P/L and determine its Emoji color ---
+    # --- Calculate P/L ---
     pl_value = 0.0
-    pl_emoji = "⚪" # Default: White circle
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0 and asset_val > 0:
             pv = current_price * asset_val
             pl_value = pv - fix_c
-            if pl_value > 0:
-                pl_emoji = "🟢" # Green for positive P/L
-            elif pl_value < 0:
-                pl_emoji = "🔴" # Red for negative P/L
     except Exception:
         pass # Keep default values if price fetch fails
 
     # 2. Format the label string with plain text and emojis
-    label = f"{ticker} Action: {action_emoji} | P/L: {pl_emoji} {pl_value:,.2f}"
+    label = f"{ticker} {action_emoji} | P/L: {pl_value:,.2f}"
     tab_labels.append(label)
 
 # 3. Create tabs with the new, informative labels
