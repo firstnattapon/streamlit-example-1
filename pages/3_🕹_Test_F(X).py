@@ -492,9 +492,6 @@ with st.expander("📈 Trading Dashboard", expanded=True):
             with st.expander("Show Raw Data Action"):
                 st.dataframe(df_data, use_container_width=True)
                 
-            st.write("_____")
-# --- END: ASSET TABS WRAPPED IN EXPANDER ---
-
 
 if st.sidebar.button("RERUN"):
     clear_all_caches()
