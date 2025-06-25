@@ -408,12 +408,46 @@ for config in ASSET_CONFIGS:
     }
 
 # --- START: REFACTORED SECTION TO USE TABS ---
-# Create a list of tab names from the asset tickers
-ticker_names = [config['ticker'] for config in ASSET_CONFIGS]
-# Create the tabs
-tabs = st.tabs(ticker_names)
+# 1. Pre-calculate data needed for tab labels
+tab_labels = []
+for config in ASSET_CONFIGS:
+    ticker = config['ticker']
+    asset_val = asset_inputs.get(ticker, 0.0)
+    fix_c = config['fix_c']
+    df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
 
-# Iterate through the tabs and the corresponding asset configurations
+    # Calculate P/L
+    pl_value = 0.0
+    pl_emoji = "⚪"  # Default: White circle for no data
+    try:
+        current_price = get_cached_price(ticker)
+        if current_price > 0 and asset_val > 0:
+            pv = current_price * asset_val
+            pl_value = pv - fix_c
+            pl_emoji = "🟢" if pl_value >= 0 else "🔴" # Green / Red circle
+    except Exception:
+        pass # Keep default if price fetch fails
+
+    # Calculate Action for display
+    action_display = "N/A"
+    try:
+        # Check if data exists and is not an empty string
+        if not df_data.empty and df_data.action.values[1 + nex] != "":
+            raw_action = df_data.action.values[1 + nex]
+            # Apply Nex_day_sell logic
+            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
+            action_display = str(final_action)
+    except (IndexError, TypeError, ValueError):
+        pass # Keep N/A if action not available
+
+    # 2. Format the label string
+    label = f"{ticker} {pl_emoji} P/L: {pl_value:,.2f} | Action: {action_display}"
+    tab_labels.append(label)
+
+# 3. Create tabs with the new, informative labels
+tabs = st.tabs(tab_labels)
+
+# 4. Iterate through tabs and populate content (logic remains the same)
 for i, config in enumerate(ASSET_CONFIGS):
     with tabs[i]:
         ticker = config['ticker']
@@ -424,7 +458,6 @@ for i, config in enumerate(ASSET_CONFIGS):
         calc = calculations.get(ticker, {})
         
         # Render the UI for the asset inside its tab
-        # The UI and logic here are identical to the original version
         st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
         trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
         
