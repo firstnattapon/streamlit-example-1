@@ -405,62 +405,61 @@ for config in ASSET_CONFIGS:
         'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
     }
 
-# --- START: REFACTORED SECTION TO USE st.tabs FOR PERFORMANCE ---
+# --- START: REFACTORED SECTION TO USE st.columns FOR HORIZONTAL LAYOUT ---
 
-# 1. Pre-calculate data needed for tab labels
-tab_labels = []
-for config in ASSET_CONFIGS:
-    ticker = config['ticker']
-    asset_val = asset_inputs.get(ticker, 0.0)
-    fix_c = config['fix_c']
-    df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
+# 1. Create a column for each asset
+cols = st.columns(len(ASSET_CONFIGS))
 
-    # --- Calculate Action and determine its Emoji color ---
-    action_emoji = "⚪"
-    try:
-        if not df_data.empty and df_data.action.values[1 + nex] != "":
-            raw_action = df_data.action.values[1 + nex]
-            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
-            if final_action == 1:
-                action_emoji = "🟢"
-            elif final_action == 0:
-                action_emoji = "🔴"
-    except Exception:
-        pass
-
-    # --- Calculate P/L ---
-    pl_value = 0.0
-    try:
-        current_price = get_cached_price(ticker)
-        if current_price > 0 and asset_val > 0:
-            pv = current_price * asset_val
-            pl_value = pv - fix_c
-    except Exception:
-        pass
-
-    # 2. Format the label string
-    label = f"{ticker} {action_emoji} | P/L: {pl_value:,.2f}"
-    tab_labels.append(label)
-
-# 3. Create tabs with the new, informative labels
-tabs = st.tabs(tab_labels)
-
-# 4. Iterate through tabs and populate content
+# 2. Iterate through each column and its corresponding asset configuration
 for i, config in enumerate(ASSET_CONFIGS):
-    with tabs[i]:
+    with cols[i]:
+        # --- Retrieve all necessary data for this specific asset ---
         ticker = config['ticker']
         df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
         asset_last = last_assets_all.get(ticker, 0.0)
         asset_val = asset_inputs.get(ticker, 0.0)
         calc = calculations.get(ticker, {})
+
+        # --- Calculate display values (P/L, emoji, etc.) ---
+        # Action Emoji
+        action_emoji = "⚪"
+        try:
+            if not df_data.empty and df_data.action.values[1 + nex] != "":
+                raw_action = df_data.action.values[1 + nex]
+                final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
+                if final_action == 1:
+                    action_emoji = "🟢"
+                elif final_action == 0:
+                    action_emoji = "🔴"
+        except Exception:
+            pass
+
+        # P/L Value
+        pl_value = 0.0
+        current_price = get_cached_price(ticker)
+        try:
+            if current_price > 0 and asset_val > 0:
+                pv = current_price * asset_val
+                pl_value = pv - config['fix_c']
+        except Exception:
+            pass
+            
+        # --- Render the UI for this asset's column ---
         
-        st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
+        # Line 1: Ticker (Label: Value@Price)
+        label_text = config.get('option_config', {}).get('label', 'Val')
+        price_str = f"@{current_price:,.2f}" if current_price > 0 else ""
+        st.subheader(f"{ticker} ({label_text}:{asset_val:,.2f}{price_str})")
+
+        # Line 2: Status (Emoji | P/L)
+        st.write(f"{action_emoji} | P/L: {pl_value:,.2f}")
+        st.write("---") # Visual separator
+
+        # The rest of the trading logic for this asset
         trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
         
         with st.expander("Show Raw Data Action"):
             st.dataframe(df_data, use_container_width=True)
-            
-        st.write("_____")
 
 # --- END: REFACTORED SECTION ---
 
