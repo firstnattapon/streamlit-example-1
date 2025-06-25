@@ -392,7 +392,7 @@ last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIEN
 # --- START: REORDERED CONTROL SECTION ---
 nex, Nex_day_sell = 0, 0
 
-with st.expander("⚙️ Controls & Asset Setup", expanded=True):
+with st.expander("⚙️ Controls & Asset Setup", expanded=False):
     
     # --- 1. nex_day section ---
     Nex_day_ = st.checkbox('nex_day')
