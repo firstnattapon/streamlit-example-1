@@ -390,39 +390,48 @@ monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLO
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
 # --- START: REFACTORED CONTROL SECTION ---
-# Initialize variables that will be modified by the controls inside the expander
+# 1. กำหนดค่าเริ่มต้นให้กับตัวแปรที่จะถูกแก้ไขโดยส่วนควบคุม
+#    เพื่อให้ตัวแปรเหล่านี้พร้อมใช้งานสำหรับส่วนที่เหลือของโปรแกรม
 nex, Nex_day_sell = 0, 0
 
-# Define columns for controls that are spread out, like Diff and Start
-control_cols = st.columns(8)
-x_2 = control_cols[7].number_input('Diff', step=1, value=60)
-
-# A single expander to hold all primary controls
+# 2. สร้าง expander หลักเพียงอันเดียวเพื่อรวมส่วนควบคุมทั้งหมด
 with st.expander("⚙️ Controls & Asset Setup", expanded=True):
     
-    # --- Nex Day Controls ---
+    # 3. จัดการส่วนควบคุมที่ต้องวางในแนวนอน (Diff, start)
+    #    โดยสร้าง st.columns ภายใน expander เพื่อรักษา layout เดิม
+    control_cols = st.columns(8)
+    x_2 = control_cols[7].number_input('Diff', step=1, value=60) # Item 2: Diff
+    Start = control_cols[0].checkbox('start') # Item 3: start
+
+    # 4. จัดกลุ่ม Logic ของ nex_day (Item 1: nex_day)
     Nex_day_ = st.checkbox('nex_day')
     if Nex_day_:
-        nex_col, Nex_day_sell_col, *_ = st.columns([1,1,3]) # Adjusted column ratios
-        if nex_col.button("Nex_day"): nex = 1
-        if Nex_day_sell_col.button("Nex_day_sell"):
+        # ใช้ columns เพื่อจัดวางปุ่มให้ดูเรียบร้อย
+        nex_col, sell_col, _ = st.columns([1, 1, 6]) 
+        if nex_col.button("Nex_day"):
+            nex = 1
+        if sell_col.button("Nex_day_sell"):
             nex, Nex_day_sell = 1, 1
-        st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
+        
+        # แสดงสถานะของค่า nex และ Nex_day_sell
+        status_text = f"nex value = {nex}"
+        if Nex_day_sell:
+            status_text += f" | Nex_day_sell = {Nex_day_sell}"
+        st.write(status_text)
     
-    st.write("---")
-    
-    # --- Start/Update Controls ---
-    Start = control_cols[0].checkbox('start')
+    st.write("---") # เส้นคั่นเพื่อความสวยงาม
+
+    # 5. จัดการ Logic ของ 'start' ที่จะแสดงส่วนควบคุมการอัปเดต Asset (Item 3: start)
     if Start:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-    # --- Nested Asset Holdings Section ---
+    # 6. ส่วนสำหรับกรอกข้อมูล Asset (Item 4: Asset Holdings)
+    #    ใช้ expander ซ้อนข้างในเพื่อจัดกลุ่มให้ชัดเจน
     with st.expander("Asset Holdings", expanded=True):
         asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
 
-# This line now correctly gets the 'asset_inputs' dictionary created inside the expander
-# because Streamlit runs the script top-down on every interaction.
-
+# เนื่องจาก Streamlit จะรันสคริปต์ใหม่ทั้งหมดทุกครั้งที่มีการโต้ตอบ
+# ตัวแปร `asset_inputs` ที่ถูกสร้างขึ้นภายใน expander จะพร้อมใช้งานสำหรับโค้ดส่วนที่เหลือเสมอ
 st.write("_____")
 # --- END: REFACTORED CONTROL SECTION ---
 
