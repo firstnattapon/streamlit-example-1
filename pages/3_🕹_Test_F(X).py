@@ -1,4 +1,4 @@
-# 📈_Monitor.py (Async Performance Version)
+# 📈_Monitor.py (Async Performance - Corrected Version)
 import streamlit as st
 import numpy as np
 import datetime
@@ -11,10 +11,11 @@ import os
 from typing import List, Dict, Any
 import asyncio
 import aiohttp
+import thingspeak # Keep this for the synchronous update part
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
-# --- START: โค้ดจาก action_simulationTracer.py (Unchanged) ---
+# --- START: SimulationTracer Class (Unchanged) ---
 class SimulationTracer:
     def __init__(self, encoded_string: str):
         self.encoded_string: str = str(encoded_string) if not isinstance(encoded_string, str) else encoded_string
@@ -53,41 +54,28 @@ class SimulationTracer:
             current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
             if self.action_length > 0: current_actions[0] = 1
         return current_actions
-# --- END: โค้ดจาก action_simulationTracer.py ---
-
+# --- END: SimulationTracer Class ---
 
 # ---------- CONFIGURATION & SETUP ----------
 @st.cache_data
 def load_config(file_path: str = 'monitor_config.json') -> Dict[str, Any]:
     if not os.path.exists(file_path):
-        st.error(f"Configuration file not found: {file_path}")
-        st.stop()
+        st.error(f"Configuration file not found: {file_path}"); st.stop()
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        with open(file_path, 'r', encoding='utf-8') as f: config = json.load(f)
         if 'assets' not in config or not config['assets']:
-            st.error("No 'assets' list found or it is empty in monitor_config.json")
-            st.stop()
+            st.error("No 'assets' list found or it is empty in monitor_config.json"); st.stop()
         return config
     except Exception as e:
-        st.error(f"Error reading or parsing configuration file {file_path}: {e}")
-        st.stop()
+        st.error(f"Error reading or parsing configuration file {file_path}: {e}"); st.stop()
 
 # ---------- GLOBAL CACHE & CLIENT MANAGEMENT ----------
 _cache_lock = Lock()
-_price_cache = {}
-_cache_timestamp = {}
+_price_cache, _cache_timestamp = {}, {}
 
-# --- ASYNC CLIENTS ---
-@st.cache_resource
-def get_aiohttp_session():
-    # สร้าง session แค่ครั้งเดียวสำหรับประสิทธิภาพสูงสุด
-    return aiohttp.ClientSession()
-
-# ThingSpeak client for asset updates (non-async part)
+# CORRECT: Keep sync client for sync operations (like updating assets)
 @st.cache_resource
 def get_thingspeak_clients(configs: List[Dict]):
-    import thingspeak # Import here to avoid circular dependency issues
     clients = {}
     unique_channels = set()
     for config in configs:
@@ -101,19 +89,13 @@ def get_thingspeak_clients(configs: List[Dict]):
             st.warning(f"Failed to create sync client for Channel ID {channel_id}: {e}")
     return clients
 
-
 def clear_all_caches():
-    st.cache_data.clear()
-    st.cache_resource.clear()
-    sell.cache_clear()
-    buy.cache_clear()
-    with _cache_lock:
-        _price_cache.clear()
-        _cache_timestamp.clear()
-    st.success("🗑️ All caches cleared!")
-    st.rerun()
+    st.cache_data.clear(); st.cache_resource.clear()
+    sell.cache_clear(); buy.cache_clear()
+    with _cache_lock: _price_cache.clear(); _cache_timestamp.clear()
+    st.success("🗑️ All caches cleared!"); st.rerun()
 
-# ---------- CALCULATION UTILITIES ----------
+# ---------- CALCULATION UTILITIES (Unchanged) ----------
 @lru_cache(maxsize=128)
 def sell(asset: float, fix_c: int = 1500, Diff: int = 60):
     if asset == 0: return 0, 0, 0
@@ -137,47 +119,35 @@ def get_cached_price(ticker: str, max_age_seconds: int = 30) -> float:
             return _price_cache[ticker]
     try:
         price = yf.Ticker(ticker).fast_info['lastPrice']
-        with _cache_lock:
-            _price_cache[ticker] = price
-            _cache_timestamp[ticker] = now
+        with _cache_lock: _price_cache[ticker] = price; _cache_timestamp[ticker] = now
         return price
     except Exception: return 0.0
 
-# ---------- ASYNCHRONOUS DATA FETCHING LOGIC ----------
-
+# ---------- ASYNCHRONOUS DATA FETCHING LOGIC (Corrected) ----------
 async def fetch_thingspeak_field_async(session: aiohttp.ClientSession, field_config: Dict) -> str:
-    """Fetches a single field from ThingSpeak asynchronously."""
-    channel_id = field_config['channel_id']
-    api_key = field_config['api_key']
-    field_num_or_name = field_config['field']
+    channel_id, api_key, field_num_or_name = field_config['channel_id'], field_config['api_key'], field_config['field']
     url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{field_num_or_name}/last.json?api_key={api_key}"
     try:
         async with session.get(url, timeout=10) as response:
             if response.status == 200:
                 data = await response.json()
-                retrieved_val = data.get(f"field{field_num_or_name}" if isinstance(field_num_or_name, int) else field_num_or_name)
+                key = f"field{field_num_or_name}" if isinstance(field_num_or_name, int) else field_num_or_name
+                retrieved_val = data.get(key)
                 return str(retrieved_val) if retrieved_val is not None else "0"
             return "0"
-    except (asyncio.TimeoutError, aiohttp.ClientError):
-        return "0"
+    except Exception: return "0"
 
 async def fetch_yfinance_history_async(ticker: str, start_date: str) -> pd.DataFrame:
-    """Fetches yfinance history in a non-blocking way."""
     loop = asyncio.get_event_loop()
     try:
-        ticker_data = await loop.run_in_executor(
-            None, lambda: yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-        )
+        ticker_data = await loop.run_in_executor(None, lambda: yf.Ticker(ticker).history(period='max')[['Close']].round(3))
         ticker_data.index = ticker_data.index.tz_convert(tz='Asia/bangkok')
-        if start_date:
-            ticker_data = ticker_data[ticker_data.index >= start_date]
+        if start_date: ticker_data = ticker_data[ticker_data.index >= start_date]
         return ticker_data
-    except Exception:
-        return pd.DataFrame(columns=['Close'])
+    except Exception: return pd.DataFrame(columns=['Close'])
 
 @st.cache_data(ttl=300)
 async def _fetch_monitor_data_for_cache(session: aiohttp.ClientSession, asset_config: Dict, start_date: str) -> (pd.DataFrame, str):
-    """Inner async function for fetching monitor data, decorated with Streamlit cache."""
     ticker = asset_config['ticker']
     try:
         results = await asyncio.gather(
@@ -185,66 +155,45 @@ async def _fetch_monitor_data_for_cache(session: aiohttp.ClientSession, asset_co
             fetch_thingspeak_field_async(session, asset_config['monitor_field'])
         )
         ticker_data, fx_js_str = results[0], results[1]
-
         ticker_data['index'] = range(len(ticker_data))
-        dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
-        df = pd.concat([ticker_data, dummy_df]).fillna("")
+        df = pd.concat([ticker_data, pd.DataFrame(index=[f'+{i}' for i in range(5)])]).fillna("")
         df['action'] = ""
-
         try:
             tracer = SimulationTracer(encoded_string=fx_js_str)
             final_actions = tracer.run()
             num_to_assign = min(len(df), len(final_actions))
-            if num_to_assign > 0:
-                df.iloc[:num_to_assign, df.columns.get_loc('action')] = final_actions[:num_to_assign]
-        except Exception as e:
-            st.warning(f"Tracer Error for {ticker}: {e}")
-
+            if num_to_assign > 0: df.iloc[:num_to_assign, df.columns.get_loc('action')] = final_actions[:num_to_assign]
+        except Exception as e: st.warning(f"Tracer Error for {ticker}: {e}")
         return df.tail(7), fx_js_str
     except Exception as e:
-        st.error(f"Error in async monitor fetch for {ticker}: {e}")
-        return pd.DataFrame(), "0"
+        st.error(f"Error in async monitor fetch for {ticker}: {e}"); return pd.DataFrame(), "0"
 
 @st.cache_data(ttl=60)
 async def _fetch_asset_data_for_cache(session: aiohttp.ClientSession, asset_config: Dict) -> float:
-    """Inner async function for fetching asset data, decorated with Streamlit cache."""
     try:
         result_str = await fetch_thingspeak_field_async(session, asset_config['asset_field'])
         return float(result_str)
-    except (ValueError, TypeError):
-        return 0.0
+    except (ValueError, TypeError): return 0.0
 
-async def fetch_all_data_main_async(configs: List[Dict], session: aiohttp.ClientSession, start_date: str):
-    """Gathers all data fetching tasks and runs them concurrently."""
-    monitor_tasks = [_fetch_monitor_data_for_cache(session, config, start_date) for config in configs]
-    asset_tasks = [_fetch_asset_data_for_cache(session, config) for config in configs]
-
-    all_results = await asyncio.gather(*monitor_tasks, *asset_tasks, return_exceptions=True)
-
+async def fetch_all_data_main_async(configs: List[Dict], start_date: str):
+    # CORRECT: Create the session inside the async function
+    async with aiohttp.ClientSession() as session:
+        monitor_tasks = [_fetch_monitor_data_for_cache(session, config, start_date) for config in configs]
+        asset_tasks = [_fetch_asset_data_for_cache(session, config) for config in configs]
+        all_results = await asyncio.gather(*monitor_tasks, *asset_tasks, return_exceptions=True)
+    
     num_configs = len(configs)
-    monitor_results_list = all_results[:num_configs]
-    asset_results_list = all_results[num_configs:]
-    
-    # Process results, handling potential exceptions from asyncio.gather
-    monitor_data_all = {
-        configs[i]['ticker']: res if not isinstance(res, Exception) else (pd.DataFrame(), "0")
-        for i, res in enumerate(monitor_results_list)
-    }
-    last_assets_all = {
-        configs[i]['ticker']: res if not isinstance(res, Exception) else 0.0
-        for i, res in enumerate(asset_results_list)
-    }
-    
+    monitor_results_list, asset_results_list = all_results[:num_configs], all_results[num_configs:]
+    monitor_data_all = {configs[i]['ticker']: res if not isinstance(res, Exception) else (pd.DataFrame(), "0") for i, res in enumerate(monitor_results_list)}
+    last_assets_all = {configs[i]['ticker']: res if not isinstance(res, Exception) else 0.0 for i, res in enumerate(asset_results_list)}
     return monitor_data_all, last_assets_all
 
 def run_async_in_streamlit(async_func):
-    """Helper to run an async function in a sync context like Streamlit."""
     return asyncio.run(async_func)
 
-# ---------- UI COMPONENTS (Unchanged from previous refactored version) ----------
+# ---------- UI COMPONENTS (Unchanged) ----------
 def render_asset_inputs(configs, last_assets):
-    cols = st.columns(len(configs))
-    asset_inputs = {}
+    cols, asset_inputs = st.columns(len(configs)), {}
     for i, config in enumerate(configs):
         with cols[i]:
             ticker, last_asset_val = config['ticker'], last_assets.get(ticker, 0.0)
@@ -260,40 +209,31 @@ def render_asset_update_controls(configs, clients):
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
             ticker, asset_conf = config['ticker'], config['asset_field']
-            field_name = asset_conf['field']
             if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
                 new_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
                     try:
-                        client = clients[asset_conf['channel_id']]
-                        client.update({field_name: new_val})
-                        st.success(f"Updated {ticker} to: {new_val}")
-                        clear_all_caches()
-                    except Exception as e:
-                        st.error(f"Failed to update {ticker}: {e}")
+                        clients[asset_conf['channel_id']].update({asset_conf['field']: new_val})
+                        st.success(f"Updated {ticker} to: {new_val}"); clear_all_caches()
+                    except Exception as e: st.error(f"Failed to update {ticker}: {e}")
 
 def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict):
     config, ticker, df_data = asset_data['config'], asset_data['ticker'], asset_data['df_data']
-    asset_conf = config['asset_field']
     try:
-        raw_action = int(df_data.action.values[1 + nex])
-        action_val = 1 - raw_action if nex_day_sell == 1 else raw_action
-    except (IndexError, ValueError, TypeError): action_val = 0
+        raw_action = int(df_data.action.values[1 + nex]); action_val = 1 - raw_action if nex_day_sell == 1 else raw_action
+    except: action_val = 0
     if not st.checkbox(f'Limit_Order_{ticker}', value=bool(action_val), key=f'limit_order_{ticker}'): return
-
     buy_calc, sell_calc = asset_data['calculations']['buy'], asset_data['calculations']['sell']
-    asset_last, asset_val = asset_data['asset_last'], asset_data['asset_val']
+    asset_last, asset_val, asset_conf = asset_data['asset_last'], asset_data['asset_val'], config['asset_field']
     
     st.write('sell', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     _, _, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}', key=f"sell_match_check_{ticker}"):
         if col3.button(f"GO_SELL_{ticker}", key=f"go_sell_btn_{ticker}"):
             try:
-                client = clients[asset_conf['channel_id']]
                 new_asset_val = asset_last - sell_calc[1]
-                client.update({asset_conf['field']: new_asset_val})
-                col3.success(f"Updated: {new_asset_val:.3f}")
-                clear_all_caches()
+                clients[asset_conf['channel_id']].update({asset_conf['field']: new_asset_val})
+                col3.success(f"Updated: {new_asset_val:.3f}"); clear_all_caches()
             except Exception as e: st.error(f"Failed to SELL {ticker}: {e}")
 
     try:
@@ -302,19 +242,16 @@ def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict
             pv, fix_value = current_price * asset_val, config['fix_c']
             pl_value, pl_color = pv - fix_value, "#a8d5a2" if pv - fix_value >= 0 else "#fbb"
             st.markdown(f"Price: **{current_price:,.3f}** | Value: **{pv:,.2f}** | P/L (vs {fix_value:,}) : <span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>", unsafe_allow_html=True)
-        else: st.info(f"Price data for {ticker} unavailable.")
-    except Exception: st.warning(f"Could not retrieve price for {ticker}.")
+    except: pass
 
     st.write('buy', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
     _, _, col6 = st.columns(3)
     if col6.checkbox(f'buy_match_{ticker}', key=f"buy_match_check_{ticker}"):
         if col6.button(f"GO_BUY_{ticker}", key=f"go_buy_btn_{ticker}"):
             try:
-                client = clients[asset_conf['channel_id']]
                 new_asset_val = asset_last + buy_calc[1]
-                client.update({asset_conf['field']: new_asset_val})
-                col6.success(f"Updated: {new_asset_val:.3f}")
-                clear_all_caches()
+                clients[asset_conf['channel_id']].update({asset_conf['field']: new_asset_val})
+                col6.success(f"Updated: {new_asset_val:.3f}"); clear_all_caches()
             except Exception as e: st.error(f"Failed to BUY {ticker}: {e}")
 
 # ---------- MAIN APPLICATION LOGIC ----------
@@ -322,77 +259,60 @@ def main():
     config_data = load_config()
     asset_configs = config_data['assets']
     global_start_date = config_data.get('global_settings', {}).get('start_date')
-    
-    # Get async session and sync clients
-    aio_session = get_aiohttp_session()
     thingspeak_clients = get_thingspeak_clients(asset_configs)
 
-    # --- 1. FETCH ALL DATA CONCURRENTLY (THE FAST PART) ---
     with st.spinner("Fetching all data..."):
+        # CORRECT: Call the async function without passing a session
         monitor_data_all, last_assets_all = run_async_in_streamlit(
-            fetch_all_data_main_async(asset_configs, aio_session, global_start_date)
+            fetch_all_data_main_async(asset_configs, global_start_date)
         )
 
-    # --- 2. RENDER CONTROLS AND GET USER INPUTS ---
-    with st.expander("⚙️ Controls & Asset Setup", expanded=False):
+    with st.expander("⚙️ Controls & Asset Setup", expanded=True):
         nex, nex_day_sell = 0, 0
         if st.checkbox('nex_day'):
             nex_col, sell_col, _ = st.columns([1, 1, 6])
             if nex_col.button("Nex_day"): nex = 1
             if sell_col.button("Nex_day_sell"): nex, nex_day_sell = 1, 1
-            st.write(f"nex value = {nex}" + (f" | Nex_day_sell = {nex_day_sell}" if nex_day_sell else ""))
         
         control_cols = st.columns(8)
         start_checked = control_cols[0].checkbox('start')
         diff_val = control_cols[7].number_input('Diff', step=1, value=60)
-        
         if start_checked: render_asset_update_controls(asset_configs, thingspeak_clients)
-
-        with st.expander("Asset Holdings", expanded=True):
-            asset_inputs = render_asset_inputs(asset_configs, last_assets_all)
+        asset_inputs = render_asset_inputs(asset_configs, last_assets_all)
 
     st.write("_____")
-
-    # --- 3. PROCESS DATA FOR UI ---
+    
     processed_assets = []
     for config in asset_configs:
         ticker = config['ticker']
         df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
         asset_val = asset_inputs.get(ticker, 0.0)
-        
         action_emoji = "⚪"
         try:
-            if not df_data.empty and df_data.action.values[1 + nex] != "":
-                raw_action = int(df_data.action.values[1 + nex])
-                final_action = 1 - raw_action if nex_day_sell == 1 else raw_action
-                if final_action == 1: action_emoji = "🟢"
-                elif final_action == 0: action_emoji = "🔴"
-        except (IndexError, ValueError, TypeError): pass
-
+            raw_action = int(df_data.action.values[1 + nex])
+            final_action = 1 - raw_action if nex_day_sell == 1 else raw_action
+            if final_action == 1: action_emoji = "🟢"
+            elif final_action == 0: action_emoji = "🔴"
+        except: pass
         current_price = get_cached_price(ticker)
-        pl_value = (current_price * asset_val) - config['fix_c'] if current_price > 0 and asset_val > 0 else 0.0
-        
+        pl_value = (current_price * asset_val) - config['fix_c'] if current_price > 0 else 0.0
         processed_assets.append({
             "config": config, "ticker": ticker, "df_data": df_data, "fx_js_str": fx_js_str,
             "asset_last": last_assets_all.get(ticker, 0.0), "asset_val": asset_val,
-            "calculations": { 'buy': buy(asset_val, config['fix_c'], diff_val), 'sell': sell(asset_val, config['fix_c'], diff_val) },
+            "calculations": {'buy': buy(asset_val, config['fix_c'], diff_val), 'sell': sell(asset_val, config['fix_c'], diff_val)},
             "action_emoji": action_emoji, "pl_value": pl_value
         })
 
-    # --- 4. RENDER MAIN DASHBOARD ---
     with st.expander("📈 Trading Dashboard", expanded=True):
-        tab_labels = [f"{asset['ticker']} {asset['action_emoji']} | P/L: {asset['pl_value']:,.2f}" for asset in processed_assets]
-        tabs = st.tabs(tab_labels)
+        tabs = st.tabs([f"{a['ticker']} {a['action_emoji']} | P/L: {a['pl_value']:,.2f}" for a in processed_assets])
         for i, asset_data in enumerate(processed_assets):
             with tabs[i]:
                 st.write(f"**{asset_data['ticker']}** (f(x): `{asset_data['fx_js_str']}`)")
                 trading_section(asset_data, nex, nex_day_sell, thingspeak_clients)
                 st.write("_____")
-                with st.expander("Show Raw Data Action"):
-                    st.dataframe(asset_data['df_data'], use_container_width=True)
+                with st.expander("Show Raw Data Action"): st.dataframe(asset_data['df_data'], use_container_width=True)
 
-    if st.sidebar.button("RERUN"):
-        clear_all_caches()
+    if st.sidebar.button("RERUN"): clear_all_caches()
 
 if __name__ == "__main__":
     main()
