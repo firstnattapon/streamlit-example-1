@@ -78,7 +78,6 @@ class SimulationTracer:
 # ---------- CONFIGURATION & SETUP ----------
 @st.cache_data
 def load_config(file_path: str = 'monitor_config.json') -> Dict[str, Any]:
-    """Load and validate configuration from a JSON file."""
     if not os.path.exists(file_path):
         st.error(f"Configuration file not found: {file_path}")
         st.stop()
@@ -100,7 +99,6 @@ _cache_timestamp = {}
 
 @st.cache_resource
 def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
-    """Creates and caches a dictionary of ThingSpeak clients based on the config."""
     clients = {}
     unique_channels = set()
     for config in configs:
@@ -117,7 +115,7 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
     return clients
 
 def clear_all_caches():
-    """Clears all Streamlit and custom caches."""
+    """Clears all Streamlit and custom caches, including session state data."""
     st.cache_data.clear()
     st.cache_resource.clear()
     sell.cache_clear()
@@ -125,7 +123,13 @@ def clear_all_caches():
     with _cache_lock:
         _price_cache.clear()
         _cache_timestamp.clear()
-    st.success("🗑️ All caches cleared!")
+    
+    # *** FIX: Clear session state data as well ***
+    for key in ['monitor_data_all', 'last_assets_all']:
+        if key in st.session_state:
+            del st.session_state[key]
+            
+    st.success("🗑️ All caches and session data cleared!")
     st.rerun()
 
 # ---------- CALCULATION UTILITIES ----------
@@ -146,7 +150,6 @@ def buy(asset: float, fix_c: int = 1500, Diff: int = 60):
     return unit_price, adjust_qty, total
 
 def get_cached_price(ticker: str, max_age_seconds: int = 30) -> float:
-    """Gets a ticker's price from a time-sensitive cache or fetches it."""
     now = datetime.datetime.now()
     with _cache_lock:
         if (ticker in _price_cache and (now - _cache_timestamp.get(ticker, now)).seconds < max_age_seconds):
@@ -160,9 +163,8 @@ def get_cached_price(ticker: str, max_age_seconds: int = 30) -> float:
     except Exception:
         return 0.0
 
-# ---------- DATA FETCHING LOGIC (REFACTORED FOR PERFORMANCE) ----------
+# ---------- DATA FETCHING LOGIC (Using Caching for explicit refresh) ----------
 def _fetch_monitor_data_worker(asset_config: Dict, clients_ref: Dict, start_date: str) -> (pd.DataFrame, str):
-    """(Worker Function) Fetches monitor data for a single asset. Not cached directly."""
     ticker = asset_config['ticker']
     try:
         monitor_field_config = asset_config['monitor_field']
@@ -201,15 +203,11 @@ def _fetch_monitor_data_worker(asset_config: Dict, clients_ref: Dict, start_date
         return df.tail(7), fx_js_str
     
     except Exception as e:
-        st.error(f"Error in _fetch_monitor_data_worker for {ticker}: {e}")
         return pd.DataFrame(), "0"
 
 @st.cache_data(ttl=300)
 def fetch_all_monitor_data(configs: List[Dict], start_date: str) -> Dict[str, Any]:
-    """(Cached) Fetches all monitor data concurrently and caches the entire result set."""
-    # *** FIX: Get clients from @st.cache_resource inside the function ***
     clients_ref = get_thingspeak_clients(configs)
-    
     results = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
         future_to_ticker = {
@@ -220,13 +218,11 @@ def fetch_all_monitor_data(configs: List[Dict], start_date: str) -> Dict[str, An
             ticker = future_to_ticker[future]
             try:
                 results[ticker] = future.result()
-            except Exception as e:
-                st.error(f"Error in concurrent task for {ticker}: {e}")
+            except Exception:
                 results[ticker] = (pd.DataFrame(), "0")
     return results
 
 def _fetch_asset_helper(asset_config: Dict, clients_ref: Dict) -> float:
-    """(Worker Function) Helper to fetch a single asset value."""
     client = clients_ref.get(asset_config['channel_id'])
     if not client: return 0.0
     try:
@@ -238,10 +234,7 @@ def _fetch_asset_helper(asset_config: Dict, clients_ref: Dict) -> float:
 
 @st.cache_data(ttl=60)
 def get_all_assets_from_thingspeak(configs: List[Dict]) -> Dict[str, float]:
-    """(Cached) Fetches all asset values from ThingSpeak concurrently and caches the result."""
-    # *** FIX: Get clients from @st.cache_resource inside the function ***
     clients_ref = get_thingspeak_clients(configs)
-    
     assets = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
         future_to_ticker = {
@@ -252,14 +245,12 @@ def get_all_assets_from_thingspeak(configs: List[Dict]) -> Dict[str, float]:
             ticker = future_to_ticker[future]
             try:
                 assets[ticker] = future.result()
-            except Exception as e:
-                st.error(f"Error fetching asset for ticker {ticker}: {e}")
+            except Exception:
                 assets[ticker] = 0.0
     return assets
 
 # ---------- UI COMPONENTS (Unchanged) ----------
 def render_asset_inputs(configs, last_assets):
-    """Renders the number input widgets for asset holdings."""
     cols = st.columns(len(configs))
     asset_inputs = {}
     for i, config in enumerate(configs):
@@ -275,7 +266,6 @@ def render_asset_inputs(configs, last_assets):
     return asset_inputs
 
 def render_asset_update_controls(configs, clients):
-    """Renders the UI for updating asset values on ThingSpeak."""
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
             ticker, asset_conf = config['ticker'], config['asset_field']
@@ -292,23 +282,19 @@ def render_asset_update_controls(configs, clients):
                         st.error(f"Failed to update {ticker}: {e}")
 
 def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict):
-    """Renders the main trading interface for a single asset."""
     config = asset_data['config']
     ticker = config['ticker']
     asset_conf = config['asset_field']
     df_data = asset_data['df_data']
     
     try:
-        if df_data.empty or df_data.action.values[1 + nex] == "":
-            action_val = 0
+        if df_data.empty or df_data.action.values[1 + nex] == "": action_val = 0
         else:
             raw_action = int(df_data.action.values[1 + nex])
             action_val = 1 - raw_action if nex_day_sell == 1 else raw_action
-    except (IndexError, ValueError):
-        action_val = 0
+    except (IndexError, ValueError): action_val = 0
 
-    if not st.checkbox(f'Limit_Order_{ticker}', value=bool(action_val), key=f'limit_order_{ticker}'):
-        return
+    if not st.checkbox(f'Limit_Order_{ticker}', value=bool(action_val), key=f'limit_order_{ticker}'): return
 
     sell_calc, buy_calc = asset_data['calculations']['buy'], asset_data['calculations']['sell']
     asset_last, asset_val = asset_data['asset_last'], asset_data['asset_val']
@@ -323,8 +309,7 @@ def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict
                 client.update({asset_conf['field']: new_asset_val})
                 col3.success(f"Updated: {new_asset_val}")
                 clear_all_caches()
-            except Exception as e:
-                st.error(f"Failed to SELL {ticker}: {e}")
+            except Exception as e: st.error(f"Failed to SELL {ticker}: {e}")
 
     try:
         current_price = get_cached_price(ticker)
@@ -334,10 +319,8 @@ def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
             st.markdown(f"Price: **{current_price:,.3f}** | Value: **{pv:,.2f}** | P/L (vs {fix_value:,}) : <span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>", unsafe_allow_html=True)
-        else:
-            st.info(f"Price data for {ticker} is currently unavailable.")
-    except Exception:
-        st.warning(f"Could not retrieve price data for {ticker}.")
+        else: st.info(f"Price data for {ticker} is currently unavailable.")
+    except Exception: st.warning(f"Could not retrieve price data for {ticker}.")
 
     st.write('buy', '   ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
     _, _, col6 = st.columns(3)
@@ -349,20 +332,41 @@ def trading_section(asset_data: Dict, nex: int, nex_day_sell: int, clients: Dict
                 client.update({asset_conf['field']: new_asset_val})
                 col6.success(f"Updated: {new_asset_val}")
                 clear_all_caches()
-            except Exception as e:
-                st.error(f"Failed to BUY {ticker}: {e}")
+            except Exception as e: st.error(f"Failed to BUY {ticker}: {e}")
 
 # ---------- MAIN APPLICATION LOGIC ----------
 def main():
-    """Main function to run the Streamlit application."""
     config_data = load_config()
     asset_configs = config_data['assets']
     global_start_date = config_data.get('global_settings', {}).get('start_date')
     
-    # *** FIX: Don't pass clients to cached functions later, they will get them internally ***
     thingspeak_clients = get_thingspeak_clients(asset_configs)
     
-    # --- 1. RENDER CONTROLS AND GET USER INPUTS ---
+    # *** FIX: Add a refresh button to explicitly fetch new data ***
+    if st.sidebar.button("🔄 Refresh Data"):
+        st.cache_data.clear() # Clear data cache to force re-fetch
+        # Also clear session state data
+        for key in ['monitor_data_all', 'last_assets_all']:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.success("🔄 Data refreshed!")
+        st.rerun()
+
+    # --- 1. INITIALIZE & FETCH DATA (using Session State) ---
+    # Load data only if it's not already in the session state
+    if 'monitor_data_all' not in st.session_state:
+        with st.spinner("Fetching monitor data..."):
+            st.session_state.monitor_data_all = fetch_all_monitor_data(asset_configs, global_start_date)
+    
+    if 'last_assets_all' not in st.session_state:
+        with st.spinner("Fetching asset holdings..."):
+            st.session_state.last_assets_all = get_all_assets_from_thingspeak(asset_configs)
+
+    # Always get data from session state for UI rendering
+    monitor_data_all = st.session_state.monitor_data_all
+    last_assets_all = st.session_state.last_assets_all
+
+    # --- 2. RENDER CONTROLS AND GET USER INPUTS ---
     nex, nex_day_sell = 0, 0
     with st.expander("⚙️ Controls & Asset Setup", expanded=False):
         if st.checkbox('nex_day'):
@@ -381,17 +385,12 @@ def main():
             render_asset_update_controls(asset_configs, thingspeak_clients)
 
         with st.expander("Asset Holdings", expanded=True):
-            # *** FIX: Call cached function without the unhashable clients argument ***
-            last_assets_all = get_all_assets_from_thingspeak(asset_configs)
+            # The 'last_assets_all' is now from session state, no re-fetch here
             asset_inputs = render_asset_inputs(asset_configs, last_assets_all)
 
     st.write("_____")
 
-    # --- 2. FETCH & PROCESS ALL DATA ---
-    # *** FIX: Call cached function without the unhashable clients argument ***
-    monitor_data_all = fetch_all_monitor_data(asset_configs, global_start_date)
-    last_assets_all = get_all_assets_from_thingspeak(asset_configs) # Get from cache again
-
+    # --- 3. PROCESS DATA ---
     processed_assets = []
     all_prices = {config['ticker']: get_cached_price(config['ticker']) for config in asset_configs}
 
@@ -429,7 +428,7 @@ def main():
             "pl_value": pl_value
         })
 
-    # --- 3. RENDER MAIN DASHBOARD ---
+    # --- 4. RENDER MAIN DASHBOARD ---
     with st.expander("📈 Trading Dashboard", expanded=True):
         tab_labels = [f"{asset['ticker']} {asset['action_emoji']} | P/L: {asset['pl_value']:,.2f}" for asset in processed_assets]
         tabs = st.tabs(tab_labels)
@@ -443,7 +442,7 @@ def main():
                 with st.expander("Show Raw Data Action"):
                     st.dataframe(asset_data['df_data'], use_container_width=True)
 
-    if st.sidebar.button("RERUN"):
+    if st.sidebar.button("Clear Cache & Rerun"):
         clear_all_caches()
 
 if __name__ == "__main__":
