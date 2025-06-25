@@ -4,7 +4,7 @@ import streamlit as st
 import thingspeak
 import yfinance as yf
 import json
-import concurrent.futures # <-- ใช้ตัวนี้แทน asyncio
+import concurrent.futures
 import datetime
 from threading import Lock
 from typing import Dict, Any, List
@@ -47,14 +47,14 @@ class SimpleTTLCache:
             self._cache.clear()
             self._timestamps.clear()
 
-# Global instance of our custom cache
+# Global instance of our custom cache, can be imported elsewhere
 MEM = SimpleTTLCache()
 
 # --------------------------------------------------------------------
 #                       ThingSpeak Client Management
 # --------------------------------------------------------------------
 def get_ts_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
-    cached_clients = MEM.ttl_get("ts_clients", 3600)
+    cached_clients = MEM.ttl_get("ts_clients", 3600) # Cache clients for 1 hour
     if cached_clients is not None:
         return cached_clients
 
@@ -75,9 +75,8 @@ def get_ts_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
     MEM.set("ts_clients", clients)
     return clients
 
-
 # --------------------------------------------------------------------
-#                       Concurrent Data Fetching
+#                Concurrent Data Fetching using Threads
 # --------------------------------------------------------------------
 def _fetch_worker(asset_config: Dict, ts_clients: Dict, start_date: str) -> Dict[str, Any]:
     """
@@ -93,31 +92,41 @@ def _fetch_worker(asset_config: Dict, ts_clients: Dict, start_date: str) -> Dict
         'fx_str': "0",
         'asset_val': 0.0
     }
-    # Fetch data... (logic is correct here)
+
+    # 1. Fetch yfinance history
     try:
-        history_df = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-        history_df.index = history_df.index.tz_convert(tz='Asia/bangkok')
+        history_df = yf.Ticker(ticker).history(period='max', auto_adjust=True)[['Close']].round(3)
+        history_df.index = history_df.index.tz_convert(tz='Asia/Bangkok')
         if start_date:
             history_df = history_df[history_df.index >= start_date]
         result['history'] = history_df.tail(7)
-    except Exception: pass
+    except Exception as e:
+        st.warning(f"[DataHub: yfinance] Error for {ticker}: {e}")
+
+    # 2. Fetch f(x) string from ThingSpeak
     try:
-        monitor_conf = asset_config['monitor_field']
-        client = ts_clients.get(monitor_conf['channel_id'])
+        monitor_conf = asset_config.get('monitor_field', {})
+        client = ts_clients.get(monitor_conf.get('channel_id'))
         if client:
             field_num = monitor_conf['field']
             field_data = client.get_field_last(field=str(field_num))
             retrieved_val = json.loads(field_data).get(f"field{field_num}")
-            if retrieved_val is not None: result['fx_str'] = str(retrieved_val)
-    except Exception: pass
+            if retrieved_val is not None:
+                result['fx_str'] = str(retrieved_val)
+    except Exception:
+        pass # Fail silently, fx_str will default to "0"
+
+    # 3. Fetch asset value from ThingSpeak
     try:
-        asset_conf = asset_config['asset_field']
-        client = ts_clients.get(asset_conf['channel_id'])
+        asset_conf = asset_config.get('asset_field', {})
+        client = ts_clients.get(asset_conf.get('channel_id'))
         if client:
             field_name = asset_conf['field']
             data = client.get_field_last(field=field_name)
             result['asset_val'] = float(json.loads(data)[field_name])
-    except Exception: pass
+    except Exception:
+        pass # Fail silently, asset_val will default to 0.0
+
     return result
 
 
@@ -125,7 +134,9 @@ def fetch_monitor_and_asset(configs: List[Dict], start_date: str) -> Dict[str, D
     """
     The main function of this module.
     Fetches all required data for all assets concurrently using ThreadPoolExecutor.
+    The entire result bundle is cached for 60 seconds.
     """
+    # Check cache first for the entire data bundle
     cached_bundle = MEM.ttl_get("data_bundle", 60)
     if cached_bundle:
         return cached_bundle
@@ -133,8 +144,7 @@ def fetch_monitor_and_asset(configs: List[Dict], start_date: str) -> Dict[str, D
     ts_clients = get_ts_clients(configs)
     results_bundle = {}
 
-    # --- THIS IS THE CORRECT IMPLEMENTATION ---
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs) or 1) as executor:
         future_to_ticker = {
             executor.submit(_fetch_worker, asset_cfg, ts_clients, start_date): asset_cfg['ticker']
             for asset_cfg in configs
@@ -147,6 +157,7 @@ def fetch_monitor_and_asset(configs: List[Dict], start_date: str) -> Dict[str, D
             except Exception as e:
                 st.error(f"[DataHub] Critical error in fetch worker for {ticker}: {e}")
                 results_bundle[ticker] = {'ticker': ticker, 'history': None, 'fx_str': "0", 'asset_val': 0.0}
-    
+
+    # Cache the freshly fetched bundle
     MEM.set("data_bundle", results_bundle)
     return results_bundle
