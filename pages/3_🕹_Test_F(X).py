@@ -389,15 +389,12 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-# --- START: REFACTORED CONTROL SECTION ---
+# --- START: REORDERED CONTROL SECTION ---
 nex, Nex_day_sell = 0, 0
 
 with st.expander("⚙️ Controls & Asset Setup", expanded=True):
     
-    control_cols = st.columns(8)
-    x_2 = control_cols[7].number_input('Diff', step=1, value=60) 
-    Start = control_cols[0].checkbox('start')
-
+    # --- 1. nex_day section ---
     Nex_day_ = st.checkbox('nex_day')
     if Nex_day_:
         nex_col, sell_col, _ = st.columns([1, 1, 6]) 
@@ -413,14 +410,20 @@ with st.expander("⚙️ Controls & Asset Setup", expanded=True):
     
     st.write("---") 
 
+    # --- 2. start section ---
+    control_cols = st.columns(8)
+    Start = control_cols[0].checkbox('start')
+    x_2 = control_cols[7].number_input('Diff', step=1, value=60) 
+    
     if Start:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
+    # --- 3. Asset Holdings section ---
     with st.expander("Asset Holdings", expanded=True):
         asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
 
 st.write("_____")
-# --- END: REFACTORED CONTROL SECTION ---
+# --- END: REORDERED CONTROL SECTION ---
 
 
 calculations = {}
