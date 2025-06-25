@@ -414,7 +414,22 @@ for config in ASSET_CONFIGS:
     asset_val = asset_inputs.get(ticker, 0.0)
     calc = calculations.get(ticker, {})
     
-    st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
+    # --- START: MODIFICATION FOR EMOJI ---
+    action_emoji = ""
+    try:
+        if not df_data.empty and df_data.action.values[1 + nex] != "":
+            raw_action = int(df_data.action.values[1 + nex])
+            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
+            if final_action == 1:
+                action_emoji = "🟢 "  # Buy, with a space
+            elif final_action == 0:
+                action_emoji = "🔴 "  # Sell, with a space
+    except (IndexError, ValueError):
+        action_emoji = "" 
+    
+    st.write(f"{action_emoji}**{ticker}** (f(x): `{fx_js_str}`)")
+    # --- END: MODIFICATION FOR EMOJI ---
+
     trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
     
     with st.expander("Show Raw Data Action"):
