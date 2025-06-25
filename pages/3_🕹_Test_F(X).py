@@ -389,27 +389,43 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
+# --- START: REFACTORED CONTROL SECTION ---
+# Initialize variables that will be modified by the controls inside the expander
 nex, Nex_day_sell = 0, 0
-Nex_day_ = st.checkbox('nex_day')
-if Nex_day_:
-    nex_col, Nex_day_sell_col, *_ = st.columns(5)
-    if nex_col.button("Nex_day"): nex = 1
-    if Nex_day_sell_col.button("Nex_day_sell"):
-        nex, Nex_day_sell = 1, 1
-    st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
-st.write("_____")
 
+# Define columns for controls that are spread out, like Diff and Start
 control_cols = st.columns(8)
 x_2 = control_cols[7].number_input('Diff', step=1, value=60)
-Start = control_cols[0].checkbox('start')
-if Start:
-    render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-# --- START: MODIFIED SECTION ---
-with st.expander("Asset Holdings", expanded=True):
-    asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
-# --- END: MODIFIED SECTION ---
+# A single expander to hold all primary controls
+with st.expander("⚙️ Controls & Asset Setup", expanded=True):
+    
+    # --- Nex Day Controls ---
+    Nex_day_ = st.checkbox('nex_day')
+    if Nex_day_:
+        nex_col, Nex_day_sell_col, *_ = st.columns([1,1,3]) # Adjusted column ratios
+        if nex_col.button("Nex_day"): nex = 1
+        if Nex_day_sell_col.button("Nex_day_sell"):
+            nex, Nex_day_sell = 1, 1
+        st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
+    
+    st.write("---")
+    
+    # --- Start/Update Controls ---
+    Start = control_cols[0].checkbox('start')
+    if Start:
+        render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
+
+    # --- Nested Asset Holdings Section ---
+    with st.expander("Asset Holdings", expanded=True):
+        asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
+
+# This line now correctly gets the 'asset_inputs' dictionary created inside the expander
+# because Streamlit runs the script top-down on every interaction.
+
 st.write("_____")
+# --- END: REFACTORED CONTROL SECTION ---
+
 
 calculations = {}
 for config in ASSET_CONFIGS:
