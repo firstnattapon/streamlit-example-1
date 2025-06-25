@@ -41,7 +41,7 @@ def initialize_session_state(config: Dict[str, Any]):
         except ValueError: st.session_state.start_date = datetime(2024, 1, 1).date()
     if 'end_date' not in st.session_state: st.session_state.end_date = datetime.now().date()
     if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 30 )  
-    if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 10000)
+    if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 1000)
     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
     if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 10.0)
     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
