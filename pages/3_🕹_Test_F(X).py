@@ -200,9 +200,7 @@ def Monitor(asset_config, _clients_ref, start_date):
         except (json.JSONDecodeError, KeyError, TypeError):
             fx_js_str = "0"
 
-        # --- MODIFIED LINE: สร้างคอลัมน์ index ให้เริ่มจาก 0 ---
         tickerData['index'] = list(range(len(tickerData)))
-        # --------------------------------------------------------
 
         dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
         df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
@@ -416,32 +414,37 @@ for config in ASSET_CONFIGS:
     fix_c = config['fix_c']
     df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
 
-    # Calculate P/L
+    # --- Calculate Action and determine its Emoji color ---
+    action_emoji = "⚪" # Default: White circle for N/A
+    try:
+        if not df_data.empty and df_data.action.values[1 + nex] != "":
+            raw_action = df_data.action.values[1 + nex]
+            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
+            if final_action == 1:
+                action_emoji = "🟢"
+            elif final_action == 0:
+                action_emoji = "🔴"
+    except (IndexError, TypeError, ValueError):
+        pass # Keep default emoji if action not available
+
+    # --- Calculate P/L and determine its text color ---
     pl_value = 0.0
-    pl_emoji = "⚪"  # Default: White circle for no data
+    pl_color = "gray" # Default color
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0 and asset_val > 0:
             pv = current_price * asset_val
             pl_value = pv - fix_c
-            pl_emoji = "🟢" if pl_value >= 0 else "🔴" # Green / Red circle
+            if pl_value > 0:
+                pl_color = "green"
+            elif pl_value < 0:
+                pl_color = "red"
     except Exception:
-        pass # Keep default if price fetch fails
+        pass # Keep default values if price fetch fails
 
-    # Calculate Action for display
-    action_display = "N/A"
-    try:
-        # Check if data exists and is not an empty string
-        if not df_data.empty and df_data.action.values[1 + nex] != "":
-            raw_action = df_data.action.values[1 + nex]
-            # Apply Nex_day_sell logic
-            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
-            action_display = str(final_action)
-    except (IndexError, TypeError, ValueError):
-        pass # Keep N/A if action not available
-
-    # 2. Format the label string
-    label = f"{ticker} {pl_emoji} P/L: {pl_value:,.2f} | Action: {action_display}"
+    # 2. Format the P/L string with Markdown for color and combine all parts
+    pl_markdown = f"<span style='color:{pl_color};'>P/L: {pl_value:,.2f}</span>"
+    label = f"{ticker} {action_emoji} | {pl_markdown}"
     tab_labels.append(label)
 
 # 3. Create tabs with the new, informative labels
@@ -451,13 +454,11 @@ tabs = st.tabs(tab_labels)
 for i, config in enumerate(ASSET_CONFIGS):
     with tabs[i]:
         ticker = config['ticker']
-        # Retrieve pre-fetched and pre-calculated data for the current asset
         df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
         asset_last = last_assets_all.get(ticker, 0.0)
         asset_val = asset_inputs.get(ticker, 0.0)
         calc = calculations.get(ticker, {})
         
-        # Render the UI for the asset inside its tab
         st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
         trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
         
