@@ -1,4 +1,4 @@
-# 📈_Monitor.py   
+# 📈_Monitor.py  
 import streamlit as st
 import numpy as np
 import datetime
@@ -405,13 +405,10 @@ for config in ASSET_CONFIGS:
         'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
     }
 
-# --- START: REFACTORED SECTION TO USE VERTICAL RADIO BUTTONS ---
+# --- START: REFACTORED SECTION TO USE st.tabs FOR PERFORMANCE ---
 
-# 1. Pre-calculate data and generate labels for the radio buttons
-radio_labels = []
-# Find the maximum length of ticker symbols for alignment
-max_ticker_len = max(len(c['ticker']) for c in ASSET_CONFIGS) if ASSET_CONFIGS else 0
-
+# 1. Pre-calculate data needed for tab labels
+tab_labels = []
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
     asset_val = asset_inputs.get(ticker, 0.0)
@@ -441,36 +438,23 @@ for config in ASSET_CONFIGS:
     except Exception:
         pass
 
-    # --- Format the label string with padding for alignment ---
-    # Use non-breaking space `\u00A0` for padding
-    padding = "\u00A0" * (max_ticker_len - len(ticker))
-    label = f"{ticker}{padding} {action_emoji} | P/L: {pl_value:,.2f}"
-    radio_labels.append(label)
+    # 2. Format the label string
+    label = f"{ticker} {action_emoji} | P/L: {pl_value:,.2f}"
+    tab_labels.append(label)
 
-# Create a dictionary for quick lookup of config by ticker
-configs_by_ticker = {c['ticker']: c for c in ASSET_CONFIGS}
+# 3. Create tabs with the new, informative labels
+tabs = st.tabs(tab_labels)
 
-# 2. Create the vertical radio button list
-selected_label = st.radio(
-    "Select Asset",
-    radio_labels,
-    label_visibility="collapsed"
-)
-
-# 3. Display the content for ONLY the selected asset
-if selected_label:
-    # Extract the ticker by splitting the label and taking the first part
-    selected_ticker = selected_label.split()[0]
-    
-    config = configs_by_ticker.get(selected_ticker)
-
-    if config:
-        df_data, fx_js_str = monitor_data_all.get(selected_ticker, (pd.DataFrame(), "0"))
-        asset_last = last_assets_all.get(selected_ticker, 0.0)
-        asset_val = asset_inputs.get(selected_ticker, 0.0)
-        calc = calculations.get(selected_ticker, {})
+# 4. Iterate through tabs and populate content
+for i, config in enumerate(ASSET_CONFIGS):
+    with tabs[i]:
+        ticker = config['ticker']
+        df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
+        asset_last = last_assets_all.get(ticker, 0.0)
+        asset_val = asset_inputs.get(ticker, 0.0)
+        calc = calculations.get(ticker, {})
         
-        st.write(f"**{selected_ticker}** (f(x): `{fx_js_str}`)")
+        st.write(f"**{ticker}** (f(x): `{fx_js_str}`)")
         trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
         
         with st.expander("Show Raw Data Action"):
