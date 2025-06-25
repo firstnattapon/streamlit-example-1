@@ -409,6 +409,9 @@ for config in ASSET_CONFIGS:
 
 # 1. Pre-calculate data and generate labels for the radio buttons
 radio_labels = []
+# Find the maximum length of ticker symbols for alignment
+max_ticker_len = max(len(c['ticker']) for c in ASSET_CONFIGS) if ASSET_CONFIGS else 0
+
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
     asset_val = asset_inputs.get(ticker, 0.0)
@@ -416,7 +419,7 @@ for config in ASSET_CONFIGS:
     df_data, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
 
     # --- Calculate Action and determine its Emoji color ---
-    action_emoji = "⚪" # Default
+    action_emoji = "⚪"
     try:
         if not df_data.empty and df_data.action.values[1 + nex] != "":
             raw_action = df_data.action.values[1 + nex]
@@ -438,15 +441,16 @@ for config in ASSET_CONFIGS:
     except Exception:
         pass
 
-    # --- Format the label string ---
-    label = f"{ticker} {action_emoji} | P/L: {pl_value:,.2f}"
+    # --- Format the label string with padding for alignment ---
+    # Use non-breaking space `\u00A0` for padding
+    padding = "\u00A0" * (max_ticker_len - len(ticker))
+    label = f"{ticker}{padding} {action_emoji} | P/L: {pl_value:,.2f}"
     radio_labels.append(label)
 
 # Create a dictionary for quick lookup of config by ticker
 configs_by_ticker = {c['ticker']: c for c in ASSET_CONFIGS}
 
 # 2. Create the vertical radio button list
-# Use label_visibility="collapsed" to hide the main "Select Asset" title
 selected_label = st.radio(
     "Select Asset",
     radio_labels,
@@ -455,20 +459,17 @@ selected_label = st.radio(
 
 # 3. Display the content for ONLY the selected asset
 if selected_label:
-    # Extract the ticker from the start of the label string
+    # Extract the ticker by splitting the label and taking the first part
     selected_ticker = selected_label.split()[0]
     
-    # Find the corresponding configuration
     config = configs_by_ticker.get(selected_ticker)
 
     if config:
-        # Retrieve pre-fetched and pre-calculated data for the selected asset
         df_data, fx_js_str = monitor_data_all.get(selected_ticker, (pd.DataFrame(), "0"))
         asset_last = last_assets_all.get(selected_ticker, 0.0)
         asset_val = asset_inputs.get(selected_ticker, 0.0)
         calc = calculations.get(selected_ticker, {})
         
-        # Render the UI for the selected asset (the logic here is identical to the old version)
         st.write(f"**{selected_ticker}** (f(x): `{fx_js_str}`)")
         trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
         
