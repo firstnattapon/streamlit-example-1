@@ -478,7 +478,6 @@ with st.expander("📈 Trading Dashboard", expanded=True):
     tabs = st.tabs(tab_labels)
 
     # 4. Iterate through tabs and populate content
-    st.write("_____")
 
     for i, config in enumerate(ASSET_CONFIGS):
         with tabs[i]:
