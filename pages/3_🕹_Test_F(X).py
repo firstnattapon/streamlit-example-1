@@ -121,7 +121,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
     with st.expander("📈 Results", expanded=True):
         # MODIFIED: Updated the main metric label to include Roll_Over cost
         st.metric(
-            f"Current Total Value (Stocks + Cash + Options P/L: {options_pl:,.2f}) Roll_Over {total_option_cost:,.2f} Usd",
+            f"Current Total Value (Stocks + Cash + Options P/L: {options_pl:,.2f}) | Roll_Over ({total_option_cost:,.2f})",
             f"{metrics['now_pv']:,.2f}"
         )
         col1, col2 = st.columns(2)
