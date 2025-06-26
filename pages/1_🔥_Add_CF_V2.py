@@ -24,7 +24,7 @@ def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
         st.stop()
 
 @st.cache_resource
-def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dict[str, Any]]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
+def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
     """Initializes ThingSpeak clients for the main channel and individual asset channels."""
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
     try:
@@ -35,7 +35,12 @@ def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dic
             channel_info = asset.get('holding_channel', {})
             if channel_info.get('channel_id'):
                 asset_clients[ticker] = thingspeak.Channel(channel_info['channel_id'], channel_info['write_api_key'])
-        st.success(f"Initialized main client and {len(asset_clients)} stock clients.")
+        
+        # MODIFIED: Changed the success message as per the user's request
+        num_asset_clients = len(asset_clients)
+        num_option_assets = len(option_assets)
+        st.success(f"Initialized main client and {num_asset_clients} asset {num_option_assets} option holding clients.")
+        
         return client_main, asset_clients
     except Exception as e:
         st.error(f"Failed to initialize ThingSpeak clients: {e}")
@@ -110,11 +115,15 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
     return user_inputs
 
-def display_results(metrics: Dict[str, float], options_pl: float, config: Dict[str, Any]):
+def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
     """Displays all calculated metrics in the Streamlit app."""
     st.divider()
     with st.expander("📈 Results", expanded=True):
-        st.metric(f"Current Total Value (Stocks + Cash + Options P/L: {options_pl:,.2f})", f"{metrics['now_pv']:,.2f}")
+        # MODIFIED: Updated the main metric label to include Roll_Over cost
+        st.metric(
+            f"Current Total Value (Stocks + Cash + Options P/L: {options_pl:,.2f}) | Roll_Over ({total_option_cost:,.2f})",
+            f"{metrics['now_pv']:,.2f}"
+        )
         col1, col2 = st.columns(2)
         col1.metric('t_0 (Product of Stock Reference Prices)', f"{metrics['t_0']:,.2f}")
         col2.metric('t_n (Product of Stock Live Prices)', f"{metrics['t_n']:,.2f}")
@@ -123,14 +132,12 @@ def display_results(metrics: Dict[str, float], options_pl: float, config: Dict[s
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
 
         # --- REFACTORED METRICS ---
-        # Dynamically create the label for the baseline metric instead of hardcoding "+2750"
         offset_display_val = -config.get('cashflow_offset', 0.0)
         baseline_val = metrics['log_pv'] - metrics['ln']
         product_cost = config.get('product_cost_default', 0)
         baseline_label = f"💰 Baseline {baseline_val:,.1f} - {product_cost} = {offset_display_val:+.0f}"
         st.metric(label=baseline_label, value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
         
-        # Use 'baseline_target' from config instead of the hardcoded 1699.46
         baseline_target = config.get('baseline_target', 0.0)
         adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
         final_value = baseline_target - adjusted_cf
@@ -158,15 +165,16 @@ def render_charts(config: Dict[str, Any]):
 
 # --- 3. CORE LOGIC & UPDATE FUNCTIONS ---
 
-def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float]:
+def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
     """Calculates all core financial metrics based on user inputs and config."""
     metrics = {}
     total_stock_value = user_inputs['total_stock_value']
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
 
-    # Calculate Options P/L
+    # MODIFIED: Calculate Options P/L and Total Option Cost
     total_options_pl = 0.0
+    total_option_cost = 0.0
     for option in option_assets:
         underlying_ticker = option.get("underlying_ticker", "").strip()
         if not underlying_ticker: continue
@@ -176,6 +184,7 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         contracts = option.get("contracts_or_shares", 0.0)
         premium = option.get("premium_paid_per_share", 0.0)
         total_cost_basis = contracts * premium
+        total_option_cost += total_cost_basis # Accumulate total cost
         
         # NOTE: This assumes all options are CALL options.
         intrinsic_value_per_share = max(0, last_price - strike)
@@ -186,9 +195,7 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
     # --- REFACTORED LOGIC ---
-    # Use 'log_pv_multiplier' from config instead of hardcoded 1500
     log_pv_multiplier = config.get('log_pv_multiplier', 1500)
-
     reference_prices = [asset['reference_price'] for asset in stock_assets]
     live_prices = [current_prices[asset['ticker'].strip()] for asset in stock_assets]
     metrics['t_0'] = np.prod(reference_prices) if reference_prices else 0
@@ -198,7 +205,9 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
     number_of_assets = len(stock_assets)
     metrics['log_pv'] = (number_of_assets * log_pv_multiplier) + metrics['ln']
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
-    return metrics, total_options_pl
+    
+    # MODIFIED: Return the new total_option_cost value
+    return metrics, total_options_pl, total_option_cost
 
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     """Handles the UI for confirming and sending data to ThingSpeak."""
@@ -243,7 +252,8 @@ def main():
     stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
     option_assets = [item for item in all_assets if item.get('type') == 'option']
 
-    clients = initialize_thingspeak_clients(config, stock_assets)
+    # MODIFIED: Pass option_assets to the initialization function
+    clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
     initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
     
     user_inputs = render_ui_and_get_inputs(
@@ -257,10 +267,11 @@ def main():
         # This button simply triggers a rerun of the script from top to bottom
         pass
 
-    # Pass config to the calculation function
-    metrics, options_pl = calculate_metrics(stock_assets, option_assets, user_inputs, config)
+    # MODIFIED: Unpack the new total_option_cost from the calculation
+    metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
     
-    display_results(metrics, options_pl, config)
+    # MODIFIED: Pass the new total_option_cost to the display function
+    display_results(metrics, options_pl, total_option_cost, config)
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
 
