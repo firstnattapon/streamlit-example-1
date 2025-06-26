@@ -8,7 +8,7 @@ from pathlib import Path
 import math
 from typing import List, Dict, Any
 
-# --- 0. คลาส SimulationTracer ---
+# --- คลาส SimulationTracer และฟังก์ชันอื่นๆ เหมือนเดิม ---
 class SimulationTracer:
     """
     คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
@@ -54,7 +54,6 @@ class SimulationTracer:
                 current_actions[0] = 1
         return current_actions
 
-# --- 1. การตั้งค่าและโหลด Configuration ---
 st.set_page_config(page_title="Calculator", page_icon="⌨️" , layout= "centered" )
 
 @st.cache_data(ttl=300)
@@ -75,8 +74,6 @@ CONFIG = load_config()
 if st.button("Rerun"):
     st.rerun()
 
-# --- 2. ฟังก์ชันต่างๆ ---
-
 @st.cache_data(ttl=600)
 def get_ticker_history(ticker_symbol):
     ticker = yf.Ticker(ticker_symbol)
@@ -91,7 +88,7 @@ def average_cf(cf_config):
     filtered_data = history[history.index >= filter_date]
     count_data = len(filtered_data)
     if count_data == 0:
-        return 0
+        return 0, 0, 0 # Return tuple of zeros
     client = thingspeak.Channel(id=cf_config['channel_id'], api_key=cf_config['write_api_key'], fmt='json')
     field_data = client.get_field_last(field=f"{cf_config['field']}")
     value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
@@ -116,7 +113,7 @@ def production_cost(ticker, t0, fix):
         return None
 
 # ==============================================================================
-# ฟังก์ชัน monitor ที่แก้ไขแล้ว เพื่อจัดเรียง index ตามรูปภาพ
+# ฟังก์ชัน monitor ที่แก้ไขให้ action ถูกต้อง
 # ==============================================================================
 def monitor(channel_id, api_key, ticker, field, filter_date):
     thingspeak_client = thingspeak.Channel(id=channel_id, api_key=api_key, fmt='json')
@@ -126,16 +123,21 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     filtered_data = history[history.index >= filter_date].copy()
     history_desc = filtered_data.sort_index(ascending=False)
 
-    # 2. เตรียม DataFrame สำหรับข้อมูลในอนาคต (placeholder) ตามลำดับที่ต้องการ
+    # 2. เตรียม DataFrame สำหรับข้อมูลในอนาคต (placeholder)
     future_index = ['+4', '+3', '+2', '+1', '0']
-    future_df = pd.DataFrame(index=future_index, columns=['Close', 'action'])
+    future_df = pd.DataFrame(index=future_index, columns=['Close'])
 
-    # 3. รวม DataFrame ของอนาคตและอดีตเข้าด้วยกัน (แถวอนาคตจะอยู่ด้านบน)
-    history_desc['action'] = "" # เพิ่มคอลัมน์ action ให้ข้อมูลในอดีตก่อน
+    # 3. รวม DataFrame และจัดเรียงคอลัมน์
     combined_df = pd.concat([future_df, history_desc])
-    combined_df.fillna("", inplace=True) # แทนที่ค่า NaN ด้วยสตริงว่าง
+    combined_df.fillna("", inplace=True)
+    combined_df['index'] = ""
+    combined_df['action'] = ""
+    combined_df = combined_df[['index', 'Close', 'action']]
+    
+    # 4. สร้างค่า 'index' ที่เป็นตัวเลขเรียงจากมากไปน้อย
+    combined_df['index'] = range(len(combined_df) - 1, -1, -1)
 
-    # 4. ดึงค่า fx_js จาก ThingSpeak
+    # 5. ดึงค่า fx_js จาก ThingSpeak
     fx_js = "0"
     try:
         field_data = thingspeak_client.get_field_last(field=f'{field}')
@@ -145,26 +147,29 @@ def monitor(channel_id, api_key, ticker, field, filter_date):
     except (json.JSONDecodeError, KeyError, TypeError):
         fx_js = "0"
 
-    # 5. สร้างคอลัมน์ 'index' ที่เป็นตัวเลข (เหมือนในโค้ดเดิม) แต่เรียงจากมากไปน้อย
-    combined_df['index'] = range(len(combined_df) - 1, -1, -1)
-    
-    # 6. จัดลำดับคอลัมน์ให้ตรงตามที่ต้องการ
-    combined_df = combined_df[['index', 'Close', 'action']]
-
-    # 7. สร้างและกำหนดค่า action
+    # 6. สร้างและกำหนดค่า action โดยใช้ค่า 'index' เป็นตัวอ้างอิง
     try:
         tracer = SimulationTracer(encoded_string=fx_js)
-        final_actions = tracer.run()
-        num_to_assign = min(len(combined_df), len(final_actions))
-        if num_to_assign > 0:
-            action_col_idx = combined_df.columns.get_loc('action')
-            combined_df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
+        final_actions = tracer.run() # นี่คือ array ของ action ทั้งหมด
+
+        # สร้างฟังก์ชันเพื่อดึง action ที่ถูกต้องสำหรับแต่ละแถว
+        def get_action_for_row(row_index_val):
+            # ตรวจสอบว่าค่า index อยู่ในขอบเขตของ array final_actions หรือไม่
+            if 0 <= row_index_val < len(final_actions):
+                return final_actions[row_index_val]
+            return "" # ถ้าไม่มี action ที่สอดคล้อง ให้เป็นค่าว่าง
+
+        # ใช้ .apply() เพื่อกำหนดค่า action ให้กับทุกแถวใน DataFrame
+        combined_df['action'] = combined_df['index'].apply(get_action_for_row)
+
     except ValueError as e:
         st.warning(f"Error generating actions for {ticker} with input '{fx_js}': {e}")
+        combined_df['action'] = "" # เคลียร์ค่า action ถ้ามีปัญหา
     except Exception as e:
         st.error(f"An unexpected error occurred during action generation for {ticker}: {e}")
+        combined_df['action'] = ""
 
-    # 8. ตั้งชื่อ index ของ DataFrame เพื่อให้แสดงผลในหัวตาราง
+    # 7. ตั้งชื่อ index ของ DataFrame เพื่อให้แสดงผลในหัวตาราง
     combined_df.index.name = '↓ index'
     
     return combined_df, fx_js
