@@ -375,6 +375,15 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
+# --- START: Session State Initialization ---
+# Initialize session state variables if they don't exist
+if 'previous_nex' not in st.session_state:
+    st.session_state.previous_nex = 0
+if 'select_key' not in st.session_state:
+    st.session_state.select_key = "Show All"
+# --- END: Session State Initialization ---
+
+
 nex, Nex_day_sell = 0, 0
 Nex_day_ = st.checkbox('nex_day')
 if Nex_day_:
@@ -384,6 +393,18 @@ if Nex_day_:
         nex, Nex_day_sell = 1, 1
     st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
 st.write("_____")
+
+
+# --- START: Rebound Logic ---
+# Detect if 'nex_day' was just unchecked.
+if st.session_state.previous_nex == 1 and nex == 0:
+    # Force the selectbox to reset to the default value.
+    st.session_state.select_key = "Show All"
+
+# Update the 'previous_nex' state for the next rerun.
+st.session_state.previous_nex = nex
+# --- END: Rebound Logic ---
+
 
 control_cols = st.columns(8)
 x_2 = control_cols[7].number_input('Diff', step=1, value=60)
@@ -405,16 +426,15 @@ for config in ASSET_CONFIGS:
     df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
     
     action_emoji = ""
-    final_action_val = None # Default to no action
+    final_action_val = None
     try:
-        # We only care about nex=1 for Buy/Sell signals
         if not df_data.empty and df_data.action.values[1 + nex] != "":
             raw_action = int(df_data.action.values[1 + nex])
             final_action_val = 1 - raw_action if Nex_day_sell == 1 else raw_action
             if final_action_val == 1:
-                action_emoji = "🟢 " # Buy
+                action_emoji = "🟢 "
             elif final_action_val == 0:
-                action_emoji = "🔴 " # Sell
+                action_emoji = "🔴 "
     except (IndexError, ValueError, TypeError):
         action_emoji = ""
     
@@ -426,38 +446,37 @@ for config in ASSET_CONFIGS:
 all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
 selectbox_options = ["Show All"]
 
-# Conditionally add filter options only if nex is 1
 if nex == 1:
     selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
 
 selectbox_options.extend(all_tickers)
 
 def format_selectbox_options(option_name):
-    """Function to format the display names in the selectbox."""
     if option_name in ["Show All", "Filter Buy Tickers", "Filter Sell Tickers"]:
         return option_name
-    # For individual tickers, show emoji and name
     return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
-selected_option = st.selectbox(
+# MODIFIED: Use the key from session state
+st.selectbox(
     "Select Ticker to View:",
     options=selectbox_options,
-    format_func=format_selectbox_options
+    format_func=format_selectbox_options,
+    key="select_key"  # Link the widget to our session state variable
 )
 st.write("_____")
 
-# 3. Filter the list of configs to display based on selection
+# 3. Filter the list of configs to display based on selection from session state
+selected_option = st.session_state.select_key
+
 if selected_option == "Show All":
     configs_to_display = ASSET_CONFIGS
 elif selected_option == "Filter Buy Tickers":
-    # This block is now only reachable if nex == 1
     buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
     configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in buy_tickers]
 elif selected_option == "Filter Sell Tickers":
-    # This block is also only reachable if nex == 1
     sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
     configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in sell_tickers]
-else: # This handles the case for an individual ticker selection
+else:
     configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_option]
 # --- END: SELECTBOX LOGIC ---
 
