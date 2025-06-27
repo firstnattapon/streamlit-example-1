@@ -1,4 +1,3 @@
-# 📈_Monitor.py (Updated with SimulationTracer, Raw Data Expander, and 0-based index)
 import streamlit as st
 import numpy as np
 import datetime
@@ -200,10 +199,8 @@ def Monitor(asset_config, _clients_ref, start_date):
         except (json.JSONDecodeError, KeyError, TypeError):
             fx_js_str = "0"
 
-        # --- MODIFIED LINE: สร้างคอลัมน์ index ให้เริ่มจาก 0 ---
         tickerData['index'] = list(range(len(tickerData)))
-        # --------------------------------------------------------
-
+        
         dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
         df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
         df['action'] = ""
@@ -397,6 +394,50 @@ if Start:
 asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
 st.write("_____")
 
+# --- START: SELECTBOX LOGIC ---
+
+# 1. Pre-generate display labels for the selectbox and title
+selectbox_labels = {}
+for config in ASSET_CONFIGS:
+    ticker = config['ticker']
+    df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
+    
+    action_emoji = ""
+    try:
+        if not df_data.empty and df_data.action.values[1 + nex] != "":
+            raw_action = int(df_data.action.values[1 + nex])
+            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
+            if final_action == 1:
+                action_emoji = "🟢 "
+            elif final_action == 0:
+                action_emoji = "🔴 "
+    except (IndexError, ValueError):
+        action_emoji = ""
+    
+    label = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
+    selectbox_labels[ticker] = label
+
+# 2. Create selectbox options and the widget
+all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
+selectbox_options = ["Show All"] + all_tickers
+
+selected_ticker = st.selectbox(
+    "Select Ticker to View:",
+    options=selectbox_options,
+    # --- MODIFIED: Update format_func to show only emoji and ticker ---
+    format_func=lambda ticker: "Show All Tickers" if ticker == "Show All" else selectbox_labels.get(ticker, ticker).split(' (f(x):')[0]
+)
+st.write("_____")
+
+# 3. Filter the list of configs to display based on selection
+if selected_ticker == "Show All":
+    configs_to_display = ASSET_CONFIGS
+else:
+    configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_ticker]
+# --- END: SELECTBOX LOGIC ---
+
+
+# Calculate for all assets upfront for efficiency
 calculations = {}
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
@@ -407,28 +448,17 @@ for config in ASSET_CONFIGS:
         'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
     }
 
-for config in ASSET_CONFIGS:
+# Loop over the FILTERED list to display the UI
+for config in configs_to_display:
     ticker = config['ticker']
     df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
     asset_last = last_assets_all.get(ticker, 0.0)
     asset_val = asset_inputs.get(ticker, 0.0)
     calc = calculations.get(ticker, {})
     
-    # --- START: MODIFICATION FOR EMOJI ---
-    action_emoji = ""
-    try:
-        if not df_data.empty and df_data.action.values[1 + nex] != "":
-            raw_action = int(df_data.action.values[1 + nex])
-            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
-            if final_action == 1:
-                action_emoji = "🟢 "  # Buy, with a space
-            elif final_action == 0:
-                action_emoji = "🔴 "  # Sell, with a space
-    except (IndexError, ValueError):
-        action_emoji = "" 
-    
-    st.write(f"{action_emoji}**{ticker}** (f(x): `{fx_js_str}`)")
-    # --- END: MODIFICATION FOR EMOJI ---
+    # --- MODIFIED: Use the full pre-calculated label for the title, removing bold ---
+    title_label = selectbox_labels.get(ticker, ticker)
+    st.write(title_label)
 
     trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
     
