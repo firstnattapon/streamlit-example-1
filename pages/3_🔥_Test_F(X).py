@@ -133,9 +133,9 @@ def clear_all_caches():
     st.cache_resource.clear()
     sell.cache_clear()
     buy.cache_clear()
-    with _cache_lock:
-        _price_cache.clear()
-        _cache_timestamp.clear()
+    # Reset session state on clear cache
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
     st.success("🗑️ Clear ALL caches complete!")
     st.rerun()
 
@@ -375,14 +375,9 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-# --- START: Session State Initialization ---
-# Initialize session state variables if they don't exist
-if 'previous_nex' not in st.session_state:
-    st.session_state.previous_nex = 0
+# Initialize session state for the selectbox key if it doesn't exist
 if 'select_key' not in st.session_state:
     st.session_state.select_key = "Show All"
-# --- END: Session State Initialization ---
-
 
 nex, Nex_day_sell = 0, 0
 Nex_day_ = st.checkbox('nex_day')
@@ -394,18 +389,6 @@ if Nex_day_:
     st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
 st.write("_____")
 
-
-# --- START: Rebound Logic ---
-# Detect if 'nex_day' was just unchecked.
-if st.session_state.previous_nex == 1 and nex == 0:
-    # Force the selectbox to reset to the default value.
-    st.session_state.select_key = "Show All"
-
-# Update the 'previous_nex' state for the next rerun.
-st.session_state.previous_nex = nex
-# --- END: Rebound Logic ---
-
-
 control_cols = st.columns(8)
 x_2 = control_cols[7].number_input('Diff', step=1, value=60)
 Start = control_cols[0].checkbox('start')
@@ -415,11 +398,11 @@ if Start:
 asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
 st.write("_____")
 
-# --- START: SELECTBOX LOGIC ---
+# --- START: SELECTBOX LOGIC (REVISED AND STABLE) ---
 
-# 1. Pre-generate display labels AND FINAL ACTIONS for all tickers
+# 1. Pre-generate display labels and actions for all tickers
 selectbox_labels = {}
-ticker_actions = {} # To store the final action (0=Sell, 1=Buy, None=No action)
+ticker_actions = {}
 
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
@@ -436,38 +419,40 @@ for config in ASSET_CONFIGS:
             elif final_action_val == 0:
                 action_emoji = "🔴 "
     except (IndexError, ValueError, TypeError):
-        action_emoji = ""
+        pass
     
     ticker_actions[ticker] = final_action_val
     label = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
     selectbox_labels[ticker] = label
 
-# 2. Create selectbox options based on the state of 'nex'
+# 2. Build the list of currently available options based on `nex`
 all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
 selectbox_options = ["Show All"]
-
 if nex == 1:
     selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
-
 selectbox_options.extend(all_tickers)
 
+# 3. *** THE CORE FIX ***
+# Before rendering, check if the saved selection is still valid. If not, reset it.
+if st.session_state.select_key not in selectbox_options:
+    st.session_state.select_key = "Show All"
+
+# 4. Define the formatting function and render the selectbox
 def format_selectbox_options(option_name):
     if option_name in ["Show All", "Filter Buy Tickers", "Filter Sell Tickers"]:
         return option_name
     return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
-# MODIFIED: Use the key from session state
 st.selectbox(
     "Select Ticker to View:",
     options=selectbox_options,
     format_func=format_selectbox_options,
-    key="select_key"  # Link the widget to our session state variable
+    key="select_key"  # This now binds to a validated state
 )
 st.write("_____")
 
-# 3. Filter the list of configs to display based on selection from session state
+# 5. Filter the display based on the (now guaranteed to be valid) selection
 selected_option = st.session_state.select_key
-
 if selected_option == "Show All":
     configs_to_display = ASSET_CONFIGS
 elif selected_option == "Filter Buy Tickers":
