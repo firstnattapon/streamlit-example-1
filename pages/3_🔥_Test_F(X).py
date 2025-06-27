@@ -426,7 +426,7 @@ for config in ASSET_CONFIGS:
 all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
 selectbox_options = ["Show All"]
 
-# -- MODIFIED: Conditionally add filter options only if nex is 1 --
+# Conditionally add filter options only if nex is 1
 if nex == 1:
     selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
 
@@ -435,7 +435,7 @@ selectbox_options.extend(all_tickers)
 def format_selectbox_options(option_name):
     """Function to format the display names in the selectbox."""
     if option_name in ["Show All", "Filter Buy Tickers", "Filter Sell Tickers"]:
-        return option_name.replace("Tickers", " Tickers") # Just ensures consistent naming
+        return option_name
     # For individual tickers, show emoji and name
     return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
