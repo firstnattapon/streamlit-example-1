@@ -133,9 +133,9 @@ def clear_all_caches():
     st.cache_resource.clear()
     sell.cache_clear()
     buy.cache_clear()
-    with _cache_lock:
-        _price_cache.clear()
-        _cache_timestamp.clear()
+    # Reset session state on clear cache
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
     st.success("🗑️ Clear ALL caches complete!")
     st.rerun()
 
@@ -375,15 +375,41 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
-nex, Nex_day_sell = 0, 0
-Nex_day_ = st.checkbox('nex_day')
+# --- START: STABLE STATE MANAGEMENT FOR NEX MODE ---
+# Initialize session states if they don't exist
+if 'select_key' not in st.session_state:
+    st.session_state.select_key = "Show All"
+if 'nex' not in st.session_state:
+    st.session_state.nex = 0
+if 'Nex_day_sell' not in st.session_state:
+    st.session_state.Nex_day_sell = 0
+
+Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
+
 if Nex_day_:
+    # If the box is checked, show buttons and manage state
     nex_col, Nex_day_sell_col, *_ = st.columns(5)
-    if nex_col.button("Nex_day"): nex = 1
+    if nex_col.button("Nex_day"):
+        st.session_state.nex = 1
+        st.session_state.Nex_day_sell = 0
     if Nex_day_sell_col.button("Nex_day_sell"):
-        nex, Nex_day_sell = 1, 1
+        st.session_state.nex = 1
+        st.session_state.Nex_day_sell = 1
+else:
+    # If the box is UNCHECKED, reset the state completely
+    st.session_state.nex = 0
+    st.session_state.Nex_day_sell = 0
+
+# The rest of the app now uses the reliable state from session_state
+nex = st.session_state.nex
+Nex_day_sell = st.session_state.Nex_day_sell
+
+# Display the current persistent state
+if Nex_day_:
     st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
 st.write("_____")
+# --- END: STABLE STATE MANAGEMENT ---
+
 
 control_cols = st.columns(8)
 x_2 = control_cols[7].number_input('Diff', step=1, value=60)
@@ -394,46 +420,62 @@ if Start:
 asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
 st.write("_____")
 
-# --- START: SELECTBOX LOGIC ---
 
-# 1. Pre-generate display labels for the selectbox and title
+# --- START: SELECTBOX LOGIC (REVISED AND STABLE) ---
+
+# 1. Pre-generate display labels and actions using the STABLE nex value
 selectbox_labels = {}
+ticker_actions = {}
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
     df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
-    
-    action_emoji = ""
+    action_emoji, final_action_val = "", None
     try:
         if not df_data.empty and df_data.action.values[1 + nex] != "":
             raw_action = int(df_data.action.values[1 + nex])
-            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
-            if final_action == 1:
-                action_emoji = "🟢 "
-            elif final_action == 0:
-                action_emoji = "🔴 "
-    except (IndexError, ValueError):
-        action_emoji = ""
-    
-    label = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
-    selectbox_labels[ticker] = label
+            final_action_val = 1 - raw_action if Nex_day_sell == 1 else raw_action
+            if final_action_val == 1: action_emoji = "🟢 "
+            elif final_action_val == 0: action_emoji = "🔴 "
+    except (IndexError, ValueError, TypeError): pass
+    ticker_actions[ticker] = final_action_val
+    selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
 
-# 2. Create selectbox options and the widget
+# 2. Build the list of currently available options based on the STABLE `nex`
 all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
-selectbox_options = ["Show All"] + all_tickers
+selectbox_options = ["Show All"]
+if nex == 1:
+    selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
+selectbox_options.extend(all_tickers)
 
-selected_ticker = st.selectbox(
+# 3. CORE FIX: Before rendering, check if the saved selection is still valid. If not, reset it.
+if st.session_state.select_key not in selectbox_options:
+    st.session_state.select_key = "Show All"
+
+# 4. Define formatting and render the selectbox
+def format_selectbox_options(option_name):
+    if option_name in ["Show All", "Filter Buy Tickers", "Filter Sell Tickers"]: return option_name
+    return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
+
+st.selectbox(
     "Select Ticker to View:",
     options=selectbox_options,
-    # --- MODIFIED: Update format_func to show only emoji and ticker ---
-    format_func=lambda ticker: "Show All Tickers" if ticker == "Show All" else selectbox_labels.get(ticker, ticker).split(' (f(x):')[0]
+    format_func=format_selectbox_options,
+    key="select_key"  # Binds to our validated session state
 )
 st.write("_____")
 
-# 3. Filter the list of configs to display based on selection
-if selected_ticker == "Show All":
+# 5. Filter the display based on the (now guaranteed to be valid) selection
+selected_option = st.session_state.select_key
+if selected_option == "Show All":
     configs_to_display = ASSET_CONFIGS
+elif selected_option == "Filter Buy Tickers":
+    buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
+    configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in buy_tickers]
+elif selected_option == "Filter Sell Tickers":
+    sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
+    configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in sell_tickers]
 else:
-    configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_ticker]
+    configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_option]
 # --- END: SELECTBOX LOGIC ---
 
 
@@ -456,7 +498,6 @@ for config in configs_to_display:
     asset_val = asset_inputs.get(ticker, 0.0)
     calc = calculations.get(ticker, {})
     
-    # --- MODIFIED: Use the full pre-calculated label for the title, removing bold ---
     title_label = selectbox_labels.get(ticker, ticker)
     st.write(title_label)
 
