@@ -396,7 +396,7 @@ st.write("_____")
 
 # --- START: SELECTBOX LOGIC ---
 
-# 1. Pre-generate display labels AND FINAL ACTIONS for the selectbox and title
+# 1. Pre-generate display labels AND FINAL ACTIONS for all tickers
 selectbox_labels = {}
 ticker_actions = {} # To store the final action (0=Sell, 1=Buy, None=No action)
 
@@ -407,9 +407,9 @@ for config in ASSET_CONFIGS:
     action_emoji = ""
     final_action_val = None # Default to no action
     try:
+        # We only care about nex=1 for Buy/Sell signals
         if not df_data.empty and df_data.action.values[1 + nex] != "":
             raw_action = int(df_data.action.values[1 + nex])
-            # The core logic to determine buy (1) or sell (0)
             final_action_val = 1 - raw_action if Nex_day_sell == 1 else raw_action
             if final_action_val == 1:
                 action_emoji = "🟢 " # Buy
@@ -419,27 +419,27 @@ for config in ASSET_CONFIGS:
         action_emoji = ""
     
     ticker_actions[ticker] = final_action_val
-    
     label = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
     selectbox_labels[ticker] = label
 
-# 2. Create selectbox options and the widget
+# 2. Create selectbox options based on the state of 'nex'
 all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
-# -- MODIFIED: Add new filter options --
-selectbox_options = ["Show All", "Filter Buy Tickers", "Filter Sell Tickers"] + all_tickers
+selectbox_options = ["Show All"]
 
-def format_selectbox_options(ticker):
+# -- MODIFIED: Conditionally add filter options only if nex is 1 --
+if nex == 1:
+    selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
+
+selectbox_options.extend(all_tickers)
+
+def format_selectbox_options(option_name):
     """Function to format the display names in the selectbox."""
-    if ticker == "Show All":
-        return "Show All Tickers"
-    if ticker == "Filter Buy Tickers":
-        return "🟢 Filter Buy Tickers"
-    if ticker == "Filter Sell Tickers":
-        return "🔴 Filter Sell Tickers"
+    if option_name in ["Show All", "Filter Buy Tickers", "Filter Sell Tickers"]:
+        return option_name.replace("Tickers", " Tickers") # Just ensures consistent naming
     # For individual tickers, show emoji and name
-    return selectbox_labels.get(ticker, ticker).split(' (f(x):')[0]
+    return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
-selected_ticker = st.selectbox(
+selected_option = st.selectbox(
     "Select Ticker to View:",
     options=selectbox_options,
     format_func=format_selectbox_options
@@ -447,16 +447,18 @@ selected_ticker = st.selectbox(
 st.write("_____")
 
 # 3. Filter the list of configs to display based on selection
-if selected_ticker == "Show All":
+if selected_option == "Show All":
     configs_to_display = ASSET_CONFIGS
-elif selected_ticker == "Filter Buy Tickers":
+elif selected_option == "Filter Buy Tickers":
+    # This block is now only reachable if nex == 1
     buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
     configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in buy_tickers]
-elif selected_ticker == "Filter Sell Tickers":
+elif selected_option == "Filter Sell Tickers":
+    # This block is also only reachable if nex == 1
     sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
     configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in sell_tickers]
 else: # This handles the case for an individual ticker selection
-    configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_ticker]
+    configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_option]
 # --- END: SELECTBOX LOGIC ---
 
 
