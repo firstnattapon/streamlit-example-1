@@ -396,7 +396,7 @@ st.write("_____")
 
 # --- START: SELECTBOX LOGIC ---
 
-# 1. Pre-generate display labels for the selectbox
+# 1. Pre-generate display labels for the selectbox and title
 selectbox_labels = {}
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
@@ -417,14 +417,15 @@ for config in ASSET_CONFIGS:
     label = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
     selectbox_labels[ticker] = label
 
-# 2. Create selectbox options (using raw tickers as values) and the widget
+# 2. Create selectbox options and the widget
 all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
 selectbox_options = ["Show All"] + all_tickers
 
 selected_ticker = st.selectbox(
     "Select Ticker to View:",
     options=selectbox_options,
-    format_func=lambda ticker: "Show All Tickers" if ticker == "Show All" else selectbox_labels.get(ticker, ticker)
+    # --- MODIFIED: Update format_func to show only emoji and ticker ---
+    format_func=lambda ticker: "Show All Tickers" if ticker == "Show All" else selectbox_labels.get(ticker, ticker).split(' (f(x):')[0]
 )
 st.write("_____")
 
@@ -436,7 +437,7 @@ else:
 # --- END: SELECTBOX LOGIC ---
 
 
-# Calculate for all assets upfront for simplicity and efficiency
+# Calculate for all assets upfront for efficiency
 calculations = {}
 for config in ASSET_CONFIGS:
     ticker = config['ticker']
@@ -455,9 +456,9 @@ for config in configs_to_display:
     asset_val = asset_inputs.get(ticker, 0.0)
     calc = calculations.get(ticker, {})
     
-    # Use the pre-calculated label for the title to avoid redundant logic
+    # --- MODIFIED: Use the full pre-calculated label for the title, removing bold ---
     title_label = selectbox_labels.get(ticker, ticker)
-    st.write(f"**{title_label.replace(f'(f(x): {fx_js_str})', '')}** (f(x): `{fx_js_str}`)")
+    st.write(title_label)
 
     trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
     
