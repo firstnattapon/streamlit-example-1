@@ -133,9 +133,9 @@ def clear_all_caches():
     st.cache_resource.clear()
     sell.cache_clear()
     buy.cache_clear()
-    # Reset session state on clear cache
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
+    # # Reset session state on clear cache
+    # for key in list(st.session_state.keys()):
+    #     del st.session_state[key]
     st.success("🗑️ Clear ALL caches complete!")
     st.rerun()
 
@@ -509,4 +509,14 @@ for config in configs_to_display:
     st.write("_____")
 
 if st.sidebar.button("RERUN"):
-    clear_all_caches()
+    # clear_all_caches()
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    sell.cache_clear()
+    buy.cache_clear()
+    # Reset session state on clear cache
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.success("🗑️ Clear ALL caches complete!")
+    st.rerun()
+    
