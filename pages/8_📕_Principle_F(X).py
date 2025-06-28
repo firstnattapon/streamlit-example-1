@@ -30,7 +30,6 @@ st.write('____')
 
 with Control:
   st.link_button("1 .หลักการและคำตอบว่า = ทำไม FIX = LN(T0/TN) ใช้ได้", "https://g.co/gemini/share/b58a41a06475")
-  st.link_button("2 .เครื่องมือประมาณราคาที่ดิน", "https://monica.im/share/artifact?id=DGLpUDdFaW7n9VFcr8B9H6" )
   iframe(frame = "https://monica.im/share/artifact?id=McLUV4GWRWenzAaWWx44qk")
 
 with Mind:
@@ -40,7 +39,7 @@ with Mind:
     st.components.v1.iframe('https://monica.im/share/artifact?id=dKModf53bUtZswz2SbrNoJ', width=1500 , height=800  , scrolling=0)
 
 with tab5:
-  iframe(frame = "https://monica.im/share/artifact?id=DGLpUDdFaW7n9VFcr8B9H6") 
+  iframe(frame = "https://monica.im/share/artifact?id=jaZw59TvuQ9kqBS3534m64") 
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
