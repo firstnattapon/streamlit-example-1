@@ -39,7 +39,7 @@ with Mind:
     st.components.v1.iframe('https://monica.im/share/artifact?id=dKModf53bUtZswz2SbrNoJ', width=1500 , height=800  , scrolling=0)
 
 with tab5:
-  iframe(frame = "https://monica.im/share/artifact?id=iNUKsJV35dFuUaZ69QMeL") 
+  iframe(frame = "https://monica.im/share/artifact?id=M5SNUM3Cf5NPcJDXYfJp5D") 
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
