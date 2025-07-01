@@ -40,7 +40,9 @@ with Mind:
 
 with tab5:
   iframe(frame = "https://monica.im/share/artifact?id=M5SNUM3Cf5NPcJDXYfJp5D")  
- 
+  iframe(frame = "https://monica.im/share/artifact?id=qr3NDpRzDEi2oXeD2Pm2sb")  
+
+
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
   st.write('https://www.mindmeister.com/app/map/3178532454?m=outline')
