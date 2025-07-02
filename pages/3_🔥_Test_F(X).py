@@ -16,8 +16,9 @@ from numba import njit
 # 1. Configuration & Constants
 # ==============================================================================
 st.set_page_config(page_title="Closed-Loop Hybrid Backtester", page_icon="🔄", layout="wide")
+CONFIG_FILE_PATH = "add_gen_config.json" # <--- ตั้งชื่อไฟล์ที่นี่
 
-def load_config(filepath: str = "add_gen_config.json") -> List[Dict[str, Any]]:
+def load_config(filepath: str = CONFIG_FILE_PATH) -> List[Dict[str, Any]]:
     """Loads asset configurations from a JSON file."""
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -189,19 +190,18 @@ def read_from_thingspeak(channel: thingspeak.Channel, field_id: int) -> Optional
 def run_backtest_and_update_workflow(asset_config: Dict[str, Any], params: Dict[str, Any]):
     """The main logic loop for a single asset."""
     ticker = asset_config['ticker']
-    field_id = asset_config['field_id']
+    # <--- ปรับให้ตรงกับ key ใน JSON
+    field_id = asset_config['thingspeak_field'] 
     
     st.info(f"🚀 เริ่มกระบวนการสำหรับ **{ticker}**...")
     status_container = st.container(border=True)
     
-    # --- Validate Config and Connect to ThingSpeak ---
-    if 'read_api_key' not in asset_config or not asset_config['read_api_key']:
-        st.error(f"[{ticker}] ขาด `read_api_key` ในไฟล์ config.json กรุณาเพิ่มเติมข้อมูล")
-        return
-
+    # --- Connect to ThingSpeak ---
     with st.spinner(f"[{ticker}] กำลังเชื่อมต่อกับ ThingSpeak..."):
         try:
-            channel = thingspeak.Channel(id=asset_config['channel_id'], write_key=asset_config['write_api_key'], read_key=asset_config['read_api_key'])
+            # ใช้ `read_api_key` ถ้ามี, ถ้าไม่มีจะใช้ `write_api_key` สำหรับการอ่าน (สำหรับ Public Channel)
+            read_key = asset_config.get('read_api_key') 
+            channel = thingspeak.Channel(id=asset_config['channel_id'], write_key=asset_config['write_api_key'], read_key=read_key)
         except Exception as e:
             st.error(f"[{ticker}] ไม่สามารถสร้างการเชื่อมต่อ ThingSpeak ได้: {e}")
             return
@@ -283,7 +283,7 @@ def main():
     asset_configs = load_config()
 
     if not asset_configs:
-        st.warning("กรุณาสร้างและตั้งค่าไฟล์ `config.json` ให้ถูกต้อง")
+        st.warning(f"กรุณาสร้างและตั้งค่าไฟล์ `{CONFIG_FILE_PATH}` ให้ถูกต้อง")
         return
 
     # Create Tabs from config
