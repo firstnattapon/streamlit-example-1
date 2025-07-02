@@ -16,7 +16,7 @@ from numba import njit
 # 1. Configuration & Constants
 # ==============================================================================
 st.set_page_config(page_title="Closed-Loop Hybrid Backtester", page_icon="🔄", layout="wide")
-CONFIG_FILE_PATH = "add_gen_config.json" # <--- ตั้งชื่อไฟล์ที่นี่
+CONFIG_FILE_PATH = "add_gen_config.json" # ตั้งชื่อไฟล์ที่นี่
 
 def load_config(filepath: str = CONFIG_FILE_PATH) -> List[Dict[str, Any]]:
     """Loads asset configurations from a JSON file."""
@@ -36,7 +36,7 @@ def initialize_session_state():
         st.session_state.results = {}
 
 # ==============================================================================
-# 2. Core Calculation & Data Functions (No changes needed)
+# 2. Core Calculation & Data Functions (No changes)
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -190,7 +190,6 @@ def read_from_thingspeak(channel: thingspeak.Channel, field_id: int) -> Optional
 def run_backtest_and_update_workflow(asset_config: Dict[str, Any], params: Dict[str, Any]):
     """The main logic loop for a single asset."""
     ticker = asset_config['ticker']
-    # <--- ปรับให้ตรงกับ key ใน JSON
     field_id = asset_config['thingspeak_field'] 
     
     st.info(f"🚀 เริ่มกระบวนการสำหรับ **{ticker}**...")
@@ -199,16 +198,27 @@ def run_backtest_and_update_workflow(asset_config: Dict[str, Any], params: Dict[
     # --- Connect to ThingSpeak ---
     with st.spinner(f"[{ticker}] กำลังเชื่อมต่อกับ ThingSpeak..."):
         try:
-            # ใช้ `read_api_key` ถ้ามี, ถ้าไม่มีจะใช้ `write_api_key` สำหรับการอ่าน (สำหรับ Public Channel)
-            read_key = asset_config.get('read_api_key') 
-            channel = thingspeak.Channel(id=asset_config['channel_id'], write_key=asset_config['write_api_key'], read_key=read_key)
+            # === START OF MODIFICATION ===
+            # Create a channel object for writing first.
+            # Older library versions use 'api_key' instead of 'write_key'.
+            write_channel = thingspeak.Channel(id=asset_config['channel_id'], api_key=asset_config['write_api_key'])
+            
+            # Create a separate channel object for reading.
+            # If 'read_api_key' is missing, it will attempt to read from a public channel.
+            read_key = asset_config.get('read_api_key')
+            read_channel = thingspeak.Channel(id=asset_config['channel_id'], api_key=read_key)
+            # === END OF MODIFICATION ===
+
         except Exception as e:
+            # Catch the error and display it clearly.
             st.error(f"[{ticker}] ไม่สามารถสร้างการเชื่อมต่อ ThingSpeak ได้: {e}")
+            st.error("โปรดตรวจสอบว่า `channel_id` และ `write_api_key` ในไฟล์ config ถูกต้อง")
             return
 
     # --- 1. Read from API ---
     with st.spinner(f"[{ticker}] กำลังอ่านค่าล่าสุดจาก Field {field_id}..."):
-        current_api_value = read_from_thingspeak(channel, field_id)
+        # Use the dedicated read_channel for reading
+        current_api_value = read_from_thingspeak(read_channel, field_id)
         if current_api_value is not None:
             status_container.metric("📊 ค่าปัจจุบันบน ThingSpeak", f"{current_api_value:,}")
         else:
@@ -246,7 +256,8 @@ def run_backtest_and_update_workflow(asset_config: Dict[str, Any], params: Dict[
         st.info(f"[{ticker}] พบค่าใหม่! ({newly_calculated_value:,}) กำลังอัปเดต ThingSpeak...")
         with st.spinner(f"[{ticker}] Sending update to Field {field_id}..."):
             try:
-                channel.update({f'field{field_id}': newly_calculated_value})
+                # Use the dedicated write_channel for updating
+                write_channel.update({f'field{field_id}': newly_calculated_value})
                 st.success(f"🎉 [{ticker}] อัปเดต ThingSpeak สำเร็จ!")
             except Exception as e:
                 st.error(f"[{ticker}] การอัปเดต ThingSpeak ล้มเหลว: {e}")
