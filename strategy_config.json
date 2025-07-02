@@ -5,7 +5,7 @@
         "thingspeak_field": 2,
         "channel_id": 2385118,
         "write_api_key": "IPSG3MMMBJEB9DY8",
-        "read_api_key": ""
+        "read_api_key": "9KI3K55D4994FNB4"
     },
     {
         "ticker": "NEGG",
@@ -13,7 +13,7 @@
         "thingspeak_field": 3,
         "channel_id": 2385118,
         "write_api_key": "IPSG3MMMBJEB9DY8",
-        "read_api_key": ""
+        "read_api_key": "9KI3K55D4994FNB4"
     },
     {
         "ticker": "RIVN",
@@ -21,7 +21,7 @@
         "thingspeak_field": 4,
         "channel_id": 2385118,
         "write_api_key": "IPSG3MMMBJEB9DY8",
-        "read_api_key": ""
+        "read_api_key": "9KI3K55D4994FNB4"
     },
     {
         "ticker": "APLS",
@@ -29,7 +29,7 @@
         "thingspeak_field": 5,
         "channel_id": 2385118,
         "write_api_key": "IPSG3MMMBJEB9DY8",
-        "read_api_key": ""
+        "read_api_key": "9KI3K55D4994FNB4"
     },
     {
         "ticker": "NVTS",
@@ -37,7 +37,7 @@
         "thingspeak_field": 6,
         "channel_id": 2385118,
         "write_api_key": "IPSG3MMMBJEB9DY8",
-        "read_api_key": ""
+        "read_api_key": "9KI3K55D4994FNB4"
     },
     {
         "ticker": "QXO",
@@ -45,7 +45,7 @@
         "thingspeak_field": 7,
         "channel_id": 2385118,
         "write_api_key": "IPSG3MMMBJEB9DY8",
-        "read_api_key": ""
+        "read_api_key": "9KI3K55D4994FNB4"
     },
     {
         "ticker": "RXRX",
@@ -53,7 +53,7 @@
         "thingspeak_field": 8,
         "channel_id": 2385118,
         "write_api_key": "IPSG3MMMBJEB9DY8",
-        "read_api_key": ""
+        "read_api_key": "9KI3K55D4994FNB4"
     },
     {
         "ticker": "AGL",
@@ -61,7 +61,7 @@
         "thingspeak_field": 1,
         "channel_id": 2385118,
         "write_api_key": "IPSG3MMMBJEB9DY8",
-        "read_api_key": ""
+        "read_api_key": "9KI3K55D4994FNB4"
     },
     {
         "ticker": "FLNC",
@@ -69,6 +69,6 @@
         "thingspeak_field": 1,
         "channel_id": 2988808,
         "write_api_key": "QBIPN1AIZ88QQW5V",
-        "read_api_key": ""
+        "read_api_key": "BM2UIBSOZ257I2OF"
     }
 ]
