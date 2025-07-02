@@ -1,4 +1,4 @@
-# main 
+# main
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -25,19 +25,8 @@ class Strategy:
     HYBRID_MULTI_MUTATION = "Hybrid (Multi-Mutation)"
     ORIGINAL_DNA = "Original DNA (Pre-Mutation)"
 
-def load_app_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
-    # Config for the Hybrid Strategy Lab itself
-    return {
-        "assets": ["FFWM", "NEGG", "RIVN", "AGL", "APLS", "FLNC", "NVTS" , "QXO" ,"RXRX"],
-        "default_settings": {
-            "selected_ticker": "FFWM", "start_date": "2024-01-01",
-            "window_size": 30 , "num_seeds": 1000, "max_workers": 1,
-            "mutation_rate": 10.0, "num_mutations": 5
-        }
-    }
-
-def load_automation_config(filename="strategy_config.json"):
-    """Loads asset configurations for automation from a JSON file."""
+def load_config(filename="strategy_config.json"):
+    """Loads all configurations from a single JSON file."""
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -49,6 +38,7 @@ def load_automation_config(filename="strategy_config.json"):
         return None
 
 def initialize_session_state(config: Dict[str, Any]):
+    # Uses the 'default_settings' section from the loaded config
     defaults = config.get('default_settings', {})
     if 'test_ticker' not in st.session_state: st.session_state.test_ticker = defaults.get('selected_ticker', 'FFWM')
     if 'start_date' not in st.session_state:
@@ -62,7 +52,7 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
 
 # ==============================================================================
-# 2. Core Calculation & Data Functions (Unchanged from Original)
+# 2. Core Calculation & Data Functions (Unchanged)
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -90,40 +80,8 @@ def _calculate_net_profit_numba(action_array: np.ndarray, price_array: np.ndarra
     net = final_sumusd - refer_net - initial_capital
     return net
 
-def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> pd.DataFrame:
-    @njit
-    def _full_sim_numba(action_arr, price_arr, fix_val):
-        n = len(action_arr); empty = np.empty(0, dtype=np.float64)
-        if n == 0 or len(price_arr) == 0: return empty, empty, empty, empty, empty, empty
-        action_calc = action_arr.copy(); action_calc[0] = 1
-        amount = np.empty(n, dtype=np.float64); buffer = np.zeros(n, dtype=np.float64)
-        cash = np.empty(n, dtype=np.float64); asset_val = np.empty(n, dtype=np.float64)
-        sumusd_val = np.empty(n, dtype=np.float64)
-        init_price = price_arr[0]; amount[0] = fix_val / init_price; cash[0] = fix_val
-        asset_val[0] = amount[0] * init_price; sumusd_val[0] = cash[0] + asset_val[0]
-        refer = -fix_val * np.log(init_price / price_arr[:n])
-        for i in range(1, n):
-            curr_price = price_arr[i]
-            if action_calc[i] == 0: amount[i] = amount[i-1]; buffer[i] = 0.0
-            else: amount[i] = fix_val / curr_price; buffer[i] = amount[i-1] * curr_price - fix_val
-            cash[i] = cash[i-1] + buffer[i]; asset_val[i] = amount[i] * curr_price; sumusd_val[i] = cash[i] + asset_val[i]
-        return buffer, sumusd_val, cash, asset_val, amount, refer
-
-    if not prices or not actions: return pd.DataFrame()
-    min_len = min(len(prices), len(actions))
-    prices_arr = np.array(prices[:min_len], dtype=np.float64); actions_arr = np.array(actions[:min_len], dtype=np.int32)
-    buffer, sumusd, cash, asset_value, amount, refer = _full_sim_numba(actions_arr, prices_arr, fix)
-    if len(sumusd) == 0: return pd.DataFrame()
-    initial_capital = sumusd[0]
-    return pd.DataFrame({
-        'price': prices_arr, 'action': actions_arr, 'buffer': np.round(buffer, 2),
-        'sumusd': np.round(sumusd, 2), 'cash': np.round(cash, 2), 'asset_value': np.round(asset_value, 2),
-        'amount': np.round(amount, 2), 'refer': np.round(refer + initial_capital, 2),
-        'net': np.round(sumusd - refer - initial_capital, 2)
-    })
-
 # ==============================================================================
-# 3. Strategy Action Generation (Unchanged from Original)
+# 3. Strategy Action Generation (Unchanged)
 # ==============================================================================
 def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int, max_workers: int) -> Tuple[int, float, np.ndarray]:
     window_len = len(prices_window)
@@ -240,7 +198,7 @@ def generate_actions_hybrid_multi_mutation(
 
 
 # ==============================================================================
-# 4. Simulation Tracer & Encoder Class (Unchanged from Original)
+# 4. Simulation Tracer & Encoder Class (Unchanged)
 # ==============================================================================
 class SimulationTracer:
     def __init__(self, encoded_string: str):
@@ -283,13 +241,14 @@ class SimulationTracer:
         return "".join([f"{len(str(num))}{num}" for num in all_numbers])
 
 # ==============================================================================
-# 5. UI Rendering Functions (Originals + New Automation Tab)
+# 5. UI Rendering Functions
 # ==============================================================================
-def render_settings_tab():
-    # This function is unchanged
+def render_settings_tab(config: Dict[str, Any]):
     st.write("⚙️ **การตั้งค่าพารามิเตอร์**")
-    config = load_app_config()
-    asset_list = config.get('assets', ['FFWM'])
+    
+    # Get the asset list for the dropdown from the unified config
+    asset_configs = config.get('automation_assets', [])
+    asset_list = [asset['ticker'] for asset in asset_configs] if asset_configs else ['FFWM']
 
     c1, c2 = st.columns(2)
     st.session_state.test_ticker = c1.selectbox("เลือก Ticker สำหรับทดสอบ", options=asset_list, index=asset_list.index(st.session_state.test_ticker) if st.session_state.test_ticker in asset_list else 0)
@@ -312,45 +271,35 @@ def render_settings_tab():
 
 
 def render_hybrid_multi_mutation_tab():
-    # This function is mostly unchanged, but now uses the shared progress bar version of the generator
-    st.write("---")
     st.markdown(f"### 🧬 {Strategy.HYBRID_MULTI_MUTATION}")
     st.info("กลยุทธ์นี้ทำงานโดย: 1. ค้นหา 'DNA' ที่ดีที่สุดในแต่ละ Window 2. นำ DNA นั้นมาพยายาม 'กลายพันธุ์' (Mutate) ซ้ำๆ เพื่อหาผลลัพธ์ที่ดีกว่าเดิม")
 
     if st.button(f"🚀 Start Hybrid Multi-Mutation", type="primary"):
         if st.session_state.start_date >= st.session_state.end_date:
-            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง")
-            return
+            st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
+        
         ticker = st.session_state.test_ticker
         with st.spinner(f"กำลังดึงข้อมูลและประมวลผลสำหรับ {ticker}..."):
             ticker_data = get_ticker_data(ticker, str(st.session_state.start_date), str(st.session_state.end_date))
-            if ticker_data.empty:
-                st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก")
-                return
+            if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
 
             progress_bar = st.progress(0, text="Initializing Hybrid Multi-Mutation Search...")
-            original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
+            _, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
                 ticker_data, st.session_state.window_size, st.session_state.num_seeds,
                 st.session_state.max_workers, st.session_state.mutation_rate,
                 st.session_state.num_mutations, progress_bar
             )
-            # ... Rest of the display logic ...
             st.session_state.simulation_results = {
                  Strategy.HYBRID_MULTI_MUTATION: run_simulation(ticker_data['Close'].tolist(), final_actions.tolist()),
-                 # Add other strategies if needed
             }
             st.session_state.df_windows_details = df_windows
             st.success("Test complete!")
-            # Code to display charts, metrics, and tables would go here. For brevity, it's omitted but would be the same as your original file.
+            # Full display logic (charts, tables) can be added here as in your original file.
 
 def render_tracer_tab():
     # This function is unchanged
     st.markdown("### 🔍 Action Sequence Tracer & Encoder")
-    st.info("เครื่องมือนี้ใช้สำหรับ 1. **ถอดรหัส (Decode)** String เพื่อจำลองผลลัพธ์ และ 2. **เข้ารหัส (Encode)** พารามิเตอร์เพื่อสร้าง String")
-
-    st.markdown("---")
-    st.markdown("#### 1. ถอดรหัส (Decode) String")
-    encoded_string = st.text_input("ป้อน Encoded String ที่นี่:", "2302104900", key="decoder_input")
+    encoded_string = st.text_input("ป้อน Encoded String ที่นี่:", "2602104900", key="decoder_input")
     if st.button("Trace & Simulate", type="primary", key="tracer_button"):
         if encoded_string:
             try:
@@ -361,14 +310,13 @@ def render_tracer_tab():
                 st.dataframe(pd.DataFrame(final_actions, columns=['Action']), use_container_width=True)
             except ValueError as e: st.error(f"❌ เกิดข้อผิดพลาดในการประมวลผล: {e}")
 
-def render_automation_hub_tab():
-    """Renders the UI for the new automation workflow."""
+def render_automation_hub_tab(config: Dict[str, Any]):
     st.markdown("### 🤖 Automation Hub")
-    st.info("ส่วนนี้จะทำการค้นหากลยุทธ์ที่ดีที่สุดสำหรับ Ticker แต่ละตัวจากไฟล์ `strategy_config.json` โดยอัตโนมัติ และอัปเดตไปยัง ThingSpeak หากพบกลยุทธ์ใหม่ที่ดีกว่าเดิม")
+    st.info("ส่วนนี้จะทำการค้นหากลยุทธ์ที่ดีที่สุดสำหรับ Ticker แต่ละตัวจากไฟล์ `config.json` โดยอัตโนมัติ และอัปเดตไปยัง ThingSpeak หากพบกลยุทธ์ใหม่")
 
-    automation_config = load_automation_config()
-    if not automation_config:
-        st.error("ไม่สามารถโหลดไฟล์ `strategy_config.json` ได้ กรุณาตรวจสอบว่าไฟล์ถูกต้องและอยู่ในตำแหน่งที่ถูกต้อง")
+    automation_configs = config.get('automation_assets')
+    if not automation_configs:
+        st.error("ไม่พบส่วน `automation_assets` ใน `config.json`")
         return
 
     st.markdown("#### Automation Settings")
@@ -376,101 +324,76 @@ def render_automation_hub_tab():
                                     help="จำนวนวันที่ต้องการดึงข้อมูลย้อนหลังเพื่อคำนวณกลยุทธ์")
 
     if st.button("🚀 Run Automation for All Tickers", type="primary"):
-        run_automation_workflow(automation_config, lookback_days)
+        run_automation_workflow(automation_configs, lookback_days)
 
-def run_automation_workflow(config: List[Dict], lookback_days: int):
-    """The main logic for the automated workflow."""
-    st.write("---")
-    st.header("Automation Run Log")
+def run_automation_workflow(asset_configs: List[Dict], lookback_days: int):
+    st.write("---"); st.header("Automation Run Log")
 
     # Get shared parameters from the settings tab
-    window_size = st.session_state.window_size
-    num_seeds = st.session_state.num_seeds
-    max_workers = st.session_state.max_workers
-    mutation_rate_pct = st.session_state.mutation_rate
-    num_mutations = st.session_state.num_mutations
+    window_size, num_seeds, max_workers, mutation_rate_pct, num_mutations = (
+        st.session_state.window_size, st.session_state.num_seeds, st.session_state.max_workers,
+        st.session_state.mutation_rate, st.session_state.num_mutations
+    )
+    end_date, start_date = datetime.now(), datetime.now() - timedelta(days=lookback_days)
 
-    # Define the date range for the run
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=lookback_days)
-
-    for asset in config:
+    for asset in asset_configs:
         ticker = asset['ticker']
         with st.status(f"Processing {ticker}...", expanded=True) as status:
             try:
                 # 1. Get Data
-                st.write(f"Fetching data for {ticker} from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}...")
+                st.write(f"Fetching data for {ticker}...")
                 ticker_data = get_ticker_data(ticker, start_date, end_date)
                 if ticker_data.empty:
-                    st.warning(f"No data found for {ticker} in the given period. Skipping.")
-                    status.update(label=f"⚠️ {ticker}: No data", state="complete", expanded=False)
-                    continue
+                    st.warning(f"No data for {ticker}. Skipping."); status.update(label=f"⚠️ {ticker}: No data", state="complete", expanded=False); continue
 
                 # 2. Generate Strategy
                 st.write(f"Running Hybrid Multi-Mutation strategy...")
                 _, _, df_windows = generate_actions_hybrid_multi_mutation(
                     ticker_data, window_size, num_seeds, max_workers, mutation_rate_pct, num_mutations
                 )
-
                 if df_windows.empty:
-                    st.warning("Strategy generation did not produce any results. Skipping.")
-                    status.update(label=f"⚠️ {ticker}: No strategy found", state="complete", expanded=False)
-                    continue
+                    st.warning("Strategy generation failed. Skipping."); status.update(label=f"⚠️ {ticker}: No strategy", state="complete", expanded=False); continue
 
-                # 3. Extract parameters from the LATEST window
+                # 3. Extract and Encode latest window
                 latest_window_data = df_windows.iloc[-1]
                 dna_seed = int(latest_window_data['dna_seed'])
-
-                # Safely parse mutation_seeds string like '[90, 219]' or 'None'
                 mutation_seeds_str = latest_window_data['mutation_seeds']
-                mutation_seeds = []
-                if mutation_seeds_str not in ["None", "[]", ""]:
-                    cleaned_str = mutation_seeds_str.strip('[]')
-                    if cleaned_str:
-                        mutation_seeds = [int(s.strip()) for s in cleaned_str.split(',')]
+                mutation_seeds = [int(s.strip()) for s in mutation_seeds_str.strip('[]').split(',') if s.strip().isdigit()]
+                
+                action_length = len(ticker_data) % window_size or window_size
 
-                # Calculate action_length for the last window
-                total_days = len(ticker_data)
-                num_full_windows = (total_days - 1) // window_size
-                start_index_last_window = num_full_windows * window_size
-                action_length = total_days - start_index_last_window
-
-                # 4. Encode the strategy into a string
                 encoded_string = SimulationTracer.encode(
-                    action_length=action_length,
-                    mutation_rate=int(mutation_rate_pct), # Encoder expects an int
-                    dna_seed=dna_seed,
-                    mutation_seeds=mutation_seeds
+                    action_length=action_length, mutation_rate=int(mutation_rate_pct),
+                    dna_seed=dna_seed, mutation_seeds=mutation_seeds
                 )
                 st.write(f"Generated encoded string: `{encoded_string}`")
 
-                # 5. Connect to ThingSpeak and compare
-                channel_id = asset['channel_id']
-                field_num = asset['thingspeak_field']
-                write_key = asset['write_api_key']
-                read_key = asset.get('read_api_key', '') # Optional read key
-
-                st.write(f"Connecting to ThingSpeak Channel {channel_id}, Field {field_num}...")
-                client = thingspeak.Channel(id=channel_id, write_key=write_key, read_key=read_key)
+                # 4. Connect to ThingSpeak and compare
+                channel_id, field_num, write_key, read_key = (
+                    asset['channel_id'], asset['thingspeak_field'], asset['write_api_key'], asset.get('read_api_key', '')
+                )
                 
-                # Read the last value
-                last_entry_json = client.get({'field': field_num, 'results': 1})
-                last_value = None
-                if last_entry_json and 'feeds' in last_entry_json and last_entry_json['feeds']:
-                    last_value = last_entry_json['feeds'][0].get(f'field{field_num}')
+                # FIX: Initialize with write_key as 'api_key'
+                client = thingspeak.Channel(id=channel_id, api_key=write_key)
+                
+                # FIX: Pass read_key in 'get' options if it exists
+                get_options = {'field': field_num, 'results': 1}
+                if read_key: get_options['api_key'] = read_key
+
+                last_entry_json = client.get(options=get_options)
+                last_value = last_entry_json['feeds'][0].get(f'field{field_num}') if last_entry_json.get('feeds') else None
                 
                 st.write(f"Last value on ThingSpeak: `{last_value}`")
 
-                # 6. Update if different
+                # 5. Update if different
                 if str(encoded_string) != str(last_value):
                     st.write(f"New strategy found. Updating ThingSpeak...")
                     client.update({f'field{field_num}': encoded_string})
-                    status.update(label=f"✅ {ticker}: Updated to ThingSpeak", state="complete", expanded=False)
+                    status.update(label=f"✅ {ticker}: Updated", state="complete", expanded=False)
                     st.success(f"Successfully updated {ticker}!")
                     time.sleep(16) # IMPORTANT: Respect ThingSpeak API rate limit
                 else:
-                    st.write("Strategy is already up-to-date. No changes needed.")
-                    status.update(label=f"☑️ {ticker}: No changes needed", state="complete", expanded=False)
+                    st.write("Strategy is up-to-date."); status.update(label=f"☑️ {ticker}: No changes", state="complete", expanded=False)
 
             except Exception as e:
                 st.error(f"An error occurred while processing {ticker}: {e}")
@@ -483,23 +406,23 @@ def main():
     st.markdown("### 🤖 Automated Strategy Lab")
     st.caption("A unified tool for strategy generation, backtesting, and automated deployment to ThingSpeak.")
 
-    app_config = load_app_config()
-    initialize_session_state(app_config)
+    config = load_config()
+    if config is None:
+        st.stop() # Halt execution if config file is invalid
+
+    initialize_session_state(config)
 
     tab_list = ["⚙️ Settings", f"🧬 {Strategy.HYBRID_MULTI_MUTATION}", "🔍 Tracer", "🤖 Automation Hub"]
     tabs = st.tabs(tab_list)
 
     with tabs[0]:
-        render_settings_tab()
+        render_settings_tab(config)
     with tabs[1]:
-        # This tab is for manual, detailed analysis.
-        # The full rendering logic is complex and kept separate.
-        # For simplicity in this merged example, we can show a placeholder or the core button.
         render_hybrid_multi_mutation_tab()
     with tabs[2]:
         render_tracer_tab()
     with tabs[3]:
-        render_automation_hub_tab()
+        render_automation_hub_tab(config)
 
 if __name__ == "__main__":
     main()
