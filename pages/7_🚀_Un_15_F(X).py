@@ -6,7 +6,7 @@ import json
 import plotly.express as px
 
 # ------------------- ส่วนที่ปรับปรุงใหม่ -------------------
-
+ 
 # 1. ฟังก์ชันสำหรับโหลด Config จากไฟล์ JSON
 def load_config(filename="un15_fx_config.json"):
     """Loads asset configurations from a JSON file."""
