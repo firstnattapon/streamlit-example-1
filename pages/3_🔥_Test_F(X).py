@@ -17,7 +17,7 @@ from numba import njit
 # ==============================================================================
 st.set_page_config(page_title="Closed-Loop Hybrid Backtester", page_icon="🔄", layout="wide")
 
-def load_config(filepath: str = "config.json") -> List[Dict[str, Any]]:
+def load_config(filepath: str = "add_gen_config.json") -> List[Dict[str, Any]]:
     """Loads asset configurations from a JSON file."""
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
