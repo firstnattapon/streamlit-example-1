@@ -289,7 +289,7 @@ def main():
     st.title("🤖 Hybrid Strategy Automation Runner")
     st.caption("This tool automates the process of finding and updating the best strategy on ThingSpeak.")
 
-    config_filepath = "automation_config.json"
+    config_filepath = "strategy_config.json"
     config = load_config(config_filepath)
 
     if not config:
