@@ -545,7 +545,8 @@ def render_hybrid_multi_mutation_tab():
             > ✨ **ผลลัพธ์สุดท้าย** คือ Actions ของ "ผู้ท้าชิง" หนึ่งราย ที่พร้อมจะถูกนำไปประเมินผลกำไรเพื่อท้าชิงตำแหน่งแชมป์เปี้ยนต่อไป กระบวนการทั้งหมดนี้จะเกิดขึ้นซ้ำๆ หลายพันครั้งเพื่อค้นหารูปแบบการกลายพันธุ์ที่ดีที่สุดเพียงหนึ่งเดียวในแต่ละรอบ
             """)
      
-        code = """import numpy as np
+        code = """ ตัวอย่าง code
+        import numpy as np
         dna_rng = np.random.default_rng(seed=239)
         current_actions = dna_rng.integers(0, 2, size=30)
         default_actions = current_actions.copy() 
