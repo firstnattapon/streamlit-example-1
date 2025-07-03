@@ -61,5 +61,12 @@
         "thingspeak_field": 1,
         "channel_id": 2988808,
         "write_api_key": "QBIPN1AIZ88QQW5V"
+    },
+    {
+        "ticker": "GERN",
+        "tab_name": "GERN",
+        "thingspeak_field": 2,
+        "channel_id": 2988808,
+        "write_api_key": "QBIPN1AIZ88QQW5V"
     }
 ]
