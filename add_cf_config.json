@@ -48,7 +48,15 @@
             "contracts_or_shares": 100,
             "premium_paid_per_share": 0.98,
             "strike": 6.0
-        },        
+        }, 
+        {
+            "type": "option",
+            "name": "GERN Call @ 1.85",
+            "underlying_ticker": "GERN",
+            "contracts_or_shares": 800,
+            "premium_paid_per_share": 0.36,
+            "strike": 1.5
+        },           
         {
             "type": "stock",
             "ticker": "FFWM",
@@ -137,6 +145,16 @@
                 "channel_id": 2988802,
                 "write_api_key": "85IOR3R3ZG643PBP",
                 "field": "field1"
+            }
+        },
+        {
+            "type": "stock",
+            "ticker": "GERN",
+            "reference_price": 1.85,
+            "holding_channel": {
+                "channel_id": 2988802,
+                "write_api_key": "85IOR3R3ZG643PBP",
+                "field": "field2"
             }
         }
     ]
