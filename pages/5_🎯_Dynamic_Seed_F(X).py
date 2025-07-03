@@ -33,7 +33,7 @@ class Strategy:
     LFSR_SEARCH = "LFSR (Characteristic Poly)"
 
 
-def load_config(filepath: str = "dynamic_seed_config.json") -> Dict[str, Any]:
+def load_config(filepath: str = "hybrid_seed_config.json") -> Dict[str, Any]:
     """
     โหลดการตั้งค่าจากไฟล์ JSON
     หากไฟล์ไม่พบหรือมีข้อผิดพลาด จะคืนค่า default เพื่อให้โปรแกรมทำงานต่อได้
