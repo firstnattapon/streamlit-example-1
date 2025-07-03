@@ -1,13 +1,13 @@
 {
   "assets": [
-    "FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" 
+    "FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , GERN
   ],
   "default_settings": {
     "selected_ticker": "FFWM",
-    "start_date": "2025-06-10",
+    "start_date": "2024-01-01",
     "window_size": 30,
-    "num_seeds": 30000,
-    "max_workers": 8
+    "num_seeds": 1000,
+    "max_workers": 1
   },
   "manual_seed_by_asset": {
     "FFWM": [
