@@ -545,30 +545,30 @@ def render_hybrid_multi_mutation_tab():
             > ✨ **ผลลัพธ์สุดท้าย** คือ Actions ของ "ผู้ท้าชิง" หนึ่งราย ที่พร้อมจะถูกนำไปประเมินผลกำไรเพื่อท้าชิงตำแหน่งแชมป์เปี้ยนต่อไป กระบวนการทั้งหมดนี้จะเกิดขึ้นซ้ำๆ หลายพันครั้งเพื่อค้นหารูปแบบการกลายพันธุ์ที่ดีที่สุดเพียงหนึ่งเดียวในแต่ละรอบ
             """)
      
-     code = """import numpy as np
-     dna_rng = np.random.default_rng(seed=239)
-     current_actions = dna_rng.integers(0, 2, size=30)
-     default_actions = current_actions.copy() 
-     
-     mutation_seeds = [30]
-     #รอบที่ for loop
-     m_seed = 30
-     mutation_rng = np.random.default_rng(seed=30)
-     mutation_mask = mutation_rng.random(30) < 0.10 # Mutation Rate 10(%)
-     """ [0.72..., 0.39..., 0.03..., 0.58..., 0.41..., ...]
-     [False False  True False False False False False False False False False
-     False False False False False False False False False False  True False
-     False False False False False False] """
-     
-     current_actions[mutation_mask] = 1 - current_actions[mutation_mask] # Flipping the Genes
-     current_actions[0] = 1
-     default_actions[0] = 1
-     
-     print( "mutation_mask" , mutation_mask)
-     print( "default_actions" , default_actions)
-     print( "current_actions" , current_actions)
-     """
-     st.code(code, language="python")
+       code = """import numpy as np
+       dna_rng = np.random.default_rng(seed=239)
+       current_actions = dna_rng.integers(0, 2, size=30)
+       default_actions = current_actions.copy() 
+       
+       mutation_seeds = [30]
+       #รอบที่ for loop
+       m_seed = 30
+       mutation_rng = np.random.default_rng(seed=30)
+       mutation_mask = mutation_rng.random(30) < 0.10 # Mutation Rate 10(%)
+       """ [0.72..., 0.39..., 0.03..., 0.58..., 0.41..., ...]
+       [False False  True False False False False False False False False False
+       False False False False False False False False False False  True False
+       False False False False False False] """
+       
+       current_actions[mutation_mask] = 1 - current_actions[mutation_mask] # Flipping the Genes
+       current_actions[0] = 1
+       default_actions[0] = 1
+       
+       print( "mutation_mask" , mutation_mask)
+       print( "default_actions" , default_actions)
+       print( "current_actions" , current_actions)
+       """
+       st.code(code, language="python")
 
     if st.button(f"🚀 Start Hybrid Multi-Mutation", type="primary"):
         if st.session_state.start_date >= st.session_state.end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
