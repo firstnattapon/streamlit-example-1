@@ -34,6 +34,9 @@
     {
         "ticker": "FLNC",
         "entry_price": 7.00
+    },
+    {
+        "ticker": "GERN",
+        "entry_price": 1.85
     }
-
 ]
