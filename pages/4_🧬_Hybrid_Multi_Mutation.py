@@ -555,10 +555,10 @@ def render_hybrid_multi_mutation_tab():
         m_seed = 30
         mutation_rng = np.random.default_rng(seed=30)
         mutation_mask = mutation_rng.random(30) < 0.10 # Mutation Rate 10(%)
-        """ [0.72..., 0.39..., 0.03..., 0.58..., 0.41..., ...]
+        [0.72..., 0.39..., 0.03..., 0.58..., 0.41..., ...]
         [False False  True False False False False False False False False False
         False False False False False False False False False False  True False
-        False False False False False False] """
+        False False False False False False]
         
         current_actions[mutation_mask] = 1 - current_actions[mutation_mask] # Flipping the Genes
         current_actions[0] = 1
