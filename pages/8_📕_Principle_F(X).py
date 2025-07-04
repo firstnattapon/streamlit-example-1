@@ -12,7 +12,7 @@ def iframe ( frame = ''):
 Main,  Control , Mind  ,   tab2, tab3 , tab4  , tab5 = st.tabs(["Main", "Control" , "Mind"  ,"tab2 (Value vs Time)", "tab3 (Fix_Asset vs Ratio_Asset)" , "tab4 (Principle)"  , "tab5 (Land Price Calculator)" ])
 
 with Main:
-  iframe(frame = "https://monica.im/share/artifact?id=qc2u4umBn2gkyVNUgU68HA")    
+  iframe(frame = "https://monica.im/share/artifact?id=AgioBmcRUSXJpUJA8MwzkG")    
   st.link_button("(Price_Cycle) พื้นฐาน Global_macro ", "https://drive.google.com/file/d/1-bNM1gPEG7i-CW1TMd_6Cu6Z5132UjGZ/view?usp=sharing")
  
 with tab2:
@@ -39,7 +39,6 @@ with Mind:
     st.components.v1.iframe('https://monica.im/share/artifact?id=dKModf53bUtZswz2SbrNoJ', width=1500 , height=800  , scrolling=0)
 
 with tab5:
-  # iframe(frame = "https://monica.im/share/artifact?id=M5SNUM3Cf5NPcJDXYfJp5D")  
   iframe(frame = "https://monica.im/share/artifact?id=qr3NDpRzDEi2oXeD2Pm2sb")  
 
 
