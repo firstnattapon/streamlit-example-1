@@ -131,7 +131,7 @@ def get_max_action(price_list, fix=1500):
 
 @st.cache_data(ttl=600)
 def Limit_fx(Ticker, act=-1):
-    filter_date = '2023-01-01 12:00:00+07:00'
+    filter_date = '2024-01-01 12:00:00+07:00'
     try:
         tickerData = yf.Ticker(Ticker)
         tickerData = tickerData.history(period='max')[['Close']]
