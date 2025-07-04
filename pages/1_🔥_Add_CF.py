@@ -134,7 +134,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         offset_display_val = -config.get('cashflow_offset', 0.0)
         baseline_val = metrics['log_pv'] - metrics['ln']
         product_cost = config.get('product_cost_default', 0)
-        baseline_label = f"💰 Baseline {baseline_val:,.1f}: (Value Controlled) - {product_cost} (Product_cost) = {offset_display_val:+.0f} (LV_OPTION) "
+        baseline_label = f"💰 Baseline {baseline_val:,.1f}: (Controll) - {product_cost} (Cost) = {offset_display_val:+.0f} (Lv) "
         st.metric(label=baseline_label, value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
         
         baseline_target = config.get('baseline_target', 0.0)
