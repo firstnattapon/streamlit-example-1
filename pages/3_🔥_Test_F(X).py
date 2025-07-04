@@ -121,7 +121,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         # MODIFIED: Updated the main metric label to reflect the new calculation.
         # The main value is now (Stocks + Cash - Max_Roll_Over), while the current P/L is still shown for reference.
         st.metric(
-            f"Current Total Value (Stocks + Cash - Max_Roll_Over: {total_option_cost:,.2f}) | Current Options P/L ({options_pl:,.2f})",
+            f"Current Total Value (Stocks + Cash - Max_Roll_Over: (-{total_option_cost:,.2f})) | Current Options P/L ({options_pl:,.2f})",
             f"{metrics['now_pv']:,.2f}"
         )
         col1, col2 = st.columns(2)
