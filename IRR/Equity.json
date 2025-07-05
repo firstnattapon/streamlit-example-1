@@ -1,0 +1,187 @@
+{
+  "projectData": {
+    "duration": 15,
+    "initialInvestment": 10000,
+    "discountRate": 17.91,
+    "currency": "USD",
+    "addTerminalValue": true,
+    "exitMultiple": 0.5
+  },
+  "baseCashFlows": [
+    1500,
+    1575,
+    1654,
+    1736,
+    1823,
+    1914,
+    2010,
+    2111,
+    2216,
+    2327,
+    2443,
+    2566,
+    2694,
+    2828,
+    2970
+  ],
+  "results": {
+    "npv": 0.41015870512387664,
+    "irr": 17.91076485052718,
+    "paybackPeriod": 5.894461859979101
+  },
+  "dcfAnalysisWithTerminalValue": [
+    {
+      "year": 0,
+      "amount": -10000,
+      "presentValue": -10000,
+      "discountFactor": 1
+    },
+    {
+      "year": 1,
+      "amount": 1500,
+      "presentValue": 1272.1567297091,
+      "discountFactor": 0.8481044864727334
+    },
+    {
+      "year": 2,
+      "amount": 1575,
+      "presentValue": 1132.8679214609067,
+      "discountFactor": 0.7192812199751789
+    },
+    {
+      "year": 3,
+      "amount": 1654,
+      "presentValue": 1008.982391518061,
+      "discountFactor": 0.6100256296965303
+    },
+    {
+      "year": 4,
+      "amount": 1736,
+      "presentValue": 898.1464618379921,
+      "discountFactor": 0.5173654734089816
+    },
+    {
+      "year": 5,
+      "amount": 1823,
+      "presentValue": 799.8959019799622,
+      "discountFactor": 0.438779979144247
+    },
+    {
+      "year": 6,
+      "amount": 1914,
+      "presentValue": 712.2592486490448,
+      "discountFactor": 0.37213126888664827
+    },
+    {
+      "year": 7,
+      "amount": 2010,
+      "presentValue": 634.3684593861105,
+      "discountFactor": 0.31560619869955747
+    },
+    {
+      "year": 8,
+      "amount": 2111,
+      "presentValue": 565.045106822802,
+      "discountFactor": 0.26766703307569967
+    },
+    {
+      "year": 9,
+      "amount": 2216,
+      "presentValue": 503.05329937727964,
+      "discountFactor": 0.22700961163234643
+    },
+    {
+      "year": 10,
+      "amount": 2327,
+      "presentValue": 448.0123537176406,
+      "discountFactor": 0.1925278700978258
+    },
+    {
+      "year": 11,
+      "amount": 2443,
+      "presentValue": 398.90220222965695,
+      "discountFactor": 0.1632837504010057
+    },
+    {
+      "year": 12,
+      "amount": 2566,
+      "presentValue": 355.34399417265763,
+      "discountFactor": 0.1384816812831869
+    },
+    {
+      "year": 13,
+      "amount": 2694,
+      "presentValue": 316.40204340336317,
+      "discountFactor": 0.11744693519055797
+    },
+    {
+      "year": 14,
+      "amount": 2828,
+      "presentValue": 281.68936707564916,
+      "discountFactor": 0.09960727265758457
+    },
+    {
+      "year": 15,
+      "amount": 7970,
+      "presentValue": 673.2846773648962,
+      "discountFactor": 0.0844773748262103
+    }
+  ],
+  "sensitivityAnalysis": [
+    {
+      "rate": 12.91,
+      "npv": 3392.745123889827,
+      "change": 827078.6217155006
+    },
+    {
+      "rate": 13.91,
+      "npv": 2581.7975338985234,
+      "change": 629363.0594561601
+    },
+    {
+      "rate": 14.91,
+      "npv": 1844.7485903777629,
+      "change": 449664.58315583225
+    },
+    {
+      "rate": 15.91,
+      "npv": 1173.4469325209081,
+      "change": 285995.82531388727
+    },
+    {
+      "rate": 16.91,
+      "npv": 560.7547321055762,
+      "change": 136616.52584728546
+    },
+    {
+      "rate": 17.91,
+      "npv": 0.41015870512387664,
+      "change": 0
+    },
+    {
+      "rate": 18.91,
+      "npv": -513.0901431868417,
+      "change": -125195.51468178094
+    },
+    {
+      "rate": 19.91,
+      "npv": -984.5916534690635,
+      "change": -240151.38527334091
+    },
+    {
+      "rate": 20.91,
+      "npv": -1418.3682387488252,
+      "change": -345909.6149197779
+    },
+    {
+      "rate": 21.91,
+      "npv": -1818.1962478194298,
+      "change": -443390.90791095025
+    },
+    {
+      "rate": 22.91,
+      "npv": -2187.4182642731616,
+      "change": -533410.2130826444
+    }
+  ]
+}
