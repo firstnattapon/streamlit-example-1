@@ -39,7 +39,7 @@ with Mind:
     st.components.v1.iframe('https://monica.im/share/artifact?id=dKModf53bUtZswz2SbrNoJ', width=1500 , height=800  , scrolling=0)
 
 with tab5:
-  iframe(frame = "https://monica.im/share/artifact?id=fggqW9ubjZazsTYLXSRmjc")  
+  iframe(frame = "https://monica.im/share/artifact?id=d32kfTnpaYiJTVVeK8G9yN")  
 
 with tab6:
   iframe(frame = "https://monica.im/share/artifact?id=nZ4pVgiTTaQXAhEoMZoc9m")  
