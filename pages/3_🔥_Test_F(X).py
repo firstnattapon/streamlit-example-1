@@ -82,7 +82,7 @@ def get_ticker_history(ticker_symbol):
     return round(history, 3)
 
 # ==============================================================================
-# ฟังก์ชัน average_cf ที่แก้ไขเพื่อรองรับ max_rollover
+# ฟังก์ชัน average_cf ที่แก้ไขให้รองรับทั้ง 'max_roll_over' และ 'max_rollover'
 # ==============================================================================
 def average_cf(cf_config):
     history = get_ticker_history(cf_config['ticker'])
@@ -90,31 +90,36 @@ def average_cf(cf_config):
     filter_date = cf_config.get('filter_date_cf', default_date)
     filtered_data = history[history.index >= filter_date]
     count_data = len(filtered_data)
+    
+    offset = cf_config.get('offset', 0)
+
+    # ทำให้ยืดหยุ่น: ตรวจสอบ key 'max_roll_over' ก่อน ถ้าไม่เจอค่อยหา 'max_rollover'
+    max_val = cf_config.get('max_roll_over') 
+    if max_val is None:
+        max_val = cf_config.get('max_rollover') # ตรวจสอบ key แบบเก่า
+
+    # ถ้าหาไม่เจอทั้งสองแบบ ให้ใช้ค่าอนันต์ (ไม่มี limit)
+    max_rollover = max_val if max_val is not None else float('inf')
+
     if count_data == 0:
-        return 0, 0, 0, False # Return tuple of zeros with was_capped=False
+        return 0, 0, 0, 0, offset, False 
 
     client = thingspeak.Channel(id=cf_config['channel_id'], api_key=cf_config['write_api_key'], fmt='json')
     field_data = client.get_field_last(field=f"{cf_config['field']}")
-    value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
-    adjusted_value = value - cf_config.get('offset', 0)
+    gross_value = int(eval(json.loads(field_data)[f"field{cf_config['field']}"]))
     
-    # คำนวณ cf/day เริ่มต้น
+    adjusted_value = gross_value - offset
+    
     initial_cf_day = adjusted_value / count_data
-    
-    # ดึงค่า max_rollover จาก config, ถ้าไม่มีให้ใช้ค่าอนันต์ (ไม่มี limit)
-    max_rollover = cf_config.get('max_rollover', float('inf'))
-    
-    # ใช้ค่าที่น้อยกว่าระหว่างค่าที่คำนวณได้กับ max_rollover
     final_cf_day = min(initial_cf_day, max_rollover)
-    
-    # ตรวจสอบว่าค่าถูก cap หรือไม่
     was_capped = initial_cf_day > final_cf_day
     
-    return final_cf_day, count_data, adjusted_value, was_capped
+    return final_cf_day, count_data, gross_value, adjusted_value, offset, was_capped
 # ==============================================================================
 
 @st.cache_data(ttl=60)
 def production_cost(ticker, t0, fix):
+    # ... (No changes in this function)
     if t0 <= 0 or fix == 0:
         return None
     try:
@@ -131,6 +136,7 @@ def production_cost(ticker, t0, fix):
         return None
 
 def monitor(channel_id, api_key, ticker, field, filter_date, cf_day):
+    # ... (No changes in this function)
     thingspeak_client = thingspeak.Channel(id=channel_id, api_key=api_key, fmt='json')
     history = get_ticker_history(ticker)
     filtered_data = history[history.index >= filter_date].copy()
@@ -191,30 +197,24 @@ def monitor(channel_id, api_key, ticker, field, filter_date, cf_day):
     combined_df.index.name = '↓ index'
     return combined_df, fx_js
 
-# ==============================================================================
-# ฟังก์ชัน main ที่แก้ไขเพื่อแสดงผลค่า cf_day ที่อาจถูก cap
-# ==============================================================================
 def main():
+    # ... (No changes in this function)
     st.write('____')
-
     avg_cf_config = CONFIG.get('average_cf_config')
     cf_day = 0.0
     if avg_cf_config:
-        # รับค่า was_capped กลับมาด้วย
-        cf_day, count_data, adjusted_value, was_capped = average_cf(avg_cf_config)
-        
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric(label="Net (USD)", value=f"{adjusted_value:.2f}")
-        col2.metric(label="Days", value=f"{count_data}")
-        
-        # เตรียมข้อความสำหรับแสดงผล
-        cf_day_display = f"{cf_day:.2f}"
+        (cf_day, count_data, gross_value, 
+         adjusted_value, offset, was_capped) = average_cf(avg_cf_config)
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric(label="Gross Income (USD)", value=f"{gross_value:.2f}")
+        col2.metric(label="Offset (USD)", value=f"({offset:.2f})")
+        col3.metric(label="Total Roll-Over (USD)", value=f"{adjusted_value:.2f}",
+                    help="ยอดเงินสุทธิที่จะถูกนำไปเฉลี่ยเป็นค่า Roll-Over ต่อวัน (Gross Income - Offset)")
+        col4.metric(label="Days", value=f"{count_data}")
+        cf_day_label = "Avg. Roll-Over/Day"
         if was_capped:
-            cf_day_display += " (Capped)" # เพิ่มข้อความบอกว่าค่าถูกจำกัด
-            
-        col3.metric(label="Average CF/Day (USD)", value=cf_day_display)
-        col4.metric(label="Average CF/Month (USD)", value=f"{cf_day * 30:.2f}")
-
+            cf_day_label += " (Capped)"
+        col5.metric(label=cf_day_label, value=f"{cf_day:.2f}")
     else:
         st.warning("`average_cf_config` not found in configuration file.")
     st.write('____')
