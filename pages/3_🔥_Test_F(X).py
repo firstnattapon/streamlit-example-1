@@ -102,7 +102,7 @@ def average_cf(cf_config):
     initial_cf_day = adjusted_value / count_data
     
     # ดึงค่า max_rollover จาก config, ถ้าไม่มีให้ใช้ค่าอนันต์ (ไม่มี limit)
-    max_rollover = cf_config.get('max_roll_over', float('inf'))
+    max_rollover = cf_config.get('max_rollover', float('inf'))
     
     # ใช้ค่าที่น้อยกว่าระหว่างค่าที่คำนวณได้กับ max_rollover
     final_cf_day = min(initial_cf_day, max_rollover)
