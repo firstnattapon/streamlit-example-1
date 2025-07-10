@@ -94,36 +94,33 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     user_inputs['current_prices'] = current_prices
 
     st.divider()
-    st.write("📦 Combined Holdings (Stocks + Options)")
-
-    option_contracts_map = {
-        opt['underlying_ticker'].strip(): opt.get('contracts_or_shares', 0)
-        for opt in option_assets
-    }
-    
+    # --- START: REVERTED TO ORIGINAL UI LOGIC ---
+    st.write("📦 Stock Holdings") # Changed title back to original
     current_holdings = {}
     total_stock_value = 0.0
     for asset in stock_assets:
         ticker = asset["ticker"].strip()
-        stock_holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
-        option_contracts_count = option_contracts_map.get(ticker, 0)
-        combined_holding_value = stock_holding_value + option_contracts_count
-        display_label = f"{ticker}_asset (Stock: {stock_holding_value:,.2f} + Option: {option_contracts_count:,.0f})"
         
+        # Get the holding value of the "stock" from thingspeak as the default
+        holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
+        
+        # Use a simple label and the stock holding as the default value, no option addition
         asset_holding = st.number_input(
-            display_label, 
-            value=combined_holding_value, 
+            f"{ticker}_asset", 
+            value=holding_value, 
             key=f"holding_{ticker}", 
             format="%.2f"
         )
         
         current_holdings[ticker] = asset_holding
+        # Calculate value from the user's input
         individual_asset_value = asset_holding * current_prices.get(ticker, 0.0)
         st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
         total_stock_value += individual_asset_value
         
     user_inputs['current_holdings'] = current_holdings
     user_inputs['total_stock_value'] = total_stock_value
+    # --- END: REVERTED TO ORIGINAL UI LOGIC ---
 
     st.divider()
     st.write("⚙️ Calculation Parameters")
@@ -131,26 +128,21 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
     return user_inputs
 
-# --- 3. DISPLAY & CHART FUNCTIONS ---
 
 def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
     """Displays all calculated metrics in the Streamlit app."""
     st.divider()
     with st.expander("📈 Results", expanded=True):
         
-        # --- START: MODIFIED DISPLAY LOGIC ---
-        # สร้าง Label ตามรูปแบบใหม่ที่คุณต้องการ
         metric_label = (
             f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
             f"| Max_Roll_Over: ({total_option_cost:,.2f})"
         )
         
-        # แสดงผล metric หลักด้วย label ใหม่ และค่า now_pv ที่คำนวณใหม่
         st.metric(
             label=metric_label,
             value=f"{metrics['now_pv']:,.2f}"
         )
-        # --- END: MODIFIED DISPLAY LOGIC ---
 
         col1, col2 = st.columns(2)
         col1.metric('t_0 (Product of Stock Reference Prices)', f"{metrics['t_0']:,.2f}")
@@ -198,9 +190,7 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
 
-    # --- START: MODIFIED LOGIC ---
-    # `total_stock_value` is still derived from the UI's Combined Holdings.
-    # This is not 100% accurate but follows the existing structure.
+    # The value here is based on the user input from the "Stock Holdings" section
     total_stock_value = user_inputs['total_stock_value']
 
     # Calculate P/L and total cost for all options
@@ -215,20 +205,17 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         contracts = option.get("contracts_or_shares", 0.0)
         premium = option.get("premium_paid_per_share", 0.0)
         
-        # Total cost of this option, added to the grand total
         total_cost_basis = contracts * premium
         total_option_cost += total_cost_basis
         
-        # P/L for this option (Intrinsic Value - Cost), added to the grand total
         intrinsic_value_per_share = max(0, last_price - strike)
         total_intrinsic_value = intrinsic_value_per_share * contracts
         unrealized_pl = total_intrinsic_value - total_cost_basis
         total_options_pl += unrealized_pl
 
-    # Calculate `now_pv` using the new, more logical formula:
+    # Calculate `now_pv` using the new formula:
     # now_pv = (Stock Value) + (Cash) + (Current Options P/L)
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
-    # --- END: MODIFIED LOGIC ---
 
     # The rest of the function remains the same
     log_pv_multiplier = config.get('log_pv_multiplier', 1500)
@@ -268,6 +255,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                 ticker = asset['ticker'].strip()
                 if ticker in asset_clients:
                     try:
+                        # The holding value to update is now just the stock holding from the UI
                         current_holding = user_inputs['current_holdings'][ticker]
                         field_to_update = asset['holding_channel']['field']
                         asset_clients[ticker].update({field_to_update: current_holding})
