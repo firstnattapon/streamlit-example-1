@@ -136,7 +136,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         
         metric_label = (
             f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
-            f"| Max_Roll_Over: ({total_option_cost:,.2f})"
+            f"| Max_Roll_Over: ({-total_option_cost:,.2f})"
         )
         
         st.metric(
