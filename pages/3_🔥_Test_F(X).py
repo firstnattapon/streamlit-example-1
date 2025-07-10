@@ -119,7 +119,7 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
         combined_holding_value = stock_holding_value + option_contracts_count
         
         # 5. Create a descriptive label to show the user the calculation breakdown
-        display_label = f"{ticker}_asset (Stock: {stock_holding_value:,.2f} + Opt: {option_contracts_count:,.0f})"
+        display_label = f"{ticker}_asset (Stock: {stock_holding_value:,.2f} + Option: {option_contracts_count:,.0f})"
         
         # 6. Use the combined value as the default in st.number_input
         asset_holding = st.number_input(
