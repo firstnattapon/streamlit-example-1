@@ -94,19 +94,33 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     user_inputs['current_prices'] = current_prices
 
     st.divider()
-    st.write("📦 Stock Holdings")
+    # --- START: REVERTED TO ORIGINAL UI LOGIC ---
+    st.write("📦 Stock Holdings") # Changed title back to original
     current_holdings = {}
     total_stock_value = 0.0
     for asset in stock_assets:
         ticker = asset["ticker"].strip()
+        
+        # Get the holding value of the "stock" from thingspeak as the default
         holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
-        asset_holding = st.number_input(f"{ticker}_asset", value=holding_value, key=f"holding_{ticker}", format="%.2f")
+        
+        # Use a simple label and the stock holding as the default value, no option addition
+        asset_holding = st.number_input(
+            f"{ticker}_asset", 
+            value=holding_value, 
+            key=f"holding_{ticker}", 
+            format="%.2f"
+        )
+        
         current_holdings[ticker] = asset_holding
+        # Calculate value from the user's input
         individual_asset_value = asset_holding * current_prices.get(ticker, 0.0)
         st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
         total_stock_value += individual_asset_value
+        
     user_inputs['current_holdings'] = current_holdings
     user_inputs['total_stock_value'] = total_stock_value
+    # --- END: REVERTED TO ORIGINAL UI LOGIC ---
 
     st.divider()
     st.write("⚙️ Calculation Parameters")
@@ -114,16 +128,22 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
     return user_inputs
 
+
 def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
     """Displays all calculated metrics in the Streamlit app."""
     st.divider()
     with st.expander("📈 Results", expanded=True):
-        # MODIFIED: Updated the main metric label to reflect the new calculation.
-        # The main value is now (Stocks + Cash - Max_Roll_Over), while the current P/L is still shown for reference.
-        st.metric(
-            f"Current Total Value (Stocks + Cash - Max_Roll_Over:-{total_option_cost:,.2f}) | Current Options P/L ({options_pl:,.2f})",
-            f"{metrics['now_pv']:,.2f}"
+        
+        metric_label = (
+            f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
+            f"| Max_Roll_Over: ({total_option_cost:,.2f})"
         )
+        
+        st.metric(
+            label=metric_label,
+            value=f"{metrics['now_pv']:,.2f}"
+        )
+
         col1, col2 = st.columns(2)
         col1.metric('t_0 (Product of Stock Reference Prices)', f"{metrics['t_0']:,.2f}")
         col2.metric('t_n (Product of Stock Live Prices)', f"{metrics['t_n']:,.2f}")
@@ -162,15 +182,18 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-# --- 3. CORE LOGIC & UPDATE FUNCTIONS ---
+# --- 4. CORE LOGIC & UPDATE FUNCTIONS ---
 
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
     """Calculates all core financial metrics based on user inputs and config."""
     metrics = {}
-    total_stock_value = user_inputs['total_stock_value']
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
 
+    # The value here is based on the user input from the "Stock Holdings" section
+    total_stock_value = user_inputs['total_stock_value']
+
+    # Calculate P/L and total cost for all options
     total_options_pl = 0.0
     total_option_cost = 0.0
     for option in option_assets:
@@ -181,6 +204,7 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         strike = option.get("strike", 0.0)
         contracts = option.get("contracts_or_shares", 0.0)
         premium = option.get("premium_paid_per_share", 0.0)
+        
         total_cost_basis = contracts * premium
         total_option_cost += total_cost_basis
         
@@ -189,10 +213,11 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         unrealized_pl = total_intrinsic_value - total_cost_basis
         total_options_pl += unrealized_pl
 
-    # MODIFIED: Changed calculation from adding options P/L to subtracting total option cost (Max_Roll_Over)
-    # as per the user's request.
-    metrics['now_pv'] = total_stock_value + portfolio_cash - total_option_cost
+    # Calculate `now_pv` using the new formula:
+    # now_pv = (Stock Value) + (Cash) + (Current Options P/L)
+    metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
+    # The rest of the function remains the same
     log_pv_multiplier = config.get('log_pv_multiplier', 1500)
     reference_prices = [asset['reference_price'] for asset in stock_assets]
     live_prices = [current_prices[asset['ticker'].strip()] for asset in stock_assets]
@@ -230,6 +255,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                 ticker = asset['ticker'].strip()
                 if ticker in asset_clients:
                     try:
+                        # The holding value to update is now just the stock holding from the UI
                         current_holding = user_inputs['current_holdings'][ticker]
                         field_to_update = asset['holding_channel']['field']
                         asset_clients[ticker].update({field_to_update: current_holding})
@@ -237,7 +263,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
 
-# --- 4. MAIN APPLICATION FLOW ---
+# --- 5. MAIN APPLICATION FLOW ---
 
 def main():
     """Main function to run the Streamlit application."""
