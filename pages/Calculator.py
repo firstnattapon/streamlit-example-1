@@ -182,14 +182,21 @@ def main():
 
     avg_cf_config = CONFIG.get('average_cf_config')
     if avg_cf_config:
-        cf_day , count_data , adjusted_value   = average_cf(avg_cf_config)
-        col1, col2, col3, col4 = st.columns(4)
+        cf_day , count_data , adjusted_value = average_cf(avg_cf_config)
+        # เปลี่ยนจำนวนคอลัมน์เป็น 5
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
         col1.metric(label="Net (USD)", value=f"{adjusted_value:.2f}")
         col2.metric(label="Days", value=f"{count_data}")
-        col3.metric(label="Average CF/Day (USD)", value=f"{cf_day:.2f}")
-        col4.metric(label="Average CF/Month (USD)", value=f"{cf_day * 30:.2f}")
+        col3.metric(label="Avg CF/Day (USD)", value=f"{cf_day:.2f}")
+        col4.metric(label="Avg CF/Month (USD)", value=f"{cf_day * 30:.2f}")
 
-    
+        # เพิ่มคอลัมน์ที่ 5
+        max_roll = avg_cf_config.get('max_roll_over', 0.0)
+        # คำนวณค่าผลต่าง
+        diff_to_max_roll =  adjusted_value - max_roll 
+        col5.metric(label="Max_roll - Net (USD)", value=f"{diff_to_max_roll:.2f}")
+        
     else:
         st.warning("`average_cf_config` not found in configuration file.")
     st.write('____')
