@@ -42,7 +42,7 @@ with tab5:
   iframe(frame = "https://monica.im/share/artifact?id=d32kfTnpaYiJTVVeK8G9yN")  
 
 with tab6:
-  iframe(frame = "https://monica.im/share/artifact?id=nZ4pVgiTTaQXAhEoMZoc9m")  
+  iframe(frame = "https://monica.im/share/artifact?id=Lhnwc2crNNsjsBcWFdJwVC")  
 
 checkbox1 = st.checkbox(' mindmeister' , value=0 )
 if checkbox1 :
