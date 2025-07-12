@@ -95,32 +95,32 @@
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
  },
-  "NMAX": {
-    "Ticker": "NMAX",
+  "": {
+    "Ticker": "",
     "Fixed_Asset_Value": 1500.0,
     "Cash_Balan": 650.0,
     "step": 0.01,
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
  },
-  "BHVN": {
-    "Ticker": "BHVN",
+  "": {
+    "Ticker": "",
     "Fixed_Asset_Value": 1500.0,
     "Cash_Balan": 650.0,
     "step": 0.01,
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
  },
-  "PCVX": {
-    "Ticker": "PCVX",
+  "": {
+    "Ticker": "",
     "Fixed_Asset_Value": 1500.0,
     "Cash_Balan": 650.0,
     "step": 0.01,
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
  },
-  "PACS": {
-    "Ticker": "PACS",
+  "": {
+    "Ticker": "",
     "Fixed_Asset_Value": 1500.0,
     "Cash_Balan": 650.0,
     "step": 0.01,
