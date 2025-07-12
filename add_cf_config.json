@@ -67,7 +67,7 @@
             "type": "stock",
             "ticker": "NEGG",
             "reference_price": 25.20,
-            "fix_c": 1500,
+            "fix_c": 1000,
             "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field2" }
         },
         {
