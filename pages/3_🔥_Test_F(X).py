@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 from typing import Dict, Any, Tuple, List
 
 # --- Page Configuration ---
-st.set_page_config(page_title="Add_CF_V2_Transparent", page_icon="🔬", layout= "centered" )
+st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout= "centered" )
 
 # --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (Unchanged) ---
 
@@ -124,21 +124,19 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
 
 # --- 3. UPDATED DISPLAY FUNCTION ---
 def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
-    """Displays all calculated metrics, including a breakdown of ln_weighted."""
+    """Displays all calculated metrics, including a detailed breakdown of ln_weighted."""
     st.divider()
     with st.expander("📈 Results", expanded=True):
-        
-        metric_label = (
-            f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
-            f"| Max_Roll_Over: ({-total_option_cost:,.2f})"
-        )
+        metric_label = (f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
+                        f"| Max_Roll_Over: ({-total_option_cost:,.2f})")
         st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
 
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
         col2.metric('log_pv Adjustment (ln_weighted)', f"{metrics.get('ln_weighted', 0.0):,.2f}")
         
-        st.metric(f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})", f"{metrics['log_pv']:,.2f}")
+        st.metric(f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})", 
+                  f"{metrics['log_pv']:,.2f}")
         
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
 
@@ -153,21 +151,27 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
     
-    # --- NEW: Expander to show the calculation breakdown ---
+    # --- NEW: Expander now shows the full formula with values ---
     with st.expander("Show 'ln_weighted' Calculation Breakdown"):
         st.write("ค่า `ln_weighted` คำนวณมาจากผลรวมของหุ้นแต่ละตัว:")
-        
-        # Retrieve the breakdown data that was saved in the metrics dictionary
         ln_breakdown_data = metrics.get('ln_breakdown', [])
         
-        # Display each asset's contribution
         for item in ln_breakdown_data:
-            st.text(f"  - {item['ticker']:<6}: {item['contribution']:+10.4f}  (fix_c: {item['fix_c']})")
+            # Check if calculation was possible to avoid showing weird formulas
+            if item['ref_price'] > 0:
+                # Build the formula string
+                formula_string = (
+                    f"{item['ticker']:<6}: {item['contribution']:+9.4f} = "
+                    f"[ {item['fix_c']} * ln( {item['live_price']:.2f} / {item['ref_price']:.2f} ) ]"
+                )
+            else:
+                formula_string = f"{item['ticker']:<6}: {item['contribution']:+9.4f}   (Calculation skipped: ref_price is zero)"
             
-        st.text("-----------------------------------")
-        # Display the total sum to confirm it matches the main metric
-        st.write(f"**Total Sum = {metrics.get('ln_weighted', 0.0):,.4f}**")
-
+            # Use st.code for a clean, monospaced look that aligns numbers
+            st.code(formula_string, language='text')
+            
+        st.code("----------------------------------------------------------------")
+        st.code(f"Total Sum = {metrics.get('ln_weighted', 0.0):+51.4f}")
 
 def render_charts(config: Dict[str, Any]):
     """Renders ThingSpeak charts using iframe components."""
@@ -191,15 +195,14 @@ def render_charts(config: Dict[str, Any]):
 
 # --- 4. UPDATED CALCULATION FUNCTION ---
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
-    """Calculates all core metrics and saves the breakdown of the ln_weighted calculation."""
+    """Calculates all core metrics and saves a detailed breakdown of the ln_weighted calculation."""
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
     total_stock_value = user_inputs['total_stock_value']
 
     # P/L calculation for options (unchanged)
-    total_options_pl = 0.0
-    total_option_cost = 0.0
+    total_options_pl, total_option_cost = 0.0, 0.0
     for option in option_assets:
         underlying_ticker = option.get("underlying_ticker", "").strip()
         if not underlying_ticker: continue
@@ -209,18 +212,14 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         premium = option.get("premium_paid_per_share", 0.0)
         total_cost_basis = contracts * premium
         total_option_cost += total_cost_basis
-        intrinsic_value_per_share = max(0, last_price - strike)
-        total_intrinsic_value = intrinsic_value_per_share * contracts
-        unrealized_pl = total_intrinsic_value - total_cost_basis
-        total_options_pl += unrealized_pl
+        intrinsic_value = max(0, last_price - strike) * contracts
+        total_options_pl += intrinsic_value - total_cost_basis
 
-    # now_pv calculation (unchanged)
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
     # New Per-Asset fix_c Calculation Logic
-    log_pv_baseline = 0.0
-    ln_weighted = 0.0
-    ln_breakdown = [] # --- NEW: List to store individual calculation details
+    log_pv_baseline, ln_weighted = 0.0, 0.0
+    ln_breakdown = [] # List to store calculation details for display
 
     for asset in stock_assets:
         fix_c = asset.get('fix_c', 1500)
@@ -236,19 +235,20 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         
         ln_weighted += contribution
 
-        # --- NEW: Save the details of this asset's calculation for display
+        # --- NEW: Save all necessary components to build the formula string later
         ln_breakdown.append({
             "ticker": ticker,
             "fix_c": fix_c,
+            "live_price": live_price,
+            "ref_price": ref_price,
             "contribution": contribution
         })
 
-    # Finalize metrics
     metrics['log_pv_baseline'] = log_pv_baseline
     metrics['ln_weighted'] = ln_weighted
     metrics['log_pv'] = log_pv_baseline + ln_weighted
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
-    metrics['ln_breakdown'] = ln_breakdown # --- NEW: Add the breakdown list to the results
+    metrics['ln_breakdown'] = ln_breakdown
 
     return metrics, total_options_pl, total_option_cost
 
