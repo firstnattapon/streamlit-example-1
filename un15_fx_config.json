@@ -87,8 +87,8 @@
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
  },
-  "": {
-    "Ticker": "",
+  "DYN": {
+    "Ticker": "DYN",
     "Fixed_Asset_Value": 1500.0,
     "Cash_Balan": 650.0,
     "step": 0.01,
