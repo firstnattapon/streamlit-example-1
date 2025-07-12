@@ -1,286 +1,307 @@
-# import numpy as np
-# import pandas as pd
-# import yfinance as yf
-# import streamlit as st
-# import json
-# import plotly.express as px
+#main
+import pandas as pd
+import numpy as np
+import yfinance as yf
+import streamlit as st
+import thingspeak
+import json
+import streamlit.components.v1 as components
+from typing import Dict, Any, Tuple, List
 
-# st.set_page_config(layout="wide", page_title="Portfolio Backtesting Engine", page_icon="📈")
+# --- Page Configuration ---
+st.set_page_config(page_title="Add_CF_V2_PerAsset_FixC", page_icon="🚀", layout= "centered" )
 
-# # ------------------- UTILITY FUNCTIONS -------------------
+# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (No changes needed here) ---
 
-# def load_config(filename="un15_fx_config.json"):
-#     """
-#     Loads asset configurations from a JSON file.
-#     Includes error handling for file not found or malformed JSON.
-#     """
-#     try:
-#         with open(filename, 'r') as f:
-#             return json.load(f)
-#     except FileNotFoundError:
-#         st.error(f"Error: Configuration file '{filename}' not found. Please create it in the same directory.")
-#         return {}
-#     except json.JSONDecodeError:
-#         st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
-#         return {}
+@st.cache_data
+def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
+    """Loads and parses the JSON configuration file."""
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        st.error(f"Error loading or parsing {filename}: {e}")
+        st.stop()
 
-# # ------------------- CORE CALCULATION ENGINE -------------------
+@st.cache_resource
+def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
+    """Initializes ThingSpeak clients for the main channel and individual asset channels."""
+    main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
+    try:
+        client_main = thingspeak.Channel(main_channel_config['channel_id'], main_channel_config['write_api_key'])
+        asset_clients = {}
+        for asset in stock_assets:
+            ticker = asset['ticker']
+            channel_info = asset.get('holding_channel', {})
+            if channel_info.get('channel_id'):
+                asset_clients[ticker] = thingspeak.Channel(channel_info['channel_id'], channel_info['write_api_key'])
+        
+        num_asset_clients = len(asset_clients)
+        num_option_assets = len(option_assets)
+        st.success(f"Initialized main client and {num_asset_clients} asset {num_option_assets} option holding clients.")
+        
+        return client_main, asset_clients
+    except Exception as e:
+        st.error(f"Failed to initialize ThingSpeak clients: {e}")
+        st.stop()
 
-# def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
-#     """
-#     Creates a theoretical reference model for a rebalancing strategy.
-#     It calculates the ideal cash balance at various price points if the asset's
-#     value were always kept constant at Fixed_Asset_Value.
-#     """
-#     if entry <= 0 or step <= 0:
-#         return pd.DataFrame()
+def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, Any]]:
+    """Fetches initial prices from yfinance and last holdings from ThingSpeak."""
+    initial_data = {}
+    tickers_to_fetch = {asset['ticker'].strip() for asset in stock_assets}
+    tickers_to_fetch.update({opt.get('underlying_ticker').strip() for opt in option_assets if opt.get('underlying_ticker')})
 
-#     # Create a grid of prices around the entry price
-#     samples = np.arange(step, np.around(entry, 2) * 3 + step, step)
+    for ticker in tickers_to_fetch:
+        initial_data[ticker] = {}
+        try:
+            last_price = yf.Ticker(ticker).fast_info['lastPrice']
+            initial_data[ticker]['last_price'] = last_price
+        except Exception:
+            ref_price = next((a.get('reference_price', 0.0) for a in stock_assets if a['ticker'].strip() == ticker), 0.0)
+            initial_data[ticker]['last_price'] = ref_price
+            st.warning(f"Could not fetch price for {ticker}. Defaulting to reference price {ref_price}.")
+
+    for asset in stock_assets:
+        ticker = asset["ticker"].strip()
+        last_holding = 0.0
+        if ticker in asset_clients:
+            try:
+                client = asset_clients[ticker]
+                field = asset['holding_channel']['field']
+                last_asset_json_string = client.get_field_last(field=field)
+                if last_asset_json_string:
+                    data_dict = json.loads(last_asset_json_string)
+                    last_holding = float(data_dict[field])
+            except Exception as e:
+                st.warning(f"Could not fetch holding for {ticker}. Defaulting to 0. Error: {e}")
+        initial_data[ticker]['last_holding'] = last_holding
+    return initial_data
+
+# --- 2. UI & DISPLAY FUNCTIONS (No changes to UI Logic) ---
+
+def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
+    """Renders all UI components and collects user inputs into a dictionary."""
+    user_inputs = {}
+    st.write("📊 Current Asset Prices")
+    current_prices = {}
+    all_tickers = {asset['ticker'].strip() for asset in stock_assets}
+    all_tickers.update({opt['underlying_ticker'].strip() for opt in option_assets if opt.get('underlying_ticker')})
+
+    for ticker in sorted(list(all_tickers)):
+        label = f"ราคา_{ticker}"
+        price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
+        current_prices[ticker] = st.number_input(label, value=price_value, key=f"price_{ticker}", format="%.2f")
+    user_inputs['current_prices'] = current_prices
+
+    st.divider()
+    st.write("📦 Stock Holdings")
+    current_holdings = {}
+    total_stock_value = 0.0
+    for asset in stock_assets:
+        ticker = asset["ticker"].strip()
+        holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
+        
+        asset_holding = st.number_input(
+            f"{ticker}_asset", 
+            value=holding_value, 
+            key=f"holding_{ticker}", 
+            format="%.2f"
+        )
+        
+        current_holdings[ticker] = asset_holding
+        individual_asset_value = asset_holding * current_prices.get(ticker, 0.0)
+        st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
+        total_stock_value += individual_asset_value
+        
+    user_inputs['current_holdings'] = current_holdings
+    user_inputs['total_stock_value'] = total_stock_value
+
+    st.divider()
+    st.write("⚙️ Calculation Parameters")
+    user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
+    user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
+    return user_inputs
+
+# --- UPDATED: display_results to show new metrics ---
+def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
+    """Displays all calculated metrics in the Streamlit app."""
+    st.divider()
+    with st.expander("📈 Results", expanded=True):
+        
+        metric_label = (
+            f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
+            f"| Max_Roll_Over: ({-total_option_cost:,.2f})"
+        )
+        
+        st.metric(
+            label=metric_label,
+            value=f"{metrics['now_pv']:,.2f}"
+        )
+
+        # --- CHANGED: Display the new components of log_pv ---
+        col1, col2 = st.columns(2)
+        col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
+        col2.metric('log_pv Adjustment (ln_weighted)', f"{metrics.get('ln_weighted', 0.0):,.2f}")
+        st.metric(f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})", f"{metrics['log_pv']:,.2f}")
+        
+        st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
+
+        offset_display_val = -config.get('cashflow_offset', 0.0)
+        # --- CHANGED: The baseline is now directly 'log_pv_baseline' ---
+        baseline_val = metrics.get('log_pv_baseline', 0.0)
+        product_cost = config.get('product_cost_default', 0)
+        baseline_label = f"💰 Baseline | {baseline_val:,.1f}(Control) - {product_cost} (Cost) = {offset_display_val:+.0f} (Lv) "
+        st.metric(label=baseline_label, value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
+        
+        baseline_target = config.get('baseline_target', 0.0)
+        adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
+        final_value = baseline_target - adjusted_cf
+        st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
+
+# --- render_charts remains unchanged ---
+def render_charts(config: Dict[str, Any]):
+    """Renders ThingSpeak charts using iframe components."""
+    st.write("📊 ThingSpeak Charts")
+    main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
+    main_channel_id = main_channel_config.get('channel_id')
+    main_fields_map = main_channel_config.get('fields', {})
+
+    def create_chart_iframe(channel_id, field_name, chart_title):
+        if channel_id and field_name:
+            chart_number = field_name.replace('field', '')
+            url = f'https://thingspeak.com/channels/{channel_id}/charts/{chart_number}?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15'
+            st.write(f"**{chart_title}**")
+            components.iframe(url, width=800, height=200)
+            st.divider()
+
+    create_chart_iframe(main_channel_id, main_fields_map.get('net_cf'), 'Cashflow')
+    create_chart_iframe(main_channel_id, main_fields_map.get('pure_alpha'), 'Pure_Alpha')
+    create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
+    create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
+
+# --- 4. CORE LOGIC & UPDATE FUNCTIONS ---
+
+# --- MAJOR CHANGE: The calculation logic is updated here ---
+def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
+    """Calculates all core financial metrics based on the new per-asset fix_c logic."""
+    metrics = {}
+    portfolio_cash = user_inputs['portfolio_cash']
+    current_prices = user_inputs['current_prices']
+    total_stock_value = user_inputs['total_stock_value']
+
+    # Calculate P/L for options (this part remains the same)
+    total_options_pl = 0.0
+    total_option_cost = 0.0
+    for option in option_assets:
+        underlying_ticker = option.get("underlying_ticker", "").strip()
+        if not underlying_ticker: continue
+
+        last_price = current_prices.get(underlying_ticker, 0.0)
+        strike = option.get("strike", 0.0)
+        contracts = option.get("contracts_or_shares", 0.0)
+        premium = option.get("premium_paid_per_share", 0.0)
+        
+        total_cost_basis = contracts * premium
+        total_option_cost += total_cost_basis
+        
+        intrinsic_value_per_share = max(0, last_price - strike)
+        total_intrinsic_value = intrinsic_value_per_share * contracts
+        unrealized_pl = total_intrinsic_value - total_cost_basis
+        total_options_pl += unrealized_pl
+
+    # Calculate now_pv (this part remains the same)
+    metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
+
+    # --- START: New Per-Asset fix_c Calculation Logic ---
+    log_pv_baseline = 0.0
+    ln_weighted = 0.0
+
+    for asset in stock_assets:
+        # Get necessary values for this asset
+        fix_c = asset.get('fix_c', 1500) # Use 1500 as a default if not specified
+        ticker = asset['ticker'].strip()
+        ref_price = asset.get('reference_price', 0.0)
+        live_price = current_prices.get(ticker, 0.0)
+        
+        # 1. Add this asset's fix_c to the total baseline
+        log_pv_baseline += fix_c
+        
+        # 2. Calculate the weighted logarithmic adjustment for this asset
+        if ref_price > 0 and live_price > 0:
+            # Formula: ln_i = fix_c_i * ln(live_price_i / ref_price_i)
+            # which is equivalent to: -fix_c_i * ln(ref_price_i / live_price_i)
+            ln_weighted += fix_c * np.log(live_price / ref_price)
+
+    # 3. Finalize metric calculations
+    metrics['log_pv_baseline'] = log_pv_baseline
+    metrics['ln_weighted'] = ln_weighted
+    metrics['log_pv'] = log_pv_baseline + ln_weighted
+    metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
+    # --- END: New Calculation Logic ---
     
-#     df = pd.DataFrame()
-#     df['Asset_Price'] = np.around(samples, 2)
-#     # Filter out zero or negative prices which are invalid
-#     df = df[df['Asset_Price'] > 0]
-#     if df.empty:
-#         return pd.DataFrame()
+    return metrics, total_options_pl, total_option_cost
 
-#     df['Fixed_Asset_Value'] = Fixed_Asset_Value
-#     df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
+# --- handle_thingspeak_update remains unchanged ---
+def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
+    """Handles the UI for confirming and sending data to ThingSpeak."""
+    client_main, asset_clients = clients
+    with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
+        if st.button("Confirm and Send All Data"):
+            diff = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
+            try:
+                fields_map = config.get('thingspeak_channels', {}).get('main_output', {}).get('fields', {})
+                payload = {
+                    fields_map.get('net_cf', 'field1'): diff,
+                    fields_map.get('pure_alpha', 'field2'): diff / user_inputs['product_cost'] if user_inputs['product_cost'] != 0 else 0,
+                    fields_map.get('buffer', 'field3'): user_inputs['portfolio_cash'],
+                    fields_map.get('cost_minus_cf', 'field4'): user_inputs['product_cost'] - diff
+                }
+                client_main.update(payload)
+                st.success("✅ Successfully updated Main Channel on Thingspeak!")
+            except Exception as e:
+                st.error(f"❌ Failed to update Main Channel on Thingspeak: {e}")
 
-#     # --- Top part (price goes up, we sell asset to generate cash) ---
-#     df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
-#     if not df_top.empty:
-#         df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
-#         df_top.fillna(0, inplace=True)
-        
-#         # Calculate cumulative cash balance
-#         cumulative_cash = np.cumsum(df_top['Cash_Balan_top'].values) + Cash_Balan
-#         df_top['Cash_Balan'] = cumulative_cash
-#         df_top = df_top.drop(columns=['Cash_Balan_top'])
-#         df_top = df_top.sort_values(by='Amount_Asset')[:-1]
+            st.divider()
+            for asset in stock_assets:
+                ticker = asset['ticker'].strip()
+                if ticker in asset_clients:
+                    try:
+                        current_holding = user_inputs['current_holdings'][ticker]
+                        field_to_update = asset['holding_channel']['field']
+                        asset_clients[ticker].update({field_to_update: current_holding})
+                        st.success(f"✅ Successfully updated holding for {ticker}.")
+                    except Exception as e:
+                        st.error(f"❌ Failed to update holding for {ticker}: {e}")
+
+# --- 5. MAIN APPLICATION FLOW (No changes needed here) ---
+
+def main():
+    """Main function to run the Streamlit application."""
+    config = load_config()
+    if not config: return
+
+    all_assets = config.get('assets', [])
+    stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
+    option_assets = [item for item in all_assets if item.get('type') == 'option']
+
+    clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
+    initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
     
-#     # --- Down part (price goes down, we spend cash to buy asset) ---
-#     df_down = df[df.Asset_Price <= np.around(entry, 2)].copy()
-#     if not df_down.empty:
-#         df_down = df_down.sort_values(by='Asset_Price', ascending=False)
-#         df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
-#         df_down.fillna(0, inplace=True)
-        
-#         # Calculate cumulative cash balance
-#         cumulative_cash = np.cumsum(df_down['Cash_Balan_down'].values) + Cash_Balan
-#         df_down['Cash_Balan'] = cumulative_cash
-#         df_down = df_down.drop(columns=['Cash_Balan_down'])
+    user_inputs = render_ui_and_get_inputs(
+        stock_assets,
+        option_assets,
+        initial_data,
+        config.get('product_cost_default', 0.0)
+    )
 
-#     # --- Combine and return the complete reference model ---
-#     combined_df = pd.concat([df_top, df_down], axis=0)
-#     return combined_df
+    if st.button("Recalculate"):
+        pass
 
-# # ------------------- SINGLE ASSET ANALYSIS FUNCTIONS -------------------
-
-# def delta_1(asset_config):
-#     """
-#     Calculates the 'Production Cost' for a single asset.
-#     This represents the maximum cash required to follow the strategy down to its lowest price.
-#     """
-#     try:
-#         tickerData = yf.Ticker(asset_config['Ticker'])
-#         entry = tickerData.fast_info.get('lastPrice')
-#         if not entry:
-#             st.warning(f"Could not get last price for {asset_config['Ticker']}. Skipping delta_1.")
-#             return None
-
-#         # Call the core model function
-#         df_model = calculate_cash_balance_model(
-#             entry, 
-#             asset_config['step'], 
-#             asset_config['Fixed_Asset_Value'], 
-#             asset_config['Cash_Balan']
-#         )
-
-#         if not df_model.empty:
-#             # Production cost is the difference between initial and minimum cash balance
-#             production_costs = df_model['Cash_Balan'].min() - asset_config['Cash_Balan']
-#             return abs(production_costs)
-#         return None
-#     except Exception as e:
-#         # st.warning(f"Could not process delta_1 for {asset_config.get('Ticker', 'N/A')}: {e}")
-#         return None
-
-# def delta6(asset_config):
-#     """
-#     Performs a full historical backtest simulation for a single asset based on its configuration.
-#     It compares the performance of a selective rebalancing strategy (based on 'pred')
-#     against the ideal theoretical model.
-#     """
-#     try:
-#         # 1. Load historical data
-#         ticker_hist = yf.Ticker(asset_config['Ticker']).history(period='max')
-#         if ticker_hist.empty:
-#             st.warning(f"No historical data found for {asset_config['Ticker']}.")
-#             return None
-#         ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
-#         ticker_hist = ticker_hist[ticker_hist.index >= asset_config['filter_date']][['Close']]
-#         if ticker_hist.empty:
-#             st.warning(f"No data for {asset_config['Ticker']} after filter date {asset_config['filter_date']}.")
-#             return None
-
-#         entry = ticker_hist.Close[0]
-
-#         # 2. Create the theoretical reference model
-#         df_model = calculate_cash_balance_model(
-#             entry, 
-#             asset_config['step'], 
-#             asset_config['Fixed_Asset_Value'], 
-#             asset_config['Cash_Balan']
-#         )
-#         if df_model.empty:
-#             return None
-
-#         # 3. Set up the simulation DataFrame
-#         sim_df = ticker_hist.copy()
-#         sim_df['Close'] = np.around(sim_df['Close'].values, 2)
-#         sim_df['pred'] = asset_config['pred'] # This is the rebalancing signal (1=rebalance, 0=hold)
-#         sim_df['Fixed_Asset_Value'] = asset_config['Fixed_Asset_Value']
-#         sim_df['Amount_Asset'] = 0.0
-#         sim_df['re'] = 0.0 # 're' stands for rebalancing cash flow
-#         sim_df['Cash_Balan'] = float(asset_config['Cash_Balan'])
-        
-#         # Initialize first day
-#         sim_df.iloc[0, sim_df.columns.get_loc('Amount_Asset')] = sim_df.iloc[0]['Fixed_Asset_Value'] / sim_df.iloc[0]['Close']
-        
-#         # 4. Run the day-by-day simulation loop
-#         for i in range(1, len(sim_df)):
-#             if sim_df.iloc[i]['pred'] == 1:  # Rebalance only if pred signal is 1
-#                 current_amount = asset_config['Fixed_Asset_Value'] / sim_df.iloc[i]['Close']
-#                 rebalance_cashflow = (sim_df.iloc[i-1]['Amount_Asset'] - current_amount) * sim_df.iloc[i]['Close']
-#                 sim_df.iloc[i, sim_df.columns.get_loc('Amount_Asset')] = current_amount
-#                 sim_df.iloc[i, sim_df.columns.get_loc('re')] = rebalance_cashflow
-#             else:  # Hold if pred signal is 0
-#                 sim_df.iloc[i, sim_df.columns.get_loc('Amount_Asset')] = sim_df.iloc[i-1]['Amount_Asset']
-#                 sim_df.iloc[i, sim_df.columns.get_loc('re')] = 0.0
-            
-#             # Update cash balance
-#             sim_df.iloc[i, sim_df.columns.get_loc('Cash_Balan')] = sim_df.iloc[i-1]['Cash_Balan'] + sim_df.iloc[i]['re']
-        
-#         # 5. Compare simulation to the theoretical model
-#         sim_df['refer_model'] = sim_df['Close'].apply(lambda x: df_model.iloc[(df_model['Asset_Price']-x).abs().argsort()[:1]]['Cash_Balan'].values[0] if not df_model.empty else np.nan)
-#         sim_df['refer_model'].interpolate(method='linear', inplace=True)
-#         sim_df.fillna(method='bfill', inplace=True)
-#         sim_df.fillna(method='ffill', inplace=True)
-
-#         # 6. Calculate final performance metrics
-#         sim_df['pv'] = sim_df['Cash_Balan'] + (sim_df['Amount_Asset'] * sim_df['Close']) # Simulated Portfolio Value
-#         sim_df['refer_pv'] = sim_df['refer_model'] + asset_config['Fixed_Asset_Value'] # Reference Portfolio Value
-#         sim_df['net_pv'] = sim_df['pv'] - sim_df['refer_pv'] # Net performance (Alpha)
-        
-#         return sim_df[['net_pv', 're']]
-        
-#     except Exception as e:
-#         st.warning(f"Could not process simulation for {asset_config.get('Ticker', 'N/A')}: {e}")
-#         return None
-
-# # ------------------- PORTFOLIO AGGREGATION FUNCTION -------------------
-
-# def un_16(active_configs):
-#     """
-#     Aggregates simulation results from multiple assets into a single portfolio view.
-#     """
-#     re_dfs = []
-#     net_pv_dfs = []
+    metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
     
-#     # Run simulation for each selected ticker
-#     for ticker_name, config in active_configs.items():
-#         result_df = delta6(config)
-#         if result_df is not None:
-#             re_dfs.append(result_df[['re']].rename(columns={"re": f"{ticker_name}_re"}))
-#             net_pv_dfs.append(result_df[['net_pv']].rename(columns={"net_pv": f"{ticker_name}_net_pv"}))
-    
-#     if not re_dfs:
-#         return pd.DataFrame() # Return empty if no simulations were successful
-        
-#     # Combine results into a single DataFrame
-#     portfolio_df = pd.concat(re_dfs + net_pv_dfs, axis=1)
-    
-#     # Calculate portfolio-level metrics
-#     portfolio_df['portfolio_cash_flow'] = portfolio_df[[col for col in portfolio_df.columns if '_re' in col]].sum(axis=1)
-#     portfolio_df['cash_drawdown'] = portfolio_df['portfolio_cash_flow'].cumsum()
-#     portfolio_df['portfolio_net_pv'] = portfolio_df[[col for col in portfolio_df.columns if '_net_pv' in col]].sum(axis=1)
+    display_results(metrics, options_pl, total_option_cost, config)
+    handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
+    render_charts(config)
 
-#     return portfolio_df
-
-# # ------------------- STREAMLIT UI AND DISPLAY -------------------
-
-# st.title("📈 Portfolio Rebalancing Strategy Backtester")
-
-# # 1. Load all configurations from the JSON file
-# full_config = load_config()
-
-# if full_config:
-#     # 2. Create a user-friendly multi-select widget for tickers
-#     all_tickers = list(full_config.keys())
-#     selected_tickers = st.multiselect(
-#         "Select Tickers to Analyze (from un15_fx_config.json)",
-#         options=all_tickers,
-#         default=all_tickers  # Select all by default
-#     )
-
-#     # 3. Create a dictionary of only the configs for the selected tickers
-#     active_configs = {ticker: full_config[ticker] for ticker in selected_tickers if ticker in full_config}
-
-#     # 4. Run analysis only if tickers are selected
-#     if not active_configs:
-#         st.warning("Please select at least one ticker to start the analysis.")
-#     else:
-#         # 5. Run the main aggregation function with a loading spinner
-#         with st.spinner('Running historical simulations... This may take a moment.'):
-#             portfolio_data = un_16(active_configs)
-        
-#         if portfolio_data.empty:
-#             st.error("Failed to generate data for the selected tickers. Check console warnings for details.")
-#         else:
-#             # 6. Calculate final metrics for charting
-#             final_metrics = pd.DataFrame()
-#             final_metrics['Sum_Alpha'] = portfolio_data['portfolio_net_pv']
-            
-#             # Calculate Maximum Drawdown (the lowest point of the cash balance)
-#             cumulative_cash = portfolio_data['cash_drawdown']
-#             running_max = cumulative_cash.cummax() # This is not needed for drawdown calc, but useful for other metrics
-#             final_metrics['Max_Cash_Drawdown'] = cumulative_cash.cummin()
-
-#             # Calculate Risk-Adjusted Return (Alpha per unit of max drawdown)
-#             # Avoid division by zero if there's no drawdown
-#             min_drawdown = abs(final_metrics['Max_Cash_Drawdown'].min())
-#             if min_drawdown == 0:
-#                 final_metrics['True_Alpha'] = 0
-#             else:
-#                 final_metrics['True_Alpha'] = (final_metrics['Sum_Alpha'] / min_drawdown) * 100
-                
-#             st.header("Portfolio Performance Summary")
-
-#             # Display final KPI values
-#             latest_alpha = final_metrics['Sum_Alpha'].iloc[-1]
-#             max_drawdown = final_metrics['Max_Cash_Drawdown'].iloc[-1]
-#             latest_true_alpha = final_metrics['True_Alpha'].iloc[-1]
-            
-#             kpi1, kpi2, kpi3 = st.columns(3)
-#             kpi1.metric(label="Total Alpha (Outperformance)", value=f"${latest_alpha:,.2f}")
-#             kpi2.metric(label="Maximum Cash Drawdown", value=f"${max_drawdown:,.2f}")
-#             kpi3.metric(label="True Alpha (Risk-Adjusted Return)", value=f"{latest_true_alpha:.2f} %")
-            
-#             st.write("---")
-
-#             # Display charts
-#             col1, col2 = st.columns(2)
-            
-#             fig1 = px.line(final_metrics[['Sum_Alpha', 'Max_Cash_Drawdown']], title="<b>Portfolio Alpha vs. Max Cash Drawdown</b>")
-#             fig1.update_layout(yaxis_title="Value ($)", legend_title="Metric")
-#             col1.plotly_chart(fig1, use_container_width=True)
-
-#             fig2 = px.line(final_metrics[['True_Alpha']], title="<b>Portfolio True Alpha (Risk-Adjusted Performance)</b>")
-#             fig2.update_layout(yaxis_title="Percentage (%)", showlegend=False)
-#             col2.plotly_chart(fig2, use_container_width=True)
-            
-#             st.write("---")
-#             st.header("Detailed Simulation Data")
-#             st.dataframe(portfolio_data)
+if __name__ == "__main__":
+    main()
