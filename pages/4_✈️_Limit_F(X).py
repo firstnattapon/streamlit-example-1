@@ -384,6 +384,8 @@ with tab_dict['cf_log']:
     - **Option P/L**: `(max(0, ราคาหุ้นปัจจุบัน - Strike) * contracts_or_shares) - (contracts_or_shares * premium_paid_per_share)`
     ---
     """)
+    iframe("https://monica.im/share/artifact?id=Su47FeHfaWtyXmqDqmqp9W")
+    st.markdown("---")
     iframe("https://monica.im/share/artifact?id=qpAkuKjBpuVz2cp9nNFRs3")
     st.markdown("---")
     iframe("https://monica.im/share/artifact?id=wEjeaMxVW6MgDDm3xAZatX")
