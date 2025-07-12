@@ -11,7 +11,7 @@ from typing import Dict, Any, Tuple, List
 # --- Page Configuration ---
 st.set_page_config(page_title="Add_CF_V2_PerAsset_FixC", page_icon="🚀", layout= "centered" )
 
-# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (No changes needed here) ---
+# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (No changes here) ---
 
 @st.cache_data
 def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
@@ -77,7 +77,7 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
 
-# --- 2. UI & DISPLAY FUNCTIONS (No changes to UI Logic) ---
+# --- 2. UI & DISPLAY FUNCTIONS (UI Logic is Unchanged) ---
 
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
     """Renders all UI components and collects user inputs into a dictionary."""
@@ -122,9 +122,9 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
     return user_inputs
 
-# --- UPDATED: display_results to show new metrics ---
+# --- 3. UPDATED DISPLAY FUNCTION ---
 def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
-    """Displays all calculated metrics in the Streamlit app."""
+    """Displays all calculated metrics in the Streamlit app. [CORRECTED VERSION]"""
     st.divider()
     with st.expander("📈 Results", expanded=True):
         
@@ -138,16 +138,19 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
             value=f"{metrics['now_pv']:,.2f}"
         )
 
-        # --- CHANGED: Display the new components of log_pv ---
+        # --- THIS IS THE CORRECTED PART ---
+        # It now displays the new components of log_pv
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
         col2.metric('log_pv Adjustment (ln_weighted)', f"{metrics.get('ln_weighted', 0.0):,.2f}")
+        
+        # Display the final log_pv
         st.metric(f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})", f"{metrics['log_pv']:,.2f}")
         
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
 
         offset_display_val = -config.get('cashflow_offset', 0.0)
-        # --- CHANGED: The baseline is now directly 'log_pv_baseline' ---
+        # The new "Control" value is the log_pv_baseline
         baseline_val = metrics.get('log_pv_baseline', 0.0)
         product_cost = config.get('product_cost_default', 0)
         baseline_label = f"💰 Baseline | {baseline_val:,.1f}(Control) - {product_cost} (Cost) = {offset_display_val:+.0f} (Lv) "
@@ -158,7 +161,6 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
 
-# --- render_charts remains unchanged ---
 def render_charts(config: Dict[str, Any]):
     """Renders ThingSpeak charts using iframe components."""
     st.write("📊 ThingSpeak Charts")
@@ -179,17 +181,16 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-# --- 4. CORE LOGIC & UPDATE FUNCTIONS ---
+# --- 4. UPDATED CALCULATION FUNCTION ---
 
-# --- MAJOR CHANGE: The calculation logic is updated here ---
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
-    """Calculates all core financial metrics based on the new per-asset fix_c logic."""
+    """Calculates all core financial metrics based on the new per-asset fix_c logic. [CORRECTED VERSION]"""
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
     total_stock_value = user_inputs['total_stock_value']
 
-    # Calculate P/L for options (this part remains the same)
+    # Calculate P/L for options (this part is unchanged)
     total_options_pl = 0.0
     total_option_cost = 0.0
     for option in option_assets:
@@ -209,16 +210,16 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         unrealized_pl = total_intrinsic_value - total_cost_basis
         total_options_pl += unrealized_pl
 
-    # Calculate now_pv (this part remains the same)
+    # Calculate now_pv (this part is unchanged)
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
-    # --- START: New Per-Asset fix_c Calculation Logic ---
+    # --- THIS IS THE CORRECTED PART ---
+    # New Per-Asset fix_c Calculation Logic
     log_pv_baseline = 0.0
     ln_weighted = 0.0
 
     for asset in stock_assets:
-        # Get necessary values for this asset
-        fix_c = asset.get('fix_c', 1500) # Use 1500 as a default if not specified
+        fix_c = asset.get('fix_c', 1500) # Use 1500 as a default if 'fix_c' is missing
         ticker = asset['ticker'].strip()
         ref_price = asset.get('reference_price', 0.0)
         live_price = current_prices.get(ticker, 0.0)
@@ -226,10 +227,8 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         # 1. Add this asset's fix_c to the total baseline
         log_pv_baseline += fix_c
         
-        # 2. Calculate the weighted logarithmic adjustment for this asset
+        # 2. Calculate the weighted logarithmic adjustment
         if ref_price > 0 and live_price > 0:
-            # Formula: ln_i = fix_c_i * ln(live_price_i / ref_price_i)
-            # which is equivalent to: -fix_c_i * ln(ref_price_i / live_price_i)
             ln_weighted += fix_c * np.log(live_price / ref_price)
 
     # 3. Finalize metric calculations
@@ -237,11 +236,10 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
     metrics['ln_weighted'] = ln_weighted
     metrics['log_pv'] = log_pv_baseline + ln_weighted
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
-    # --- END: New Calculation Logic ---
     
     return metrics, total_options_pl, total_option_cost
 
-# --- handle_thingspeak_update remains unchanged ---
+# --- 5. UNCHANGED FUNCTIONS ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     """Handles the UI for confirming and sending data to ThingSpeak."""
     client_main, asset_clients = clients
@@ -272,8 +270,6 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                         st.success(f"✅ Successfully updated holding for {ticker}.")
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
-
-# --- 5. MAIN APPLICATION FLOW (No changes needed here) ---
 
 def main():
     """Main function to run the Streamlit application."""
