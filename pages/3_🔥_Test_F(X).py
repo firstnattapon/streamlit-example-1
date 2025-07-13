@@ -272,7 +272,6 @@ def get_all_assets_from_thingspeak(configs, _clients_ref):
 
 # ---------- UI SECTION ----------
 def render_asset_inputs(configs, last_assets):
-    st.subheader("Asset Values")
     cols = st.columns(len(configs))
     asset_inputs = {}
     for i, config in enumerate(configs):
@@ -379,9 +378,7 @@ last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIEN
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 # --- CONTROLS TAB ---
-with tab2:
-    st.header("Global Controls")
-    
+with tab2:    
     # --- START: STABLE STATE MANAGEMENT FOR NEX MODE ---
     # Initialize session states if they don't exist
     if 'select_key' not in st.session_state:
