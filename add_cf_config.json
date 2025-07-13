@@ -10,7 +10,8 @@
                 "net_cf": "field1",
                 "pure_alpha": "field2",
                 "buffer": "field3",
-                "cost_minus_cf": "field4"
+                "cost_minus_cf": "field4",
+                "now_pv": "field5"
             }
         }
     },
