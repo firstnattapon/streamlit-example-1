@@ -1,4 +1,4 @@
-#main
+#main code
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -189,6 +189,8 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('pure_alpha'), 'Pure_Alpha')
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
+    # เพิ่ม Chart สำหรับ now_pv (field5) ถ้าต้องการแสดงผลใน UI
+    # create_chart_iframe(main_channel_id, main_fields_map.get('now_pv'), 'Current Total Value')
 
 # --- 4. CALCULATION FUNCTION (Unchanged) ---
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
@@ -248,13 +250,12 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
 
     return metrics, total_options_pl, total_option_cost
 
-# --- 5. UPDATED THINGSPEAK FUNCTION (HANDLES MISSING KEY) ---
+# --- 5. UPDATED THINGSPEAK FUNCTION (HANDLES MISSING KEY & ADDS now_pv) ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     """Handles the UI for confirming and sending data to ThingSpeak."""
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         if st.button("Confirm and Send All Data"):
-            # Use .get() with a default value of 0.0 in case 'cashflow_offset' is deleted from JSON
             diff = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
             try:
                 fields_map = config.get('thingspeak_channels', {}).get('main_output', {}).get('fields', {})
@@ -262,7 +263,10 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     fields_map.get('net_cf', 'field1'): diff,
                     fields_map.get('pure_alpha', 'field2'): diff / user_inputs['product_cost'] if user_inputs['product_cost'] != 0 else 0,
                     fields_map.get('buffer', 'field3'): user_inputs['portfolio_cash'],
-                    fields_map.get('cost_minus_cf', 'field4'): user_inputs['product_cost'] - diff
+                    fields_map.get('cost_minus_cf', 'field4'): user_inputs['product_cost'] - diff,
+                    # --- START: GOAL 1 - ADDED DATA FOR FIELD 5 ---
+                    fields_map.get('now_pv', 'field5'): metrics.get('now_pv', 0.0)
+                    # --- END: GOAL 1 ---
                 }
                 client_main.update(payload)
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
@@ -308,8 +312,6 @@ def main():
     metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
     
     # 2. Dynamic Cashflow Offset Calculation
-    # The equation is: log_pv_baseline = product_cost - cashflow_offset
-    # Rearranging for cashflow_offset: cashflow_offset = product_cost - log_pv_baseline
     log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
     product_cost = user_inputs.get('product_cost', 0.0)
     dynamic_offset = product_cost - log_pv_baseline
