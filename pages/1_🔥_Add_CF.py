@@ -9,9 +9,9 @@ import streamlit.components.v1 as components
 from typing import Dict, Any, Tuple, List
 
 # --- Page Configuration ---
-st.set_page_config(page_title="Add_CF_V1_with_Options", page_icon="🚀", layout= "centered" )
+st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout= "centered" )
 
-# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS ---
+# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (Unchanged) ---
 
 @st.cache_data
 def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
@@ -77,7 +77,7 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
 
-# --- 2. UI & DISPLAY FUNCTIONS ---
+# --- 2. UI & DISPLAY FUNCTIONS (UI Logic is Unchanged) ---
 
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
     """Renders all UI components and collects user inputs into a dictionary."""
@@ -94,17 +94,13 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     user_inputs['current_prices'] = current_prices
 
     st.divider()
-    # --- START: REVERTED TO ORIGINAL UI LOGIC ---
-    st.write("📦 Stock Holdings") # Changed title back to original
+    st.write("📦 Stock Holdings")
     current_holdings = {}
     total_stock_value = 0.0
     for asset in stock_assets:
         ticker = asset["ticker"].strip()
-        
-        # Get the holding value of the "stock" from thingspeak as the default
         holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
         
-        # Use a simple label and the stock holding as the default value, no option addition
         asset_holding = st.number_input(
             f"{ticker}_asset", 
             value=holding_value, 
@@ -113,14 +109,12 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
         )
         
         current_holdings[ticker] = asset_holding
-        # Calculate value from the user's input
         individual_asset_value = asset_holding * current_prices.get(ticker, 0.0)
         st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
         total_stock_value += individual_asset_value
         
     user_inputs['current_holdings'] = current_holdings
     user_inputs['total_stock_value'] = total_stock_value
-    # --- END: REVERTED TO ORIGINAL UI LOGIC ---
 
     st.divider()
     st.write("⚙️ Calculation Parameters")
@@ -128,39 +122,56 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
     return user_inputs
 
-
+# --- 3. UPDATED DISPLAY FUNCTION ---
 def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
-    """Displays all calculated metrics in the Streamlit app."""
+    """Displays all calculated metrics, including a detailed breakdown of ln_weighted."""
     st.divider()
     with st.expander("📈 Results", expanded=True):
-        
-        metric_label = (
-            f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
-            f"| Max_Roll_Over: ({-total_option_cost:,.2f})"
-        )
-        
-        st.metric(
-            label=metric_label,
-            value=f"{metrics['now_pv']:,.2f}"
-        )
+        metric_label = (f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
+                        f"| Max_Roll_Over: ({-total_option_cost:,.2f})")
+        st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
 
         col1, col2 = st.columns(2)
-        col1.metric('t_0 (Product of Stock Reference Prices)', f"{metrics['t_0']:,.2f}")
-        col2.metric('t_n (Product of Stock Live Prices)', f"{metrics['t_n']:,.2f}")
-        st.metric('Fix Component (ln)', f"{metrics['ln']:,.2f}")
-        st.metric(f"Log PV (Calculated: {metrics['log_pv'] - metrics['ln']:,.2f} + {metrics['ln']:,.2f})", f"{metrics['log_pv']:,.2f}")
+        col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
+        col2.metric('log_pv Adjustment (ln_weighted)', f"{metrics.get('ln_weighted', 0.0):,.2f}")
+        
+        st.metric(f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})", 
+                  f"{metrics['log_pv']:,.2f}")
+        
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
 
         offset_display_val = -config.get('cashflow_offset', 0.0)
-        baseline_val = metrics['log_pv'] - metrics['ln']
+        baseline_val = metrics.get('log_pv_baseline', 0.0)
         product_cost = config.get('product_cost_default', 0)
-        baseline_label = f"💰 Baseline | {baseline_val:,.1f}(Control) - {product_cost} (Cost) = {offset_display_val:+.0f} (Lv) "
+        baseline_label = f"💰 Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost} (Cost)  + {offset_display_val:.0f} (Lv) "
         st.metric(label=baseline_label, value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
         
         baseline_target = config.get('baseline_target', 0.0)
         adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
+    
+    # --- NEW: Expander now shows the full formula with values ---
+    with st.expander("Show 'ln_weighted' Calculation Breakdown"):
+        st.write("ค่า `ln_weighted` คำนวณมาจากผลรวมของหุ้นแต่ละตัว:")
+        ln_breakdown_data = metrics.get('ln_breakdown', [])
+        
+        for item in ln_breakdown_data:
+            # Check if calculation was possible to avoid showing weird formulas
+            if item['ref_price'] > 0:
+                # Build the formula string
+                formula_string = (
+                    f"{item['ticker']:<6}: {item['contribution']:+9.4f} = "
+                    f"[ {item['fix_c']} * ln( {item['live_price']:.2f} / {item['ref_price']:.2f} ) ]"
+                )
+            else:
+                formula_string = f"{item['ticker']:<6}: {item['contribution']:+9.4f}   (Calculation skipped: ref_price is zero)"
+            
+            # Use st.code for a clean, monospaced look that aligns numbers
+            st.code(formula_string, language='text')
+            
+        st.code("----------------------------------------------------------------")
+        st.code(f"Total Sum = {metrics.get('ln_weighted', 0.0):+51.4f}")
 
 def render_charts(config: Dict[str, Any]):
     """Renders ThingSpeak charts using iframe components."""
@@ -182,55 +193,66 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-# --- 4. CORE LOGIC & UPDATE FUNCTIONS ---
-
+# --- 4. UPDATED CALCULATION FUNCTION ---
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
-    """Calculates all core financial metrics based on user inputs and config."""
+    """Calculates all core metrics and saves a detailed breakdown of the ln_weighted calculation."""
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
-
-    # The value here is based on the user input from the "Stock Holdings" section
     total_stock_value = user_inputs['total_stock_value']
 
-    # Calculate P/L and total cost for all options
-    total_options_pl = 0.0
-    total_option_cost = 0.0
+    # P/L calculation for options (unchanged)
+    total_options_pl, total_option_cost = 0.0, 0.0
     for option in option_assets:
         underlying_ticker = option.get("underlying_ticker", "").strip()
         if not underlying_ticker: continue
-
         last_price = current_prices.get(underlying_ticker, 0.0)
         strike = option.get("strike", 0.0)
         contracts = option.get("contracts_or_shares", 0.0)
         premium = option.get("premium_paid_per_share", 0.0)
-        
         total_cost_basis = contracts * premium
         total_option_cost += total_cost_basis
-        
-        intrinsic_value_per_share = max(0, last_price - strike)
-        total_intrinsic_value = intrinsic_value_per_share * contracts
-        unrealized_pl = total_intrinsic_value - total_cost_basis
-        total_options_pl += unrealized_pl
+        intrinsic_value = max(0, last_price - strike) * contracts
+        total_options_pl += intrinsic_value - total_cost_basis
 
-    # Calculate `now_pv` using the new formula:
-    # now_pv = (Stock Value) + (Cash) + (Current Options P/L)
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
-    # The rest of the function remains the same
-    log_pv_multiplier = config.get('log_pv_multiplier', 1500)
-    reference_prices = [asset['reference_price'] for asset in stock_assets]
-    live_prices = [current_prices[asset['ticker'].strip()] for asset in stock_assets]
-    metrics['t_0'] = np.prod(reference_prices) if reference_prices else 0
-    metrics['t_n'] = np.prod(live_prices) if live_prices else 0
-    t_0, t_n = metrics['t_0'], metrics['t_n']
-    metrics['ln'] = -log_pv_multiplier * np.log(t_0 / t_n) if t_0 > 0 and t_n > 0 else 0
-    number_of_assets = len(stock_assets)
-    metrics['log_pv'] = (number_of_assets * log_pv_multiplier) + metrics['ln']
+    # New Per-Asset fix_c Calculation Logic
+    log_pv_baseline, ln_weighted = 0.0, 0.0
+    ln_breakdown = [] # List to store calculation details for display
+
+    for asset in stock_assets:
+        fix_c = asset.get('fix_c', 1500)
+        ticker = asset['ticker'].strip()
+        ref_price = asset.get('reference_price', 0.0)
+        live_price = current_prices.get(ticker, 0.0)
+        
+        log_pv_baseline += fix_c
+        
+        contribution = 0.0
+        if ref_price > 0 and live_price > 0:
+            contribution = fix_c * np.log(live_price / ref_price)
+        
+        ln_weighted += contribution
+
+        # --- NEW: Save all necessary components to build the formula string later
+        ln_breakdown.append({
+            "ticker": ticker,
+            "fix_c": fix_c,
+            "live_price": live_price,
+            "ref_price": ref_price,
+            "contribution": contribution
+        })
+
+    metrics['log_pv_baseline'] = log_pv_baseline
+    metrics['ln_weighted'] = ln_weighted
+    metrics['log_pv'] = log_pv_baseline + ln_weighted
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
-    
+    metrics['ln_breakdown'] = ln_breakdown
+
     return metrics, total_options_pl, total_option_cost
 
+# --- 5. UNCHANGED FUNCTIONS ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     """Handles the UI for confirming and sending data to ThingSpeak."""
     client_main, asset_clients = clients
@@ -255,15 +277,12 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                 ticker = asset['ticker'].strip()
                 if ticker in asset_clients:
                     try:
-                        # The holding value to update is now just the stock holding from the UI
                         current_holding = user_inputs['current_holdings'][ticker]
                         field_to_update = asset['holding_channel']['field']
                         asset_clients[ticker].update({field_to_update: current_holding})
                         st.success(f"✅ Successfully updated holding for {ticker}.")
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
-
-# --- 5. MAIN APPLICATION FLOW ---
 
 def main():
     """Main function to run the Streamlit application."""
