@@ -374,20 +374,22 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
 monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
+# --- START: STABLE STATE MANAGEMENT ---
+# Initialize session states if they don't exist
+if 'select_key' not in st.session_state:
+    st.session_state.select_key = "" # CHANGED: Default is now an empty string
+if 'nex' not in st.session_state:
+    st.session_state.nex = 0
+if 'Nex_day_sell' not in st.session_state:
+    st.session_state.Nex_day_sell = 0
+# --- END: STABLE STATE MANAGEMENT ---
+
 # Create tabs
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 # --- CONTROLS TAB ---
-with tab2:    
-    # --- START: STABLE STATE MANAGEMENT FOR NEX MODE ---
-    # Initialize session states if they don't exist
-    if 'select_key' not in st.session_state:
-        st.session_state.select_key = ""
-    if 'nex' not in st.session_state:
-        st.session_state.nex = 0
-    if 'Nex_day_sell' not in st.session_state:
-        st.session_state.Nex_day_sell = 0
-
+with tab2:
+    # Nex mode controls
     Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
 
     if Nex_day_:
@@ -411,7 +413,6 @@ with tab2:
     # Display the current persistent state
     if Nex_day_:
         st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
-    # --- END: STABLE STATE MANAGEMENT ---
 
     st.write("---")
     
@@ -449,18 +450,21 @@ with tab1:
 
     # 2. Build the list of currently available options based on the STABLE `nex`
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
-    selectbox_options = [""]
+    selectbox_options = [""] # CHANGED: "Show All" is now an empty string
     if nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
 
     # 3. CORE FIX: Before rendering, check if the saved selection is still valid. If not, reset it.
     if st.session_state.select_key not in selectbox_options:
-        st.session_state.select_key = ""
+        st.session_state.select_key = "" # CHANGED: Reset to the empty string option
 
     # 4. Define formatting and render the selectbox
     def format_selectbox_options(option_name):
-        if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]: return option_name
+        # CHANGED: Check for "" instead of "Show All"
+        if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
+            # For the empty string option, we return an empty string to make the box appear blank
+            return option_name
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
     st.selectbox(
@@ -473,6 +477,7 @@ with tab1:
 
     # 5. Filter the display based on the (now guaranteed to be valid) selection
     selected_option = st.session_state.select_key
+    # CHANGED: The "Show All" case is now triggered by the empty string
     if selected_option == "":
         configs_to_display = ASSET_CONFIGS
     elif selected_option == "Filter Buy Tickers":
