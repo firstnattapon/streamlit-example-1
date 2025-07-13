@@ -382,7 +382,7 @@ with tab2:
     # --- START: STABLE STATE MANAGEMENT FOR NEX MODE ---
     # Initialize session states if they don't exist
     if 'select_key' not in st.session_state:
-        st.session_state.select_key = "Show All"
+        st.session_state.select_key = ""
     if 'nex' not in st.session_state:
         st.session_state.nex = 0
     if 'Nex_day_sell' not in st.session_state:
@@ -449,18 +449,18 @@ with tab1:
 
     # 2. Build the list of currently available options based on the STABLE `nex`
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
-    selectbox_options = ["Show All"]
+    selectbox_options = [""]
     if nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
 
     # 3. CORE FIX: Before rendering, check if the saved selection is still valid. If not, reset it.
     if st.session_state.select_key not in selectbox_options:
-        st.session_state.select_key = "Show All"
+        st.session_state.select_key = ""
 
     # 4. Define formatting and render the selectbox
     def format_selectbox_options(option_name):
-        if option_name in ["Show All", "Filter Buy Tickers", "Filter Sell Tickers"]: return option_name
+        if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]: return option_name
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
     st.selectbox(
@@ -473,7 +473,7 @@ with tab1:
 
     # 5. Filter the display based on the (now guaranteed to be valid) selection
     selected_option = st.session_state.select_key
-    if selected_option == "Show All":
+    if selected_option == "":
         configs_to_display = ASSET_CONFIGS
     elif selected_option == "Filter Buy Tickers":
         buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
