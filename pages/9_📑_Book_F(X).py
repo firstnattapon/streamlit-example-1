@@ -285,6 +285,9 @@ with st.expander("Book : Mudley Live by Jatuphon vol.1 " , expanded = 0 ):
   st.write('https://notebooklm.google.com/notebook/7266636a-4bc4-45ae-816e-78521222f9e0')
   st.write('____')  
 
+with st.expander("Book : Mudley Live by Jatuphon vol.2 " , expanded = 0 ):
+  st.write('https://notebooklm.google.com/notebook/b0777e9a-2faf-4be0-9f66-2974633e7d1c')
+  st.write('____')  
 
 st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1100 , height=1000  , scrolling=0)
 
