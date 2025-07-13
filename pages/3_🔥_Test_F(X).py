@@ -284,6 +284,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
 
+# --- UPDATED main() FUNCTION ---
 def main():
     """Main function to run the Streamlit application."""
     config = load_config()
@@ -306,11 +307,35 @@ def main():
     if st.button("Recalculate"):
         pass
 
+    # --- 1. Initial Calculation ---
     metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
     
+    # --- 2. DYNAMIC CASHFLOW OFFSET CALCULATION (NEW LOGIC) ---
+    # The goal is to make the "Baseline_T0" metric self-balancing.
+    # The displayed formula is: Baseline_T0(Control) = Product_Cost + Lv
+    # Where:
+    #   - Baseline_T0(Control) is 'log_pv_baseline'
+    #   - Lv is '-cashflow_offset'
+    #
+    # So, the equation becomes: log_pv_baseline = Product_Cost + (-cashflow_offset)
+    # Rearranging to solve for cashflow_offset:
+    # cashflow_offset = Product_Cost - log_pv_baseline
+    #
+    # This calculation overrides the hardcoded 'cashflow_offset' from the JSON file for this run.
+    log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
+    product_cost = user_inputs.get('product_cost', 0.0)
+    dynamic_offset = product_cost - log_pv_baseline
+
+    # Override the config value in memory. This ensures all subsequent functions
+    # (display_results, handle_thingspeak_update) use the correct, calculated offset.
+    config['cashflow_offset'] = dynamic_offset
+    # --- END OF NEW LOGIC ---
+
+    # --- 3. Display and Update using the new dynamic offset ---
     display_results(metrics, options_pl, total_option_cost, config)
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
+
 
 if __name__ == "__main__":
     main()
