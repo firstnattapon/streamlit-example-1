@@ -170,8 +170,9 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         st.code("----------------------------------------------------------------")
         st.code(f"Total Sum = {metrics.get('ln_weighted', 0.0):+51.4f}")
 
+# --- START: MODIFIED FUNCTION ---
 def render_charts(config: Dict[str, Any]):
-    """Renders ThingSpeak charts using iframe components."""
+    """Renders ThingSpeak charts using iframe components in a specific order."""
     st.write("📊 ThingSpeak Charts")
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
     main_channel_id = main_channel_config.get('channel_id')
@@ -185,12 +186,13 @@ def render_charts(config: Dict[str, Any]):
             components.iframe(url, width=800, height=200)
             st.divider()
 
+    # Display charts in the requested order
     create_chart_iframe(main_channel_id, main_fields_map.get('net_cf'), 'Cashflow')
+    create_chart_iframe(main_channel_id, main_fields_map.get('now_pv'), 'Current Total Value')
     create_chart_iframe(main_channel_id, main_fields_map.get('pure_alpha'), 'Pure_Alpha')
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
-    # เพิ่ม Chart สำหรับ now_pv (field5) ถ้าต้องการแสดงผลใน UI
-    # create_chart_iframe(main_channel_id, main_fields_map.get('now_pv'), 'Current Total Value')
+# --- END: MODIFIED FUNCTION ---
 
 # --- 4. CALCULATION FUNCTION (Unchanged) ---
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
@@ -264,9 +266,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     fields_map.get('pure_alpha', 'field2'): diff / user_inputs['product_cost'] if user_inputs['product_cost'] != 0 else 0,
                     fields_map.get('buffer', 'field3'): user_inputs['portfolio_cash'],
                     fields_map.get('cost_minus_cf', 'field4'): user_inputs['product_cost'] - diff,
-                    # --- START: GOAL 1 - ADDED DATA FOR FIELD 5 ---
                     fields_map.get('now_pv', 'field5'): metrics.get('now_pv', 0.0)
-                    # --- END: GOAL 1 ---
                 }
                 client_main.update(payload)
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
