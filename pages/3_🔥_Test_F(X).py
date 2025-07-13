@@ -382,7 +382,7 @@ with tab2:
     # --- START: STABLE STATE MANAGEMENT FOR NEX MODE ---
     # Initialize session states if they don't exist
     if 'select_key' not in st.session_state:
-        st.session_state.select_key = "Show All"
+        st.session_state.select_key = ""
     if 'nex' not in st.session_state:
         st.session_state.nex = 0
     if 'Nex_day_sell' not in st.session_state:
