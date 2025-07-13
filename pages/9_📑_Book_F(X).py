@@ -281,6 +281,11 @@ with st.expander("Book : the power of now : พลังแห่งจิตป
   st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8') 
   st.write('____')  
 
+with st.expander("Book : Mudley Live by Jatuphon vol.1 " , expanded = 0 ):
+  st.components.v1.iframe("https://notebooklm.google.com/notebook/7266636a-4bc4-45ae-816e-78521222f9e0", width=1100 , height=1000  , scrolling=0)
+  st.write('____')  
+
+
 st.components.v1.iframe("https://monica.im/share/chat?shareId=ZZYqC15w7HFYvGhW", width=1100 , height=1000  , scrolling=0)
 
 
