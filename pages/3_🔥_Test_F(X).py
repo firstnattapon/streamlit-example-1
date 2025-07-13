@@ -35,11 +35,11 @@ def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dic
             channel_info = asset.get('holding_channel', {})
             if channel_info.get('channel_id'):
                 asset_clients[ticker] = thingspeak.Channel(channel_info['channel_id'], channel_info['write_api_key'])
-        
+
         num_asset_clients = len(asset_clients)
         num_option_assets = len(option_assets)
         st.success(f"Initialized main client and {num_asset_clients} asset {num_option_assets} option holding clients.")
-        
+
         return client_main, asset_clients
     except Exception as e:
         st.error(f"Failed to initialize ThingSpeak clients: {e}")
@@ -100,19 +100,19 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     for asset in stock_assets:
         ticker = asset["ticker"].strip()
         holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
-        
+
         asset_holding = st.number_input(
-            f"{ticker}_asset", 
-            value=holding_value, 
-            key=f"holding_{ticker}", 
+            f"{ticker}_asset",
+            value=holding_value,
+            key=f"holding_{ticker}",
             format="%.2f"
         )
-        
+
         current_holdings[ticker] = asset_holding
         individual_asset_value = asset_holding * current_prices.get(ticker, 0.0)
         st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
         total_stock_value += individual_asset_value
-        
+
     user_inputs['current_holdings'] = current_holdings
     user_inputs['total_stock_value'] = total_stock_value
 
@@ -122,7 +122,7 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
     return user_inputs
 
-# --- 3. UPDATED DISPLAY FUNCTION ---
+# --- 3. UPDATED DISPLAY FUNCTION (HANDLES MISSING KEY) ---
 def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
     """Displays all calculated metrics, including a detailed breakdown of ln_weighted."""
     st.divider()
@@ -140,6 +140,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
 
+        # Use .get() with a default value of 0.0 in case 'cashflow_offset' is deleted from JSON
         offset_display_val = -config.get('cashflow_offset', 0.0)
         baseline_val = metrics.get('log_pv_baseline', 0.0)
         product_cost = config.get('product_cost_default', 0)
@@ -151,15 +152,12 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
     
-    # --- NEW: Expander now shows the full formula with values ---
     with st.expander("Show 'ln_weighted' Calculation Breakdown"):
         st.write("ค่า `ln_weighted` คำนวณมาจากผลรวมของหุ้นแต่ละตัว:")
         ln_breakdown_data = metrics.get('ln_breakdown', [])
         
         for item in ln_breakdown_data:
-            # Check if calculation was possible to avoid showing weird formulas
             if item['ref_price'] > 0:
-                # Build the formula string
                 formula_string = (
                     f"{item['ticker']:<6}: {item['contribution']:+9.4f} = "
                     f"[ {item['fix_c']} * ln( {item['live_price']:.2f} / {item['ref_price']:.2f} ) ]"
@@ -167,7 +165,6 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
             else:
                 formula_string = f"{item['ticker']:<6}: {item['contribution']:+9.4f}   (Calculation skipped: ref_price is zero)"
             
-            # Use st.code for a clean, monospaced look that aligns numbers
             st.code(formula_string, language='text')
             
         st.code("----------------------------------------------------------------")
@@ -193,7 +190,7 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-# --- 4. UPDATED CALCULATION FUNCTION ---
+# --- 4. CALCULATION FUNCTION (Unchanged) ---
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
     """Calculates all core metrics and saves a detailed breakdown of the ln_weighted calculation."""
     metrics = {}
@@ -235,7 +232,6 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         
         ln_weighted += contribution
 
-        # --- NEW: Save all necessary components to build the formula string later
         ln_breakdown.append({
             "ticker": ticker,
             "fix_c": fix_c,
@@ -252,12 +248,13 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
 
     return metrics, total_options_pl, total_option_cost
 
-# --- 5. UNCHANGED FUNCTIONS ---
+# --- 5. UPDATED THINGSPEAK FUNCTION (HANDLES MISSING KEY) ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     """Handles the UI for confirming and sending data to ThingSpeak."""
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         if st.button("Confirm and Send All Data"):
+            # Use .get() with a default value of 0.0 in case 'cashflow_offset' is deleted from JSON
             diff = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
             try:
                 fields_map = config.get('thingspeak_channels', {}).get('main_output', {}).get('fields', {})
@@ -307,35 +304,23 @@ def main():
     if st.button("Recalculate"):
         pass
 
-    # --- 1. Initial Calculation ---
+    # 1. Initial Calculation
     metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
     
-    # --- 2. DYNAMIC CASHFLOW OFFSET CALCULATION (NEW LOGIC) ---
-    # The goal is to make the "Baseline_T0" metric self-balancing.
-    # The displayed formula is: Baseline_T0(Control) = Product_Cost + Lv
-    # Where:
-    #   - Baseline_T0(Control) is 'log_pv_baseline'
-    #   - Lv is '-cashflow_offset'
-    #
-    # So, the equation becomes: log_pv_baseline = Product_Cost + (-cashflow_offset)
-    # Rearranging to solve for cashflow_offset:
-    # cashflow_offset = Product_Cost - log_pv_baseline
-    #
-    # This calculation overrides the hardcoded 'cashflow_offset' from the JSON file for this run.
+    # 2. Dynamic Cashflow Offset Calculation
+    # The equation is: log_pv_baseline = product_cost - cashflow_offset
+    # Rearranging for cashflow_offset: cashflow_offset = product_cost - log_pv_baseline
     log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
     product_cost = user_inputs.get('product_cost', 0.0)
     dynamic_offset = product_cost - log_pv_baseline
 
-    # Override the config value in memory. This ensures all subsequent functions
-    # (display_results, handle_thingspeak_update) use the correct, calculated offset.
+    # Override the config value in memory for this run.
     config['cashflow_offset'] = dynamic_offset
-    # --- END OF NEW LOGIC ---
 
-    # --- 3. Display and Update using the new dynamic offset ---
+    # 3. Display and Update using the new dynamic offset
     display_results(metrics, options_pl, total_option_cost, config)
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
-
 
 if __name__ == "__main__":
     main()
