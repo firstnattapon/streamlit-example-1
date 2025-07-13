@@ -518,5 +518,5 @@ with tab1:
         st.write("_____")
 
 # This button stays in the sidebar, outside the tabs
-if st.sidebar.button("RERUN & CLEAR CACHE"):
+if st.sidebar.button("RERUN"):
     clear_all_caches()
