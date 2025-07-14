@@ -128,15 +128,35 @@ def get_thingspeak_clients(configs):
 
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
+# --- START: MODIFIED FUNCTION ---
 def clear_all_caches():
+    """
+    Clears data caches and non-essential session state, but preserves
+    UI state keys like 'select_key', 'nex', and 'Nex_day_sell' to maintain
+    the user's selections across reruns triggered by button clicks.
+    """
+    # Clear streamlit's data caches
     st.cache_data.clear()
     st.cache_resource.clear()
+
+    # Clear other function-specific caches
     sell.cache_clear()
     buy.cache_clear()
-    for key in list(st.session_state.keys()):
+
+    # Define the UI state keys that should NOT be deleted
+    ui_state_keys_to_preserve = ['select_key', 'nex', 'Nex_day_sell']
+
+    # Find all session state keys that are NOT in the preservation list
+    keys_to_delete = [k for k in st.session_state.keys() if k not in ui_state_keys_to_preserve]
+
+    # Delete only the non-UI state keys
+    for key in keys_to_delete:
         del st.session_state[key]
-    st.success("🗑️ Clear ALL caches complete!")
+
+    st.success("🗑️ Data caches cleared! UI state preserved.")
     st.rerun()
+# --- END: MODIFIED FUNCTION ---
+
 
 # ---------- CALCULATION UTILS ----------
 @lru_cache(maxsize=128)
@@ -464,7 +484,7 @@ with tab1:
         # CHANGED: Check for "" instead of "Show All"
         if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
             # For the empty string option, we return an empty string to make the box appear blank
-            return option_name
+            return "Show All" if option_name == "" else option_name
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
     st.selectbox(
@@ -524,4 +544,5 @@ with tab1:
 
 # This button stays in the sidebar, outside the tabs
 if st.sidebar.button("RERUN"):
+    # This button now correctly preserves the UI state while clearing data
     clear_all_caches()
