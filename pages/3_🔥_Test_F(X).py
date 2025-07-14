@@ -1,4 +1,3 @@
-#
 import streamlit as st
 import numpy as np
 import datetime
@@ -67,7 +66,7 @@ class SimulationTracer:
     def run(self) -> np.ndarray:
         if self.action_length <= 0:
             return np.array([])
-
+            
         dna_rng = np.random.default_rng(seed=self.dna_seed)
         current_actions = dna_rng.integers(0, 2, size=self.action_length)
         if self.action_length > 0:
@@ -129,16 +128,35 @@ def get_thingspeak_clients(configs):
 
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
+# --- START: MODIFIED FUNCTION ---
 def clear_all_caches():
+    """
+    Clears data caches and non-essential session state, but preserves
+    UI state keys like 'select_key', 'nex', and 'Nex_day_sell' to maintain
+    the user's selections across reruns triggered by button clicks.
+    """
+    # Clear streamlit's data caches
     st.cache_data.clear()
     st.cache_resource.clear()
+
+    # Clear other function-specific caches
     sell.cache_clear()
     buy.cache_clear()
-    # ไม่เคลียร์ st.session_state เพื่อให้จำค่าที่เลือกไว้ได้
-    # for key in list(st.session_state.keys()):
-    #     del st.session_state[key]
-    st.success("🗑️ Clear DATA caches complete!")
-    # st.rerun() # st.rerun() จะถูกเรียกโดยอัตโนมัติเมื่อกดปุ่ม ไม่ต้องเรียกเอง
+
+    # Define the UI state keys that should NOT be deleted
+    ui_state_keys_to_preserve = ['select_key', 'nex', 'Nex_day_sell']
+
+    # Find all session state keys that are NOT in the preservation list
+    keys_to_delete = [k for k in st.session_state.keys() if k not in ui_state_keys_to_preserve]
+
+    # Delete only the non-UI state keys
+    for key in keys_to_delete:
+        del st.session_state[key]
+
+    st.success("🗑️ Data caches cleared! UI state preserved.")
+    st.rerun()
+# --- END: MODIFIED FUNCTION ---
+
 
 # ---------- CALCULATION UTILS ----------
 @lru_cache(maxsize=128)
@@ -190,7 +208,7 @@ def Monitor(asset_config, _clients_ref, start_date):
 
         if start_date:
             tickerData = tickerData[tickerData.index >= start_date]
-
+        
         fx_js_str = "0"
         try:
             field_data = client.get_field_last(field=str(field_num))
@@ -201,7 +219,7 @@ def Monitor(asset_config, _clients_ref, start_date):
             fx_js_str = "0"
 
         tickerData['index'] = list(range(len(tickerData)))
-
+        
         dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
         df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
         df['action'] = ""
@@ -209,19 +227,19 @@ def Monitor(asset_config, _clients_ref, start_date):
         try:
             tracer = SimulationTracer(encoded_string=fx_js_str)
             final_actions = tracer.run()
-
+            
             num_to_assign = min(len(df), len(final_actions))
             if num_to_assign > 0:
                 action_col_idx = df.columns.get_loc('action')
                 df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
-
+        
         except ValueError as e:
             st.warning(f"Tracer Error for {ticker} (input: '{fx_js_str}'): {e}")
         except Exception as e:
             st.error(f"Unexpected Tracer Error for {ticker}: {e}")
 
         return df.tail(7), fx_js_str
-
+    
     except Exception as e:
         st.error(f"Error in Monitor function for {ticker}: {str(e)}")
         return pd.DataFrame(), "0"
@@ -297,7 +315,7 @@ def render_asset_update_controls(configs, clients):
             ticker = config['ticker']
             asset_conf = config['asset_field']
             field_name = asset_conf['field']
-
+            
             if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
                 add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
@@ -306,7 +324,6 @@ def render_asset_update_controls(configs, clients):
                         client.update({field_name: add_val})
                         st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
                         clear_all_caches()
-                        st.rerun() # Rerun to reflect the change immediately
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
 
@@ -319,7 +336,7 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
         try:
             if df_data.empty or df_data.action.values[1 + nex] == "":
                 return 0
-
+                
             val = df_data.action.values[1 + nex]
             return 1 - val if Nex_day_sell == 1 else val
         except Exception:
@@ -341,7 +358,6 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
                 client.update({field_name: new_asset_val})
                 col3.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
-                st.rerun() # Rerun to reflect the change immediately
             except Exception as e:
                 st.error(f"Failed to SELL {ticker}: {e}")
 
@@ -371,7 +387,6 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
                 client.update({field_name: new_asset_val})
                 col6.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
-                st.rerun() # Rerun to reflect the change immediately
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
 
@@ -380,9 +395,9 @@ monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLO
 last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
 # --- START: STABLE STATE MANAGEMENT ---
-# Initialize session states if they don't exist. This runs only once per session.
+# Initialize session states if they don't exist
 if 'select_key' not in st.session_state:
-    st.session_state.select_key = "" # ใช้ "" แทน "Show All" เพื่อความสะดวก
+    st.session_state.select_key = "" # CHANGED: Default is now an empty string
 if 'nex' not in st.session_state:
     st.session_state.nex = 0
 if 'Nex_day_sell' not in st.session_state:
@@ -408,24 +423,23 @@ with tab2:
             st.session_state.Nex_day_sell = 1
     else:
         # If the box is UNCHECKED, reset the state completely
-        if st.session_state.nex != 0:
-            st.session_state.nex = 0
-            st.session_state.Nex_day_sell = 0
+        st.session_state.nex = 0
+        st.session_state.Nex_day_sell = 0
 
     # The rest of the app now uses the reliable state from session_state
     nex = st.session_state.nex
     Nex_day_sell = st.session_state.Nex_day_sell
 
     # Display the current persistent state
-    if nex == 1:
-        st.write(f"**Mode:** `nex_day`", f" | **Action:** `{'Sell' if Nex_day_sell else 'Buy'}`")
+    if Nex_day_:
+        st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
 
     st.write("---")
-
+    
     x_2 = st.number_input('Diff', step=1, value=60)
-
+    
     st.write("---")
-
+    
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
 
     st.write("---")
@@ -433,7 +447,7 @@ with tab2:
     Start = st.checkbox('start')
     if Start:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
-
+        
 # --- MONITOR TAB ---
 with tab1:
     # --- START: SELECTBOX LOGIC (REVISED AND STABLE) ---
@@ -456,34 +470,34 @@ with tab1:
 
     # 2. Build the list of currently available options based on the STABLE `nex`
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
-    selectbox_options = [""] # ใช้ "" แทน "Show All"
+    selectbox_options = [""] # CHANGED: "Show All" is now an empty string
     if nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
 
     # 3. CORE FIX: Before rendering, check if the saved selection is still valid. If not, reset it.
-    # This prevents errors if options change (e.g. toggling 'nex_day')
     if st.session_state.select_key not in selectbox_options:
-        st.session_state.select_key = "" # Reset to the "Show All" option
+        st.session_state.select_key = "" # CHANGED: Reset to the empty string option
 
     # 4. Define formatting and render the selectbox
     def format_selectbox_options(option_name):
-        if option_name == "":
-            return "Show All"
-        if option_name in ["Filter Buy Tickers", "Filter Sell Tickers"]:
-            return option_name
+        # CHANGED: Check for "" instead of "Show All"
+        if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
+            # For the empty string option, we return an empty string to make the box appear blank
+            return "Show All" if option_name == "" else option_name
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
     st.selectbox(
         "Select Ticker to View:",
         options=selectbox_options,
         format_func=format_selectbox_options,
-        key="select_key"  # **นี่คือส่วนสำคัญที่ผูก widget กับ session_state**
+        key="select_key"  # Binds to our validated session state
     )
     st.write("_____")
 
     # 5. Filter the display based on the (now guaranteed to be valid) selection
     selected_option = st.session_state.select_key
+    # CHANGED: The "Show All" case is now triggered by the empty string
     if selected_option == "":
         configs_to_display = ASSET_CONFIGS
     elif selected_option == "Filter Buy Tickers":
@@ -502,7 +516,7 @@ with tab1:
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
         # Use asset_inputs which was defined in Tab 2
-        asset_value = asset_inputs.get(ticker, 0.0)
+        asset_value = asset_inputs.get(ticker, 0.0) 
         fix_c = config['fix_c']
         # Use x_2 (Diff) which was defined in Tab 2
         calculations[ticker] = {
@@ -517,19 +531,18 @@ with tab1:
         asset_last = last_assets_all.get(ticker, 0.0)
         asset_val = asset_inputs.get(ticker, 0.0)
         calc = calculations.get(ticker, {})
-
+        
         title_label = selectbox_labels.get(ticker, ticker)
         st.write(title_label)
 
         trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
-
+        
         with st.expander("Show Raw Data Action"):
             st.dataframe(df_data, use_container_width=True)
-
+            
         st.write("_____")
 
 # This button stays in the sidebar, outside the tabs
-if st.sidebar.button("RERUN & Clear Caches"):
-    # เคลียร์ Cache ของข้อมูล แต่ไม่เคลียร์ session_state
+if st.sidebar.button("RERUN"):
+    # This button now correctly preserves the UI state while clearing data
     clear_all_caches()
-    st.rerun()
