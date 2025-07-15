@@ -1,6 +1,6 @@
 {
     "baseline_target": 1967.68,
-    "cashflow_offset_comment": "Offset_minimal_cf as of 13/7/68",
+    "cashflow_offset_comment": "Offset_minimal_cf 13/7/68",
     "product_cost_default": 10750.00,
     "thingspeak_channels": {
         "main_output": {
