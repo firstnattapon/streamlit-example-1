@@ -38,5 +38,10 @@
     {
         "ticker": "GERN",
         "entry_price": 1.85
+    },
+    {
+        "ticker": "DYN",
+        "entry_price": 12.60
     }
+    
 ]
