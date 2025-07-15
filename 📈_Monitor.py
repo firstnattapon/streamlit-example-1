@@ -1,3 +1,4 @@
+#
 import streamlit as st
 import numpy as np
 import datetime
@@ -154,7 +155,10 @@ def clear_all_caches():
         del st.session_state[key]
 
     st.success("🗑️ Data caches cleared! UI state preserved.")
-    st.rerun()
+    # st.rerun() is called automatically after a button press, no need to call it here explicitly
+    # However, if you want an immediate rerun even if the button press doesn't change anything else, you can leave it.
+    # For this specific case, it's better to let Streamlit handle the rerun after the button's logic completes.
+
 # --- END: MODIFIED FUNCTION ---
 
 
@@ -324,6 +328,7 @@ def render_asset_update_controls(configs, clients):
                         client.update({field_name: add_val})
                         st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
                         clear_all_caches()
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
 
@@ -358,6 +363,7 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
                 client.update({field_name: new_asset_val})
                 col3.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
+                st.rerun() # Ensure rerun after cache clear
             except Exception as e:
                 st.error(f"Failed to SELL {ticker}: {e}")
 
@@ -387,6 +393,7 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
                 client.update({field_name: new_asset_val})
                 col6.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
+                st.rerun() # Ensure rerun after cache clear
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
 
@@ -397,7 +404,7 @@ last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIEN
 # --- START: STABLE STATE MANAGEMENT ---
 # Initialize session states if they don't exist
 if 'select_key' not in st.session_state:
-    st.session_state.select_key = "" # CHANGED: Default is now an empty string
+    st.session_state.select_key = "" # Default is now an empty string
 if 'nex' not in st.session_state:
     st.session_state.nex = 0
 if 'Nex_day_sell' not in st.session_state:
@@ -470,20 +477,18 @@ with tab1:
 
     # 2. Build the list of currently available options based on the STABLE `nex`
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
-    selectbox_options = [""] # CHANGED: "Show All" is now an empty string
+    selectbox_options = [""] # "Show All" is now an empty string
     if nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
 
     # 3. CORE FIX: Before rendering, check if the saved selection is still valid. If not, reset it.
     if st.session_state.select_key not in selectbox_options:
-        st.session_state.select_key = "" # CHANGED: Reset to the empty string option
+        st.session_state.select_key = "" # Reset to the empty string option ("Show All")
 
     # 4. Define formatting and render the selectbox
     def format_selectbox_options(option_name):
-        # CHANGED: Check for "" instead of "Show All"
         if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
-            # For the empty string option, we return an empty string to make the box appear blank
             return "Show All" if option_name == "" else option_name
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
@@ -497,7 +502,6 @@ with tab1:
 
     # 5. Filter the display based on the (now guaranteed to be valid) selection
     selected_option = st.session_state.select_key
-    # CHANGED: The "Show All" case is now triggered by the empty string
     if selected_option == "":
         configs_to_display = ASSET_CONFIGS
     elif selected_option == "Filter Buy Tickers":
@@ -544,5 +548,5 @@ with tab1:
 
 # This button stays in the sidebar, outside the tabs
 if st.sidebar.button("RERUN"):
-    # This button now correctly preserves the UI state while clearing data
     clear_all_caches()
+    st.rerun()
