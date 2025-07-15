@@ -51,7 +51,7 @@
       "fix_c": 1500,
       "option_config": {
         "base_value": 100.0,
-        "label": "FFWM (LV:100@12.60)"
+        "label": "DYN (LV:100@12.60)"
       }
     },
     {
