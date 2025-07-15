@@ -25,7 +25,7 @@ class Strategy:
 def load_config(filepath: str = "hybrid_seed_config.json") -> Dict[str, Any]:
     # In a real app, this might load from a JSON file. For simplicity, it's a dict.
     return {
-        "assets": ["FFWM", "NEGG", "RIVN", "AGL", "APLS", "FLNC", "NVTS" , "QXO" ,"RXRX" , "GERN"],
+        "assets": ["FFWM", "NEGG", "RIVN", "AGL", "APLS", "FLNC", "NVTS" , "QXO" ,"RXRX" , "GERN" , "DYN"],
         "default_settings": {
             "selected_ticker": "FFWM", "start_date": "2024-01-01",
             "window_size": 30 , "num_seeds": 1000, "max_workers": 1, 
