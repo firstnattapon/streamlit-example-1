@@ -57,6 +57,14 @@
             "strike": 1.5
         },           
         {
+            "type": "option",
+            "name": "DYN Call @ 12.60",
+            "underlying_ticker": "DYN",
+            "contracts_or_shares": 100,
+            "premium_paid_per_share": 2.61,
+            "strike": 10.0
+        },  
+        {
             "type": "stock",
             "ticker": "FFWM",
             "reference_price": 6.88,
@@ -125,6 +133,13 @@
             "reference_price": 1.85,
             "fix_c": 1500,
             "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field2" }
+        },
+        {
+            "type": "stock",
+            "ticker": "DYN",
+            "reference_price": 12.60,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field3" }
         }
     ]
 }
