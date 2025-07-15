@@ -68,5 +68,12 @@
         "thingspeak_field": 2,
         "channel_id": 2988808,
         "write_api_key": "QBIPN1AIZ88QQW5V"
+    },
+    {
+        "ticker": "DYN",
+        "tab_name": "DYN",
+        "thingspeak_field": 3,
+        "channel_id": 2988808,
+        "write_api_key": "QBIPN1AIZ88QQW5V"
     }
 ]
