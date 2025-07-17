@@ -105,16 +105,31 @@ with tabs[0]:
     for asset in assets_config:
         ticker = asset['ticker']
         entry_price = asset['entry_price']
+        
+        # --- ส่วนที่แก้ไข ---
+        # ดึงค่า comment จาก config, ถ้าไม่มีให้เป็นค่าว่าง
+        comment = asset.get('comment', '')
+        
         try:
             # ดึงราคาล่าสุดจาก yfinance เป็นค่าเริ่มต้น
             last_price = yf.Ticker(ticker).fast_info.get('lastPrice', entry_price)
         except Exception:
             st.warning(f"ไม่สามารถดึงราคาล่าสุดของ {ticker} ได้, ใช้ราคา Entry แทน")
             last_price = entry_price
-            
+        
+        # สร้าง label ของ input โดยรวม comment เข้าไปด้วย (ถ้ามี)
         label = f"ราคา_{ticker} (Entry: {entry_price})"
+        if comment:
+            label += f" | {comment}"
+        
         # เก็บราคาปัจจุบันที่ผู้ใช้กรอกลงใน Dictionary
-        current_prices[ticker] = st.number_input(label, step=0.01, value=float(last_price), key=f"price_{ticker}")
+        current_prices[ticker] = st.number_input(
+            label, 
+            step=0.01, 
+            value=float(last_price), 
+            key=f"price_{ticker}"
+        )
+        # --- จบส่วนที่แก้ไข ---
         
 # 4. สร้าง Tab ของแต่ละ Asset และแสดงกราฟแบบวนลูป        
 for i, asset in enumerate(assets_config):
@@ -144,22 +159,21 @@ for i, asset in enumerate(assets_config):
             as_1 = df.set_index('Asset_Price')
             as_1_py = px.line(as_1, title=f"Analysis for {ticker}")
 
-            # --- ส่วนที่แก้ไข ---
-            # 1. เพิ่มเส้นแนวตั้ง (โดยไม่ใส่ข้อความในคำสั่งนี้)
+            # เพิ่มเส้นแนวตั้งสำหรับราคา Entry และราคาปัจจุบัน
             as_1_py.add_vline(x=ref_price, line_width=1.5, line_dash="dash", line_color="red")
             as_1_py.add_vline(x=entry_price, line_width=1.5, line_dash="solid", line_color="green", opacity=0.6)
 
-            # 2. คำนวณหาตำแหน่งกึ่งกลางของแกน Y เพื่อวางข้อความ
+            # คำนวณหาตำแหน่งกึ่งกลางของแกน Y เพื่อวางข้อความ
             y_position = df['net_pv'].median() 
 
-            # 3. เพิ่มข้อความ (Annotation) เองเพื่อควบคุมตำแหน่ง
+            # เพิ่มข้อความ (Annotation)
             as_1_py.add_annotation(
                 x=ref_price, y=y_position,
                 text=f"Current: {ref_price:.2f}",
                 showarrow=False,
                 yshift=15, # ขยับข้อความขึ้นเล็กน้อย
                 font=dict(color="red", size=12),
-                bgcolor="rgba(255, 255, 255, 0.6)" # เพิ่มพื้นหลังสีขาวโปร่งแสง
+                bgcolor="rgba(255, 255, 255, 0.6)"
             )
             as_1_py.add_annotation(
                 x=entry_price, y=y_position,
@@ -167,13 +181,12 @@ for i, asset in enumerate(assets_config):
                 showarrow=False,
                 yshift=-15, # ขยับข้อความลงเล็กน้อย
                 font=dict(color="green", size=12),
-                bgcolor="rgba(255, 255, 255, 0.6)" # เพิ่มพื้นหลังสีขาวโปร่งแสง
+                bgcolor="rgba(255, 255, 255, 0.6)"
             )
-            # --- จบส่วนที่แก้ไข ---
 
             st.plotly_chart(as_1_py, use_container_width=True)
             
-            st.write(f'rf: {df_rf_value}')
+            st.metric(label=f"Net PV ของ {ticker} ที่ราคาปัจจุบัน", value=f"${df_rf_value:,.2f}")
             st.write("_____") 
 
         else:
@@ -181,20 +194,21 @@ for i, asset in enumerate(assets_config):
 
 # 5. แสดงผลสรุปรวม (คำนวณจาก Dictionary)
 st.write("_______")
-st.write("สรุปผลรวมพอร์ต")
+st.header("สรุปผลรวมพอร์ต")
 
 total_rf = sum(results_rf.values())
 num_assets = len(assets_config)
 total_fixed_asset_value = x_5 * num_assets
 total_initial_cash = x_6 * num_assets
 
-st.write("จำนวน Asset ทั้งหมด | ", f"{num_assets} ตัว")
-st.write("มูลค่า Fixed Asset รวม | ", f"${total_fixed_asset_value:,.2f}")
-st.write("เงินสดเริ่มต้นรวม | ", f"${total_initial_cash:,.2f}")
-st.write("✅ SUM Net PV (ตามราคาอ้างอิง) | ", f"${total_rf:,.2f}")
-# st.sidebar.metric("✅ Real RF (ตัวอย่าง) | ", f"${total_rf - 0:,.2f}") # หากมีค่าอื่นมาลบ
+st.metric("✅ SUM Net PV (ตามราคาอ้างอิง)", f"${total_rf:,.2f}")
 
-# แสดงค่าแต่ละตัวใน sidebar เพื่อตรวจสอบ
+col1, col2, col3 = st.columns(3)
+col1.metric("จำนวน Asset ทั้งหมด", f"{num_assets} ตัว")
+col2.metric("มูลค่า Fixed Asset รวม", f"${total_fixed_asset_value:,.2f}")
+col3.metric("เงินสดเริ่มต้นรวม", f"${total_initial_cash:,.2f}")
+
+# แสดงค่าแต่ละตัวใน Expander เพื่อตรวจสอบ
 with st.expander("ดู Net PV ของแต่ละตัว"):
     for ticker, value in results_rf.items():
         st.write(f"{ticker}: ${value:,.2f}")
