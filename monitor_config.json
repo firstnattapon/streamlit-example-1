@@ -136,7 +136,9 @@
         "api_key": "2E65V8XEIPH9B2VV"
       },
       "fix_c": 1500,
-      "option_config": null
+      "option_config": {
+        "base_value": 200.0,
+        "label": "NVTS (LV:200@8.25)"
     },
     {
       "ticker": "QXO",
