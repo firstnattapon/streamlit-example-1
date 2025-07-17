@@ -5,7 +5,7 @@
     "channel_id": 2394198,
     "write_api_key": "OVZNYQBL57GJW5JF",
     "offset": 1967.68 ,
-    "max_roll_over": 1430.00  , 
+    "max_roll_over": 1682.00  , 
     "filter_date_cf": "2025-07-13 12:00:00+07:00"
   },
   "monitor_config": {
@@ -58,7 +58,7 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 3.05,
+        "t0": 8.25,
         "fix": 1500.0
       }
     },
