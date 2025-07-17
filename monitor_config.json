@@ -136,8 +136,11 @@
         "api_key": "2E65V8XEIPH9B2VV"
       },
       "fix_c": 1500,
-      "option_config": null
-    },
+      "option_config": {
+        "base_value": 800.0,
+        "label": "GERN (LV:800@1.85)"
+      }
+    },  
     {
       "ticker": "QXO",
       "monitor_field": {
