@@ -63,6 +63,14 @@
             "contracts_or_shares": 100,
             "premium_paid_per_share": 2.61,
             "strike": 10.0
+        },           
+        {
+            "type": "option",
+            "name": "NVTS Call @ 8.25",
+            "underlying_ticker": "NVTS",
+            "contracts_or_shares": 200,
+            "premium_paid_per_share": 1.26,
+            "strike": 7.0
         },  
         {
             "type": "stock",
@@ -95,7 +103,7 @@
         {
             "type": "stock",
             "ticker": "NVTS",
-            "reference_price": 3.05,
+            "reference_price": 8.25,
             "fix_c": 1500,
             "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field5" }
         },
