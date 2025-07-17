@@ -2,7 +2,7 @@
     {
         "ticker": "FFWM",
         "entry_price": 6.88,
-        "comment": "-"
+        "comment": ""
     },
     {
         "ticker": "NEGG",
@@ -12,12 +12,12 @@
     {
         "ticker": "RIVN",
         "entry_price": 10.07,
-        "comment": "-"
+        "comment": ""
     },
     {
         "ticker": "APLS",
         "entry_price": 39.61,
-        "comment": "-"
+        "comment": ""
     },
     {
         "ticker": "NVTS",
@@ -27,31 +27,31 @@
     {
         "ticker": "QXO",
         "entry_price": 19.00,
-        "comment": "-"
+        "comment": ""
     },
     {
         "ticker": "RXRX",
         "entry_price": 5.40,
-        "comment": "-"
+        "comment": ""
     },
     {
         "ticker": "AGL",
         "entry_price": 3.00,
-        "comment": "-"
+        "comment": ""
     },
     {
         "ticker": "FLNC",
         "entry_price": 7.00,
-        "comment": "-"
+        "comment": ""
     },
     {
         "ticker": "GERN",
         "entry_price": 1.85,
-        "comment": "-"
+        "comment": ""
     },
     {
         "ticker": "DYN",
         "entry_price": 12.60,
-        "comment": "-"
+        "comment": ""
     }
 ]
