@@ -136,9 +136,7 @@
         "api_key": "2E65V8XEIPH9B2VV"
       },
       "fix_c": 1500,
-      "option_config": {
-        "base_value": 200.0,
-        "label": "RXRX (LV:200@5.4)"
+      "option_config": null
     },
     {
       "ticker": "QXO",
