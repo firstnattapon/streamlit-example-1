@@ -120,7 +120,7 @@ with tabs[0]:
         # สร้าง label ของ input โดยรวม comment เข้าไปด้วย (ถ้ามี)
         label = f"ราคา_{ticker} (Entry: {entry_price})"
         if comment:
-            label += f" | {comment}"
+            label += f" | roll {comment}"
         
         # เก็บราคาปัจจุบันที่ผู้ใช้กรอกลงใน Dictionary
         current_prices[ticker] = st.number_input(
