@@ -6,7 +6,9 @@ import streamlit as st
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Tuple, Dict, Any
- 
+import json
+import thingspeak
+
 # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
 from numba import njit
  
@@ -24,14 +26,19 @@ class Strategy:
 
 def load_config(filepath: str = "hybrid_seed_config.json") -> Dict[str, Any]:
     # In a real app, this might load from a JSON file. For simplicity, it's a dict.
-    return {
-        "assets": ["FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" ],
-        "default_settings": {
-            "selected_ticker": "FFWM", "start_date": "2024-01-01",
-            "window_size": 30 , "num_seeds": 1000, "max_workers": 1, 
-            "mutation_rate": 10.0, "num_mutations": 5
+    try:
+        with open(filepath, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        st.error(f"Could not load or parse {filepath}. Using default values.")
+        return {
+            "assets": ["FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" ],
+            "default_settings": {
+                "selected_ticker": "FFWM", "start_date": "2024-01-01",
+                "window_size": 30 , "num_seeds": 1000, "max_workers": 1, 
+                "mutation_rate": 10.0, "num_mutations": 5
+            }
         }
-    }
 
 def initialize_session_state(config: Dict[str, Any]):
     defaults = config.get('default_settings', {})
@@ -47,7 +54,7 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
 
 # ==============================================================================
-# 2. Core Calculation & Data Functions (No Changes)
+# 2. Core Calculation & Data Functions
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -108,7 +115,7 @@ def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> 
     })
 
 # ==============================================================================
-# 3. Strategy Action Generation (No Changes)
+# 3. Strategy Action Generation
 # ==============================================================================
 def generate_actions_rebalance_daily(num_days: int) -> np.ndarray: return np.ones(num_days, dtype=np.int32)
 def generate_actions_perfect_foresight(prices: List[float], fix: int = 1500) -> np.ndarray:
@@ -228,7 +235,6 @@ def generate_actions_hybrid_multi_mutation(
         if len(prices_window) < 2: continue
 
         progress_text = f"Window {i+1}/{num_windows} - Phase 1: Searching for Best DNA..."
-        # This function updates its own progress bar now
         progress_bar.progress(current_step_in_window / progress_total_steps, text=progress_text)
         current_step_in_window += 1
 
@@ -270,7 +276,7 @@ def generate_actions_hybrid_multi_mutation(
     return original_actions_full, final_actions, pd.DataFrame(window_details_list)
 
 # ==============================================================================
-# 4. Simulation Tracer Class (No Changes)
+# 4. Simulation Tracer Class
 # ==============================================================================
 class SimulationTracer:
     """
@@ -340,15 +346,24 @@ class SimulationTracer:
         return "".join(encoded_parts)
 
 # ==============================================================================
-# 5. UI Rendering Functions (RESTRUCTURED)
+# 5. UI Rendering Functions
 # ==============================================================================
+
+# Helper function to load the add_gen_config.json
+def load_add_gen_config(filepath: str = "add_gen_config.json") -> List[Dict[str, Any]]:
+    """Loads the ThingSpeak configuration file."""
+    try:
+        with open(filepath, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
 def render_settings_tab():
     st.write("⚙️ **การตั้งค่าพารามิเตอร์**")
     config = load_config()
     asset_list = config.get('assets', ['FFWM'])
 
     c1, c2 = st.columns(2)
-    # This ticker selection is now a general default, not the one controlling the run
     st.session_state.test_ticker = c1.selectbox("เลือก Ticker เริ่มต้น (Default)", options=asset_list, index=asset_list.index(st.session_state.get('test_ticker', 'FFWM')) if st.session_state.get('test_ticker', 'FFWM') in asset_list else 0)
     st.session_state.window_size = c2.number_input("ขนาด Window (วัน)", min_value=2, value=st.session_state.window_size)
 
@@ -367,14 +382,12 @@ def render_settings_tab():
     st.session_state.mutation_rate = c1.slider("อัตราการกลายพันธุ์ (Mutation Rate) %", min_value=0.0, max_value=50.0, value=st.session_state.mutation_rate, step=0.5)
     st.session_state.num_mutations = c2.number_input("จำนวนรอบการกลายพันธุ์ (Multi-Mutation)", min_value=0, max_value=10, value=st.session_state.num_mutations, help="จำนวนครั้งที่จะพยายามพัฒนายีนส์ต่อจากตัวที่ดีที่สุดในแต่ละ Window")
     
-    # --- MOVED: Encoder Section ---
     st.divider()
-    st.markdown("#### 🎁 Generate Encoded String from Window Result")
+    st.markdown("#### 🎁 Generate Encoded String from Window Result (Individual)")
     
     if 'all_window_details' in st.session_state and st.session_state.all_window_details:
         st.info("เลือก Ticker และหมายเลข Window จากผลการทดสอบล่าสุดเพื่อสร้าง Encoded String")
         
-        # Select Ticker from completed results
         available_tickers = list(st.session_state.all_window_details.keys())
         selected_ticker_for_encode = st.selectbox("Select Ticker to Encode", options=available_tickers)
 
@@ -389,7 +402,6 @@ def render_settings_tab():
                     "Select Window #", min_value=1, max_value=max_window, value=1, key="window_encoder_input"
                 )
                 
-                # Calculate the default action length for the selected window
                 try:
                     total_days = len(ticker_data_cache)
                     window_size = st.session_state.window_size
@@ -404,7 +416,7 @@ def render_settings_tab():
                 )
 
             with c2:
-                st.write("") # for vertical alignment
+                st.write("") 
                 if st.button("Encode Selected Window", key="window_encoder_button", use_container_width=True):
                     try:
                         window_data = df_windows.iloc[window_to_encode - 1]
@@ -435,7 +447,47 @@ def render_settings_tab():
                     except Exception as e:
                         st.error(f"เกิดข้อผิดพลาดระหว่างการเข้ารหัส: {e}")
     else:
-        st.warning("กรุณาทำการทดสอบในแท็บ 'Hybrid (Multi-Mutation)' ก่อนเพื่อสร้างผลลัพธ์")
+        st.warning("กรุณาทำการทดสอบในแท็บ 'Hybrid (Multi-Mutation)' ก่อนเพื่อสร้างผลลัพธ์ (Individual Encoder)")
+
+    st.divider()
+    st.markdown("#### 🚀 Encode & Push All Tickers to ThingSpeak")
+
+    if 'all_window_details' in st.session_state and st.session_state.all_window_details:
+        st.info(
+            "กดปุ่มด้านล่างเพื่อสร้าง **Encoded String** จาก **Window ล่าสุด** ของแต่ละ Ticker "
+            "และส่งข้อมูลไปยัง ThingSpeak โดยอัตโนมัติตาม `add_gen_config.json`"
+        )
+        if st.button("🚀 Encode & Push All Tickers", type="primary", use_container_width=True):
+            thingspeak_configs = load_add_gen_config()
+            if not thingspeak_configs:
+                st.error("ไม่สามารถโหลด `add_gen_config.json` ได้ หรือไฟล์ว่างเปล่า")
+            else:
+                ts_config_map = {conf['ticker']: conf for conf in thingspeak_configs}
+                with st.spinner("Processing all tickers..."):
+                    for ticker, df_windows in st.session_state.all_window_details.items():
+                        with st.status(f"Processing {ticker}...", expanded=False) as status:
+                            try:
+                                if ticker not in ts_config_map:
+                                    status.update(label=f"⚠️ {ticker}: ไม่พบการตั้งค่าใน `add_gen_config.json`, ข้าม...", state="error")
+                                    continue
+
+                                last_window_data = df_windows.iloc[-1]
+                                
+                                # **สำคัญ:** ThingSpeak รับได้แค่ตัวเลข ไม่สามารถรับ String ยาวๆ ได้
+                                # ในตัวอย่างนี้ เราจะส่ง `dna_seed` ของ Window ล่าสุดไปแทน
+                                value_to_push = int(last_window_data['dna_seed'])
+
+                                ts_conf = ts_config_map[ticker]
+                                client = thingspeak.Channel(ts_conf['channel_id'], ts_conf['write_api_key'], fmt='json')
+                                client.update({f"field{ts_conf['thingspeak_field']}": value_to_push})
+
+                                status.update(label=f"✅ {ticker}: Pushed seed {value_to_push} to Field {ts_conf['thingspeak_field']}", state="complete")
+
+                            except Exception as e:
+                                status.update(label=f"❌ {ticker}: เกิดข้อผิดพลาด - {e}", state="error")
+                st.success("ดำเนินการส่งข้อมูลทั้งหมดเสร็จสิ้น!")
+    else:
+        st.warning("กรุณาทำการทดสอบในแท็บ 'Hybrid (Multi-Mutation)' ก่อนเพื่อเปิดใช้งานฟังก์ชันนี้ (Bulk Push)")
 
 def render_hybrid_multi_mutation_tab():
     st.write("---")
@@ -443,8 +495,11 @@ def render_hybrid_multi_mutation_tab():
     st.info("กลยุทธ์นี้ทำงานโดย: 1. ค้นหา 'DNA' ที่ดีที่สุดในแต่ละ Window 2. นำ DNA นั้นมาพยายาม 'กลายพันธุ์' (Mutate) ซ้ำๆ เพื่อหาผลลัพธ์ที่ดีกว่าเดิม")
 
     with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (Multi-Mutation)", expanded=False):
-        # (Explanation content remains the same, so it's omitted for brevity)
-        st.markdown("...")
+        st.markdown(
+            """
+            (คำอธิบายยาวๆ เหมือนเดิม ถูกย่อไว้เพื่อความกระชับ)
+            """
+        )
         
     if st.button(f"🚀 Start Hybrid Multi-Mutation for ALL Tickers", type="primary", use_container_width=True):
         if st.session_state.start_date >= st.session_state.end_date:
@@ -457,12 +512,10 @@ def render_hybrid_multi_mutation_tab():
             st.error("ไม่พบรายชื่อ Ticker ในไฟล์ config")
             return
 
-        # Initialize containers for results
         st.session_state.all_ticker_data = {}
         st.session_state.all_window_details = {}
         all_results_summary = []
         
-        # Master progress bar for all tickers
         master_progress = st.progress(0, text="Initializing full test run...")
         
         for i, ticker in enumerate(tickers_to_run):
@@ -475,8 +528,6 @@ def render_hybrid_multi_mutation_tab():
                     continue
                 
                 st.session_state.all_ticker_data[ticker] = ticker_data
-                
-                # Create a dedicated progress bar for this ticker's windows
                 ticker_progress_bar = st.progress(0, text=f"Initializing {ticker}...")
 
                 original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
@@ -496,7 +547,6 @@ def render_hybrid_multi_mutation_tab():
                     Strategy.PERFECT_FORESIGHT: run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
                 }
 
-                # Extract final net profit for summary
                 ticker_summary = {'Ticker': ticker}
                 for name, df in results.items():
                     final_net = df['net'].iloc[-1] if not df.empty else 0.0
@@ -506,11 +556,8 @@ def render_hybrid_multi_mutation_tab():
                 status.update(label=f"✅ {ticker} simulation complete!", state="complete", expanded=False)
         
         master_progress.progress(1.0, text="All Tickers Processed!")
-
-        # Store final summary DataFrame in session state
         st.session_state.summary_df = pd.DataFrame(all_results_summary).set_index('Ticker')
 
-    # --- Display results section ---
     if 'summary_df' in st.session_state:
         st.success("การทดสอบสำหรับ Ticker ทั้งหมดเสร็จสมบูรณ์!")
         st.divider()
@@ -518,7 +565,6 @@ def render_hybrid_multi_mutation_tab():
         st.write("ตารางสรุปกำไรสุทธิสุดท้าย (Compounded Final Net Profit) ของแต่ละ Ticker และกลยุทธ์")
         
         summary_df = st.session_state.summary_df
-        # Display styled summary table
         st.dataframe(
             summary_df.style.format("{:,.2f}").background_gradient(cmap='Greens', subset=[Strategy.HYBRID_MULTI_MUTATION])
                                   .background_gradient(cmap='RdYlGn', subset=[Strategy.ORIGINAL_DNA])
@@ -526,7 +572,6 @@ def render_hybrid_multi_mutation_tab():
             use_container_width=True
         )
 
-        # Optional: Chart of overall results
         st.write("#### เปรียบเทียบกำไรสุทธิของกลยุทธ์ Hybrid")
         st.bar_chart(summary_df[[Strategy.HYBRID_MULTI_MUTATION, Strategy.ORIGINAL_DNA]])
         
@@ -549,9 +594,7 @@ def render_hybrid_multi_mutation_tab():
                 )
 
 def render_tracer_tab():
-    # This function remains unchanged, so it is omitted for brevity
     st.markdown("### 🔍 Action Sequence Tracer & Encoder")
-    # ... (same code as before) ...
     st.info("เครื่องมือนี้ใช้สำหรับ 1. **ถอดรหัส (Decode)** String เพื่อจำลองผลลัพธ์ และ 2. **เข้ารหัส (Encode)** พารามิเตอร์เพื่อสร้าง String")
 
     st.markdown("---")
@@ -559,7 +602,7 @@ def render_tracer_tab():
     
     encoded_string = st.text_input(
         "ป้อน Encoded String ที่นี่:",
-        "260210295355822131233176", # Example string for Window 13
+        "260210295355822131233176",
         help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds",
         key="decoder_input"
     )
@@ -619,7 +662,6 @@ def render_tracer_tab():
 
         except (ValueError, TypeError) as e:
             st.error(f"❌ เกิดข้อผิดพลาด: กรุณาตรวจสอบว่า Mutation Seeds เป็นตัวเลขที่คั่นด้วยจุลภาคเท่านั้น ({e})")
-
 
 # ==============================================================================
 # 6. Main Application
