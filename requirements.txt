@@ -11,3 +11,4 @@ curl_cffi
 pytz
 alpha_vantage
 requests
+matplotlib
