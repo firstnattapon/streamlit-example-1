@@ -260,47 +260,70 @@ with tab_dict['Ref_index_Log']:
                 st.info("Performance analysis of the portfolio's net value against the logarithmic reference index. 'Worst' periods indicate maximum losses, while 'Trough-to-Peak' shows the maximum possible gain from a low point.")
 
                 net_series = df_sumusd_['net']
+                
+                # Pre-calculate change series to avoid re-computation
+                daily_changes = net_series.diff()
+                
+                rolling_30_day_change = pd.Series(dtype=np.float64)
+                if len(net_series) >= 30:
+                    rolling_30_day_change = net_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
 
-                # --- CF (Cash Flow) Calculation for Worst Periods ---
-                min_daily_cf = net_series.diff().min()
-                if pd.isna(min_daily_cf): min_daily_cf = 0
+                rolling_90_day_change = pd.Series(dtype=np.float64)
+                if len(net_series) >= 90:
+                    rolling_90_day_change = net_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
 
-                # Trough-to-Peak Gain (Max Run-up) - This remains unchanged as requested
+                # Add the radio button for selection
+                analysis_type = st.radio(
+                    "Select Cash Flow (CF) Analysis Type:",
+                    ('Worst Case', 'Average Case'),
+                    horizontal=True,
+                    key='cf_analysis_type'
+                )
+
+                # --- Metric Calculation based on selection ---
+                if analysis_type == 'Worst Case':
+                    metric_1d_val = daily_changes.min()
+                    metric_30d_val = rolling_30_day_change.min() if not rolling_30_day_change.empty else 0
+                    metric_90d_val = rolling_90_day_change.min() if not rolling_90_day_change.empty else 0
+                    
+                    label_1d = "📉 1-Day CF (Worst Day)"
+                    label_30d = "📉 30-Day CF (Worst Month)"
+                    label_90d = "📉 90-Day CF (Worst Quarter)"
+                else: # Average Case
+                    metric_1d_val = daily_changes.mean()
+                    metric_30d_val = rolling_30_day_change.mean() if not rolling_30_day_change.empty else 0
+                    metric_90d_val = rolling_90_day_change.mean() if not rolling_90_day_change.empty else 0
+
+                    label_1d = "📊 1-Day CF (Average Day)"
+                    label_30d = "📊 30-Day CF (Average Month)"
+                    label_90d = "📊 90-Day CF (Average Quarter)"
+
+                # Handle potential NaN values
+                if pd.isna(metric_1d_val): metric_1d_val = 0
+                if pd.isna(metric_30d_val): metric_30d_val = 0
+                if pd.isna(metric_90d_val): metric_90d_val = 0
+
+                # Trough-to-Peak Gain (Max Run-up) - This is a "max" metric and remains constant
                 trough_to_peak_gain = 0
                 if not net_series.empty:
                     trough_index = net_series.idxmin()
                     peak_after_trough = net_series.loc[trough_index:].max()
                     trough_value = net_series.loc[trough_index]
                     if pd.notna(peak_after_trough) and pd.notna(trough_value):
-                         trough_to_peak_gain = peak_after_trough - trough_value
+                            trough_to_peak_gain = peak_after_trough - trough_value
                     else:
-                         trough_to_peak_gain = 0
+                            trough_to_peak_gain = 0
 
-                # Worst 30-day gain (Min Gain / Max Loss)
-                min_30_day_cf = 0
-                if len(net_series) >= 30:
-                    rolling_30_day_change = net_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-                    if not rolling_30_day_change.empty and rolling_30_day_change.notna().any():
-                        min_30_day_cf = rolling_30_day_change.min()
-                if pd.isna(min_30_day_cf): min_30_day_cf = 0
-                
-                # Worst 90-day gain (Min Gain / Max Loss)
-                min_90_day_cf = 0
-                if len(net_series) >= 90:
-                    rolling_90_day_change = net_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-                    if not rolling_90_day_change.empty and rolling_90_day_change.notna().any():
-                        min_90_day_cf = rolling_90_day_change.min()
-                if pd.isna(min_90_day_cf): min_90_day_cf = 0
-
+                # --- Display Metrics ---
                 col1, col2 = st.columns(2)
                 with col1:
                     st.subheader("Short-Term CF")
-                    st.metric(label="📉 1-Day CF (Worst Day)", value=f"{min_daily_cf:,.2f} USD")
-                    st.metric(label="📉 30-Day CF (Worst Month)", value=f"{min_30_day_cf:,.2f} USD")
+                    st.metric(label=label_1d, value=f"{metric_1d_val:,.2f} USD")
+                    st.metric(label=label_30d, value=f"{metric_30d_val:,.2f} USD")
 
                 with col2:
                     st.subheader("Medium to Long-Term CF")
-                    st.metric(label="📉 90-Day CF (Worst Quarter)", value=f"{min_90_day_cf:,.2f} USD")
+                    st.metric(label=label_90d, value=f"{metric_90d_val:,.2f} USD")
                     st.metric(label="📈 Trough-to-Peak Gain (Max Run-up)", value=f"{trough_to_peak_gain:,.2f} USD")
 
                 st.markdown("---")
