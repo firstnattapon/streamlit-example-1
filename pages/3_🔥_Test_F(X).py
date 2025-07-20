@@ -214,7 +214,7 @@ for asset in ASSETS:
         )
         plot(symbol, act)
 
-# === REF_INDEX_LOG TAB (FIXED) ===
+# === REF_INDEX_LOG TAB ===
 with tab_dict['Ref_index_Log']:
     filter_date = '2023-01-01 12:00:00+07:00'
     prices_df = get_prices(TICKERS, filter_date)
@@ -255,7 +255,6 @@ with tab_dict['Ref_index_Log']:
                 net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
                 df_sumusd_['net'] = net_raw - net_at_index_0
 
-                # <<<--- START OF MODIFICATION ---<<<
                 st.header("Net Performance Analysis (vs. Reference)")
                 st.info("""
                 Performance analysis of the portfolio's net value against the logarithmic reference index.
@@ -265,8 +264,6 @@ with tab_dict['Ref_index_Log']:
                 """)
 
                 net_series = df_sumusd_['net']
-
-                # --- CF (Cash Flow) Calculations ---
                 
                 # 1-Day CF
                 daily_cf = net_series.diff()
@@ -326,7 +323,6 @@ with tab_dict['Ref_index_Log']:
                 st.line_chart(df_sumusd_['net'])
                 with st.expander("View Data"):
                     st.dataframe(df_sumusd_)
-                # >>>--- END OF MODIFICATION ---<<<
         else:
              st.warning("Could not align dataframes. Not enough data available for the selected assets.")
     else:
@@ -341,7 +337,7 @@ with tab_dict['Burn_Cash']:
         if not df_temp.empty:
             renamed_df = df_temp[['buffer']].rename(columns={'buffer': f'buffer_{symbol}'})
             dfs_to_align.append(renamed_df)
-
+    
     if not dfs_to_align:
         st.error("Cannot calculate burn cash due to missing data for all assets.")
     else:
@@ -349,47 +345,81 @@ with tab_dict['Burn_Cash']:
 
         df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
         df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
-
+        
         st.header("Cash Burn Risk Analysis")
-        st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
+        st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess potential cash risk. Burn is represented by negative numbers.")
 
-        # --- Risk Calculation ---
-        max_daily_burn = df_burn_cash['daily_burn'].min()
+        # <<<--- START OF MODIFICATION ---<<<
+
+        # --- Calculate all metrics first ---
+        daily_burn_series = df_burn_cash['daily_burn']
         cumulative_burn_series = df_burn_cash['cumulative_burn']
+
+        # -- Worst-Case Metrics --
+        worst_daily_burn = daily_burn_series.min()
+        if pd.isna(worst_daily_burn): worst_daily_burn = 0
 
         peak_to_trough_burn = 0
         if not cumulative_burn_series.empty:
             peak_index = cumulative_burn_series.idxmax()
-            peak_to_trough_burn = cumulative_burn_series.loc[peak_index] - cumulative_burn_series.loc[peak_index:].min()
+            trough_after_peak = cumulative_burn_series.loc[peak_index:].min()
+            peak_to_trough_burn = cumulative_burn_series.loc[peak_index] - trough_after_peak
+        if pd.isna(peak_to_trough_burn): peak_to_trough_burn = 0
 
-        max_30_day_burn = 0
+        # -- Rolling calculations for both Worst and Average --
+        worst_30_day_burn, avg_30_day_burn = 0, 0
         if len(cumulative_burn_series) >= 30:
             rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-            max_30_day_burn = rolling_30_day_change.min()
-
-        max_90_day_burn = 0
+            if rolling_30_day_change.notna().any():
+                worst_30_day_burn = rolling_30_day_change.min()
+                avg_30_day_burn = rolling_30_day_change.mean()
+        if pd.isna(worst_30_day_burn): worst_30_day_burn = 0
+        if pd.isna(avg_30_day_burn): avg_30_day_burn = 0
+        
+        worst_90_day_burn, avg_90_day_burn = 0, 0
         if len(cumulative_burn_series) >= 90:
             rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-            max_90_day_burn = rolling_90_day_change.min()
+            if rolling_90_day_change.notna().any():
+                worst_90_day_burn = rolling_90_day_change.min()
+                avg_90_day_burn = rolling_90_day_change.mean()
+        if pd.isna(worst_90_day_burn): worst_90_day_burn = 0
+        if pd.isna(avg_90_day_burn): avg_90_day_burn = 0
+        
+        # -- Average-Case Metrics --
+        avg_daily_burn = daily_burn_series.mean()
+        if pd.isna(avg_daily_burn): avg_daily_burn = 0
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Short-Term Risk")
-            st.metric(label="🔥 1-Day Burn (Worst Day)", value=f"{max_daily_burn:,.2f} USD")
-            st.metric(label="🔥 30-Day Burn (Worst Month)", value=f"{max_30_day_burn:,.2f} USD")
+        # --- Create Sub-Tabs for UI ---
+        worst_tab, avg_tab = st.tabs(["Worst-Case Scenario", "Average Scenario"])
 
-        with col2:
-            st.subheader("Medium to Long-Term Risk")
-            st.metric(label="🔥 90-Day Burn (Worst Quarter)", value=f"{max_90_day_burn:,.2f} USD")
-            st.metric(label="🏔️ Peak-to-Trough Burn (Max Drawdown)", value=f"{peak_to_trough_burn:,.2f} USD")
+        with worst_tab:
+            st.subheader("Maximum Risk Exposure")
+            st.markdown("These metrics highlight the most severe cash burn periods experienced in the backtest.")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(label="🔥 Worst 1-Day Burn", value=f"{worst_daily_burn:,.2f} USD")
+                st.metric(label="🔥 Worst 30-Day Burn", value=f"{worst_30_day_burn:,.2f} USD", help="The largest cash decrease in any 30-day period.")
+            
+            with col2:
+                st.metric(label="🔥 Worst 90-Day Burn", value=f"{worst_90_day_burn:,.2f} USD", help="The largest cash decrease in any 90-day period.")
+                st.metric(label="🏔️ Peak-to-Trough Burn (Max Drawdown)", value=f"{-peak_to_trough_burn:,.2f} USD", help="The largest drop in cash from a previous peak. Negative indicates burn.")
 
+        with avg_tab:
+            st.subheader("Typical Cash Flow")
+            st.markdown("These metrics show the average cash burn over different timeframes, providing a sense of the typical operational cash flow.")
+            st.metric(label="💧 Average 1-Day Burn", value=f"{avg_daily_burn:,.2f} USD", help="The average daily cash change.")
+            st.metric(label="💧 Average 30-Day Burn", value=f"{avg_30_day_burn:,.2f} USD", help="The average cash change over a 30-day rolling window.")
+            st.metric(label="💧 Average 90-Day Burn", value=f"{avg_90_day_burn:,.2f} USD", help="The average cash change over a 90-day rolling window.")
+            
         st.markdown("---")
-
+        
         st.subheader("Cumulative Cash Burn Over Time")
         st.line_chart(df_burn_cash['cumulative_burn'])
-
+        
         with st.expander("View Detailed Burn Data"):
             st.dataframe(df_burn_cash)
+        
+        # >>>--- END OF MODIFICATION ---<<<
 
 # === CF_LOG TAB ===
 with tab_dict['cf_log']:
