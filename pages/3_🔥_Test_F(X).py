@@ -214,7 +214,7 @@ for asset in ASSETS:
         )
         plot(symbol, act)
 
-# === REF_INDEX_LOG TAB ===
+# === REF_INDEX_LOG TAB (FIXED) ===
 with tab_dict['Ref_index_Log']:
     filter_date = '2023-01-01 12:00:00+07:00'
     prices_df = get_prices(TICKERS, filter_date)
@@ -227,14 +227,14 @@ with tab_dict['Ref_index_Log']:
             if not df_temp.empty:
                 renamed_df = df_temp[['sumusd']].rename(columns={'sumusd': f'sumusd_{symbol}'})
                 dfs_to_align.append(renamed_df)
-
+        
         if dfs_to_align:
             aligned_dfs = [prices_df] + dfs_to_align
             df_sumusd_ = pd.concat(aligned_dfs, axis=1).ffill().dropna()
 
             price_cols = [col for col in df_sumusd_.columns if '_price' in col]
             sumusd_cols = [col for col in df_sumusd_.columns if 'sumusd_' in col]
-
+            
             if not price_cols or not sumusd_cols:
                  st.warning("Could not find price or sumusd columns after alignment.")
             else:
@@ -254,45 +254,28 @@ with tab_dict['Ref_index_Log']:
                 net_raw = df_sumusd_['daily_sumusd'] - df_sumusd_['ref_log'] - total_initial_capital
                 net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
                 df_sumusd_['net'] = net_raw - net_at_index_0
-
+                
+                # <<<--- START OF MODIFICATION ---<<<
                 st.header("Net Performance Analysis (vs. Reference)")
-                st.info("""
-                Performance analysis of the portfolio's net value against the logarithmic reference index.
-                - **Worst**: Indicates the maximum loss in a given period.
-                - **Average**: Shows the typical cash flow for a period.
-                - **Trough-to-Peak**: Shows the maximum possible gain from a low point.
-                """)
+                st.info("Performance analysis of the portfolio's net value against the logarithmic reference index. Switch between 'Worst Case' and 'Average Case' to view different metrics.")
 
                 net_series = df_sumusd_['net']
-                
-                # 1-Day CF
-                daily_cf = net_series.diff()
-                worst_daily_cf = daily_cf.min()
-                avg_daily_cf = daily_cf.mean()
-                if pd.isna(worst_daily_cf): worst_daily_cf = 0
-                if pd.isna(avg_daily_cf): avg_daily_cf = 0
 
-                # 30-Day CF
-                worst_30_day_cf, avg_30_day_cf = 0, 0
-                if len(net_series) >= 30:
-                    rolling_30_day_cf = net_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-                    if not rolling_30_day_cf.empty and rolling_30_day_cf.notna().any():
-                        worst_30_day_cf = rolling_30_day_cf.min()
-                        avg_30_day_cf = rolling_30_day_cf.mean()
-                if pd.isna(worst_30_day_cf): worst_30_day_cf = 0
-                if pd.isna(avg_30_day_cf): avg_30_day_cf = 0
-                
-                # 90-Day CF
-                worst_90_day_cf, avg_90_day_cf = 0, 0
-                if len(net_series) >= 90:
-                    rolling_90_day_cf = net_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-                    if not rolling_90_day_cf.empty and rolling_90_day_cf.notna().any():
-                        worst_90_day_cf = rolling_90_day_cf.min()
-                        avg_90_day_cf = rolling_90_day_cf.mean()
-                if pd.isna(worst_90_day_cf): worst_90_day_cf = 0
-                if pd.isna(avg_90_day_cf): avg_90_day_cf = 0
+                # Add the radio button
+                metric_type = st.radio(
+                    "Select Analysis Type",
+                    ("Worst Case", "Average Case"),
+                    key='ref_log_metric_type',
+                    horizontal=True,
+                    label_visibility="visible"
+                )
 
-                # Trough-to-Peak Gain (Max Run-up)
+                # --- Pre-calculate all changes ---
+                daily_change = net_series.diff()
+                rolling_30_day_change = net_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
+                rolling_90_day_change = net_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
+
+                # Trough-to-Peak Gain (Max Run-up) - This is always a 'max' value, so it's shown in both views.
                 trough_to_peak_gain = 0
                 if not net_series.empty:
                     trough_index = net_series.idxmin()
@@ -300,22 +283,48 @@ with tab_dict['Ref_index_Log']:
                     trough_value = net_series.loc[trough_index]
                     if pd.notna(peak_after_trough) and pd.notna(trough_value):
                          trough_to_peak_gain = peak_after_trough - trough_value
-                    else:
-                         trough_to_peak_gain = 0
 
                 col1, col2 = st.columns(2)
-                with col1:
-                    st.subheader("Short-Term Cash Flow Analysis")
-                    st.metric(label="📉 Worst 1-Day CF", value=f"{worst_daily_cf:,.2f} USD")
-                    st.metric(label="📊 Average 1-Day CF", value=f"{avg_daily_cf:,.2f} USD")
-                    st.metric(label="📉 Worst 30-Day CF", value=f"{worst_30_day_cf:,.2f} USD", help="Based on a 30-day rolling window.")
-                    st.metric(label="📊 Average 30-Day CF", value=f"{avg_30_day_cf:,.2f} USD", help="Based on a 30-day rolling window.")
 
-                with col2:
-                    st.subheader("Long-Term Cash Flow & Gain")
-                    st.metric(label="📉 Worst 90-Day CF", value=f"{worst_90_day_cf:,.2f} USD", help="Based on a 90-day rolling window.")
-                    st.metric(label="📊 Average 90-Day CF", value=f"{avg_90_day_cf:,.2f} USD", help="Based on a 90-day rolling window.")
-                    st.metric(label="📈 Trough-to-Peak Gain (Max Run-up)", value=f"{trough_to_peak_gain:,.2f} USD", help="The maximum possible gain from the lowest point to a subsequent peak.")
+                if metric_type == "Worst Case":
+                    # --- CF (Cash Flow) Calculation for Worst Periods ---
+                    metric_1_day = daily_change.min()
+                    metric_30_day = rolling_30_day_change.min()
+                    metric_90_day = rolling_90_day_change.min()
+                    
+                    if pd.isna(metric_1_day): metric_1_day = 0
+                    if pd.isna(metric_30_day): metric_30_day = 0
+                    if pd.isna(metric_90_day): metric_90_day = 0
+
+                    with col1:
+                        st.subheader("Short-Term CF (Worst)")
+                        st.metric(label="📉 1-Day CF (Worst Day)", value=f"{metric_1_day:,.2f} USD")
+                        st.metric(label="📉 30-Day CF (Worst Month)", value=f"{metric_30_day:,.2f} USD")
+
+                    with col2:
+                        st.subheader("Medium to Long-Term CF (Worst)")
+                        st.metric(label="📉 90-Day CF (Worst Quarter)", value=f"{metric_90_day:,.2f} USD")
+                        st.metric(label="📈 Trough-to-Peak Gain (Max Run-up)", value=f"{trough_to_peak_gain:,.2f} USD")
+
+                elif metric_type == "Average Case":
+                    # --- CF (Cash Flow) Calculation for Average Periods ---
+                    metric_1_day = daily_change.mean()
+                    metric_30_day = rolling_30_day_change.mean()
+                    metric_90_day = rolling_90_day_change.mean()
+
+                    if pd.isna(metric_1_day): metric_1_day = 0
+                    if pd.isna(metric_30_day): metric_30_day = 0
+                    if pd.isna(metric_90_day): metric_90_day = 0
+
+                    with col1:
+                        st.subheader("Short-Term CF (Average)")
+                        st.metric(label="📊 Avg. 1-Day CF", value=f"{metric_1_day:,.2f} USD")
+                        st.metric(label="📊 Avg. 30-Day CF", value=f"{metric_30_day:,.2f} USD")
+
+                    with col2:
+                        st.subheader("Medium to Long-Term CF (Average)")
+                        st.metric(label="📊 Avg. 90-Day CF", value=f"{metric_90_day:,.2f} USD")
+                        st.metric(label="📈 Trough-to-Peak Gain (Max Run-up)", value=f"{trough_to_peak_gain:,.2f} USD")
 
                 st.markdown("---")
                 
@@ -323,6 +332,7 @@ with tab_dict['Ref_index_Log']:
                 st.line_chart(df_sumusd_['net'])
                 with st.expander("View Data"):
                     st.dataframe(df_sumusd_)
+                # >>>--- END OF MODIFICATION ---<<<
         else:
              st.warning("Could not align dataframes. Not enough data available for the selected assets.")
     else:
@@ -346,80 +356,85 @@ with tab_dict['Burn_Cash']:
         df_burn_cash['daily_burn'] = df_burn_cash.sum(axis=1)
         df_burn_cash['cumulative_burn'] = df_burn_cash['daily_burn'].cumsum()
         
-        st.header("Cash Burn Risk Analysis")
-        st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess potential cash risk. Burn is represented by negative numbers.")
-
         # <<<--- START OF MODIFICATION ---<<<
-
-        # --- Calculate all metrics first ---
+        st.header("Cash Burn Risk Analysis")
+        st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess potential risk. Switch between 'Worst Case' and 'Average Case' to view different metrics.")
+        
+        # Add the radio button
+        metric_type = st.radio(
+            "Select Analysis Type",
+            ("Worst Case", "Average Case"),
+            key='burn_cash_metric_type',
+            horizontal=True,
+            label_visibility="visible"
+        )
+        
+        # --- Pre-calculate all series ---
         daily_burn_series = df_burn_cash['daily_burn']
         cumulative_burn_series = df_burn_cash['cumulative_burn']
-
-        # -- Worst-Case Metrics --
-        worst_daily_burn = daily_burn_series.min()
-        if pd.isna(worst_daily_burn): worst_daily_burn = 0
-
-        peak_to_trough_burn = 0
-        if not cumulative_burn_series.empty:
-            peak_index = cumulative_burn_series.idxmax()
-            trough_after_peak = cumulative_burn_series.loc[peak_index:].min()
-            peak_to_trough_burn = cumulative_burn_series.loc[peak_index] - trough_after_peak
-        if pd.isna(peak_to_trough_burn): peak_to_trough_burn = 0
-
-        # -- Rolling calculations for both Worst and Average --
-        worst_30_day_burn, avg_30_day_burn = 0, 0
-        if len(cumulative_burn_series) >= 30:
-            rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-            if rolling_30_day_change.notna().any():
-                worst_30_day_burn = rolling_30_day_change.min()
-                avg_30_day_burn = rolling_30_day_change.mean()
-        if pd.isna(worst_30_day_burn): worst_30_day_burn = 0
-        if pd.isna(avg_30_day_burn): avg_30_day_burn = 0
+        rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
+        rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
         
-        worst_90_day_burn, avg_90_day_burn = 0, 0
-        if len(cumulative_burn_series) >= 90:
-            rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-            if rolling_90_day_change.notna().any():
-                worst_90_day_burn = rolling_90_day_change.min()
-                avg_90_day_burn = rolling_90_day_change.mean()
-        if pd.isna(worst_90_day_burn): worst_90_day_burn = 0
-        if pd.isna(avg_90_day_burn): avg_90_day_burn = 0
+        col1, col2 = st.columns(2)
+
+        if metric_type == "Worst Case":
+            # --- Risk Calculation for Worst Case ---
+            max_daily_burn = daily_burn_series.min()
+            max_30_day_burn = rolling_30_day_change.min()
+            max_90_day_burn = rolling_90_day_change.min()
+
+            peak_to_trough_burn = 0
+            if not cumulative_burn_series.empty and cumulative_burn_series.notna().any():
+                peak_index = cumulative_burn_series.idxmax()
+                trough_after_peak_value = cumulative_burn_series.loc[peak_index:].min()
+                peak_value = cumulative_burn_series.loc[peak_index]
+                if pd.notna(trough_after_peak_value) and pd.notna(peak_value):
+                    peak_to_trough_burn = peak_value - trough_after_peak_value
+            
+            if pd.isna(max_daily_burn): max_daily_burn = 0
+            if pd.isna(max_30_day_burn): max_30_day_burn = 0
+            if pd.isna(max_90_day_burn): max_90_day_burn = 0
         
-        # -- Average-Case Metrics --
-        avg_daily_burn = daily_burn_series.mean()
-        if pd.isna(avg_daily_burn): avg_daily_burn = 0
-
-        # --- Create Sub-Tabs for UI ---
-        worst_tab, avg_tab = st.tabs(["Worst-Case Scenario", "Average Scenario"])
-
-        with worst_tab:
-            st.subheader("Maximum Risk Exposure")
-            st.markdown("These metrics highlight the most severe cash burn periods experienced in the backtest.")
-            col1, col2 = st.columns(2)
             with col1:
-                st.metric(label="🔥 Worst 1-Day Burn", value=f"{worst_daily_burn:,.2f} USD")
-                st.metric(label="🔥 Worst 30-Day Burn", value=f"{worst_30_day_burn:,.2f} USD", help="The largest cash decrease in any 30-day period.")
+                st.subheader("Short-Term Risk")
+                st.metric(label="🔥 1-Day Burn (Worst Day)", value=f"{max_daily_burn:,.2f} USD")
+                st.metric(label="🔥 30-Day Burn (Worst Month)", value=f"{max_30_day_burn:,.2f} USD")
             
             with col2:
-                st.metric(label="🔥 Worst 90-Day Burn", value=f"{worst_90_day_burn:,.2f} USD", help="The largest cash decrease in any 90-day period.")
-                st.metric(label="🏔️ Peak-to-Trough Burn (Max Drawdown)", value=f"{-peak_to_trough_burn:,.2f} USD", help="The largest drop in cash from a previous peak. Negative indicates burn.")
+                st.subheader("Medium to Long-Term Risk")
+                st.metric(label="🔥 90-Day Burn (Worst Quarter)", value=f"{max_90_day_burn:,.2f} USD")
+                st.metric(label="🏔️ Peak-to-Trough Burn (Max Drawdown)", value=f"{peak_to_trough_burn:,.2f} USD")
+        
+        elif metric_type == "Average Case":
+             # --- Risk Calculation for Average Case ---
+            avg_daily_burn = daily_burn_series.mean()
+            avg_30_day_burn = rolling_30_day_change.mean()
+            avg_90_day_burn = rolling_90_day_change.mean()
 
-        with avg_tab:
-            st.subheader("Typical Cash Flow")
-            st.markdown("These metrics show the average cash burn over different timeframes, providing a sense of the typical operational cash flow.")
-            st.metric(label="💧 Average 1-Day Burn", value=f"{avg_daily_burn:,.2f} USD", help="The average daily cash change.")
-            st.metric(label="💧 Average 30-Day Burn", value=f"{avg_30_day_burn:,.2f} USD", help="The average cash change over a 30-day rolling window.")
-            st.metric(label="💧 Average 90-Day Burn", value=f"{avg_90_day_burn:,.2f} USD", help="The average cash change over a 90-day rolling window.")
+            if pd.isna(avg_daily_burn): avg_daily_burn = 0
+            if pd.isna(avg_30_day_burn): avg_30_day_burn = 0
+            if pd.isna(avg_90_day_burn): avg_90_day_burn = 0
             
+            with col1:
+                st.subheader("Short-Term Burn (Average)")
+                st.metric(label="📊 Avg. 1-Day Burn", value=f"{avg_daily_burn:,.2f} USD")
+                st.metric(label="📊 Avg. 30-Day Burn", value=f"{avg_30_day_burn:,.2f} USD")
+            
+            with col2:
+                st.subheader("Medium to Long-Term Burn (Average)")
+                st.metric(label="📊 Avg. 90-Day Burn", value=f"{avg_90_day_burn:,.2f} USD")
+                # Hide Peak-to-Trough as it's a worst-case metric
+                st.metric(label=" ", value=" ", help="Max Drawdown is only shown in Worst Case view")
+
+
         st.markdown("---")
+        # >>>--- END OF MODIFICATION ---<<<
         
         st.subheader("Cumulative Cash Burn Over Time")
         st.line_chart(df_burn_cash['cumulative_burn'])
         
         with st.expander("View Detailed Burn Data"):
             st.dataframe(df_burn_cash)
-        
-        # >>>--- END OF MODIFICATION ---<<<
 
 # === CF_LOG TAB ===
 with tab_dict['cf_log']:
