@@ -257,7 +257,7 @@ with tab_dict['Ref_index_Log']:
                 
                 # <<<--- START OF MODIFICATION ---<<<
                 st.header("Net Performance Analysis (vs. Reference)")
-                st.info("Performance analysis of the portfolio's net value against the logarithmic reference index. 'Worst Case' indicates maximum losses, while 'Average Case' shows the mean performance. 'Trough-to-Peak' shows the maximum possible gain from a low point.")
+                st.info("Performance analysis of the portfolio's net value against the logarithmic reference index. 'Worst' periods indicate maximum losses, while 'Trough-to-Peak' shows the maximum possible gain from a low point.")
 
                 net_series = df_sumusd_['net']
                 
