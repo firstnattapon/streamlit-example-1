@@ -281,6 +281,8 @@ with st.expander("Book : the power of now : พลังแห่งจิตป
   st.video('https://www.youtube.com/watch?v=fhgc8FBPnA8') 
   st.write('____')  
 
+st.write('notebooklm')
+
 with st.expander("Book : Mudley Live by Jatuphon vol.1 " , expanded = 0 ):
   st.write('https://notebooklm.google.com/notebook/7266636a-4bc4-45ae-816e-78521222f9e0')
   st.write('____')  
