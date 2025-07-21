@@ -68,7 +68,7 @@
             "type": "option",
             "name": "NVTS Call @ 8.25",
             "underlying_ticker": "NVTS",
-            "contracts_or_shares": 200,
+            "contracts_or_shares": 100,
             "premium_paid_per_share": 1.26,
             "strike": 7.0
         },  
