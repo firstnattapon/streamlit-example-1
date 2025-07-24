@@ -13,7 +13,7 @@ import tenacity  # เพิ่ม library นี้สำหรับ retry (pi
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
-# --- SimulationTracer Class ( unchanged, but added caching ) ---
+# --- SimulationTracer Class (added caching) ---
 class SimulationTracer:
     def __init__(self, encoded_string: str):
         self.encoded_string: str = str(encoded_string)
@@ -56,7 +56,7 @@ class SimulationTracer:
         self.mutation_seeds: List[int] = decoded_numbers[3:]
         self.mutation_rate_float: float = self.mutation_rate / 100.0
 
-    @lru_cache(maxsize=128)  # เพิ่ม caching สำหรับ run เพื่อความเร็ว
+    @lru_cache(maxsize=128)  # เพิ่ม caching สำหรับ run
     def run(self) -> np.ndarray:
         if self.action_length <= 0:
             return np.array([])
@@ -73,10 +73,9 @@ class SimulationTracer:
                 current_actions[0] = 1
         return current_actions
 
-# --- Configuration Loading (unchanged, but added error handling) ---
+# --- Configuration Loading ---
 @st.cache_data
 def load_config(file_path='monitor_config.json') -> Dict:
-    """Load configuration from a JSON file with error handling."""
     if not os.path.exists(file_path):
         st.error(f"Configuration file not found: {file_path}")
         return {}
@@ -98,7 +97,7 @@ if not ASSET_CONFIGS:
     st.error("No 'assets' list found in monitor_config.json")
     st.stop()
 
-# --- ThingSpeak Clients (unchanged) ---
+# --- ThingSpeak Clients ---
 @st.cache_resource
 def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
     clients = {}
@@ -118,7 +117,7 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
 
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
-# --- Clear Caches Function (modified: no auto rerun, only clear) ---
+# --- Clear Caches Function (modified) ---
 def clear_all_caches():
     st.cache_data.clear()
     st.cache_resource.clear()
@@ -147,8 +146,8 @@ def buy(asset, fix_c=1500, Diff=60):
     total = round(asset * unit_price - adjust_qty * unit_price, 2)
     return unit_price, adjust_qty, total
 
-# --- Price Fetching with Retry (modified: added retry and caching) ---
-@st.cache_data(ttl=300)  # เพิ่ม ttl ยาวขึ้น
+# --- Price Fetching with Retry ---
+@st.cache_data(ttl=300)
 @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(3))
 def get_cached_price(ticker: str) -> float:
     try:
@@ -156,10 +155,9 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
-# --- Data Fetching (optimized: combined into one cached function) ---
+# --- Data Fetching (optimized: combined) ---
 @st.cache_data(ttl=300)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> Dict[str, tuple]:
-    """Fetch all monitor and asset data in one go with concurrency."""
     monitor_results = {}
     asset_results = {}
     
@@ -220,13 +218,11 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
             return ticker, 0.0
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
-        # Fetch monitors
         monitor_futures = [executor.submit(fetch_monitor, asset) for asset in configs]
         for future in concurrent.futures.as_completed(monitor_futures):
             ticker, result = future.result()
             monitor_results[ticker] = result
         
-        # Fetch assets
         asset_futures = [executor.submit(fetch_asset, asset) for asset in configs]
         for future in concurrent.futures.as_completed(asset_futures):
             ticker, result = future.result()
@@ -234,7 +230,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
 
     return {'monitors': monitor_results, 'assets': asset_results}
 
-# --- UI Components (simplified) ---
+# --- UI Components (restored to original) ---
 def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, float]:
     asset_inputs = {}
     cols = st.columns(len(configs))
@@ -259,15 +255,16 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict):
             ticker = config['ticker']
             asset_conf = config['asset_field']
             field_name = asset_conf['field']
-            with st.form(key=f'form_{ticker}'):  # ใช้ form เพื่อ compact
-                add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0)
-                submit = st.form_submit_button(f"Update {ticker}")
-                if submit:
+            
+            if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
+                add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
+                if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
                     try:
                         client = clients[asset_conf['channel_id']]
                         client.update({field_name: add_val})
-                        st.success(f"Updated {ticker} to: {add_val}")
+                        st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
                         clear_all_caches()
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
 
@@ -290,28 +287,20 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
     if not limit_order:
         return
 
-    sell_calc = calc['sell']
-    buy_calc = calc['buy']
-
-    # Compact display
-    st.markdown(f"**Sell:** A {buy_calc[1]} | P {buy_calc[0]} | C {buy_calc[2]}")
-    st.markdown(f"**Buy:** A {sell_calc[1]} | P {sell_calc[0]} | C {sell_calc[2]}")
-
-    with st.form(key=f'trade_form_{ticker}'):  # ใช้ form สำหรับ buy/sell เพื่อลด buttons
-        trade_type = st.radio("Trade Action", ["Sell", "Buy"])
-        submit = st.form_submit_button("Execute Trade")
-        if submit:
+    sell_calc, buy_calc = calc['sell'], calc['buy']
+    st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
+    col1, col2, col3 = st.columns(3)
+    if col3.checkbox(f'sell_match_{ticker}'):
+        if col3.button(f"GO_SELL_{ticker}"):
             try:
                 client = clients[asset_conf['channel_id']]
-                if trade_type == "Sell":
-                    new_val = asset_last - buy_calc[1]
-                else:
-                    new_val = asset_last + sell_calc[1]
-                client.update({field_name: new_val})
-                st.success(f"{trade_type} executed: New value {new_val}")
+                new_asset_val = asset_last - buy_calc[1]
+                client.update({field_name: new_asset_val})
+                col3.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
+                st.rerun()
             except Exception as e:
-                st.error(f"Failed to {trade_type} {ticker}: {e}")
+                st.error(f"Failed to SELL {ticker}: {e}")
 
     try:
         current_price = get_cached_price(ticker)
@@ -321,20 +310,34 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
             st.markdown(
-                f"Price: **{current_price:,.3f}** | Value: **{pv:,.2f}** | P/L (vs {fix_value:,}) : <span style='color:{pl_color};'>{pl_value:,.2f}</span>",
+                f"Price: **{current_price:,.3f}** | Value: **{pv:,.2f}** | P/L (vs {fix_value:,}) : <span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>",
                 unsafe_allow_html=True
             )
         else:
-            st.info(f"Price data for {ticker} unavailable.")
+            st.info(f"Price data for {ticker} is currently unavailable.")
     except Exception:
-        st.warning(f"Could not retrieve price for {ticker}.")
+        st.warning(f"Could not retrieve price data for {ticker}.")
+
+    col4, col5, col6 = st.columns(3)
+    st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
+    if col6.checkbox(f'buy_match_{ticker}'):
+        if col6.button(f"GO_BUY_{ticker}"):
+            try:
+                client = clients[asset_conf['channel_id']]
+                new_asset_val = asset_last + sell_calc[1]
+                client.update({field_name: new_asset_val})
+                col6.write(f"Updated: {new_asset_val}")
+                clear_all_caches()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to BUY {ticker}: {e}")
 
 # --- Main Logic ---
 all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
 
-# Stable Session State (unchanged)
+# Stable Session State
 if 'select_key' not in st.session_state:
     st.session_state.select_key = ""
 if 'nex' not in st.session_state:
@@ -346,12 +349,13 @@ tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 with tab2:
     Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
+
     if Nex_day_:
-        col1, col2 = st.columns(2)
-        if col1.button("Nex_day"):
+        nex_col, Nex_day_sell_col, *_ = st.columns([1,1,3])
+        if nex_col.button("Nex_day"):
             st.session_state.nex = 1
             st.session_state.Nex_day_sell = 0
-        if col2.button("Nex_day_sell"):
+        if Nex_day_sell_col.button("Nex_day_sell"):
             st.session_state.nex = 1
             st.session_state.Nex_day_sell = 1
     else:
@@ -360,77 +364,84 @@ with tab2:
 
     nex = st.session_state.nex
     Nex_day_sell = st.session_state.Nex_day_sell
+
     if Nex_day_:
-        st.write(f"nex = {nex} | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else f"nex = {nex}")
+        st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
 
     st.write("---")
+    
     x_2 = st.number_input('Diff', step=1, value=60)
+    
     st.write("---")
+    
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
+
     st.write("---")
-    if st.checkbox('Start Updates'):
+
+    Start = st.checkbox('start')
+    if Start:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
 with tab1:
-    # Selectbox Logic (simplified)
     selectbox_labels = {}
     ticker_actions = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
         df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
-        action_emoji = ""
+        action_emoji, final_action_val = "", None
         try:
             if not df_data.empty and df_data.action.values[1 + nex] != "":
                 raw_action = int(df_data.action.values[1 + nex])
-                final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
-                action_emoji = "🟢 " if final_action == 1 else "🔴 "
-                ticker_actions[ticker] = final_action
-        except Exception:
-            pass
+                final_action_val = 1 - raw_action if Nex_day_sell == 1 else raw_action
+                if final_action_val == 1: action_emoji = "🟢 "
+                elif final_action_val == 0: action_emoji = "🔴 "
+        except (IndexError, ValueError, TypeError): pass
+        ticker_actions[ticker] = final_action_val
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
 
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
-    selectbox_options = [""] + (["Filter Buy Tickers", "Filter Sell Tickers"] if nex == 1 else []) + all_tickers
+    selectbox_options = [""] 
+    if nex == 1:
+        selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
+    selectbox_options.extend(all_tickers)
 
     if st.session_state.select_key not in selectbox_options:
         st.session_state.select_key = ""
 
-    def format_option(option):
-        if option == "": return "Show All"
-        if option in ["Filter Buy Tickers", "Filter Sell Tickers"]: return option
-        return selectbox_labels.get(option, option).split(' (f(x):')[0]
+    def format_selectbox_options(option_name):
+        if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
+            return "Show All" if option_name == "" else option_name
+        return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
-    st.selectbox("Select Ticker:", options=selectbox_options, format_func=format_option, key="select_key")
+    st.selectbox(
+        "Select Ticker to View:",
+        options=selectbox_options,
+        format_func=format_selectbox_options,
+        key="select_key"
+    )
     st.write("_____")
 
-    selected = st.session_state.select_key
-    if selected == "":
+    selected_option = st.session_state.select_key
+    if selected_option == "":
         configs_to_display = ASSET_CONFIGS
-    elif selected == "Filter Buy Tickers":
-        configs_to_display = [c for c in ASSET_CONFIGS if ticker_actions.get(c['ticker'], None) == 1]
-    elif selected == "Filter Sell Tickers":
-        configs_to_display = [c for c in ASSET_CONFIGS if ticker_actions.get(c['ticker'], None) == 0]
+    elif selected_option == "Filter Buy Tickers":
+        buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
+        configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in buy_tickers]
+    elif selected_option == "Filter Sell Tickers":
+        sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
+        configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in sell_tickers]
     else:
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected]
+        configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_option]
 
-    # Pre-calculate all
     calculations = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
-        asset_value = asset_inputs.get(ticker, 0.0)
+        asset_value = asset_inputs.get(ticker, 0.0) 
         fix_c = config['fix_c']
         calculations[ticker] = {
             'sell': sell(asset_value, fix_c=fix_c, Diff=x_2),
             'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
         }
-
-    # เพิ่ม Summary Table สำหรับ usability
-    summary_data = []
-    for config in configs_to_display:
-        ticker = config['ticker']
-        action = ticker_actions.get(ticker, None)
-        summary_data.append({"Ticker": ticker, "Action": "Buy" if action == 1 else "Sell" if action == 0 else "N/A"})
-    st.dataframe(summary_data, use_container_width=True)
 
     for config in configs_to_display:
         ticker = config['ticker']
@@ -439,15 +450,16 @@ with tab1:
         asset_val = asset_inputs.get(ticker, 0.0)
         calc = calculations.get(ticker, {})
         
-        st.write(selectbox_labels.get(ticker, ticker))
+        title_label = selectbox_labels.get(ticker, ticker)
+        st.write(title_label)
+
         trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
         
-        with st.expander("Show Raw Data"):
+        with st.expander("Show Raw Data Action"):
             st.dataframe(df_data, use_container_width=True)
             
         st.write("_____")
 
-# Sidebar Button (unchanged)
 if st.sidebar.button("RERUN"):
     clear_all_caches()
     st.rerun()
