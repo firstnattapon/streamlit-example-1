@@ -1,4 +1,3 @@
-#
 import streamlit as st
 import numpy as np
 import datetime
@@ -8,27 +7,20 @@ import yfinance as yf
 import json
 from functools import lru_cache
 import concurrent.futures
-from threading import Lock
 import os
-from typing import List
+from typing import List, Dict
+import tenacity  # เพิ่ม library นี้สำหรับ retry (pip install tenacity)
 
-st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide" , initial_sidebar_state = "expanded")
+st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
-# --- START: โค้ดจาก action_simulationTracer.py ---
+# --- SimulationTracer Class (added caching) ---
 class SimulationTracer:
-    """
-    คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
-    ไปจนถึงการจำลองกระบวนการกลายพันธุ์ของ action sequence
-    """
     def __init__(self, encoded_string: str):
-        self.encoded_string: str = encoded_string
-        # ทำให้แน่ใจว่าค่าที่เข้ามาเป็นสตริงเสมอ
-        if not isinstance(self.encoded_string, str):
-            self.encoded_string = str(self.encoded_string)
-
+        self.encoded_string: str = str(encoded_string)
         self._decode_and_set_attributes()
 
     def _decode_and_set_attributes(self):
+        # (unchanged code here)
         encoded_string = self.encoded_string
         if not encoded_string.isdigit():
             self.action_length: int = 0
@@ -64,6 +56,7 @@ class SimulationTracer:
         self.mutation_seeds: List[int] = decoded_numbers[3:]
         self.mutation_rate_float: float = self.mutation_rate / 100.0
 
+    @lru_cache(maxsize=128)  # เพิ่ม caching สำหรับ run
     def run(self) -> np.ndarray:
         if self.action_length <= 0:
             return np.array([])
@@ -80,18 +73,18 @@ class SimulationTracer:
                 current_actions[0] = 1
         return current_actions
 
-# --- END: โค้ดจาก action_simulationTracer.py ---
-
-
-# ---------- CONFIGURATION ----------
+# --- Configuration Loading ---
 @st.cache_data
-def load_config(file_path='monitor_config.json'):
-    """Load configuration from a JSON file."""
+def load_config(file_path='monitor_config.json') -> Dict:
     if not os.path.exists(file_path):
         st.error(f"Configuration file not found: {file_path}")
-        return None
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        return {}
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        st.error(f"Invalid JSON in config file: {e}")
+        return {}
 
 CONFIG_DATA = load_config()
 if not CONFIG_DATA:
@@ -104,14 +97,9 @@ if not ASSET_CONFIGS:
     st.error("No 'assets' list found in monitor_config.json")
     st.stop()
 
-# ---------- GLOBAL CACHE & CLIENT MANAGEMENT ----------
-_cache_lock = Lock()
-_price_cache = {}
-_cache_timestamp = {}
-
+# --- ThingSpeak Clients ---
 @st.cache_resource
-def get_thingspeak_clients(configs):
-    """Creates and caches a dictionary of ThingSpeak clients based on the config."""
+def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
     clients = {}
     unique_channels = set()
     for config in configs:
@@ -129,40 +117,19 @@ def get_thingspeak_clients(configs):
 
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
-# --- START: MODIFIED FUNCTION ---
+# --- Clear Caches Function (modified) ---
 def clear_all_caches():
-    """
-    Clears data caches and non-essential session state, but preserves
-    UI state keys like 'select_key', 'nex', and 'Nex_day_sell' to maintain
-    the user's selections across reruns triggered by button clicks.
-    """
-    # Clear streamlit's data caches
     st.cache_data.clear()
     st.cache_resource.clear()
-
-    # Clear other function-specific caches
     sell.cache_clear()
     buy.cache_clear()
-
-    # Define the UI state keys that should NOT be deleted
     ui_state_keys_to_preserve = ['select_key', 'nex', 'Nex_day_sell']
-
-    # Find all session state keys that are NOT in the preservation list
     keys_to_delete = [k for k in st.session_state.keys() if k not in ui_state_keys_to_preserve]
-
-    # Delete only the non-UI state keys
     for key in keys_to_delete:
         del st.session_state[key]
-
     st.success("🗑️ Data caches cleared! UI state preserved.")
-    # st.rerun() is called automatically after a button press, no need to call it here explicitly
-    # However, if you want an immediate rerun even if the button press doesn't change anything else, you can leave it.
-    # For this specific case, it's better to let Streamlit handle the rerun after the button's logic completes.
 
-# --- END: MODIFIED FUNCTION ---
-
-
-# ---------- CALCULATION UTILS ----------
+# --- Calculation Utils (unchanged) ---
 @lru_cache(maxsize=128)
 def sell(asset, fix_c=1500, Diff=60):
     if asset == 0: return 0, 0, 0
@@ -179,141 +146,110 @@ def buy(asset, fix_c=1500, Diff=60):
     total = round(asset * unit_price - adjust_qty * unit_price, 2)
     return unit_price, adjust_qty, total
 
-def get_cached_price(ticker, max_age=30):
-    now = datetime.datetime.now()
-    with _cache_lock:
-        if (ticker in _price_cache and
-            ticker in _cache_timestamp and
-            (now - _cache_timestamp[ticker]).seconds < max_age):
-            return _price_cache[ticker]
+# --- Price Fetching with Retry ---
+@st.cache_data(ttl=300)
+@tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(3))
+def get_cached_price(ticker: str) -> float:
     try:
-        price = yf.Ticker(ticker).fast_info['lastPrice']
-        with _cache_lock:
-            _price_cache[ticker] = price
-            _cache_timestamp[ticker] = now
-        return price
-    except:
+        return yf.Ticker(ticker).fast_info['lastPrice']
+    except Exception:
         return 0.0
 
-# ---------- DATA FETCHING ----------
+# --- Data Fetching (optimized: combined) ---
 @st.cache_data(ttl=300)
-def Monitor(asset_config, _clients_ref, start_date):
-    """
-    Fetches monitor data and generates actions using SimulationTracer.
-    """
-    ticker = asset_config['ticker']
-    try:
-        monitor_field_config = asset_config['monitor_field']
-        client = _clients_ref[monitor_field_config['channel_id']]
-        field_num = monitor_field_config['field']
-
-        tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-        tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-
-        if start_date:
-            tickerData = tickerData[tickerData.index >= start_date]
-        
-        fx_js_str = "0"
-        try:
-            field_data = client.get_field_last(field=str(field_num))
-            retrieved_val = json.loads(field_data)[f"field{field_num}"]
-            if retrieved_val is not None:
-                fx_js_str = str(retrieved_val)
-        except (json.JSONDecodeError, KeyError, TypeError):
-            fx_js_str = "0"
-
-        tickerData['index'] = list(range(len(tickerData)))
-        
-        dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
-        df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
-        df['action'] = ""
-
-        try:
-            tracer = SimulationTracer(encoded_string=fx_js_str)
-            final_actions = tracer.run()
-            
-            num_to_assign = min(len(df), len(final_actions))
-            if num_to_assign > 0:
-                action_col_idx = df.columns.get_loc('action')
-                df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
-        
-        except ValueError as e:
-            st.warning(f"Tracer Error for {ticker} (input: '{fx_js_str}'): {e}")
-        except Exception as e:
-            st.error(f"Unexpected Tracer Error for {ticker}: {e}")
-
-        return df.tail(7), fx_js_str
+def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> Dict[str, tuple]:
+    monitor_results = {}
+    asset_results = {}
     
-    except Exception as e:
-        st.error(f"Error in Monitor function for {ticker}: {str(e)}")
-        return pd.DataFrame(), "0"
+    def fetch_monitor(asset_config):
+        ticker = asset_config['ticker']
+        try:
+            monitor_field_config = asset_config['monitor_field']
+            client = _clients_ref[monitor_field_config['channel_id']]
+            field_num = monitor_field_config['field']
 
-@st.cache_data(ttl=300)
-def fetch_all_monitor_data(configs, _clients_ref, start_date):
-    results = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
-        future_to_ticker = {
-            executor.submit(Monitor, asset, _clients_ref, start_date): asset['ticker']
-            for asset in configs
-        }
-        for future in concurrent.futures.as_completed(future_to_ticker):
-            ticker = future_to_ticker[future]
+            tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
+            tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+
+            if start_date:
+                tickerData = tickerData[tickerData.index >= start_date]
+            
+            fx_js_str = "0"
             try:
-                results[ticker] = future.result()
-            except Exception as e:
-                st.error(f"Error fetching monitor data for {ticker}: {str(e)}")
-                results[ticker] = (pd.DataFrame(), "0")
-    return results
+                field_data = client.get_field_last(field=str(field_num))
+                retrieved_val = json.loads(field_data)[f"field{field_num}"]
+                if retrieved_val is not None:
+                    fx_js_str = str(retrieved_val)
+            except Exception:
+                pass
 
-def fetch_asset(asset_config, client):
-    """Helper to fetch a single asset value."""
-    try:
-        field_name = asset_config['field']
-        data = client.get_field_last(field=field_name)
-        return float(json.loads(data)[field_name])
-    except (json.JSONDecodeError, KeyError, ValueError, TypeError):
-        return 0.0
+            tickerData['index'] = list(range(len(tickerData)))
+            
+            dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
+            df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
+            df['action'] = ""
 
-@st.cache_data(ttl=60)
-def get_all_assets_from_thingspeak(configs, _clients_ref):
-    assets = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
-        future_to_ticker = {
-            executor.submit(
-                fetch_asset,
-                asset['asset_field'],
-                _clients_ref[asset['asset_field']['channel_id']]
-            ): asset['ticker']
-            for asset in configs if asset['asset_field']['channel_id'] in _clients_ref
-        }
-        for future in concurrent.futures.as_completed(future_to_ticker):
-            ticker = future_to_ticker[future]
             try:
-                assets[ticker] = future.result()
+                tracer = SimulationTracer(encoded_string=fx_js_str)
+                final_actions = tracer.run()
+                
+                num_to_assign = min(len(df), len(final_actions))
+                if num_to_assign > 0:
+                    action_col_idx = df.columns.get_loc('action')
+                    df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
+            
             except Exception as e:
-                st.error(f"Error fetching asset for ticker {ticker}: {str(e)}")
-    return assets
+                st.warning(f"Tracer Error for {ticker}: {e}")
 
-# ---------- UI SECTION ----------
-def render_asset_inputs(configs, last_assets):
-    cols = st.columns(len(configs))
+            return ticker, (df.tail(7), fx_js_str)
+        except Exception as e:
+            st.error(f"Error in Monitor for {ticker}: {str(e)}")
+            return ticker, (pd.DataFrame(), "0")
+
+    def fetch_asset(asset_config):
+        ticker = asset_config['ticker']
+        try:
+            asset_conf = asset_config['asset_field']
+            client = _clients_ref[asset_conf['channel_id']]
+            field_name = asset_conf['field']
+            data = client.get_field_last(field=field_name)
+            return ticker, float(json.loads(data)[field_name])
+        except Exception:
+            return ticker, 0.0
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
+        monitor_futures = [executor.submit(fetch_monitor, asset) for asset in configs]
+        for future in concurrent.futures.as_completed(monitor_futures):
+            ticker, result = future.result()
+            monitor_results[ticker] = result
+        
+        asset_futures = [executor.submit(fetch_asset, asset) for asset in configs]
+        for future in concurrent.futures.as_completed(asset_futures):
+            ticker, result = future.result()
+            asset_results[ticker] = result
+
+    return {'monitors': monitor_results, 'assets': asset_results}
+
+# --- UI Components (restored to original) ---
+def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, float]:
     asset_inputs = {}
+    cols = st.columns(len(configs))
     for i, config in enumerate(configs):
         with cols[i]:
             ticker = config['ticker']
-            last_asset_val = last_assets.get(ticker, 0.0)
+            last_val = last_assets.get(ticker, 0.0)
             if config.get('option_config'):
                 option_val = config['option_config']['base_value']
                 label = config['option_config']['label']
-                real_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_real")
+                real_val = st.number_input(label, step=0.001, value=last_val, key=f"input_{ticker}_real")
                 asset_inputs[ticker] = option_val + real_val
             else:
                 label = f'{ticker}_ASSET'
-                asset_val = st.number_input(label, step=0.001, value=last_asset_val, key=f"input_{ticker}_asset")
-                asset_inputs[ticker] = asset_val
+                val = st.number_input(label, step=0.001, value=last_val, key=f"input_{ticker}_asset")
+                asset_inputs[ticker] = val
     return asset_inputs
 
-def render_asset_update_controls(configs, clients):
+def render_asset_update_controls(configs: List[Dict], clients: Dict):
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
             ticker = config['ticker']
@@ -332,7 +268,7 @@ def render_asset_update_controls(configs, clients):
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
 
-def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, clients):
+def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: pd.DataFrame, calc: Dict, nex: int, Nex_day_sell: int, clients: Dict):
     ticker = config['ticker']
     asset_conf = config['asset_field']
     field_name = asset_conf['field']
@@ -341,7 +277,6 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
         try:
             if df_data.empty or df_data.action.values[1 + nex] == "":
                 return 0
-                
             val = df_data.action.values[1 + nex]
             return 1 - val if Nex_day_sell == 1 else val
         except Exception:
@@ -363,7 +298,7 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
                 client.update({field_name: new_asset_val})
                 col3.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
-                st.rerun() # Ensure rerun after cache clear
+                st.rerun()
             except Exception as e:
                 st.error(f"Failed to SELL {ticker}: {e}")
 
@@ -393,34 +328,29 @@ def trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_s
                 client.update({field_name: new_asset_val})
                 col6.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
-                st.rerun() # Ensure rerun after cache clear
+                st.rerun()
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
 
-# ---------- MAIN LOGIC ----------
-monitor_data_all = fetch_all_monitor_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
-last_assets_all = get_all_assets_from_thingspeak(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
+# --- Main Logic ---
+all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
+monitor_data_all = all_data['monitors']
+last_assets_all = all_data['assets']
 
-# --- START: STABLE STATE MANAGEMENT ---
-# Initialize session states if they don't exist
+# Stable Session State
 if 'select_key' not in st.session_state:
-    st.session_state.select_key = "" # Default is now an empty string
+    st.session_state.select_key = ""
 if 'nex' not in st.session_state:
     st.session_state.nex = 0
 if 'Nex_day_sell' not in st.session_state:
     st.session_state.Nex_day_sell = 0
-# --- END: STABLE STATE MANAGEMENT ---
 
-# Create tabs
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
-# --- CONTROLS TAB ---
 with tab2:
-    # Nex mode controls
     Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
 
     if Nex_day_:
-        # If the box is checked, show buttons and manage state
         nex_col, Nex_day_sell_col, *_ = st.columns([1,1,3])
         if nex_col.button("Nex_day"):
             st.session_state.nex = 1
@@ -429,15 +359,12 @@ with tab2:
             st.session_state.nex = 1
             st.session_state.Nex_day_sell = 1
     else:
-        # If the box is UNCHECKED, reset the state completely
         st.session_state.nex = 0
         st.session_state.Nex_day_sell = 0
 
-    # The rest of the app now uses the reliable state from session_state
     nex = st.session_state.nex
     Nex_day_sell = st.session_state.Nex_day_sell
 
-    # Display the current persistent state
     if Nex_day_:
         st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
 
@@ -454,11 +381,8 @@ with tab2:
     Start = st.checkbox('start')
     if Start:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
-        
-# --- MONITOR TAB ---
+
 with tab1:
-    # --- START: SELECTBOX LOGIC (REVISED AND STABLE) ---
-    # 1. Pre-generate display labels and actions using the STABLE nex value from tab2
     selectbox_labels = {}
     ticker_actions = {}
     for config in ASSET_CONFIGS:
@@ -475,18 +399,15 @@ with tab1:
         ticker_actions[ticker] = final_action_val
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
 
-    # 2. Build the list of currently available options based on the STABLE `nex`
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
-    selectbox_options = [""] # "Show All" is now an empty string
+    selectbox_options = [""] 
     if nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
 
-    # 3. CORE FIX: Before rendering, check if the saved selection is still valid. If not, reset it.
     if st.session_state.select_key not in selectbox_options:
-        st.session_state.select_key = "" # Reset to the empty string option ("Show All")
+        st.session_state.select_key = ""
 
-    # 4. Define formatting and render the selectbox
     def format_selectbox_options(option_name):
         if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
             return "Show All" if option_name == "" else option_name
@@ -496,11 +417,10 @@ with tab1:
         "Select Ticker to View:",
         options=selectbox_options,
         format_func=format_selectbox_options,
-        key="select_key"  # Binds to our validated session state
+        key="select_key"
     )
     st.write("_____")
 
-    # 5. Filter the display based on the (now guaranteed to be valid) selection
     selected_option = st.session_state.select_key
     if selected_option == "":
         configs_to_display = ASSET_CONFIGS
@@ -512,23 +432,17 @@ with tab1:
         configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in sell_tickers]
     else:
         configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_option]
-    # --- END: SELECTBOX LOGIC ---
 
-
-    # Calculate for all assets upfront for efficiency
     calculations = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
-        # Use asset_inputs which was defined in Tab 2
         asset_value = asset_inputs.get(ticker, 0.0) 
         fix_c = config['fix_c']
-        # Use x_2 (Diff) which was defined in Tab 2
         calculations[ticker] = {
             'sell': sell(asset_value, fix_c=fix_c, Diff=x_2),
             'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
         }
 
-    # Loop over the FILTERED list to display the UI
     for config in configs_to_display:
         ticker = config['ticker']
         df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
@@ -546,7 +460,6 @@ with tab1:
             
         st.write("_____")
 
-# This button stays in the sidebar, outside the tabs
 if st.sidebar.button("RERUN"):
     clear_all_caches()
     st.rerun()
