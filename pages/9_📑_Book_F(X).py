@@ -295,6 +295,10 @@ with st.expander("Book : Mudley Live by Jatuphon vol.2 " , expanded = 0 ):
   st.write('https://notebooklm.google.com/notebook/b0777e9a-2faf-4be0-9f66-2974633e7d1c')
   st.write('____')  
 
+with st.expander("Book : Mudley Live by Jatuphon vol.3 (TFEX  PROFESSIONAL TRADER) " , expanded = 0 ):
+  st.write('https://notebooklm.google.com/notebook/c1970908-007f-4a5c-a33e-774ab91acb1b')
+  st.write('____')  
+
 with st.expander("Book : The Most Important Thing : นักลงทุนเหนือชั้น & Mastering the Market Cycle : เหนือกว่าวัฏจักรการลงทุน " , expanded = 0 ):
   st.write('https://notebooklm.google.com/notebook/b59fa253-0e58-421e-b085-c8092aebd56c')
   st.write('____')  
