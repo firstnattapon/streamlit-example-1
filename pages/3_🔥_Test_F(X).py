@@ -7,20 +7,38 @@ import plotly.express as px
 
 # ------------------- ส่วนที่ปรับปรุงใหม่ -------------------
  
-# 1. ฟังก์ชันสำหรับโหลด Config จากไฟล์ JSON
+# 1. ฟังก์ชันสำหรับโหลด Config จากไฟล์ JSON (ปรับปรุงให้อ่านค่า Default)
 def load_config(filename="un15_fx_config.json"):
-    """Loads asset configurations from a JSON file."""
+    """
+    Loads configurations from a JSON file.
+    It expects a special key '__DEFAULT_CONFIG__' for default values.
+    Returns a tuple: (ticker_configs, default_config)
+    """
     try:
-        with open(filename, 'r') as f:
-            return json.load(f)
+        with open(filename, 'r', encoding='utf-8') as f:
+            data = json.load(f)
     except FileNotFoundError:
         st.error(f"Error: Configuration file '{filename}' not found.")
-        return {}
+        return {}, {} # คืนค่า dict ว่าง
     except json.JSONDecodeError:
         st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
-        return {}
+        return {}, {} # คืนค่า dict ว่าง
 
-# 2. ฟังก์ชันกลางที่รวม Logic ที่ซ้ำซ้อนกัน
+    # กำหนดค่า fallback เผื่อไม่มี '__DEFAULT_CONFIG__' ในไฟล์ JSON
+    fallback_default = {
+        "Fixed_Asset_Value": 1500.0, "Cash_Balan": 650.0, "step": 0.01,
+        "filter_date": "2024-01-01 12:00:00+07:00", "pred": 1
+    }
+
+    # ดึงค่า default config ออกมา, ถ้าไม่เจอก็ใช้ fallback
+    default_config = data.pop('__DEFAULT_CONFIG__', fallback_default)
+    
+    # ข้อมูลที่เหลือคือ config ของ Ticker แต่ละตัว
+    ticker_configs = data
+    
+    return ticker_configs, default_config
+
+# 2. ฟังก์ชันกลางที่รวม Logic ที่ซ้ำซ้อนกัน (เหมือนเดิม)
 def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     """Calculates the core cash balance model DataFrame. This logic was duplicated in the original code."""
     if entry >= 10000:
@@ -71,9 +89,8 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     combined_df = pd.concat([df_top, df_down], axis=0)
     return combined_df
 
-# ------------------- ฟังก์ชันหลักที่ถูกปรับปรุง -------------------
+# ------------------- ฟังก์ชันหลัก (เหมือนเดิม) -------------------
 
-# ฟังก์ชัน delta_1 และ delta6 ถูกปรับให้รับ 'asset_config' เป็น dict แทนที่จะ Hardcode ค่า
 def delta_1(asset_config):
     """Calculates Production_Costs based on asset configuration."""
     try:
@@ -85,20 +102,17 @@ def delta_1(asset_config):
         tickerData = yf.Ticker(Ticker)
         entry = tickerData.fast_info['lastPrice']
         
-        # เรียกใช้ฟังก์ชันกลาง
         df_model = calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan)
 
         if not df_model.empty:
             Production_Costs = (df_model['Cash_Balan'].values[-1]) - Cash_Balan
             return abs(Production_Costs)
     except Exception as e:
-        # st.warning(f"Could not process delta_1 for {asset_config.get('Ticker', 'N/A')}: {e}")
         return None
 
 def delta6(asset_config):
     """Performs historical simulation based on asset configuration."""
     try:
-        # ดึงค่าจากการตั้งค่า
         Ticker = asset_config['Ticker']
         pred = asset_config['pred']
         filter_date = asset_config['filter_date']
@@ -106,20 +120,17 @@ def delta6(asset_config):
         Cash_Balan = asset_config['Cash_Balan']
         step = asset_config['step']
 
-        # โหลดข้อมูลราคา
         ticker_hist = yf.Ticker(Ticker).history(period='max')
         ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
         ticker_hist = ticker_hist[ticker_hist.index >= filter_date][['Close']]
         
         entry = ticker_hist.Close[0]
-
-        # 1. สร้าง Model อ้างอิงด้วยฟังก์ชันกลาง
+        
         df_model = calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan)
         
         if df_model.empty:
             return None
 
-        # 2. ส่วน Logic การจำลอง (เหมือนเดิมทุกประการ)
         tickerData = ticker_hist.copy()
         tickerData['Close'] = np.around(tickerData['Close'].values, 2)
         tickerData['pred'] = pred
@@ -139,7 +150,7 @@ def delta6(asset_config):
             if pred_vals[idx] == 1:
                 Amount_Asset[idx] = Fixed_Asset_Value / Close[idx]
                 re[idx] = (Amount_Asset[idx-1] * Close[idx]) - Fixed_Asset_Value
-            else: # pred[idx] == 0
+            else: 
                 Amount_Asset[idx] = Amount_Asset[idx-1]
                 re[idx] = 0
             Cash_Balan_sim[idx] = Cash_Balan_sim[idx-1] + re[idx]
@@ -148,7 +159,6 @@ def delta6(asset_config):
         tickerData['re'] = re
         tickerData['Cash_Balan'] = Cash_Balan_sim
         
-        # ส่วนคำนวณท้าย (เหมือนเดิมทุกประการ)
         tickerData['refer_model'] = 0.
         price = np.around(tickerData['Close'].values, 2)
         refer_model = tickerData['refer_model'].values
@@ -163,7 +173,6 @@ def delta6(asset_config):
         tickerData['refer_model'].fillna(method='bfill', inplace=True)
         tickerData['refer_model'].fillna(method='ffill', inplace=True)
 
-
         tickerData['pv'] = tickerData['Cash_Balan'] + (tickerData['Amount_Asset'] * tickerData['Close'])
         tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value
         tickerData['net_pv'] = tickerData['pv'] - tickerData['refer_pv']
@@ -172,34 +181,26 @@ def delta6(asset_config):
         return final
         
     except Exception as e:
-        # st.warning(f"Could not process delta6 for {asset_config.get('Ticker', 'N/A')}: {e}")
         return None
 
-# ฟังก์ชัน un_16 ถูกปรับให้รับ dict ของ config ที่จะใช้
 def un_16(active_configs):
     """Aggregates results from multiple assets specified in active_configs."""
     a_0 = pd.DataFrame()
     a_1 = pd.DataFrame()
     Max_Production = 0
     
-    # วนลูปตาม Ticker ที่ผู้ใช้เลือก
     for ticker_name, config in active_configs.items():
-        # st.write(f"Processing {ticker_name}...") # Uncomment for debugging
-        
-        # คำนวณ delta6
         a_2 = delta6(config)
         if a_2 is not None:
             a_0 = pd.concat([a_0, a_2[['re']].rename(columns={"re": f"{ticker_name}_re"})], axis=1)
             a_1 = pd.concat([a_1, a_2[['net_pv']].rename(columns={"net_pv": f"{ticker_name}_net_pv"})], axis=1)
         
-        # คำนวณ delta_1
         prod_cost = delta_1(config)
         if prod_cost is not None:
             Max_Production += prod_cost
     
-    # ส่วนการคำนวณรวม (เหมือนเดิมทุกประการ)
     if a_0.empty:
-        return pd.DataFrame() # คืนค่า DataFrame ว่างถ้าไม่มีข้อมูล
+        return pd.DataFrame()
         
     net_dd = []
     net = 0
@@ -213,22 +214,15 @@ def un_16(active_configs):
 
     return a_x
 
-# ------------------- ส่วนแสดงผล STREAMLIT -------------------
+# ------------------- ส่วนแสดงผล STREAMLIT (ปรับปรุงใหม่) -------------------
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀")
 
-# 1. โหลด config ทั้งหมดจากไฟล์
-full_config = load_config()
+# 1. โหลด config ทั้งหมดจากไฟล์ (ตอนนี้จะคืนค่า 2 ตัว)
+full_config, DEFAULT_CONFIG = load_config()
 
-# ค่า default สำหรับ Ticker ใหม่
-DEFAULT_CONFIG = {
-    "Fixed_Asset_Value": 1500.0,
-    "Cash_Balan": 650.0,
-    "step": 0.01,
-    "filter_date": "2024-01-01 12:00:00+07:00",
-    "pred": 1
-}
+# ----> จุดนี้ ไม่ต้องมี DEFAULT_CONFIG แบบ Hardcode อีกต่อไป <----
 
-if full_config:
+if full_config or DEFAULT_CONFIG: # ตรวจสอบว่ามีข้อมูล config หรือ default config อย่างน้อยหนึ่งอย่าง
     # 2. ใช้ Session State เพื่อเก็บ Ticker ที่เพิ่มจาก UI
     if 'custom_tickers' not in st.session_state:
         st.session_state.custom_tickers = {}
@@ -238,16 +232,18 @@ if full_config:
     new_ticker = st.text_input("พิมพ์ Ticker ที่ต้องการเพิ่ม (เช่น AAPL):").upper()
     if st.button("เพิ่ม Ticker"):
         if new_ticker and new_ticker not in full_config and new_ticker not in st.session_state.custom_tickers:
-            # สร้าง config สำหรับ Ticker ใหม่โดยใช้ default
+            # สร้าง config สำหรับ Ticker ใหม่โดยใช้ default ที่อ่านมาจาก JSON
             st.session_state.custom_tickers[new_ticker] = {
                 "Ticker": new_ticker,
                 **DEFAULT_CONFIG
             }
-            st.success(f"เพิ่ม {new_ticker} สำเร็จ! (ใช้ค่า default)")
+            st.success(f"เพิ่ม {new_ticker} สำเร็จ! (ใช้ค่า default จากไฟล์ config)")
         elif new_ticker in full_config:
             st.warning(f"{new_ticker} มีอยู่ใน config จาก JSON แล้ว")
-        else:
+        elif new_ticker in st.session_state.custom_tickers:
             st.warning(f"{new_ticker} ถูกเพิ่มแล้ว")
+        else:
+            st.warning("กรุณาพิมพ์ชื่อ Ticker")
 
     # 4. รวม Ticker จาก JSON และจาก UI
     all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
@@ -256,7 +252,7 @@ if full_config:
     selected_tickers = st.multiselect(
         "Select Tickers to Analyze",
         options=all_tickers,
-        default=all_tickers  # เลือกทั้งหมดเป็นค่าเริ่มต้น
+        default=list(full_config.keys())  # เลือก Ticker จากไฟล์ JSON เป็นค่าเริ่มต้น
     )
 
     # 6. สร้าง dict config เฉพาะ Ticker ที่ถูกเลือก (รวมจากทั้ง JSON และ custom)
@@ -278,7 +274,7 @@ if full_config:
         if data.empty:
             st.error("Failed to generate data for the selected tickers. Please check logs or try again.")
         else:
-            # ------------------- ส่วนแสดงผล (เหมือนเดิมทุกประการ) -------------------
+            # ------------------- ส่วนแสดงผล (เหมือนเดิม) -------------------
             for i in selected_tickers:
                 col_name = f'{i}_re'
                 if col_name in data.columns:
@@ -291,21 +287,19 @@ if full_config:
             for i in range(len(max_dd)):
                 try:
                     roll = max_dd[:i]
-                    # แก้ไขเล็กน้อยเพื่อป้องกัน error ตอน roll ว่าง
                     if len(roll) > 0:
                         roll_min = np.min(roll)
                     else:
-                        roll_min = 0 # ค่าเริ่มต้น
+                        roll_min = 0
                     roll_max = 0
                     data_roll = roll_min - roll_max
                     roll_over.append(data_roll)
                 except:
-                    roll_over.append(0) # เพิ่มค่า default หากเกิด error
+                    roll_over.append(0)
 
-            # ตรวจสอบว่า roll_over ไม่ใช่ค่า 0 ทั้งหมดเพื่อป้องกันหารด้วยศูนย์
             min_sum_val = np.min(roll_over)
             if min_sum_val == 0:
-                min_sum = 1 # ป้องกันการหารด้วยศูนย์
+                min_sum = 1 
             else:
                 min_sum = abs(min_sum_val)
                 
@@ -323,3 +317,5 @@ if full_config:
             col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"))
             st.write('____')
             st.plotly_chart(px.line(df_new, title="Detailed Portfolio Simulation"))
+else:
+    st.error("Could not load any configuration. Please check the 'un15_fx_config.json' file.")
