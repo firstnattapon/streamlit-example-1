@@ -1,4 +1,11 @@
 {
+  "__DEFAULT_CONFIG__": {
+    "Fixed_Asset_Value": 1500.0,
+    "Cash_Balan": 650.0,
+    "step": 0.01,
+    "filter_date": "2024-01-01 12:00:00+07:00",
+    "pred": 1
+  },
   "FFWM": {
     "Ticker": "FFWM",
     "Fixed_Asset_Value": 1500.0,
@@ -6,7 +13,7 @@
     "step": 0.01,
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
-  }, 
+  },
   "NEGG": {
     "Ticker": "NEGG",
     "Fixed_Asset_Value": 1500.0,
@@ -63,14 +70,6 @@
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
   },
-  "AGL": {
-    "Ticker": "AGL",
-    "Fixed_Asset_Value": 1500.0,
-    "Cash_Balan": 650.0,
-    "step": 0.01,
-    "filter_date": "2024-01-01 12:00:00+07:00",
-    "pred": 1
-  },
   "FLNC": {
     "Ticker": "FLNC",
     "Fixed_Asset_Value": 1500.0,
@@ -86,7 +85,7 @@
     "step": 0.01,
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
- },
+  },
   "DYN": {
     "Ticker": "DYN",
     "Fixed_Asset_Value": 1500.0,
@@ -94,5 +93,5 @@
     "step": 0.01,
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
-}
+  }
 }
