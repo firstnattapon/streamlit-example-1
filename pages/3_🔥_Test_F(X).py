@@ -1,3 +1,4 @@
+# v2 ที่ ปรับปรุ่งใหม่ (แก้ไขแล้ว)
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -315,9 +316,21 @@ if full_config or DEFAULT_CONFIG:
             st.divider()
             
             st.subheader("Detailed Simulation Data")
-            # เลือกเฉพาะคอลัมน์ที่สำคัญมาแสดงในกราฟใหญ่
-            cols_to_plot = ['maxcash_dd', 'cf'] + [f"{t}_net_pv" for t in selected_tickers]
-            st.plotly_chart(px.line(df_new[cols_to_plot], title="Portfolio Simulation Details"), use_container_width=True)
+
+            # ---------- START: ส่วนที่แก้ไข ----------
+            # 1. เพิ่มการคำนวณ Cumulative Sum สำหรับคอลัมน์ _re เหมือนใน V1
+            for ticker in selected_tickers:
+                col_name = f'{ticker}_re'
+                if col_name in df_new.columns:
+                    df_new[col_name] = df_new[col_name].cumsum()
+            
+            # 2. เพิ่มคอลัมน์ _re และ _net_pv เข้าไปใน List ที่จะพล็อตกราฟ
+            # เราจะพล็อตกราฟจาก df_new ทั้งหมดเลย เพื่อให้เหมือน V1 ที่สุด
+            # โดยอาจจะยกเว้นบางคอลัมน์ที่ไม่ต้องการเช่น cf ที่ซ้ำซ้อนกับ maxcash_dd
+            # หรือจะพล็อตทั้งหมดก็ได้
+            st.plotly_chart(px.line(df_new, title="Portfolio Simulation Details"), use_container_width=True)
+            # ---------- END: ส่วนที่แก้ไข ----------
+
 
 else:
     st.error("Could not load any configuration. Please check that 'un15_fx_config.json' exists and is correctly formatted.")
