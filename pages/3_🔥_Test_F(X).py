@@ -211,8 +211,6 @@ def un_16(active_configs):
 # ------------------- ส่วนแสดงผล STREAMLIT -------------------
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
 
-st.title("Exist F(X) - Portfolio Simulation")
-
 # 1. โหลด config
 full_config, DEFAULT_CONFIG = load_config()
 
@@ -222,7 +220,6 @@ if full_config or DEFAULT_CONFIG:
         st.session_state.custom_tickers = {}
 
     # 3. ส่วนควบคุมบนหน้าหลัก
-    st.header("Configuration")
     control_col1, control_col2 = st.columns([1, 2])
 
     with control_col1:
