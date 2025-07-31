@@ -1,4 +1,4 @@
-# v2 ที่ ปรับปรุ่งใหม่ (แก้ไขแล้ว)
+# v2 ที่ ปรับปรุ่งใหม่ (แก้ไข Index เป็นวันที่แล้ว)
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -106,7 +106,6 @@ def delta_1(asset_config):
             production_costs = df_model['Cash_Balan'].iloc[-1] - asset_config['Cash_Balan']
             return abs(production_costs)
     except Exception as e:
-        # st.warning(f"Could not calculate delta_1 for {asset_config['Ticker']}: {e}")
         return None
 
 def delta6(asset_config):
@@ -114,14 +113,12 @@ def delta6(asset_config):
     try:
         ticker_hist = yf.Ticker(asset_config['Ticker']).history(period='max')
         if ticker_hist.empty:
-            st.warning(f"No historical data found for {asset_config['Ticker']}.")
             return None
             
         ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
         ticker_hist = ticker_hist[ticker_hist.index >= asset_config['filter_date']][['Close']]
         
         if ticker_hist.empty:
-            # st.warning(f"No data for {asset_config['Ticker']} after filter date {asset_config['filter_date']}.")
             return None
 
         entry = ticker_hist['Close'].iloc[0]
@@ -174,7 +171,6 @@ def delta6(asset_config):
         return ticker_data[['net_pv', 're']]
         
     except Exception as e:
-        # st.warning(f"Could not process delta6 for {asset_config['Ticker']}: {e}")
         return None
 
 def un_16(active_configs):
@@ -241,7 +237,6 @@ if full_config or DEFAULT_CONFIG:
     with control_col2:
         st.subheader("Select Tickers to Analyze")
         all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
-        # ทำให้ default list ไม่ error ถ้า custom ticker ถูกลบไปแล้ว
         default_selection = [t for t in list(full_config.keys()) if t in all_tickers]
         selected_tickers = st.multiselect(
             "Select from available tickers:",
@@ -272,32 +267,31 @@ if full_config or DEFAULT_CONFIG:
             for i in range(len(max_dd_values)):
                 roll = max_dd_values[:i]
                 roll_min = np.min(roll) if len(roll) > 0 else 0
-                roll_over.append(roll_min) # Max Sum Buffer is the minimum of the cumulative sum up to that point
+                roll_over.append(roll_min)
             
-            # สร้าง DataFrame ผลลัพธ์หลัก
+            # ---------- START: ส่วนที่แก้ไข ----------
+            # สร้าง DataFrame ผลลัพธ์หลัก โดยใส่ `index=df_new.index` เข้าไปด้วย
             cf_values = df_new.cf.values
             df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
             
-            # คำนวณ True Alpha
+            # คำนวณ True Alpha และใส่ `index=df_new.index`
             min_sum_val = np.min(roll_over)
             min_sum = abs(min_sum_val) if min_sum_val != 0 else 1
             true_alpha_values = (df_new.cf.values / min_sum) * 100
             df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
+            # ---------- END: ส่วนที่แก้ไข ----------
 
             # 7. แสดงผล KPI
             st.subheader("Key Performance Indicators")
             
-            # ดึงค่าสุดท้ายมาคำนวณ
             final_sum_delta = df_all.Sum_Delta.iloc[-1]
             final_max_buffer = df_all.Max_Sum_Buffer.iloc[-1]
             final_true_alpha = df_all_2.True_Alpha.iloc[-1]
             num_days = len(df_new)
             
-            # คำนวณค่าเฉลี่ย
             avg_cf = final_sum_delta / num_days if num_days > 0 else 0
             avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
 
-            # แสดงผลใน Metric cards
             kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
             kpi1.metric(label="Total Net Profit (cf)", value=f"{final_sum_delta:,.2f}")
             kpi2.metric(label="Max Cash Buffer Used", value=f"{final_max_buffer:,.2f}")
@@ -317,20 +311,13 @@ if full_config or DEFAULT_CONFIG:
             
             st.subheader("Detailed Simulation Data")
 
-            # ---------- START: ส่วนที่แก้ไข ----------
-            # 1. เพิ่มการคำนวณ Cumulative Sum สำหรับคอลัมน์ _re เหมือนใน V1
+            # ทำให้กราฟ Detailed Simulation เหมือน V1
             for ticker in selected_tickers:
                 col_name = f'{ticker}_re'
                 if col_name in df_new.columns:
                     df_new[col_name] = df_new[col_name].cumsum()
             
-            # 2. เพิ่มคอลัมน์ _re และ _net_pv เข้าไปใน List ที่จะพล็อตกราฟ
-            # เราจะพล็อตกราฟจาก df_new ทั้งหมดเลย เพื่อให้เหมือน V1 ที่สุด
-            # โดยอาจจะยกเว้นบางคอลัมน์ที่ไม่ต้องการเช่น cf ที่ซ้ำซ้อนกับ maxcash_dd
-            # หรือจะพล็อตทั้งหมดก็ได้
             st.plotly_chart(px.line(df_new, title="Portfolio Simulation Details"), use_container_width=True)
-            # ---------- END: ส่วนที่แก้ไข ----------
-
 
 else:
     st.error("Could not load any configuration. Please check that 'un15_fx_config.json' exists and is correctly formatted.")
