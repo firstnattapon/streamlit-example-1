@@ -5,9 +5,7 @@ import streamlit as st
 import json
 import plotly.express as px
 
-# ------------------- ส่วนที่ปรับปรุงใหม่ -------------------
-
-# 1. ฟังก์ชันสำหรับโหลด Config จากไฟล์ JSON (ปรับปรุงให้อ่านค่า Default)
+# ------------------- ฟังก์ชันสำหรับโหลด Config -------------------
 def load_config(filename="un15_fx_config.json"):
     """
     Loads configurations from a JSON file.
@@ -38,14 +36,14 @@ def load_config(filename="un15_fx_config.json"):
 
     return ticker_configs, default_config
 
-# 2. ฟังก์ชันกลางที่รวม Logic ที่ซ้ำซ้อนกัน (เหมือนเดิม)
+# ------------------- ฟังก์ชันคำนวณหลัก -------------------
 def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
-    """Calculates the core cash balance model DataFrame. This logic was duplicated in the original code."""
-    if entry >= 10000:
+    """Calculates the core cash balance model DataFrame."""
+    if entry >= 10000 or entry <= 0: # ป้องกันค่า entry ที่ไม่ถูกต้อง
         return pd.DataFrame()
 
     samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
-
+    
     df = pd.DataFrame()
     df['Asset_Price'] = np.around(samples, 2)
     df['Fixed_Asset_Value'] = Fixed_Asset_Value
@@ -53,297 +51,276 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
 
     # --- Top part calculation ---
     df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
-    df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
-    df_top.fillna(0, inplace=True)
+    if not df_top.empty:
+        df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
+        df_top.fillna(0, inplace=True)
+        
+        np_Cash_Balan_top = df_top['Cash_Balan_top'].values
+        xx = np.zeros(len(np_Cash_Balan_top))
+        y_0 = Cash_Balan
+        for idx, v_0 in enumerate(np_Cash_Balan_top):
+            z_0 = y_0 + v_0
+            y_0 = z_0
+            xx[idx] = y_0
+            
+        df_top['Cash_Balan'] = xx
+        df_top = df_top.sort_values(by='Amount_Asset')[:-1]
+    else:
+        df_top = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
 
-    np_Cash_Balan_top = df_top['Cash_Balan_top'].values
-    xx = np.zeros(len(np_Cash_Balan_top))
-    y_0 = Cash_Balan
-    for idx, v_0 in enumerate(np_Cash_Balan_top):
-        z_0 = y_0 + v_0
-        y_0 = z_0
-        xx[idx] = y_0
-
-    df_top['Cash_Balan_top'] = xx
-    df_top.rename(columns={'Cash_Balan_top': 'Cash_Balan'}, inplace=True)
-    df_top = df_top.sort_values(by='Amount_Asset')[:-1]
 
     # --- Down part calculation ---
     df_down = df[df.Asset_Price <= np.around(entry, 2)].copy()
-    df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
-    df_down.fillna(0, inplace=True)
-    df_down = df_down.sort_values(by='Asset_Price', ascending=False)
+    if not df_down.empty:
+        df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
+        df_down.fillna(0, inplace=True)
+        df_down = df_down.sort_values(by='Asset_Price', ascending=False)
+        
+        np_Cash_Balan_down = df_down['Cash_Balan_down'].values
+        xxx = np.zeros(len(np_Cash_Balan_down))
+        y_1 = Cash_Balan
+        for idx, v_1 in enumerate(np_Cash_Balan_down):
+            z_1 = y_1 + v_1
+            y_1 = z_1
+            xxx[idx] = y_1
 
-    np_Cash_Balan_down = df_down['Cash_Balan_down'].values
-    xxx = np.zeros(len(np_Cash_Balan_down))
-    y_1 = Cash_Balan
-    for idx, v_1 in enumerate(np_Cash_Balan_down):
-        z_1 = y_1 + v_1
-        y_1 = z_1
-        xxx[idx] = y_1
-
-    df_down['Cash_Balan_down'] = xxx
-    df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'}, inplace=True)
+        df_down['Cash_Balan'] = xxx
+    else:
+        df_down = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
 
     # --- Combine and return ---
-    combined_df = pd.concat([df_top, df_down], axis=0)
-    return combined_df
+    combined_df = pd.concat([df_top, df_down], axis=0, ignore_index=True)
+    return combined_df[['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan']]
 
-# ------------------- ฟังก์ชันหลัก (เหมือนเดิม) -------------------
 
 def delta_1(asset_config):
     """Calculates Production_Costs based on asset configuration."""
     try:
-        Ticker = asset_config['Ticker']
-        Fixed_Asset_Value = asset_config['Fixed_Asset_Value']
-        Cash_Balan = asset_config['Cash_Balan']
-        step = asset_config['step']
-
-        tickerData = yf.Ticker(Ticker)
-        entry = tickerData.fast_info['lastPrice']
-
-        df_model = calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan)
+        ticker_data = yf.Ticker(asset_config['Ticker'])
+        entry = ticker_data.fast_info['lastPrice']
+        
+        df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
 
         if not df_model.empty:
-            Production_Costs = (df_model['Cash_Balan'].values[-1]) - Cash_Balan
-            return abs(Production_Costs)
+            production_costs = df_model['Cash_Balan'].iloc[-1] - asset_config['Cash_Balan']
+            return abs(production_costs)
     except Exception as e:
+        # st.warning(f"Could not calculate delta_1 for {asset_config['Ticker']}: {e}")
         return None
 
 def delta6(asset_config):
     """Performs historical simulation based on asset configuration."""
     try:
-        Ticker = asset_config['Ticker']
-        pred = asset_config['pred']
-        filter_date = asset_config['filter_date']
-        Fixed_Asset_Value = asset_config['Fixed_Asset_Value']
-        Cash_Balan = asset_config['Cash_Balan']
-        step = asset_config['step']
-
-        ticker_hist = yf.Ticker(Ticker).history(period='max')
+        ticker_hist = yf.Ticker(asset_config['Ticker']).history(period='max')
+        if ticker_hist.empty:
+            st.warning(f"No historical data found for {asset_config['Ticker']}.")
+            return None
+            
         ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
-        ticker_hist = ticker_hist[ticker_hist.index >= filter_date][['Close']]
+        ticker_hist = ticker_hist[ticker_hist.index >= asset_config['filter_date']][['Close']]
+        
+        if ticker_hist.empty:
+            # st.warning(f"No data for {asset_config['Ticker']} after filter date {asset_config['filter_date']}.")
+            return None
 
-        entry = ticker_hist.Close[0]
-
-        df_model = calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan)
-
+        entry = ticker_hist['Close'].iloc[0]
+        df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
+        
         if df_model.empty:
             return None
 
-        tickerData = ticker_hist.copy()
-        tickerData['Close'] = np.around(tickerData['Close'].values, 2)
-        tickerData['pred'] = pred
-        tickerData['Fixed_Asset_Value'] = Fixed_Asset_Value
-        tickerData['Amount_Asset'] = 0.
-        tickerData['Amount_Asset'][0] = tickerData['Fixed_Asset_Value'][0] / tickerData['Close'][0]
-        tickerData['re'] = 0.
-        tickerData['Cash_Balan'] = Cash_Balan
+        ticker_data = ticker_hist.copy()
+        ticker_data['Close'] = np.around(ticker_data['Close'].values, 2)
+        ticker_data['pred'] = asset_config['pred']
+        ticker_data['Fixed_Asset_Value'] = asset_config['Fixed_Asset_Value']
+        
+        # Initialize columns
+        ticker_data['Amount_Asset'] = 0.0
+        ticker_data['re'] = 0.0
+        ticker_data['Cash_Balan'] = asset_config['Cash_Balan']
 
-        Close = tickerData['Close'].values
-        pred_vals = tickerData['pred'].values
-        Amount_Asset = tickerData['Amount_Asset'].values
-        re = tickerData['re'].values
-        Cash_Balan_sim = tickerData['Cash_Balan'].values
+        # Set initial values safely
+        ticker_data['Amount_Asset'].iloc[0] = ticker_data['Fixed_Asset_Value'].iloc[0] / ticker_data['Close'].iloc[0]
 
-        for idx in range(1, len(Amount_Asset)):
+        # Vectorized access for performance
+        close_vals = ticker_data['Close'].values
+        pred_vals = ticker_data['pred'].values
+        amount_asset_vals = ticker_data['Amount_Asset'].values
+        re_vals = ticker_data['re'].values
+        cash_balan_sim_vals = ticker_data['Cash_Balan'].values
+
+        for idx in range(1, len(amount_asset_vals)):
             if pred_vals[idx] == 1:
-                Amount_Asset[idx] = Fixed_Asset_Value / Close[idx]
-                re[idx] = (Amount_Asset[idx-1] * Close[idx]) - Fixed_Asset_Value
-            else:
-                Amount_Asset[idx] = Amount_Asset[idx-1]
-                re[idx] = 0
-            Cash_Balan_sim[idx] = Cash_Balan_sim[idx-1] + re[idx]
+                amount_asset_vals[idx] = asset_config['Fixed_Asset_Value'] / close_vals[idx]
+                re_vals[idx] = (amount_asset_vals[idx-1] * close_vals[idx]) - asset_config['Fixed_Asset_Value']
+            else: 
+                amount_asset_vals[idx] = amount_asset_vals[idx-1]
+                re_vals[idx] = 0
+            cash_balan_sim_vals[idx] = cash_balan_sim_vals[idx-1] + re_vals[idx]
 
-        tickerData['Amount_Asset'] = Amount_Asset
-        tickerData['re'] = re
-        tickerData['Cash_Balan'] = Cash_Balan_sim
+        # Merge model data
+        ticker_data = ticker_data.merge(df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}), 
+                                        left_on='Close', right_on='Asset_Price', how='left').drop('Asset_Price', axis=1)
 
-        tickerData['refer_model'] = 0.
-        price = np.around(tickerData['Close'].values, 2)
-        refer_model = tickerData['refer_model'].values
+        ticker_data['refer_model'].interpolate(method='linear', inplace=True)
+        ticker_data.fillna(method='bfill', inplace=True)
+        ticker_data.fillna(method='ffill', inplace=True)
 
-        for idx, x_3 in enumerate(price):
-            try:
-                refer_model[idx] = (df_model[df_model['Asset_Price'] == x_3]['Cash_Balan'].values[0])
-            except IndexError:
-                refer_model[idx] = np.nan
-
-        tickerData['refer_model'].interpolate(method='linear', inplace=True)
-        tickerData['refer_model'].fillna(method='bfill', inplace=True)
-        tickerData['refer_model'].fillna(method='ffill', inplace=True)
-
-        tickerData['pv'] = tickerData['Cash_Balan'] + (tickerData['Amount_Asset'] * tickerData['Close'])
-        tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value
-        tickerData['net_pv'] = tickerData['pv'] - tickerData['refer_pv']
-
-        final = tickerData[['net_pv', 'pred', 're', 'Cash_Balan', 'Close']]
-        return final
-
+        ticker_data['pv'] = ticker_data['Cash_Balan'] + (ticker_data['Amount_Asset'] * ticker_data['Close'])
+        ticker_data['refer_pv'] = ticker_data['refer_model'] + asset_config['Fixed_Asset_Value']
+        ticker_data['net_pv'] = ticker_data['pv'] - ticker_data['refer_pv']
+        
+        return ticker_data[['net_pv', 're']]
+        
     except Exception as e:
+        # st.warning(f"Could not process delta6 for {asset_config['Ticker']}: {e}")
         return None
 
 def un_16(active_configs):
     """Aggregates results from multiple assets specified in active_configs."""
-    a_0 = pd.DataFrame()
-    a_1 = pd.DataFrame()
-    Max_Production = 0
-
+    all_re = []
+    all_net_pv = []
+    
     for ticker_name, config in active_configs.items():
-        a_2 = delta6(config)
-        if a_2 is not None:
-            a_0 = pd.concat([a_0, a_2[['re']].rename(columns={"re": f"{ticker_name}_re"})], axis=1)
-            a_1 = pd.concat([a_1, a_2[['net_pv']].rename(columns={"net_pv": f"{ticker_name}_net_pv"})], axis=1)
-
-        prod_cost = delta_1(config)
-        if prod_cost is not None:
-            Max_Production += prod_cost
-
-    if a_0.empty:
+        result_df = delta6(config)
+        if result_df is not None and not result_df.empty:
+            all_re.append(result_df[['re']].rename(columns={"re": f"{ticker_name}_re"}))
+            all_net_pv.append(result_df[['net_pv']].rename(columns={"net_pv": f"{ticker_name}_net_pv"}))
+    
+    if not all_re:
         return pd.DataFrame()
+        
+    # Concatenate all dataframes at once
+    df_re = pd.concat(all_re, axis=1)
+    df_net_pv = pd.concat(all_net_pv, axis=1)
 
-    net_dd = []
-    net = 0
-    for i in a_0.sum(axis=1, numeric_only=True).values:
-        net = net + i
-        net_dd.append(net)
+    # Fill NaNs that may arise from different trading calendars and then sum
+    df_re.fillna(0, inplace=True)
+    df_net_pv.fillna(0, inplace=True)
 
-    a_0['maxcash_dd'] = net_dd
-    a_1['cf'] = a_1.sum(axis=1, numeric_only=True)
-    a_x = pd.concat([a_0, a_1], axis=1)
+    # Calculate max cash drawdown
+    df_re['maxcash_dd'] = df_re.sum(axis=1).cumsum()
+    # Calculate combined portfolio cash flow
+    df_net_pv['cf'] = df_net_pv.sum(axis=1)
 
-    return a_x
+    # Combine results
+    final_df = pd.concat([df_re, df_net_pv], axis=1)
 
-# ------------------- ส่วนแสดงผล STREAMLIT (ปรับปรุงใหม่ทั้งหมด) -------------------
+    return final_df
+
+# ------------------- ส่วนแสดงผล STREAMLIT -------------------
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
 
-# 1. โหลด config ทั้งหมดจากไฟล์ (ตอนนี้จะคืนค่า 2 ตัว)
+st.title("Exist F(X) - Portfolio Simulation")
+
+# 1. โหลด config
 full_config, DEFAULT_CONFIG = load_config()
 
-if full_config or DEFAULT_CONFIG: # ตรวจสอบว่ามีข้อมูล config หรือ default config อย่างน้อยหนึ่งอย่าง
-    # 2. ใช้ Session State เพื่อเก็บ Ticker ที่เพิ่มจาก UI
+if full_config or DEFAULT_CONFIG:
+    # 2. ตั้งค่า Session State
     if 'custom_tickers' not in st.session_state:
         st.session_state.custom_tickers = {}
 
-    # 3. UI สำหรับเพิ่ม Ticker ใหม่
-    with st.sidebar:
-        st.subheader("เพิ่ม Ticker ใหม่")
-        new_ticker = st.text_input("พิมพ์ Ticker (เช่น AAPL):", key="new_ticker_input").upper()
-        if st.button("เพิ่ม Ticker", key="add_ticker_button"):
+    # 3. ส่วนควบคุมบนหน้าหลัก
+    st.header("Configuration")
+    control_col1, control_col2 = st.columns([1, 2])
+
+    with control_col1:
+        st.subheader("Add New Ticker")
+        new_ticker = st.text_input("Ticker (e.g., AAPL):", key="new_ticker_input").upper()
+        if st.button("Add Ticker", key="add_ticker_button", use_container_width=True):
             if new_ticker and new_ticker not in full_config and new_ticker not in st.session_state.custom_tickers:
-                # สร้าง config สำหรับ Ticker ใหม่โดยใช้ default ที่อ่านมาจาก JSON
-                st.session_state.custom_tickers[new_ticker] = {
-                    "Ticker": new_ticker,
-                    **DEFAULT_CONFIG
-                }
-                st.success(f"เพิ่ม {new_ticker} สำเร็จ!")
+                st.session_state.custom_tickers[new_ticker] = {"Ticker": new_ticker, **DEFAULT_CONFIG}
+                st.success(f"Added {new_ticker}!")
+                st.rerun() 
             elif new_ticker in full_config:
-                st.warning(f"{new_ticker} มีอยู่แล้วในไฟล์ config")
+                st.warning(f"{new_ticker} already exists in config file.")
             elif new_ticker in st.session_state.custom_tickers:
-                st.warning(f"{new_ticker} ถูกเพิ่มแล้ว")
+                st.warning(f"{new_ticker} has already been added.")
             else:
-                st.warning("กรุณาพิมพ์ชื่อ Ticker")
+                st.warning("Please enter a ticker symbol.")
 
-        # 4. รวม Ticker จาก JSON และจาก UI
+    with control_col2:
+        st.subheader("Select Tickers to Analyze")
         all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
-
-        # 5. สร้าง UI ให้ผู้ใช้เลือก Ticker จากทั้งหมด
+        # ทำให้ default list ไม่ error ถ้า custom ticker ถูกลบไปแล้ว
+        default_selection = [t for t in list(full_config.keys()) if t in all_tickers]
         selected_tickers = st.multiselect(
-            "เลือก Tickers เพื่อวิเคราะห์",
+            "Select from available tickers:",
             options=all_tickers,
-            default=list(full_config.keys())  # เลือก Ticker จากไฟล์ JSON เป็นค่าเริ่มต้น
+            default=default_selection
         )
+    st.divider()
 
-    # 6. สร้าง dict config เฉพาะ Ticker ที่ถูกเลือก (รวมจากทั้ง JSON และ custom)
-    active_configs = {}
-    for ticker in selected_tickers:
-        if ticker in full_config:
-            active_configs[ticker] = full_config[ticker]
-        elif ticker in st.session_state.custom_tickers:
-            active_configs[ticker] = st.session_state.custom_tickers[ticker]
+    # 4. สร้าง Dict Config ของ Ticker ที่เลือก
+    active_configs = {ticker: full_config.get(ticker, st.session_state.custom_tickers.get(ticker)) for ticker in selected_tickers}
 
-    # 7. ตรวจสอบว่าผู้ใช้ได้เลือก Ticker หรือไม่
     if not active_configs:
-        st.warning("กรุณาเลือก Ticker อย่างน้อย 1 ตัวเพื่อเริ่มการวิเคราะห์")
+        st.warning("Please select at least one ticker to start the analysis.")
     else:
-        # 8. รันการคำนวณด้วย config ที่เลือก
-        with st.spinner('กำลังคำนวณ... กรุณารอสักครู่'):
+        # 5. รันการคำนวณ
+        with st.spinner('Calculating... Please wait.'):
             data = un_16(active_configs)
 
         if data.empty:
-            st.error("ไม่สามารถสร้างข้อมูลสำหรับ Ticker ที่เลือกได้ กรุณาตรวจสอบ Log หรือลองอีกครั้ง")
+            st.error("Failed to generate data. This might happen if tickers have no historical data for the selected period or another error occurred.")
         else:
-            # ------------------- ส่วนแสดงผล (ปรับปรุงตามโจทย์) -------------------
-            for i in selected_tickers:
-                col_name = f'{i}_re'
-                if col_name in data.columns:
-                    data[col_name] = np.cumsum(data[col_name].values)
+            # 6. คำนวณค่าสำหรับแสดงผล
+            df_new = data.copy()
 
-            df_new = data
-
+            # คำนวณ Max Sum Buffer
             roll_over = []
-            max_dd = df_new.maxcash_dd.values
-            for i in range(len(max_dd)):
-                try:
-                    roll = max_dd[:i]
-                    if len(roll) > 0:
-                        roll_min = np.min(roll)
-                    else:
-                        roll_min = 0
-                    roll_max = 0
-                    data_roll = roll_min - roll_max
-                    roll_over.append(data_roll)
-                except:
-                    roll_over.append(0)
-
+            max_dd_values = df_new.maxcash_dd.values
+            for i in range(len(max_dd_values)):
+                roll = max_dd_values[:i]
+                roll_min = np.min(roll) if len(roll) > 0 else 0
+                roll_over.append(roll_min) # Max Sum Buffer is the minimum of the cumulative sum up to that point
+            
+            # สร้าง DataFrame ผลลัพธ์หลัก
+            cf_values = df_new.cf.values
+            df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
+            
+            # คำนวณ True Alpha
             min_sum_val = np.min(roll_over)
-            if min_sum_val == 0:
-                min_sum = 1
-            else:
-                min_sum = abs(min_sum_val)
+            min_sum = abs(min_sum_val) if min_sum_val != 0 else 1
+            true_alpha_values = (df_new.cf.values / min_sum) * 100
+            df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
 
-            sum_val = (df_new.cf.values / min_sum) * 100
-            cf = df_new.cf.values
-
-            df_all = pd.DataFrame(list(zip(cf, roll_over)), columns=['Sum_Delta', 'Max_Sum_Buffer'])
-            df_all_2 = pd.DataFrame(sum_val, columns=['True_Alpha'])
-
-            st.write('____')
-
-            # --- จุดที่เพิ่มการคำนวณและแสดงผล KPI ---
+            # 7. แสดงผล KPI
             st.subheader("Key Performance Indicators")
-
-            # ดึงค่าสุดท้ายออกมา
-            final_sum_delta = df_all.Sum_Delta.values[-1]
-            final_max_buffer = df_all.Max_Sum_Buffer.values[-1]
-            final_true_alpha = df_all_2.True_Alpha.values[-1]
-
-            # คำนวณจำนวนวัน
+            
+            # ดึงค่าสุดท้ายมาคำนวณ
+            final_sum_delta = df_all.Sum_Delta.iloc[-1]
+            final_max_buffer = df_all.Max_Sum_Buffer.iloc[-1]
+            final_true_alpha = df_all_2.True_Alpha.iloc[-1]
             num_days = len(df_new)
+            
+            # คำนวณค่าเฉลี่ย
+            avg_cf = final_sum_delta / num_days if num_days > 0 else 0
+            avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
 
-            # คำนวณค่าเฉลี่ย (ป้องกันการหารด้วยศูนย์)
-            if num_days > 0:
-                avg_cf = final_sum_delta / num_days
-                avg_burn_cash = abs(final_max_buffer) / num_days
-            else:
-                avg_cf = 0
-                avg_burn_cash = 0
-
-            # สร้าง 5 คอลัมน์สำหรับแสดงผล
+            # แสดงผลใน Metric cards
             kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-
-            # แสดงผลด้วย st.metric
             kpi1.metric(label="Total Net Profit (cf)", value=f"{final_sum_delta:,.2f}")
             kpi2.metric(label="Max Cash Buffer Used", value=f"{final_max_buffer:,.2f}")
-            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}")
-            kpi4.metric(label="Avg. Daily Profit (Avg_Cf)", value=f"{avg_cf:,.2f}")
-            kpi5.metric(label="Avg. Daily Burn (Avg_Burn)", value=f"{avg_burn_cash:,.2f}")
-            # --- สิ้นสุดส่วนที่เพิ่ม ---
+            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}%")
+            kpi4.metric(label="Avg. Daily Profit", value=f"{avg_cf:,.2f}")
+            kpi5.metric(label="Avg. Daily Buffer Used", value=f"{avg_burn_cash:,.2f}")
+            
+            st.divider()
 
-            col1, col2 = st.columns(2)
-            col1.plotly_chart(px.line(df_all, title="Sum Delta vs Max Sum Buffer"), use_container_width=True)
-            col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)
-            st.write('____')
-            st.plotly_chart(px.line(df_new, title="Detailed Portfolio Simulation"), use_container_width=True)
+            # 8. แสดงผลกราฟ
+            st.subheader("Performance Charts")
+            graph_col1, graph_col2 = st.columns(2)
+            graph_col1.plotly_chart(px.line(df_all, title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"), use_container_width=True)
+            graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)
+            
+            st.divider()
+            
+            st.subheader("Detailed Simulation Data")
+            # เลือกเฉพาะคอลัมน์ที่สำคัญมาแสดงในกราฟใหญ่
+            cols_to_plot = ['maxcash_dd', 'cf'] + [f"{t}_net_pv" for t in selected_tickers]
+            st.plotly_chart(px.line(df_new[cols_to_plot], title="Portfolio Simulation Details"), use_container_width=True)
+
 else:
-    st.error("ไม่สามารถโหลด Configuration ได้ กรุณาตรวจสอบไฟล์ 'un15_fx_config.json'")
+    st.error("Could not load any configuration. Please check that 'un15_fx_config.json' exists and is correctly formatted.")
