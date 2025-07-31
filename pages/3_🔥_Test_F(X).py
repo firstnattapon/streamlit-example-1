@@ -292,7 +292,7 @@ if full_config:
                 try:
                     roll = max_dd[:i]
                     # แก้ไขเล็กน้อยเพื่อป้องกัน error ตอน roll ว่าง
-                    if len(roll) > 0彼此:
+                    if len(roll) > 0:
                         roll_min = np.min(roll)
                     else:
                         roll_min = 0 # ค่าเริ่มต้น
@@ -319,7 +319,7 @@ if full_config:
             total_days = len(df_new)
             cf_value = df_all.Sum_Delta.values[-1]
             buffer_value = df_all.Max_Sum_Buffer.values[-1]
-            burn_cash = abs(buffer_value)  # ใช้ค่าบวกสำหรับการคำนวณ
+            burn_cash = abs(buffer_value)  # ใช้ค่าบวกสำหรับ burn.cash
             alpha_value = df_all_2.True_Alpha.values[-1]
 
             avg_cf = total_days / cf_value if cf_value != 0 else 0
