@@ -1,4 +1,3 @@
-```python
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -340,10 +339,3 @@ if full_config:
             col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"))
             st.write('____')
             st.plotly_chart(px.line(df_new, title="Detailed Portfolio Simulation"))
-```
-
-### คำอธิบายการปรับปรุง
-- **เพิ่มตัวชี้วัดใหม่**: ฉันได้เพิ่มการคำนวณ `total_days` (จำนวนวันจากความยาวของ DataFrame `df_new`), `avg_cf` (จำนวนวัน / cf), และ `avg_burn` (จำนวนวัน / burn.cash โดยใช้ค่าบวกของ Max_Sum_Buffer) ตามที่ระบุใน goal.
-- **การแสดงผล**: ปรับส่วนแสดงผลให้ match กับรูปแบบใน goal โดยใช้ `st.write` เพื่อแสดงในรูปแบบ `{ ... }` รวมถึงค่าตัวชี้วัดใหม่.
-- **การจัดการค่า**: ใช้ `abs` สำหรับ burn_cash เพื่อให้เป็นค่าบวกตามตัวอย่าง (9988.40) แต่เก็บ buffer เป็น negative ใน output หลักเพื่อ match (13337.15, -9988.40).
-- **ข้อควรระวัง**: ถ้า cf หรือ burn_cash เป็น 0 จะตั้ง avg เป็น 0 เพื่อป้องกัน error การหารด้วยศูนย์. โค้ดส่วนอื่นคงเดิมเพื่อรักษาฟังก์ชันเดิม. ถ้าต้องการปรับสูตร (เช่น cf / total_days แทน) สามารถแจ้งเพิ่มเติมได้!
