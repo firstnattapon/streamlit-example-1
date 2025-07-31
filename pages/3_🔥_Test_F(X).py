@@ -6,7 +6,7 @@ import json
 import plotly.express as px
 
 # ------------------- ส่วนที่ปรับปรุงใหม่ -------------------
- 
+
 # 1. ฟังก์ชันสำหรับโหลด Config จากไฟล์ JSON (ปรับปรุงให้อ่านค่า Default)
 def load_config(filename="un15_fx_config.json"):
     """
@@ -32,10 +32,10 @@ def load_config(filename="un15_fx_config.json"):
 
     # ดึงค่า default config ออกมา, ถ้าไม่เจอก็ใช้ fallback
     default_config = data.pop('__DEFAULT_CONFIG__', fallback_default)
-    
+
     # ข้อมูลที่เหลือคือ config ของ Ticker แต่ละตัว
     ticker_configs = data
-    
+
     return ticker_configs, default_config
 
 # 2. ฟังก์ชันกลางที่รวม Logic ที่ซ้ำซ้อนกัน (เหมือนเดิม)
@@ -45,7 +45,7 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
         return pd.DataFrame()
 
     samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
-    
+
     df = pd.DataFrame()
     df['Asset_Price'] = np.around(samples, 2)
     df['Fixed_Asset_Value'] = Fixed_Asset_Value
@@ -55,7 +55,7 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
     df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
     df_top.fillna(0, inplace=True)
-    
+
     np_Cash_Balan_top = df_top['Cash_Balan_top'].values
     xx = np.zeros(len(np_Cash_Balan_top))
     y_0 = Cash_Balan
@@ -63,7 +63,7 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
         z_0 = y_0 + v_0
         y_0 = z_0
         xx[idx] = y_0
-        
+
     df_top['Cash_Balan_top'] = xx
     df_top.rename(columns={'Cash_Balan_top': 'Cash_Balan'}, inplace=True)
     df_top = df_top.sort_values(by='Amount_Asset')[:-1]
@@ -73,7 +73,7 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
     df_down.fillna(0, inplace=True)
     df_down = df_down.sort_values(by='Asset_Price', ascending=False)
-    
+
     np_Cash_Balan_down = df_down['Cash_Balan_down'].values
     xxx = np.zeros(len(np_Cash_Balan_down))
     y_1 = Cash_Balan
@@ -98,10 +98,10 @@ def delta_1(asset_config):
         Fixed_Asset_Value = asset_config['Fixed_Asset_Value']
         Cash_Balan = asset_config['Cash_Balan']
         step = asset_config['step']
-        
+
         tickerData = yf.Ticker(Ticker)
         entry = tickerData.fast_info['lastPrice']
-        
+
         df_model = calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan)
 
         if not df_model.empty:
@@ -123,11 +123,11 @@ def delta6(asset_config):
         ticker_hist = yf.Ticker(Ticker).history(period='max')
         ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
         ticker_hist = ticker_hist[ticker_hist.index >= filter_date][['Close']]
-        
+
         entry = ticker_hist.Close[0]
-        
+
         df_model = calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan)
-        
+
         if df_model.empty:
             return None
 
@@ -150,7 +150,7 @@ def delta6(asset_config):
             if pred_vals[idx] == 1:
                 Amount_Asset[idx] = Fixed_Asset_Value / Close[idx]
                 re[idx] = (Amount_Asset[idx-1] * Close[idx]) - Fixed_Asset_Value
-            else: 
+            else:
                 Amount_Asset[idx] = Amount_Asset[idx-1]
                 re[idx] = 0
             Cash_Balan_sim[idx] = Cash_Balan_sim[idx-1] + re[idx]
@@ -158,7 +158,7 @@ def delta6(asset_config):
         tickerData['Amount_Asset'] = Amount_Asset
         tickerData['re'] = re
         tickerData['Cash_Balan'] = Cash_Balan_sim
-        
+
         tickerData['refer_model'] = 0.
         price = np.around(tickerData['Close'].values, 2)
         refer_model = tickerData['refer_model'].values
@@ -168,7 +168,7 @@ def delta6(asset_config):
                 refer_model[idx] = (df_model[df_model['Asset_Price'] == x_3]['Cash_Balan'].values[0])
             except IndexError:
                 refer_model[idx] = np.nan
-        
+
         tickerData['refer_model'].interpolate(method='linear', inplace=True)
         tickerData['refer_model'].fillna(method='bfill', inplace=True)
         tickerData['refer_model'].fillna(method='ffill', inplace=True)
@@ -176,10 +176,10 @@ def delta6(asset_config):
         tickerData['pv'] = tickerData['Cash_Balan'] + (tickerData['Amount_Asset'] * tickerData['Close'])
         tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value
         tickerData['net_pv'] = tickerData['pv'] - tickerData['refer_pv']
-        
+
         final = tickerData[['net_pv', 'pred', 're', 'Cash_Balan', 'Close']]
         return final
-        
+
     except Exception as e:
         return None
 
@@ -188,20 +188,20 @@ def un_16(active_configs):
     a_0 = pd.DataFrame()
     a_1 = pd.DataFrame()
     Max_Production = 0
-    
+
     for ticker_name, config in active_configs.items():
         a_2 = delta6(config)
         if a_2 is not None:
             a_0 = pd.concat([a_0, a_2[['re']].rename(columns={"re": f"{ticker_name}_re"})], axis=1)
             a_1 = pd.concat([a_1, a_2[['net_pv']].rename(columns={"net_pv": f"{ticker_name}_net_pv"})], axis=1)
-        
+
         prod_cost = delta_1(config)
         if prod_cost is not None:
             Max_Production += prod_cost
-    
+
     if a_0.empty:
         return pd.DataFrame()
-        
+
     net_dd = []
     net = 0
     for i in a_0.sum(axis=1, numeric_only=True).values:
@@ -214,13 +214,11 @@ def un_16(active_configs):
 
     return a_x
 
-# ------------------- ส่วนแสดงผล STREAMLIT (ปรับปรุงใหม่) -------------------
-st.set_page_config(page_title="Exist_F(X)", page_icon="☀")
+# ------------------- ส่วนแสดงผล STREAMLIT (ปรับปรุงใหม่ทั้งหมด) -------------------
+st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
 
 # 1. โหลด config ทั้งหมดจากไฟล์ (ตอนนี้จะคืนค่า 2 ตัว)
 full_config, DEFAULT_CONFIG = load_config()
-
-# ----> จุดนี้ ไม่ต้องมี DEFAULT_CONFIG แบบ Hardcode อีกต่อไป <----
 
 if full_config or DEFAULT_CONFIG: # ตรวจสอบว่ามีข้อมูล config หรือ default config อย่างน้อยหนึ่งอย่าง
     # 2. ใช้ Session State เพื่อเก็บ Ticker ที่เพิ่มจาก UI
@@ -228,32 +226,33 @@ if full_config or DEFAULT_CONFIG: # ตรวจสอบว่ามีข้�
         st.session_state.custom_tickers = {}
 
     # 3. UI สำหรับเพิ่ม Ticker ใหม่
-    st.subheader("เพิ่ม Ticker ใหม่")
-    new_ticker = st.text_input("พิมพ์ Ticker ที่ต้องการเพิ่ม (เช่น AAPL):").upper()
-    if st.button("เพิ่ม Ticker"):
-        if new_ticker and new_ticker not in full_config and new_ticker not in st.session_state.custom_tickers:
-            # สร้าง config สำหรับ Ticker ใหม่โดยใช้ default ที่อ่านมาจาก JSON
-            st.session_state.custom_tickers[new_ticker] = {
-                "Ticker": new_ticker,
-                **DEFAULT_CONFIG
-            }
-            st.success(f"เพิ่ม {new_ticker} สำเร็จ! (ใช้ค่า default จากไฟล์ config)")
-        elif new_ticker in full_config:
-            st.warning(f"{new_ticker} มีอยู่ใน config จาก JSON แล้ว")
-        elif new_ticker in st.session_state.custom_tickers:
-            st.warning(f"{new_ticker} ถูกเพิ่มแล้ว")
-        else:
-            st.warning("กรุณาพิมพ์ชื่อ Ticker")
+    with st.sidebar:
+        st.subheader("เพิ่ม Ticker ใหม่")
+        new_ticker = st.text_input("พิมพ์ Ticker (เช่น AAPL):", key="new_ticker_input").upper()
+        if st.button("เพิ่ม Ticker", key="add_ticker_button"):
+            if new_ticker and new_ticker not in full_config and new_ticker not in st.session_state.custom_tickers:
+                # สร้าง config สำหรับ Ticker ใหม่โดยใช้ default ที่อ่านมาจาก JSON
+                st.session_state.custom_tickers[new_ticker] = {
+                    "Ticker": new_ticker,
+                    **DEFAULT_CONFIG
+                }
+                st.success(f"เพิ่ม {new_ticker} สำเร็จ!")
+            elif new_ticker in full_config:
+                st.warning(f"{new_ticker} มีอยู่แล้วในไฟล์ config")
+            elif new_ticker in st.session_state.custom_tickers:
+                st.warning(f"{new_ticker} ถูกเพิ่มแล้ว")
+            else:
+                st.warning("กรุณาพิมพ์ชื่อ Ticker")
 
-    # 4. รวม Ticker จาก JSON และจาก UI
-    all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
+        # 4. รวม Ticker จาก JSON และจาก UI
+        all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
 
-    # 5. สร้าง UI ให้ผู้ใช้เลือก Ticker จากทั้งหมด
-    selected_tickers = st.multiselect(
-        "Select Tickers to Analyze",
-        options=all_tickers,
-        default=list(full_config.keys())  # เลือก Ticker จากไฟล์ JSON เป็นค่าเริ่มต้น
-    )
+        # 5. สร้าง UI ให้ผู้ใช้เลือก Ticker จากทั้งหมด
+        selected_tickers = st.multiselect(
+            "เลือก Tickers เพื่อวิเคราะห์",
+            options=all_tickers,
+            default=list(full_config.keys())  # เลือก Ticker จากไฟล์ JSON เป็นค่าเริ่มต้น
+        )
 
     # 6. สร้าง dict config เฉพาะ Ticker ที่ถูกเลือก (รวมจากทั้ง JSON และ custom)
     active_configs = {}
@@ -265,16 +264,16 @@ if full_config or DEFAULT_CONFIG: # ตรวจสอบว่ามีข้�
 
     # 7. ตรวจสอบว่าผู้ใช้ได้เลือก Ticker หรือไม่
     if not active_configs:
-        st.warning("Please select at least one ticker to start the analysis.")
+        st.warning("กรุณาเลือก Ticker อย่างน้อย 1 ตัวเพื่อเริ่มการวิเคราะห์")
     else:
         # 8. รันการคำนวณด้วย config ที่เลือก
-        with st.spinner('Calculating... Please wait.'):
+        with st.spinner('กำลังคำนวณ... กรุณารอสักครู่'):
             data = un_16(active_configs)
-        
+
         if data.empty:
-            st.error("Failed to generate data for the selected tickers. Please check logs or try again.")
+            st.error("ไม่สามารถสร้างข้อมูลสำหรับ Ticker ที่เลือกได้ กรุณาตรวจสอบ Log หรือลองอีกครั้ง")
         else:
-            # ------------------- ส่วนแสดงผล (เหมือนเดิม) -------------------
+            # ------------------- ส่วนแสดงผล (ปรับปรุงตามโจทย์) -------------------
             for i in selected_tickers:
                 col_name = f'{i}_re'
                 if col_name in data.columns:
@@ -299,10 +298,10 @@ if full_config or DEFAULT_CONFIG: # ตรวจสอบว่ามีข้�
 
             min_sum_val = np.min(roll_over)
             if min_sum_val == 0:
-                min_sum = 1 
+                min_sum = 1
             else:
                 min_sum = abs(min_sum_val)
-                
+
             sum_val = (df_new.cf.values / min_sum) * 100
             cf = df_new.cf.values
 
@@ -310,12 +309,41 @@ if full_config or DEFAULT_CONFIG: # ตรวจสอบว่ามีข้�
             df_all_2 = pd.DataFrame(sum_val, columns=['True_Alpha'])
 
             st.write('____')
-            st.write(f"({df_all.Sum_Delta.values[-1]:.2f}, {df_all.Max_Sum_Buffer.values[-1]:.2f}) , {df_all_2.True_Alpha.values[-1]:.2f}")
+
+            # --- จุดที่เพิ่มการคำนวณและแสดงผล KPI ---
+            st.subheader("Key Performance Indicators")
+
+            # ดึงค่าสุดท้ายออกมา
+            final_sum_delta = df_all.Sum_Delta.values[-1]
+            final_max_buffer = df_all.Max_Sum_Buffer.values[-1]
+            final_true_alpha = df_all_2.True_Alpha.values[-1]
+
+            # คำนวณจำนวนวัน
+            num_days = len(df_new)
+
+            # คำนวณค่าเฉลี่ย (ป้องกันการหารด้วยศูนย์)
+            if num_days > 0:
+                avg_cf = final_sum_delta / num_days
+                avg_burn_cash = abs(final_max_buffer) / num_days
+            else:
+                avg_cf = 0
+                avg_burn_cash = 0
+
+            # สร้าง 5 คอลัมน์สำหรับแสดงผล
+            kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+
+            # แสดงผลด้วย st.metric
+            kpi1.metric(label="Total Net Profit (cf)", value=f"{final_sum_delta:,.2f}")
+            kpi2.metric(label="Max Cash Buffer Used", value=f"{final_max_buffer:,.2f}")
+            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}")
+            kpi4.metric(label="Avg. Daily Profit (Avg_Cf)", value=f"{avg_cf:,.2f}")
+            kpi5.metric(label="Avg. Daily Burn (Avg_Burn)", value=f"{avg_burn_cash:,.2f}")
+            # --- สิ้นสุดส่วนที่เพิ่ม ---
 
             col1, col2 = st.columns(2)
-            col1.plotly_chart(px.line(df_all, title="Sum Delta vs Max Sum Buffer"))
-            col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"))
+            col1.plotly_chart(px.line(df_all, title="Sum Delta vs Max Sum Buffer"), use_container_width=True)
+            col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)
             st.write('____')
-            st.plotly_chart(px.line(df_new, title="Detailed Portfolio Simulation"))
+            st.plotly_chart(px.line(df_new, title="Detailed Portfolio Simulation"), use_container_width=True)
 else:
-    st.error("Could not load any configuration. Please check the 'un15_fx_config.json' file.")
+    st.error("ไม่สามารถโหลด Configuration ได้ กรุณาตรวจสอบไฟล์ 'un15_fx_config.json'")
