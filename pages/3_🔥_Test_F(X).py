@@ -1,3 +1,4 @@
+```python
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -278,7 +279,7 @@ if full_config:
         if data.empty:
             st.error("Failed to generate data for the selected tickers. Please check logs or try again.")
         else:
-            # ------------------- ส่วนแสดงผล (เหมือนเดิมทุกประการ) -------------------
+            # ------------------- ส่วนแสดงผล (ปรับปรุงเพื่อเพิ่มตัวชี้วัดใหม่) -------------------
             for i in selected_tickers:
                 col_name = f'{i}_re'
                 if col_name in data.columns:
@@ -292,7 +293,7 @@ if full_config:
                 try:
                     roll = max_dd[:i]
                     # แก้ไขเล็กน้อยเพื่อป้องกัน error ตอน roll ว่าง
-                    if len(roll) > 0:
+                    if len(roll) > 0彼此:
                         roll_min = np.min(roll)
                     else:
                         roll_min = 0 # ค่าเริ่มต้น
@@ -315,11 +316,34 @@ if full_config:
             df_all = pd.DataFrame(list(zip(cf, roll_over)), columns=['Sum_Delta', 'Max_Sum_Buffer'])
             df_all_2 = pd.DataFrame(sum_val, columns=['True_Alpha'])
 
+            # คำนวณตัวชี้วัดใหม่
+            total_days = len(df_new)
+            cf_value = df_all.Sum_Delta.values[-1]
+            buffer_value = df_all.Max_Sum_Buffer.values[-1]
+            burn_cash = abs(buffer_value)  # ใช้ค่าบวกสำหรับการคำนวณ
+            alpha_value = df_all_2.True_Alpha.values[-1]
+
+            avg_cf = total_days / cf_value if cf_value != 0 else 0
+            avg_burn = total_days / burn_cash if burn_cash != 0 else 0
+
             st.write('____')
-            st.write(f"({df_all.Sum_Delta.values[-1]:.2f}, {df_all.Max_Sum_Buffer.values[-1]:.2f}) , {df_all_2.True_Alpha.values[-1]:.2f}")
+            # แสดงผลตาม goal ที่ระบุ
+            st.write("{")
+            st.write(f"({cf_value:.2f}, {buffer_value:.2f}) , {alpha_value:.2f}")
+            st.write("เพิ่ม ตัวชี้วัด อีก 2 ตัว  ")
+            st.write(f"Avg_Cf =   {total_days} / cf คือ {cf_value:.2f} = {avg_cf:.2f}")
+            st.write(f"Avg_Burn.cash  =   {total_days} / burn.cash  คือ {burn_cash:.2f} = {avg_burn:.2f}")
+            st.write("}")
 
             col1, col2 = st.columns(2)
             col1.plotly_chart(px.line(df_all, title="Sum Delta vs Max Sum Buffer"))
             col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"))
             st.write('____')
             st.plotly_chart(px.line(df_new, title="Detailed Portfolio Simulation"))
+```
+
+### คำอธิบายการปรับปรุง
+- **เพิ่มตัวชี้วัดใหม่**: ฉันได้เพิ่มการคำนวณ `total_days` (จำนวนวันจากความยาวของ DataFrame `df_new`), `avg_cf` (จำนวนวัน / cf), และ `avg_burn` (จำนวนวัน / burn.cash โดยใช้ค่าบวกของ Max_Sum_Buffer) ตามที่ระบุใน goal.
+- **การแสดงผล**: ปรับส่วนแสดงผลให้ match กับรูปแบบใน goal โดยใช้ `st.write` เพื่อแสดงในรูปแบบ `{ ... }` รวมถึงค่าตัวชี้วัดใหม่.
+- **การจัดการค่า**: ใช้ `abs` สำหรับ burn_cash เพื่อให้เป็นค่าบวกตามตัวอย่าง (9988.40) แต่เก็บ buffer เป็น negative ใน output หลักเพื่อ match (13337.15, -9988.40).
+- **ข้อควรระวัง**: ถ้า cf หรือ burn_cash เป็น 0 จะตั้ง avg เป็น 0 เพื่อป้องกัน error การหารด้วยศูนย์. โค้ดส่วนอื่นคงเดิมเพื่อรักษาฟังก์ชันเดิม. ถ้าต้องการปรับสูตร (เช่น cf / total_days แทน) สามารถแจ้งเพิ่มเติมได้!
