@@ -1,4 +1,4 @@
-# v2 ที่ ปรับปรุ่งใหม่ (แก้ไข Index เป็นวันที่แล้ว)
+# v2 ที่ ปรับปรุ่งใหม่ (แก้ไข Index และกราฟ)
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -23,24 +23,18 @@ def load_config(filename="un15_fx_config.json"):
         st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
         return {}, {} # คืนค่า dict ว่าง
 
-    # กำหนดค่า fallback เผื่อไม่มี '__DEFAULT_CONFIG__' ในไฟล์ JSON
     fallback_default = {
         "Fixed_Asset_Value": 1500.0, "Cash_Balan": 650.0, "step": 0.01,
         "filter_date": "2024-01-01 12:00:00+07:00", "pred": 1
     }
-
-    # ดึงค่า default config ออกมา, ถ้าไม่เจอก็ใช้ fallback
     default_config = data.pop('__DEFAULT_CONFIG__', fallback_default)
-
-    # ข้อมูลที่เหลือคือ config ของ Ticker แต่ละตัว
     ticker_configs = data
-
     return ticker_configs, default_config
 
 # ------------------- ฟังก์ชันคำนวณหลัก -------------------
 def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     """Calculates the core cash balance model DataFrame."""
-    if entry >= 10000 or entry <= 0: # ป้องกันค่า entry ที่ไม่ถูกต้อง
+    if entry >= 10000 or entry <= 0:
         return pd.DataFrame()
 
     samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
@@ -50,7 +44,6 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     df['Fixed_Asset_Value'] = Fixed_Asset_Value
     df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
 
-    # --- Top part calculation ---
     df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
     if not df_top.empty:
         df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
@@ -69,8 +62,6 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     else:
         df_top = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
 
-
-    # --- Down part calculation ---
     df_down = df[df.Asset_Price <= np.around(entry, 2)].copy()
     if not df_down.empty:
         df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
@@ -89,19 +80,15 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     else:
         df_down = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
 
-    # --- Combine and return ---
     combined_df = pd.concat([df_top, df_down], axis=0, ignore_index=True)
     return combined_df[['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan']]
-
 
 def delta_1(asset_config):
     """Calculates Production_Costs based on asset configuration."""
     try:
         ticker_data = yf.Ticker(asset_config['Ticker'])
         entry = ticker_data.fast_info['lastPrice']
-        
         df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
-
         if not df_model.empty:
             production_costs = df_model['Cash_Balan'].iloc[-1] - asset_config['Cash_Balan']
             return abs(production_costs)
@@ -131,16 +118,11 @@ def delta6(asset_config):
         ticker_data['Close'] = np.around(ticker_data['Close'].values, 2)
         ticker_data['pred'] = asset_config['pred']
         ticker_data['Fixed_Asset_Value'] = asset_config['Fixed_Asset_Value']
-        
-        # Initialize columns
         ticker_data['Amount_Asset'] = 0.0
         ticker_data['re'] = 0.0
         ticker_data['Cash_Balan'] = asset_config['Cash_Balan']
-
-        # Set initial values safely
         ticker_data['Amount_Asset'].iloc[0] = ticker_data['Fixed_Asset_Value'].iloc[0] / ticker_data['Close'].iloc[0]
 
-        # Vectorized access for performance
         close_vals = ticker_data['Close'].values
         pred_vals = ticker_data['pred'].values
         amount_asset_vals = ticker_data['Amount_Asset'].values
@@ -156,9 +138,17 @@ def delta6(asset_config):
                 re_vals[idx] = 0
             cash_balan_sim_vals[idx] = cash_balan_sim_vals[idx-1] + re_vals[idx]
 
-        # Merge model data
+        # ---------- START: FIX for DatetimeIndex ----------
+        # 1. เก็บ Index วันที่และเวลาเดิมเอาไว้ก่อน
+        original_index = ticker_data.index
+
+        # 2. ทำการ merge ซึ่งจะทำให้ Index เดิมหายไป
         ticker_data = ticker_data.merge(df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}), 
                                         left_on='Close', right_on='Asset_Price', how='left').drop('Asset_Price', axis=1)
+
+        # 3. นำ Index เดิมที่เก็บไว้กลับมาใส่ให้ DataFrame
+        ticker_data.set_index(original_index, inplace=True)
+        # ---------- END: FIX for DatetimeIndex ----------
 
         ticker_data['refer_model'].interpolate(method='linear', inplace=True)
         ticker_data.fillna(method='bfill', inplace=True)
@@ -187,22 +177,16 @@ def un_16(active_configs):
     if not all_re:
         return pd.DataFrame()
         
-    # Concatenate all dataframes at once
     df_re = pd.concat(all_re, axis=1)
     df_net_pv = pd.concat(all_net_pv, axis=1)
 
-    # Fill NaNs that may arise from different trading calendars and then sum
     df_re.fillna(0, inplace=True)
     df_net_pv.fillna(0, inplace=True)
 
-    # Calculate max cash drawdown
     df_re['maxcash_dd'] = df_re.sum(axis=1).cumsum()
-    # Calculate combined portfolio cash flow
     df_net_pv['cf'] = df_net_pv.sum(axis=1)
 
-    # Combine results
     final_df = pd.concat([df_re, df_net_pv], axis=1)
-
     return final_df
 
 # ------------------- ส่วนแสดงผล STREAMLIT -------------------
@@ -218,7 +202,6 @@ if full_config or DEFAULT_CONFIG:
 
     # 3. ส่วนควบคุมบนหน้าหลัก
     control_col1, control_col2 = st.columns([1, 2])
-
     with control_col1:
         st.subheader("Add New Ticker")
         new_ticker = st.text_input("Ticker (e.g., AAPL):", key="new_ticker_input").upper()
@@ -260,8 +243,6 @@ if full_config or DEFAULT_CONFIG:
         else:
             # 6. คำนวณค่าสำหรับแสดงผล
             df_new = data.copy()
-
-            # คำนวณ Max Sum Buffer
             roll_over = []
             max_dd_values = df_new.maxcash_dd.values
             for i in range(len(max_dd_values)):
@@ -269,26 +250,20 @@ if full_config or DEFAULT_CONFIG:
                 roll_min = np.min(roll) if len(roll) > 0 else 0
                 roll_over.append(roll_min)
             
-            # ---------- START: ส่วนที่แก้ไข ----------
-            # สร้าง DataFrame ผลลัพธ์หลัก โดยใส่ `index=df_new.index` เข้าไปด้วย
             cf_values = df_new.cf.values
             df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
             
-            # คำนวณ True Alpha และใส่ `index=df_new.index`
             min_sum_val = np.min(roll_over)
             min_sum = abs(min_sum_val) if min_sum_val != 0 else 1
             true_alpha_values = (df_new.cf.values / min_sum) * 100
             df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
-            # ---------- END: ส่วนที่แก้ไข ----------
 
             # 7. แสดงผล KPI
             st.subheader("Key Performance Indicators")
-            
             final_sum_delta = df_all.Sum_Delta.iloc[-1]
             final_max_buffer = df_all.Max_Sum_Buffer.iloc[-1]
             final_true_alpha = df_all_2.True_Alpha.iloc[-1]
             num_days = len(df_new)
-            
             avg_cf = final_sum_delta / num_days if num_days > 0 else 0
             avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
 
@@ -310,13 +285,13 @@ if full_config or DEFAULT_CONFIG:
             st.divider()
             
             st.subheader("Detailed Simulation Data")
-
-            # ทำให้กราฟ Detailed Simulation เหมือน V1
+            # แก้ไขส่วนนี้ให้เหมือน v1 (ที่แก้ไขไปแล้วใน request ก่อนหน้า)
             for ticker in selected_tickers:
                 col_name = f'{ticker}_re'
                 if col_name in df_new.columns:
                     df_new[col_name] = df_new[col_name].cumsum()
             
+            # เมื่อ Index ถูกต้องแล้ว Plotly จะแสดงแกน X เป็นวันที่โดยอัตโนมัติ
             st.plotly_chart(px.line(df_new, title="Portfolio Simulation Details"), use_container_width=True)
 
 else:
