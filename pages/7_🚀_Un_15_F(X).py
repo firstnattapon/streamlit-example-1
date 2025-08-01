@@ -1,4 +1,3 @@
-# v2 ที่ ปรับปรุ่งใหม่ (แก้ไข Index และกราฟ)
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -279,7 +278,12 @@ if full_config or DEFAULT_CONFIG:
             # 8. แสดงผลกราฟ
             st.subheader("Performance Charts")
             graph_col1, graph_col2 = st.columns(2)
-            graph_col1.plotly_chart(px.line(df_all, title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"), use_container_width=True)
+            
+            # --- START GOAL 1 MODIFICATION ---
+            # ใช้ .reset_index(drop=True) เพื่อให้แกน X เป็นลำดับตัวเลขสำหรับกราฟนี้โดยเฉพาะ
+            graph_col1.plotly_chart(px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"), use_container_width=True)
+            # --- END GOAL 1 MODIFICATION ---
+            
             graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)
             
             st.divider()
