@@ -1,3 +1,4 @@
+#main code
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -8,11 +9,10 @@ import streamlit.components.v1 as components
 from typing import Dict, Any, Tuple, List
 
 # --- Page Configuration ---
-st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout="centered")
+st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout= "centered" )
 
-# ### MODIFIED PART 1: Initialize Session State ###
-# Initialize 'portfolio_cash' in session_state if it doesn't exist.
-# This ensures the value persists across reruns and has a default value.
+# --- Initialize Session State ---
+# This runs only once at the beginning of the session.
 if 'portfolio_cash' not in st.session_state:
     st.session_state.portfolio_cash = 0.00
 
@@ -125,13 +125,17 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
     
-    # ### MODIFIED PART 2: Link Input to Session State ###
-    # Use the 'key' parameter to directly link this input widget to 'st.session_state.portfolio_cash'.
-    # Any changes by the user will automatically update the session state.
-    # We then read from the session state to populate our local `user_inputs` dictionary,
-    # ensuring the data flow to other functions remains unchanged.
-    st.number_input('Portfolio_cash', key='portfolio_cash', format="%.2f")
-    user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
+    # ### MODIFIED AND CORRECTED PART ###
+    # This creates a robust two-way binding with session_state.
+    # 1. `value=st.session_state.portfolio_cash`: The widget always displays the value from the state.
+    # 2. `key='portfolio_cash'`: User edits are automatically saved back to the state.
+    # 3. The widget's return value is the most current value, which we assign to our dictionary.
+    user_inputs['portfolio_cash'] = st.number_input(
+        'Portfolio_cash',
+        value=st.session_state.portfolio_cash,
+        key='portfolio_cash',
+        format="%.2f"
+    )
 
     return user_inputs
 
@@ -153,7 +157,6 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
 
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
 
-        # Use .get() with a default value of 0.0 in case 'cashflow_offset' is deleted from JSON
         offset_display_val = -config.get('cashflow_offset', 0.0)
         baseline_val = metrics.get('log_pv_baseline', 0.0)
         product_cost = config.get('product_cost_default', 0)
@@ -199,7 +202,6 @@ def render_charts(config: Dict[str, Any]):
             components.iframe(url, width=800, height=200)
             st.divider()
 
-    # Display charts in the requested order
     create_chart_iframe(main_channel_id, main_fields_map.get('net_cf'), 'Cashflow')
     create_chart_iframe(main_channel_id, main_fields_map.get('now_pv'), 'Current Total Value')
     create_chart_iframe(main_channel_id, main_fields_map.get('pure_alpha'), 'Pure_Alpha')
@@ -215,7 +217,6 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
     current_prices = user_inputs['current_prices']
     total_stock_value = user_inputs['total_stock_value']
 
-    # P/L calculation for options (unchanged)
     total_options_pl, total_option_cost = 0.0, 0.0
     for option in option_assets:
         underlying_ticker = option.get("underlying_ticker", "").strip()
@@ -231,24 +232,19 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
 
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
-    # New Per-Asset fix_c Calculation Logic
     log_pv_baseline, ln_weighted = 0.0, 0.0
-    ln_breakdown = [] # List to store calculation details for display
+    ln_breakdown = []
 
     for asset in stock_assets:
         fix_c = asset.get('fix_c', 1500)
         ticker = asset['ticker'].strip()
         ref_price = asset.get('reference_price', 0.0)
         live_price = current_prices.get(ticker, 0.0)
-
         log_pv_baseline += fix_c
-
         contribution = 0.0
         if ref_price > 0 and live_price > 0:
             contribution = fix_c * np.log(live_price / ref_price)
-
         ln_weighted += contribution
-
         ln_breakdown.append({
             "ticker": ticker,
             "fix_c": fix_c,
@@ -321,18 +317,14 @@ def main():
     if st.button("Recalculate"):
         pass
 
-    # 1. Initial Calculation
     metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
 
-    # 2. Dynamic Cashflow Offset Calculation
     log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
     product_cost = user_inputs.get('product_cost', 0.0)
     dynamic_offset = product_cost - log_pv_baseline
 
-    # Override the config value in memory for this run.
     config['cashflow_offset'] = dynamic_offset
 
-    # 3. Display and Update using the new dynamic offset
     display_results(metrics, options_pl, total_option_cost, config)
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
