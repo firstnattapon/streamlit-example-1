@@ -11,6 +11,12 @@ from typing import Dict, Any, Tuple, List
 # --- Page Configuration ---
 st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout= "centered" )
 
+# ### MODIFIED PART 1: Initialize Session State ###
+# Initialize 'portfolio_cash' in session_state if it doesn't exist.
+# This ensures the value persists across reruns and has a default value.
+if 'portfolio_cash' not in st.session_state:
+    st.session_state.portfolio_cash = 0.00
+
 # --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (Unchanged) ---
 
 @st.cache_data
@@ -77,7 +83,7 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
 
-# --- 2. UI & DISPLAY FUNCTIONS (UI Logic is Unchanged) ---
+# --- 2. UI & DISPLAY FUNCTIONS ---
 
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
     """Renders all UI components and collects user inputs into a dictionary."""
@@ -119,10 +125,18 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     st.divider()
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
-    user_inputs['portfolio_cash'] = st.number_input('Portfolio_cash', value=0.00, format="%.2f")
+    
+    # ### MODIFIED PART 2: Link Input to Session State ###
+    # Use the 'key' parameter to directly link this input widget to 'st.session_state.portfolio_cash'.
+    # Any changes by the user will automatically update the session state.
+    # We then read from the session state to populate our local `user_inputs` dictionary,
+    # ensuring the data flow to other functions remains unchanged.
+    st.number_input('Portfolio_cash', key='portfolio_cash', format="%.2f")
+    user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
+
     return user_inputs
 
-# --- 3. UPDATED DISPLAY FUNCTION (HANDLES MISSING KEY) ---
+# --- 3. DISPLAY & CHARTING FUNCTIONS (Unchanged) ---
 def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
     """Displays all calculated metrics, including a detailed breakdown of ln_weighted."""
     st.divider()
@@ -134,10 +148,10 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
         col2.metric('log_pv Adjustment (ln_weighted)', f"{metrics.get('ln_weighted', 0.0):,.2f}")
-        
-        st.metric(f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})", 
+
+        st.metric(f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})",
                   f"{metrics['log_pv']:,.2f}")
-        
+
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
 
         # Use .get() with a default value of 0.0 in case 'cashflow_offset' is deleted from JSON
@@ -146,16 +160,16 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         product_cost = config.get('product_cost_default', 0)
         baseline_label = f"💰 Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost} (Cost)  + {offset_display_val:.0f} (Lv) "
         st.metric(label=baseline_label, value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
-        
+
         baseline_target = config.get('baseline_target', 0.0)
         adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
-    
+
     with st.expander("Show 'ln_weighted' Calculation Breakdown"):
         st.write("ค่า `ln_weighted` คำนวณมาจากผลรวมของหุ้นแต่ละตัว:")
         ln_breakdown_data = metrics.get('ln_breakdown', [])
-        
+
         for item in ln_breakdown_data:
             if item['ref_price'] > 0:
                 formula_string = (
@@ -164,13 +178,13 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
                 )
             else:
                 formula_string = f"{item['ticker']:<6}: {item['contribution']:+9.4f}   (Calculation skipped: ref_price is zero)"
-            
+
             st.code(formula_string, language='text')
-            
+
         st.code("----------------------------------------------------------------")
         st.code(f"Total Sum = {metrics.get('ln_weighted', 0.0):+51.4f}")
 
-# --- START: MODIFIED FUNCTION ---
+
 def render_charts(config: Dict[str, Any]):
     """Renders ThingSpeak charts using iframe components in a specific order."""
     st.write("📊 ThingSpeak Charts")
@@ -192,7 +206,7 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('pure_alpha'), 'Pure_Alpha')
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
-# --- END: MODIFIED FUNCTION ---
+
 
 # --- 4. CALCULATION FUNCTION (Unchanged) ---
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
@@ -227,13 +241,13 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         ticker = asset['ticker'].strip()
         ref_price = asset.get('reference_price', 0.0)
         live_price = current_prices.get(ticker, 0.0)
-        
+
         log_pv_baseline += fix_c
-        
+
         contribution = 0.0
         if ref_price > 0 and live_price > 0:
             contribution = fix_c * np.log(live_price / ref_price)
-        
+
         ln_weighted += contribution
 
         ln_breakdown.append({
@@ -252,7 +266,7 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
 
     return metrics, total_options_pl, total_option_cost
 
-# --- 5. UPDATED THINGSPEAK FUNCTION (HANDLES MISSING KEY & ADDS now_pv) ---
+# --- 5. THINGSPEAK UPDATE FUNCTION (Unchanged) ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     """Handles the UI for confirming and sending data to ThingSpeak."""
     client_main, asset_clients = clients
@@ -285,7 +299,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
 
-# --- UPDATED main() FUNCTION ---
+# --- main() FUNCTION (Unchanged) ---
 def main():
     """Main function to run the Streamlit application."""
     config = load_config()
@@ -297,7 +311,7 @@ def main():
 
     clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
     initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
-    
+
     user_inputs = render_ui_and_get_inputs(
         stock_assets,
         option_assets,
@@ -310,7 +324,7 @@ def main():
 
     # 1. Initial Calculation
     metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
-    
+
     # 2. Dynamic Cashflow Offset Calculation
     log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
     product_cost = user_inputs.get('product_cost', 0.0)
