@@ -15,6 +15,8 @@ st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout= "
 # This runs only once at the beginning of the session.
 if 'portfolio_cash' not in st.session_state:
     st.session_state.portfolio_cash = 0.00
+if 'product_cost' not in st.session_state:
+    st.session_state.product_cost = 0.00 # Initialize product_cost as well
 
 # --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (Unchanged) ---
 
@@ -82,64 +84,7 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
 
-# --- 2. UI & DISPLAY FUNCTIONS ---
-
-def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
-    """Renders all UI components and collects user inputs into a dictionary."""
-    user_inputs = {}
-    st.write("📊 Current Asset Prices")
-    current_prices = {}
-    all_tickers = {asset['ticker'].strip() for asset in stock_assets}
-    all_tickers.update({opt['underlying_ticker'].strip() for opt in option_assets if opt.get('underlying_ticker')})
-
-    for ticker in sorted(list(all_tickers)):
-        label = f"ราคา_{ticker}"
-        price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
-        current_prices[ticker] = st.number_input(label, value=price_value, key=f"price_{ticker}", format="%.2f")
-    user_inputs['current_prices'] = current_prices
-
-    st.divider()
-    st.write("📦 Stock Holdings")
-    current_holdings = {}
-    total_stock_value = 0.0
-    for asset in stock_assets:
-        ticker = asset["ticker"].strip()
-        holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
-
-        asset_holding = st.number_input(
-            f"{ticker}_asset",
-            value=holding_value,
-            key=f"holding_{ticker}",
-            format="%.2f"
-        )
-
-        current_holdings[ticker] = asset_holding
-        individual_asset_value = asset_holding * current_prices.get(ticker, 0.0)
-        st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
-        total_stock_value += individual_asset_value
-
-    user_inputs['current_holdings'] = current_holdings
-    user_inputs['total_stock_value'] = total_stock_value
-
-    st.divider()
-    st.write("⚙️ Calculation Parameters")
-    user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
-    
-    # ### MODIFIED AND CORRECTED PART ###
-    # This creates a robust two-way binding with session_state.
-    # 1. `value=st.session_state.portfolio_cash`: The widget always displays the value from the state.
-    # 2. `key='portfolio_cash'`: User edits are automatically saved back to the state.
-    # 3. The widget's return value is the most current value, which we assign to our dictionary.
-    user_inputs['portfolio_cash'] = st.number_input(
-        'Portfolio_cash',
-        value=st.session_state.portfolio_cash,
-        key='portfolio_cash',
-        format="%.2f"
-    )
-
-    return user_inputs
-
-# --- 3. DISPLAY & CHARTING FUNCTIONS (Unchanged) ---
+# --- 2. DISPLAY & CHARTING FUNCTIONS (Unchanged, as they only display data) ---
 def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
     """Displays all calculated metrics, including a detailed breakdown of ln_weighted."""
     st.divider()
@@ -186,9 +131,7 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         st.code("----------------------------------------------------------------")
         st.code(f"Total Sum = {metrics.get('ln_weighted', 0.0):+51.4f}")
 
-
 def render_charts(config: Dict[str, Any]):
-    """Renders ThingSpeak charts using iframe components in a specific order."""
     st.write("📊 ThingSpeak Charts")
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
     main_channel_id = main_channel_config.get('channel_id')
@@ -208,10 +151,8 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-
-# --- 4. CALCULATION FUNCTION (Unchanged) ---
+# --- 3. CALCULATION FUNCTION (Unchanged) ---
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
-    """Calculates all core metrics and saves a detailed breakdown of the ln_weighted calculation."""
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
@@ -234,7 +175,6 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
 
     log_pv_baseline, ln_weighted = 0.0, 0.0
     ln_breakdown = []
-
     for asset in stock_assets:
         fix_c = asset.get('fix_c', 1500)
         ticker = asset['ticker'].strip()
@@ -245,25 +185,17 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         if ref_price > 0 and live_price > 0:
             contribution = fix_c * np.log(live_price / ref_price)
         ln_weighted += contribution
-        ln_breakdown.append({
-            "ticker": ticker,
-            "fix_c": fix_c,
-            "live_price": live_price,
-            "ref_price": ref_price,
-            "contribution": contribution
-        })
+        ln_breakdown.append({"ticker": ticker, "fix_c": fix_c, "live_price": live_price, "ref_price": ref_price, "contribution": contribution})
 
     metrics['log_pv_baseline'] = log_pv_baseline
     metrics['ln_weighted'] = ln_weighted
     metrics['log_pv'] = log_pv_baseline + ln_weighted
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
-
     return metrics, total_options_pl, total_option_cost
 
-# --- 5. THINGSPEAK UPDATE FUNCTION (Unchanged) ---
+# --- 4. THINGSPEAK UPDATE FUNCTION (Unchanged) ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
-    """Handles the UI for confirming and sending data to ThingSpeak."""
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         if st.button("Confirm and Send All Data"):
@@ -281,7 +213,6 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
             except Exception as e:
                 st.error(f"❌ Failed to update Main Channel on Thingspeak: {e}")
-
             st.divider()
             for asset in stock_assets:
                 ticker = asset['ticker'].strip()
@@ -294,9 +225,9 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
 
-# --- main() FUNCTION (Unchanged) ---
+# --- 5. RESTRUCTURED main() FUNCTION ---
 def main():
-    """Main function to run the Streamlit application."""
+    """Main function to run the Streamlit application using st.form for robust state handling."""
     config = load_config()
     if not config: return
 
@@ -307,27 +238,79 @@ def main():
     clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
     initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
 
-    user_inputs = render_ui_and_get_inputs(
-        stock_assets,
-        option_assets,
-        initial_data,
-        config.get('product_cost_default', 0.0)
-    )
+    # The user_inputs dictionary will be populated inside the form
+    user_inputs = {}
 
-    if st.button("Recalculate"):
-        pass
+    # Create a form to group all user inputs
+    with st.form(key="calculation_form"):
+        st.write("📊 Current Asset Prices")
+        current_prices = {}
+        all_tickers = {asset['ticker'].strip() for asset in stock_assets}
+        all_tickers.update({opt['underlying_ticker'].strip() for opt in option_assets if opt.get('underlying_ticker')})
 
-    metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
+        for ticker in sorted(list(all_tickers)):
+            label = f"ราคา_{ticker}"
+            price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
+            # Use a unique key for each widget to avoid conflicts
+            current_prices[ticker] = st.number_input(label, value=price_value, key=f"price_{ticker}", format="%.2f")
+        user_inputs['current_prices'] = current_prices
 
-    log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
-    product_cost = user_inputs.get('product_cost', 0.0)
-    dynamic_offset = product_cost - log_pv_baseline
+        st.divider()
+        st.write("📦 Stock Holdings")
+        current_holdings = {}
+        total_stock_value = 0.0
+        for asset in stock_assets:
+            ticker = asset["ticker"].strip()
+            holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
+            asset_holding = st.number_input(f"{ticker}_asset", value=holding_value, key=f"holding_{ticker}", format="%.2f")
+            current_holdings[ticker] = asset_holding
+            individual_asset_value = asset_holding * current_prices.get(ticker, 0.0)
+            st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
+            total_stock_value += individual_asset_value
+        user_inputs['current_holdings'] = current_holdings
+        user_inputs['total_stock_value'] = total_stock_value
 
-    config['cashflow_offset'] = dynamic_offset
+        st.divider()
+        st.write("⚙️ Calculation Parameters")
+        
+        # We now use a key and assign the returned value to the dictionary
+        # The key ensures the state is managed correctly by the form
+        user_inputs['product_cost'] = st.number_input(
+            'Product_cost',
+            key='product_cost_input',
+            value=config.get('product_cost_default', 0.0),
+            format="%.2f"
+        )
+        user_inputs['portfolio_cash'] = st.number_input(
+            'Portfolio_cash',
+            key='portfolio_cash_input',
+            value=st.session_state.portfolio_cash, # Read initial value from session_state
+            format="%.2f"
+        )
 
-    display_results(metrics, options_pl, total_option_cost, config)
-    handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
-    render_charts(config)
+        # The one and only button to trigger the calculation
+        submitted = st.form_submit_button("Calculate / Refresh")
+
+    # --- Calculation and display logic only runs AFTER the form is submitted ---
+    if submitted:
+        # Update session state with the value from the form just before calculation
+        st.session_state.portfolio_cash = user_inputs['portfolio_cash']
+        
+        metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
+
+        log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
+        product_cost = user_inputs.get('product_cost', 0.0)
+        dynamic_offset = product_cost - log_pv_baseline
+
+        # Create a temporary config copy for this run to hold the dynamic offset
+        run_config = config.copy()
+        run_config['cashflow_offset'] = dynamic_offset
+        run_config['product_cost_default'] = product_cost # Use the submitted product cost
+
+        display_results(metrics, options_pl, total_option_cost, run_config)
+        handle_thingspeak_update(run_config, clients, stock_assets, metrics, user_inputs)
+        render_charts(config)
+
 
 if __name__ == "__main__":
     main()
