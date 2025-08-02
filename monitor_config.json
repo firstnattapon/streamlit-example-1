@@ -51,7 +51,7 @@
       "fix_c": 2000,
       "option_config": {
         "base_value": 100.0,
-        "label": "DJT (LV:100@20.40)"
+        "label": "DJT (LV:100@20.4)"
       }
     },    
     { 
@@ -105,7 +105,7 @@
       "fix_c": 1500,
       "option_config": {
         "base_value": 100.0,
-        "label": "FLNC (LV:100@7.00)"
+        "label": "FLNC (LV:100@7.0)"
       }
     },  
    {
