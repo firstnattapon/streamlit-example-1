@@ -4,7 +4,7 @@ import yfinance as yf
 import streamlit as st
 import json
 import plotly.express as px
-import numpy_financial as npf # --- ADDED FOR GOAL 1 ---
+import numpy_financial as npf
 
 # ------------------- ฟังก์ชันสำหรับโหลด Config -------------------
 def load_config(filename="un15_fx_config.json"):
@@ -246,10 +246,26 @@ if full_config or DEFAULT_CONFIG:
             cf_values = df_new.cf.values
             df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
             
-            min_sum_val = np.min(roll_over)
-            min_sum = abs(min_sum_val) if min_sum_val != 0 else 1
-            true_alpha_values = (df_new.cf.values / min_sum) * 100
+            # --- START: GOAL 1 MODIFICATION - Redefine True Alpha ---
+            # คำนวณต้นทุนรวมที่ใช้ในการลงทุนตามสูตรใหม่
+            # ต้นทุนรวม = (เงินลงทุนเริ่มต้น) + (เงินสดสำรองที่ใช้ไปสูงสุด)
+            num_selected_tickers = len(selected_tickers)
+            initial_capital = num_selected_tickers * 1500.0 # เงินลงทุนเริ่มต้นตาม Fixed_Asset_Value ต่อ Ticker
+            max_buffer_used = abs(np.min(roll_over)) # เงินสดสำรองที่ใช้ไปสูงสุด (Max Drawdown)
+
+            # ต้นทุนรวมที่ใช้เป็นตัวหาร (Total Capital at Risk)
+            total_capital_at_risk = initial_capital + max_buffer_used
+            
+            # ป้องกันการหารด้วยศูนย์
+            if total_capital_at_risk == 0:
+                total_capital_at_risk = 1 
+
+            # คำนวณ True Alpha ใหม่ โดยใช้ "ต้นทุนรวม" เป็นตัวหาร
+            # True Alpha = (กำไรสะสม / ต้นทุนรวม) * 100
+            true_alpha_values = (df_new.cf.values / total_capital_at_risk) * 100
             df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
+            # --- END: GOAL 1 MODIFICATION ---
+
 
             # 7. แสดงผล KPI
             st.subheader("Key Performance Indicators")
@@ -260,9 +276,8 @@ if full_config or DEFAULT_CONFIG:
             avg_cf = final_sum_delta / num_days if num_days > 0 else 0
             avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
 
-            # --- START: GOAL 1 - MIRR CALCULATION ---
+            # --- MIRR CALCULATION (UNCHANGED) ---
             mirr_value = 0.0
-            num_selected_tickers = len(selected_tickers)
             
             # Per your formula: Initial Investment = (len(tickers) * 1500) + (Max Cash Buffer Used * -1)
             initial_investment = (num_selected_tickers * 1500) + abs(final_max_buffer)
@@ -275,10 +290,6 @@ if full_config or DEFAULT_CONFIG:
                 exit_multiple = initial_investment * 0.5
                 
                 # Construct cash flows for 3-year project duration
-                # Year 0: -Initial Investment
-                # Year 1: Annual Cash Flow
-                # Year 2: Annual Cash Flow
-                # Year 3: Annual Cash Flow + Exit Multiple
                 cash_flows = [
                     -initial_investment,
                     annual_cash_flow,
@@ -291,16 +302,15 @@ if full_config or DEFAULT_CONFIG:
                 reinvest_rate = 0.0
                 
                 mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate)
-            # --- END: GOAL 1 - MIRR CALCULATION ---
+            # --- END MIRR CALCULATION ---
 
-            # --- MODIFIED FOR GOAL 1: Changed from 5 to 6 columns ---
+            # --- KPI Display (UNCHANGED) ---
             kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
             kpi1.metric(label="Total Net Profit (cf)", value=f"{final_sum_delta:,.2f}")
             kpi2.metric(label="Max Cash Buffer Used", value=f"{final_max_buffer:,.2f}")
-            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}%")
+            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}%") # ค่านี้จะเปลี่ยนไปตามสูตรใหม่
             kpi4.metric(label="Avg. Daily Profit", value=f"{avg_cf:,.2f}")
             kpi5.metric(label="Avg. Daily Buffer Used", value=f"{avg_burn_cash:,.2f}")
-            # --- ADDED FOR GOAL 1: New MIRR KPI display ---
             kpi6.metric(label="MIRR (3-Year)", value=f"{mirr_value:.2%}")
             
             st.divider()
@@ -310,7 +320,7 @@ if full_config or DEFAULT_CONFIG:
             graph_col1, graph_col2 = st.columns(2)
             
             graph_col1.plotly_chart(px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"), use_container_width=True)
-            graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)
+            graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True) # กราฟนี้จะเปลี่ยนไปตามสูตรใหม่
             
             st.divider()
             
