@@ -4,6 +4,7 @@ import yfinance as yf
 import streamlit as st
 import json
 import plotly.express as px
+import numpy_financial as npf
 
 # ------------------- ฟังก์ชันสำหรับโหลด Config -------------------
 def load_config(filename="un15_fx_config.json"):
@@ -137,17 +138,10 @@ def delta6(asset_config):
                 re_vals[idx] = 0
             cash_balan_sim_vals[idx] = cash_balan_sim_vals[idx-1] + re_vals[idx]
 
-        # ---------- START: FIX for DatetimeIndex ----------
-        # 1. เก็บ Index วันที่และเวลาเดิมเอาไว้ก่อน
         original_index = ticker_data.index
-
-        # 2. ทำการ merge ซึ่งจะทำให้ Index เดิมหายไป
         ticker_data = ticker_data.merge(df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}), 
                                         left_on='Close', right_on='Asset_Price', how='left').drop('Asset_Price', axis=1)
-
-        # 3. นำ Index เดิมที่เก็บไว้กลับมาใส่ให้ DataFrame
         ticker_data.set_index(original_index, inplace=True)
-        # ---------- END: FIX for DatetimeIndex ----------
 
         ticker_data['refer_model'].interpolate(method='linear', inplace=True)
         ticker_data.fillna(method='bfill', inplace=True)
@@ -252,10 +246,26 @@ if full_config or DEFAULT_CONFIG:
             cf_values = df_new.cf.values
             df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
             
-            min_sum_val = np.min(roll_over)
-            min_sum = abs(min_sum_val) if min_sum_val != 0 else 1
-            true_alpha_values = (df_new.cf.values / min_sum) * 100
+            # --- START: GOAL 1 MODIFICATION - Redefine True Alpha ---
+            # คำนวณต้นทุนรวมที่ใช้ในการลงทุนตามสูตรใหม่
+            # ต้นทุนรวม = (เงินลงทุนเริ่มต้น) + (เงินสดสำรองที่ใช้ไปสูงสุด)
+            num_selected_tickers = len(selected_tickers)
+            initial_capital = num_selected_tickers * 1500.0 # เงินลงทุนเริ่มต้นตาม Fixed_Asset_Value ต่อ Ticker
+            max_buffer_used = abs(np.min(roll_over)) # เงินสดสำรองที่ใช้ไปสูงสุด (Max Drawdown)
+
+            # ต้นทุนรวมที่ใช้เป็นตัวหาร (Total Capital at Risk)
+            total_capital_at_risk = initial_capital + max_buffer_used
+            
+            # ป้องกันการหารด้วยศูนย์
+            if total_capital_at_risk == 0:
+                total_capital_at_risk = 1 
+
+            # คำนวณ True Alpha ใหม่ โดยใช้ "ต้นทุนรวม" เป็นตัวหาร
+            # True Alpha = (กำไรสะสม / ต้นทุนรวม) * 100
+            true_alpha_values = (df_new.cf.values / total_capital_at_risk) * 100
             df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
+            # --- END: GOAL 1 MODIFICATION ---
+
 
             # 7. แสดงผล KPI
             st.subheader("Key Performance Indicators")
@@ -266,12 +276,42 @@ if full_config or DEFAULT_CONFIG:
             avg_cf = final_sum_delta / num_days if num_days > 0 else 0
             avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
 
-            kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+            # --- MIRR CALCULATION (UNCHANGED) ---
+            mirr_value = 0.0
+            
+            # Per your formula: Initial Investment = (len(tickers) * 1500) + (Max Cash Buffer Used * -1)
+            initial_investment = (num_selected_tickers * 1500) + abs(final_max_buffer)
+            
+            if initial_investment > 0:
+                # Per your formula: Annual Cash Flows = Year(Avg. Daily Profit * 252 วัน)
+                annual_cash_flow = avg_cf * 252
+                
+                # Per your formula: Exit Multiple = Initial Investment * 0.5
+                exit_multiple = initial_investment * 0.5
+                
+                # Construct cash flows for 3-year project duration
+                cash_flows = [
+                    -initial_investment,
+                    annual_cash_flow,
+                    annual_cash_flow,
+                    annual_cash_flow + exit_multiple
+                ]
+                
+                # Finance rate (cost of capital) and reinvestment rate are both 0% per your spec
+                finance_rate = 0.0
+                reinvest_rate = 0.0
+                
+                mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate)
+            # --- END MIRR CALCULATION ---
+
+            # --- KPI Display (UNCHANGED) ---
+            kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
             kpi1.metric(label="Total Net Profit (cf)", value=f"{final_sum_delta:,.2f}")
             kpi2.metric(label="Max Cash Buffer Used", value=f"{final_max_buffer:,.2f}")
-            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}%")
+            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}%") # ค่านี้จะเปลี่ยนไปตามสูตรใหม่
             kpi4.metric(label="Avg. Daily Profit", value=f"{avg_cf:,.2f}")
             kpi5.metric(label="Avg. Daily Buffer Used", value=f"{avg_burn_cash:,.2f}")
+            kpi6.metric(label="MIRR (3-Year)", value=f"{mirr_value:.2%}")
             
             st.divider()
 
@@ -279,23 +319,17 @@ if full_config or DEFAULT_CONFIG:
             st.subheader("Performance Charts")
             graph_col1, graph_col2 = st.columns(2)
             
-            # --- START GOAL 1 MODIFICATION ---
-            # ใช้ .reset_index(drop=True) เพื่อให้แกน X เป็นลำดับตัวเลขสำหรับกราฟนี้โดยเฉพาะ
             graph_col1.plotly_chart(px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"), use_container_width=True)
-            # --- END GOAL 1 MODIFICATION ---
-            
-            graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)
+            graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True) # กราฟนี้จะเปลี่ยนไปตามสูตรใหม่
             
             st.divider()
             
             st.subheader("Detailed Simulation Data")
-            # แก้ไขส่วนนี้ให้เหมือน v1 (ที่แก้ไขไปแล้วใน request ก่อนหน้า)
             for ticker in selected_tickers:
                 col_name = f'{ticker}_re'
                 if col_name in df_new.columns:
                     df_new[col_name] = df_new[col_name].cumsum()
             
-            # เมื่อ Index ถูกต้องแล้ว Plotly จะแสดงแกน X เป็นวันที่โดยอัตโนมัติ
             st.plotly_chart(px.line(df_new, title="Portfolio Simulation Details"), use_container_width=True)
 
 else:
