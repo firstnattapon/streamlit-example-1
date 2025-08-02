@@ -121,6 +121,16 @@
         "t0": 12.60,
         "fix": 1500.0
       }
+    } , 
+    {
+      "ticker": "DJT",
+      "monitor_field": 4,
+      "channel_id": 2988808,
+      "write_api_key": "QBIPN1AIZ88QQW5V",
+      "production_params": {
+        "t0": 20.40,
+        "fix": 2000.0
+      }
     }
   ]
 }
