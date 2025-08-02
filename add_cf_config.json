@@ -71,6 +71,14 @@
             "contracts_or_shares": 100,
             "premium_paid_per_share": 1.26,
             "strike": 7.0
+        },           
+        {
+            "type": "option",
+            "name": "DJT Call @ 20.40",
+            "underlying_ticker": "DJT",
+            "contracts_or_shares": 100,
+            "premium_paid_per_share": 2.93,
+            "strike": 17.5
         },  
         {
             "type": "stock",
@@ -148,6 +156,16 @@
             "reference_price": 12.60,
             "fix_c": 1500,
             "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field3" }
+        },
+        {
+            "type": "stock",
+            "ticker": "DJT",
+            "reference_price": 20.40,
+            "fix_c": 2000,
+            "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field4" }
         }
     ]
 }
+
+
+
