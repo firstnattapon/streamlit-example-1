@@ -382,7 +382,7 @@ with tab_dict['Burn_Cash']:
             st.metric(label="🔥 90-Day Burn (Worst Quarter)", value=f"{max_90_day_burn:,.2f} USD")
             st.metric(
                 label="🏔️ Max Drawdown (Peak to Trough)", 
-                value=f"{max_drawdown_burn:,.2f} USD",
+                value=f"{-max_drawdown_burn:,.2f} USD",
                 help="The largest drop in cumulative cash from any peak to a subsequent trough."
             )
 
