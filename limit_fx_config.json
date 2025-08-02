@@ -65,6 +65,12 @@
       "field": 3,
       "channel_id": 2988808,
       "write_api_key": "QBIPN1AIZ88QQW5V"
+    },
+    {
+      "symbol": "DJT",
+      "field": 4,
+      "channel_id": 2988808,
+      "write_api_key": "QBIPN1AIZ88QQW5V"
     }
   ]
 }
