@@ -18,7 +18,7 @@
       "fix_c": 1500,
       "option_config": {
         "base_value": 500.0,
-        "label": "AGL(LV:5@3.0)"
+        "label": "AGL(LV:5C@3.0)"
       }
     },
     { 
@@ -51,7 +51,7 @@
       "fix_c": 2000,
       "option_config": {
         "base_value": 100.0,
-        "label": "DJT(LV:1@20.40)"
+        "label": "DJT(LV:1C@20.40)"
       }
     },    
     { 
@@ -69,7 +69,7 @@
       "fix_c": 1500,
       "option_config": {
         "base_value": 100.0,
-        "label": "DYN(LV:1@12.60)"
+        "label": "DYN(LV:1C@12.60)"
       }
     },
     {
@@ -87,7 +87,7 @@
       "fix_c": 1500,
       "option_config": {
         "base_value": 200.0,
-        "label": "FFWM(LV:2@6.88)"
+        "label": "FFWM(LV:2C@6.88)"
       }
     },
     {
@@ -105,7 +105,7 @@
       "fix_c": 1500,
       "option_config": {
         "base_value": 100.0,
-        "label": "FLNC(LV:1@7.0)"
+        "label": "FLNC(LV:1C@7.0)"
       }
     },  
    {
@@ -123,7 +123,7 @@
       "fix_c": 1500,
       "option_config": {
         "base_value": 800.0,
-        "label": "GERN(LV:8@1.85)"
+        "label": "GERN(LV:8C@1.85)"
       }
     },    
     {
@@ -156,7 +156,7 @@
       "fix_c": 1500,
       "option_config": {
         "base_value": 100.0,
-        "label": "NVTS(LV:1@8.25)"
+        "label": "NVTS(LV:1C@8.25)"
       }
     },  
     {
@@ -204,7 +204,7 @@
       "fix_c": 1500,
       "option_config": {
         "base_value": 200.0,
-        "label": "RXRX(LV:2@5.4)"
+        "label": "RXRX(LV:2C@5.4)"
       }
     }
   ]
