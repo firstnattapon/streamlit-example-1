@@ -53,5 +53,10 @@
         "ticker": "DYN",
         "entry_price": 12.60,
         "comment": ""
+    },
+    {
+        "ticker": "DJT",
+        "entry_price": 20.40,
+        "comment": ""
     }
 ]
