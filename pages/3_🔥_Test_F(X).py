@@ -184,7 +184,6 @@ def un_16(active_configs):
 
 # ------------------- ส่วนแสดงผล STREAMLIT -------------------
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
-st.info("To run this app, you may need to install an additional library. In your terminal, please run: `pip install numpy-financial`", icon="ℹ️")
 
 # 1. โหลด config
 full_config, DEFAULT_CONFIG = load_config()
