@@ -3,6 +3,7 @@
     "duration": 10,
     "initialInvestment": 10750,
     "discountRate": 17.614,
+    "reinvestmentRate": 0,
     "currency": "USD",
     "addTerminalValue": true,
     "exitMultiple": 0.5
@@ -22,7 +23,9 @@
   "results": {
     "npv": 0.3262038435834711,
     "irr": 17.614654812557152,
-    "paybackPeriod": 5.623819301848049
+    "mirr": 10.611457365354982,
+    "paybackPeriod": 5.623819301848049,
+    "dcfPaybackPeriod": 9.999815183066975
   },
   "dcfAnalysisWithTerminalValue": [
     {
