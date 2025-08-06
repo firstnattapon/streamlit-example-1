@@ -187,8 +187,11 @@
         "api_key": "2E65V8XEIPH9B2VV"
       },
       "fix_c": 1500,
-      "option_config": null
-    },
+      "option_config": {
+        "base_value": 100.0,
+        "label": "RIVN(LV:1@14.2)"
+      }
+    }, 
     {
       "ticker": "RXRX",
       "monitor_field": {
