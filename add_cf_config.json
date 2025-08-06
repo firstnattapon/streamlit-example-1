@@ -26,11 +26,11 @@
         },
         {
             "type": "option",
-            "name": "AGL Call @ 3.0",
+            "name": "AGL Call @ 1.83",
             "underlying_ticker": "AGL",
-            "contracts_or_shares": 500,
-            "premium_paid_per_share": 0.538,
-            "strike": 2.5
+            "contracts_or_shares": 1500,
+            "premium_paid_per_share": 0.33,
+            "strike": 1.5
         },
         {
             "type": "option",
