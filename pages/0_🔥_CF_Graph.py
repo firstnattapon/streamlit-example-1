@@ -212,3 +212,6 @@ col3.metric("เงินสดเริ่มต้นรวม", f"${total_ini
 with st.expander("ดู Net PV ของแต่ละตัว"):
     for ticker, value in results_rf.items():
         st.write(f"{ticker}: ${value:,.2f}")
+
+st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1100 , height=1000  , scrolling=0)
+
