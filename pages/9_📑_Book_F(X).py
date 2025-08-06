@@ -303,6 +303,10 @@ with st.expander("Book : The Most Important Thing : นักลงทุนเ�
   st.write('https://notebooklm.google.com/notebook/b59fa253-0e58-421e-b085-c8092aebd56c')
   st.write('____')  
 
+with st.expander("Book : Capital in the Twenty-First Century : ทุนนิยมในศตวรรษที่ 21 " , expanded = 0 ):
+  st.write('https://notebooklm.google.com/notebook/dbe6015c-5aa1-4c71-a8bd-1b3ac898f5ef')
+  st.write('____')  
+
 with st.expander("Book : การลงทุน 50 ปีของ Howard Marks" , expanded = 0 ):
   st.write('https://notebooklm.google.com/notebook/7e3b54f2-add3-40bb-9441-19c70a53654b')
   st.write('____')  
