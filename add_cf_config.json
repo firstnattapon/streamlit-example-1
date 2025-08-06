@@ -111,7 +111,7 @@
         {
             "type": "stock",
             "ticker": "NVTS",
-            "reference_price": 3.05,
+            "reference_price": 8.25,
             "fix_c": 1500,
             "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field5" }
         },
