@@ -1,0 +1,178 @@
+{
+    "baseline_target": 1967.675,
+    "cashflow_offset_comment": "Offset_minimal_cf 18/7/68",
+    "product_cost_default": 10750.00,
+    "thingspeak_channels": {
+        "main_output": {
+            "channel_id": 2394198,
+            "write_api_key": "OVZNYQBL57GJW5JF",
+            "fields": {
+                "net_cf": "field1",
+                "pure_alpha": "field2",
+                "buffer": "field3",
+                "cost_minus_cf": "field4",
+                "now_pv": "field5"
+            }
+        }
+    },
+    "assets": [
+        {
+            "type": "option",
+            "name": "FFWM Call @ 6.88",
+            "underlying_ticker": "FFWM",
+            "contracts_or_shares": 200,
+            "premium_paid_per_share": 1.17,
+            "strike": 5.0
+        },
+        {
+            "type": "option",
+            "name": "AGL Call @ 3.00",
+            "underlying_ticker": "AGL",
+            "contracts_or_shares": 1500,
+            "premium_paid_per_share": 0.33,
+            "strike": 1.5
+        },
+        {
+            "type": "option",
+            "name": "RXRX Call @ 5.40",
+            "underlying_ticker": "RXRX",
+            "contracts_or_shares": 200,
+            "premium_paid_per_share": 1.4,
+            "strike": 4.0
+        },    
+        {
+            "type": "option",
+            "name": "FLNC Call @ 7.00",
+            "underlying_ticker": "FLNC",
+            "contracts_or_shares": 100,
+            "premium_paid_per_share": 0.98,
+            "strike": 6.0
+        }, 
+        {
+            "type": "option",
+            "name": "GERN Call @ 1.85",
+            "underlying_ticker": "GERN",
+            "contracts_or_shares": 800,
+            "premium_paid_per_share": 0.36,
+            "strike": 1.5
+        },           
+        {
+            "type": "option",
+            "name": "DYN Call @ 12.60",
+            "underlying_ticker": "DYN",
+            "contracts_or_shares": 100,
+            "premium_paid_per_share": 2.61,
+            "strike": 10.0
+        },           
+        {
+            "type": "option",
+            "name": "NVTS Call @ 8.25",
+            "underlying_ticker": "NVTS",
+            "contracts_or_shares": 100,
+            "premium_paid_per_share": 1.26,
+            "strike": 7.0
+        },           
+        {
+            "type": "option",
+            "name": "DJT Call @ 20.40",
+            "underlying_ticker": "DJT",
+            "contracts_or_shares": 100,
+            "premium_paid_per_share": 2.93,
+            "strike": 17.5
+        },           
+        {
+            "type": "option",
+            "name": "RIVN Call @ 14.20",
+            "underlying_ticker": "RIVN",
+            "contracts_or_shares": 100,
+            "premium_paid_per_share": 1.70,
+            "strike": 12.5
+        },  
+        {
+            "type": "stock",
+            "ticker": "FFWM",
+            "reference_price": 6.88,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field1" }
+        },
+        {
+            "type": "stock",
+            "ticker": "NEGG",
+            "reference_price": 25.20,
+            "fix_c": 1000,
+            "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field2" }
+        },
+        {
+            "type": "stock",
+            "ticker": "RIVN",
+            "reference_price": 14.20,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field3" }
+        },
+        {
+            "type": "stock",
+            "ticker": "APLS",
+            "reference_price": 39.61,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field4" }
+        },
+        {
+            "type": "stock",
+            "ticker": "NVTS",
+            "reference_price": 8.25,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field5" }
+        },
+        {
+            "type": "stock",
+            "ticker": "QXO",
+            "reference_price": 19.00,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field6" }
+        },
+        {
+            "type": "stock",
+            "ticker": "RXRX",
+            "reference_price": 5.40,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field7" }
+        },
+        {
+            "type": "stock",
+            "ticker": "AGL",
+            "reference_price": 3.00,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field8" }
+        },
+        {
+            "type": "stock",
+            "ticker": "FLNC",
+            "reference_price": 7.00,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field1" }
+        },
+        {
+            "type": "stock",
+            "ticker": "GERN",
+            "reference_price": 1.85,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field2" }
+        },
+        {
+            "type": "stock",
+            "ticker": "DYN",
+            "reference_price": 12.60,
+            "fix_c": 1500,
+            "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field3" }
+        },
+        {
+            "type": "stock",
+            "ticker": "DJT",
+            "reference_price": 20.40,
+            "fix_c": 2000,
+            "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field4" }
+        }
+    ]
+}
+
+
