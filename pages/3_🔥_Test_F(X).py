@@ -9,14 +9,13 @@ import streamlit.components.v1 as components
 from typing import Dict, Any, Tuple, List
 
 # --- Page Configuration ---
-st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout= "centered" )
+st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout="centered")
 
-# ### (No Change Here) ###
-# Initialize 'portfolio_cash' in session_state if it doesn't exist.
+# ### MODIFIED PART 1: Initialize Session State ###
 if 'portfolio_cash' not in st.session_state:
     st.session_state.portfolio_cash = 0.00
 
-# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (Unchanged) ---
+# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS ---
 
 @st.cache_data
 def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
@@ -28,8 +27,19 @@ def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
         st.error(f"Error loading or parsing {filename}: {e}")
         st.stop()
 
+def save_config(config: Dict[str, Any], filename: str = "add_cf_config.json") -> None:
+    """Persist config (including per-asset b_offset) to disk."""
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+        st.success("💾 Saved config (with updated b_offset / reference_price).")
+    except Exception as e:
+        st.error(f"Failed to save config: {e}")
+
 @st.cache_resource
-def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
+def initialize_thingspeak_clients(config: Dict[str, Any],
+                                  stock_assets: List[Dict[str, Any]],
+                                  option_assets: List[Dict[str, Any]]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
     """Initializes ThingSpeak clients for the main channel and individual asset channels."""
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
     try:
@@ -43,14 +53,15 @@ def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dic
 
         num_asset_clients = len(asset_clients)
         num_option_assets = len(option_assets)
-        st.success(f"Initialized main client and {num_asset_clients} asset {num_option_assets} option holding clients.")
-
+        st.success(f"Initialized main client and {num_asset_clients} asset holding clients, {num_option_assets} option legs.")
         return client_main, asset_clients
     except Exception as e:
         st.error(f"Failed to initialize ThingSpeak clients: {e}")
         st.stop()
 
-def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, Any]]:
+def fetch_initial_data(stock_assets: List[Dict[str, Any]],
+                       option_assets: List[Dict[str, Any]],
+                       asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, Any]]:
     """Fetches initial prices from yfinance and last holdings from ThingSpeak."""
     initial_data = {}
     tickers_to_fetch = {asset['ticker'].strip() for asset in stock_assets}
@@ -84,7 +95,10 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
 
 # --- 2. UI & DISPLAY FUNCTIONS ---
 
-def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
+def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]],
+                             option_assets: List[Dict[str, Any]],
+                             initial_data: Dict[str, Dict[str, Any]],
+                             product_cost_default: float) -> Dict[str, Any]:
     """Renders all UI components and collects user inputs into a dictionary."""
     user_inputs = {}
     st.write("📊 Current Asset Prices")
@@ -95,7 +109,7 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     for ticker in sorted(list(all_tickers)):
         label = f"ราคา_{ticker}"
         price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
-        current_prices[ticker] = st.number_input(label, value=price_value, key=f"price_{ticker}", format="%.2f")
+        current_prices[ticker] = st.number_input(label, value=float(price_value), key=f"price_{ticker}", format="%.2f")
     user_inputs['current_prices'] = current_prices
 
     st.divider()
@@ -108,7 +122,7 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
 
         asset_holding = st.number_input(
             f"{ticker}_asset",
-            value=holding_value,
+            value=float(holding_value),
             key=f"holding_{ticker}",
             format="%.2f"
         )
@@ -123,28 +137,98 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
 
     st.divider()
     st.write("⚙️ Calculation Parameters")
-    user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
-    
+    user_inputs['product_cost'] = st.number_input('Product_cost', value=float(product_cost_default), format="%.2f")
+
+    # Link to session state for portfolio_cash
     st.number_input('Portfolio_cash', key='portfolio_cash', format="%.2f")
-    user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
+    user_inputs['portfolio_cash'] = float(st.session_state.portfolio_cash)
 
     return user_inputs
 
-# --- 3. DISPLAY & CHARTING FUNCTIONS (Unchanged) ---
+def render_rollover_ui(stock_assets: List[Dict[str, Any]], config: Dict[str, Any]) -> Tuple[Dict[str, float], bool]:
+    """
+    UI: Per-asset Rollover t0 with b compensation.
+    Returns (pending_rolls, apply_flag). pending_rolls[ticker] = new_t0 (float)
+    """
+    pending_rolls: Dict[str, float] = {}
+    with st.expander("🔁 Rollover t₀ (per-asset, with b compensation)", expanded=False):
+        st.caption("เมื่อ roll t₀ จะปรับ b_offset อัตโนมัติ: b ← b + fix*ln(t0_new/t0_old) และอัปเดต reference_price = t0_new")
+        for asset in stock_assets:
+            ticker = asset['ticker'].strip()
+            fix_c = float(asset.get('fix_c', 1500.0))
+            ref_price = float(asset.get('reference_price', 0.0))
+            b_off = float(asset.get('b_offset', 0.0))
+            cols = st.columns([1.2, 1, 1, 1.2])
+            with cols[0]:
+                st.write(f"**{ticker}**")
+                st.write(f"fix={fix_c:.0f}")
+            with cols[1]:
+                st.number_input(f"t0 (current) - {ticker}", value=ref_price, key=f"t0_current_{ticker}", format="%.4f", disabled=True)
+            with cols[2]:
+                st.number_input(f"b_offset - {ticker}", value=b_off, key=f"b_offset_view_{ticker}", format="%.4f", disabled=True)
+            with cols[3]:
+                do_roll = st.checkbox(f"Roll {ticker}", key=f"roll_do_{ticker}", value=False)
+                new_t0 = st.number_input(f"t0' (new) - {ticker}", value=ref_price, key=f"roll_to_{ticker}", format="%.4f")
+                if do_roll:
+                    if new_t0 <= 0:
+                        st.warning(f"{ticker}: t0' ต้อง > 0")
+                    elif abs(new_t0 - ref_price) < 1e-12:
+                        st.info(f"{ticker}: t0' = t0 (ไม่เปลี่ยน)")
+                    else:
+                        pending_rolls[ticker] = float(new_t0)
+
+        apply = st.button("✅ Apply rolls & Save config")
+    return pending_rolls, apply
+
+def apply_rolls_and_update_config(config: Dict[str, Any],
+                                  stock_assets: List[Dict[str, Any]],
+                                  pending_rolls: Dict[str, float]) -> None:
+    """Apply t0 rolls to each selected asset, adjust b_offset, and persist to config."""
+    if not pending_rolls:
+        st.info("No rolls selected.")
+        return
+
+    changes = []
+    for asset in stock_assets:
+        ticker = asset['ticker'].strip()
+        if ticker in pending_rolls:
+            old_t0 = float(asset.get('reference_price', 0.0))
+            new_t0 = float(pending_rolls[ticker])
+            if old_t0 <= 0 or new_t0 <= 0:
+                st.warning(f"Skip {ticker}: invalid t0 (old={old_t0}, new={new_t0})")
+                continue
+            fix_c = float(asset.get('fix_c', 1500.0))
+            old_b = float(asset.get('b_offset', 0.0))
+            delta_b = fix_c * np.log(new_t0 / old_t0)
+            asset['b_offset'] = float(old_b + delta_b)
+            asset['reference_price'] = new_t0
+            changes.append((ticker, old_t0, new_t0, fix_c, old_b, delta_b, asset['b_offset']))
+
+    if changes:
+        # Reflect back in the full config (stock_assets are dicts from config['assets'])
+        save_config(config)
+        st.success("Applied rolls. Details:")
+        for tck, old_t0, new_t0, fix_c, old_b, delta_b, new_b in changes:
+            st.code(f"{tck}: t0 {old_t0:.4f} → {new_t0:.4f} | Δb = {fix_c:.0f}*ln({new_t0:.4f}/{old_t0:.4f}) = {delta_b:+.4f} | b: {old_b:.4f} → {new_b:.4f}")
+
+# --- 3. DISPLAY & CHARTING FUNCTIONS ---
 def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
-    """Displays all calculated metrics, including a detailed breakdown of ln_weighted."""
+    """Displays all calculated metrics, including a detailed breakdown with b_offset."""
     st.divider()
     with st.expander("📈 Results", expanded=True):
         metric_label = (f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
                         f"| Max_Roll_Over: ({-total_option_cost:,.2f})")
         st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
 
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
-        col2.metric('log_pv Adjustment (ln_weighted)', f"{metrics.get('ln_weighted', 0.0):,.2f}")
+        col2.metric('b_total (roll compensation)', f"{metrics.get('b_total', 0.0):,.2f}")
+        col3.metric('ln_weighted', f"{metrics.get('ln_weighted', 0.0):,.2f}")
 
-        st.metric(f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})",
-                  f"{metrics['log_pv']:,.2f}")
+        st.metric(
+            f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('b_total', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})",
+            f"{metrics['log_pv']:,.2f}"
+        )
 
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
 
@@ -159,30 +243,19 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
 
-    # ### MODIFIED PART 1: Update 'ln_weighted' Breakdown Display ###
-    with st.expander("Show 'ln_weighted' Calculation Breakdown"):
-        st.write("ค่า `ln_weighted` คือผลรวมของการเปลี่ยนแปลงทั้งหมด (`sum of b_offset` + `sum of ln part`)")
+    with st.expander("Show 'per-asset' Calculation Breakdown"):
+        st.write("ต่อหุ้น: Fᵢ = bᵢ + fixᵢ * ln(liveᵢ / t0ᵢ)")
         ln_breakdown_data = metrics.get('ln_breakdown', [])
-
-        total_dynamic_contribution = 0
         for item in ln_breakdown_data:
-            total_dynamic_contribution += item['total_contribution']
-            # The formula now includes the b_offset term explicitly
             if item['ref_price'] > 0:
-                formula_string = (
-                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [ {item['b_offset']:>7.2f} (b) + "
-                    f"{item['fix_c']} * ln( {item['live_price']:.2f} / {item['ref_price']:.2f} ) ]"
+                st.code(
+                    f"{item['ticker']:<6}: F_contrib = [{item['fix_c']} * ln({item['live_price']:.4f} / {item['ref_price']:.4f})] "
+                    f"+ b ({item['b_offset']:+.4f}) = {item['F_contribution']:+.4f}"
                 )
             else:
-                formula_string = (
-                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [ {item['b_offset']:>7.2f} (b) + 0.00 ] "
-                    f"(Calculation skipped: ref_price is zero)"
-                )
-            st.code(formula_string, language='text')
-
-        st.code("-------------------------------------------------------------------------")
-        st.code(f"Total Sum (ln_weighted) = {total_dynamic_contribution:+51.4f}")
-
+                st.code(f"{item['ticker']:<6}: (skip; ref_price is zero)")
+        st.code("----------------------------------------------------------------")
+        st.code(f"Σ ln-term = {metrics.get('ln_weighted', 0.0):+,.4f} | Σ b = {metrics.get('b_total', 0.0):+,.4f} | Total F = {metrics.get('F_total', 0.0):+,.4f}")
 
 def render_charts(config: Dict[str, Any]):
     """Renders ThingSpeak charts using iframe components in a specific order."""
@@ -199,93 +272,87 @@ def render_charts(config: Dict[str, Any]):
             components.iframe(url, width=800, height=200)
             st.divider()
 
-    # Display charts in the requested order
     create_chart_iframe(main_channel_id, main_fields_map.get('net_cf'), 'Cashflow')
     create_chart_iframe(main_channel_id, main_fields_map.get('now_pv'), 'Current Total Value')
     create_chart_iframe(main_channel_id, main_fields_map.get('pure_alpha'), 'Pure_Alpha')
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-
-# --- 4. CALCULATION FUNCTION ---
-# ### MODIFIED PART 2: Update Core Calculation Logic ###
-def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
-    """
-    Calculates all core metrics using the F = b + fix*ln(live/t0) model.
-    'ln_weighted' now represents the total adjustment from the baseline (sum of b + sum of ln parts).
-    """
+# --- 4. CALCULATION FUNCTION (with b_offset support) ---
+def calculate_metrics(stock_assets: List[Dict[str, Any]],
+                      option_assets: List[Dict[str, Any]],
+                      user_inputs: Dict[str, Any],
+                      config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
+    """Calculates all core metrics including b_offset and saves per-asset breakdown."""
     metrics = {}
-    portfolio_cash = user_inputs['portfolio_cash']
+    portfolio_cash = float(user_inputs['portfolio_cash'])
     current_prices = user_inputs['current_prices']
-    total_stock_value = user_inputs['total_stock_value']
+    total_stock_value = float(user_inputs['total_stock_value'])
 
-    # P/L calculation for options (unchanged)
+    # Options P/L (unchanged)
     total_options_pl, total_option_cost = 0.0, 0.0
     for option in option_assets:
         underlying_ticker = option.get("underlying_ticker", "").strip()
-        if not underlying_ticker: continue
-        last_price = current_prices.get(underlying_ticker, 0.0)
-        strike = option.get("strike", 0.0)
-        contracts = option.get("contracts_or_shares", 0.0)
-        premium = option.get("premium_paid_per_share", 0.0)
+        if not underlying_ticker:
+            continue
+        last_price = float(current_prices.get(underlying_ticker, 0.0))
+        strike = float(option.get("strike", 0.0))
+        contracts = float(option.get("contracts_or_shares", 0.0))
+        premium = float(option.get("premium_paid_per_share", 0.0))
         total_cost_basis = contracts * premium
         total_option_cost += total_cost_basis
-        intrinsic_value = max(0, last_price - strike) * contracts
+        intrinsic_value = max(0.0, last_price - strike) * contracts
         total_options_pl += intrinsic_value - total_cost_basis
 
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
-    # New log_pv calculation logic incorporating b_offset
-    log_pv_baseline = 0.0  # This will remain sum(fix_c) for display consistency
-    ln_weighted = 0.0      # This will be the total dynamic adjustment
-    total_b_offset = 0.0   # Accumulator for all b_offsets
-    ln_breakdown = []      # List to store calculation details for display
+    # Per-asset calc
+    log_pv_baseline, ln_weighted, b_total, F_total = 0.0, 0.0, 0.0, 0.0
+    ln_breakdown = []
 
     for asset in stock_assets:
+        fix_c = float(asset.get('fix_c', 1500.0))
         ticker = asset['ticker'].strip()
-        fix_c = asset.get('fix_c', 1500)
-        # Use .get() for b_offset for backward compatibility if a stock is missing it
-        b_offset = asset.get('b_offset', 0.0)
-        ref_price = asset.get('reference_price', 0.0)
-        live_price = current_prices.get(ticker, 0.0)
+        ref_price = float(asset.get('reference_price', 0.0))
+        live_price = float(current_prices.get(ticker, 0.0))
+        b_off = float(asset.get('b_offset', 0.0))  # NEW
 
-        # Accumulate the baseline (sum of all fix_c values)
         log_pv_baseline += fix_c
-        # Accumulate the total b_offset from past rollovers
-        total_b_offset += b_offset
+        b_total += b_off
 
-        # Calculate the dynamic part for the current period (since last roll)
-        ln_part_contribution = 0.0
-        if ref_price > 0 and live_price > 0:
-            ln_part_contribution = fix_c * np.log(live_price / ref_price)
-        
-        # Accumulate the ln() part
-        ln_weighted += ln_part_contribution
+        ln_term = 0.0
+        if ref_price > 0.0 and live_price > 0.0:
+            ln_term = fix_c * np.log(live_price / ref_price)
 
-        # Store detailed breakdown for each asset for display
+        ln_weighted += ln_term
+        F_contrib = b_off + ln_term
+        F_total += F_contrib
+
         ln_breakdown.append({
             "ticker": ticker,
-            "b_offset": b_offset,
             "fix_c": fix_c,
             "live_price": live_price,
             "ref_price": ref_price,
-            "total_contribution": b_offset + ln_part_contribution # The total F value for this asset's adjustment
+            "b_offset": b_off,
+            "ln_term": ln_term,
+            "F_contribution": F_contrib
         })
-    
-    # Final assembly of metrics
+
     metrics['log_pv_baseline'] = log_pv_baseline
-    # 'ln_weighted' is the sum of all adjustments: accumulated (b_offset) and current (ln part)
-    metrics['ln_weighted'] = total_b_offset + ln_weighted
-    # Total log_pv is the baseline control value + the total adjustment
-    metrics['log_pv'] = metrics['log_pv_baseline'] + metrics['ln_weighted']
+    metrics['b_total'] = b_total
+    metrics['ln_weighted'] = ln_weighted
+    metrics['F_total'] = F_total
+    metrics['log_pv'] = log_pv_baseline + b_total + ln_weighted  # NEW: include b_total
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
     return metrics, total_options_pl, total_option_cost
 
-
 # --- 5. THINGSPEAK UPDATE FUNCTION (Unchanged) ---
-def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
+def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple,
+                             stock_assets: List[Dict[str, Any]],
+                             metrics: Dict[str, float],
+                             user_inputs: Dict[str, Any]):
     """Handles the UI for confirming and sending data to ThingSpeak."""
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
@@ -317,11 +384,17 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
 
-# --- main() FUNCTION (Unchanged) ---
+# --- main() FUNCTION ---
 def main():
     """Main function to run the Streamlit application."""
     config = load_config()
-    if not config: return
+    if not config:
+        return
+
+    # Ensure b_offset exists per stock
+    for a in config.get('assets', []):
+        if a.get('type', 'stock') == 'stock':
+            a.setdefault('b_offset', 0.0)
 
     all_assets = config.get('assets', [])
     stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
@@ -329,6 +402,16 @@ def main():
 
     clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
     initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
+
+    # --- NEW: Rollover UI (apply updates to config before calc) ---
+    pending_rolls, apply = render_rollover_ui(stock_assets, config)
+    if apply:
+        apply_rolls_and_update_config(config, stock_assets, pending_rolls)
+        # Re-load to ensure we pick up persisted values (optional)
+        config = load_config()
+        all_assets = config.get('assets', [])
+        stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
+        option_assets = [item for item in all_assets if item.get('type') == 'option']
 
     user_inputs = render_ui_and_get_inputs(
         stock_assets,
@@ -343,15 +426,13 @@ def main():
     # 1. Initial Calculation
     metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
 
-    # 2. Dynamic Cashflow Offset Calculation
+    # 2. Dynamic Cashflow Offset Calculation (UNCHANGED logic)
     log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
     product_cost = user_inputs.get('product_cost', 0.0)
     dynamic_offset = product_cost - log_pv_baseline
+    config['cashflow_offset'] = dynamic_offset  # override in-memory only
 
-    # Override the config value in memory for this run.
-    config['cashflow_offset'] = dynamic_offset
-
-    # 3. Display and Update using the new dynamic offset
+    # 3. Display and Update
     display_results(metrics, options_pl, total_option_cost, config)
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
