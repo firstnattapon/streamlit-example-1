@@ -1,0 +1,630 @@
+import os
+import json
+import datetime
+from typing import List, Dict, Tuple, Optional
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+import yfinance as yf
+import thingspeak
+from functools import lru_cache
+import concurrent.futures
+import tenacity
+
+# =====================================================================================
+# App setup
+# =====================================================================================
+st.set_page_config(
+    page_title="Monitor",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+TZ_NAME = "Asia/Bangkok"  # use correct case for tz
+DUMMY_ROWS = 5             # how many forward rows to append ("+0".."+n-1")
+HISTORY_TTL = 300          # seconds for cached market data
+PRICE_TTL = 300            # seconds for cached last price fetch
+MAX_WORKERS = 8            # cap threadpool to avoid oversubscription
+
+# =====================================================================================
+# Utilities
+# =====================================================================================
+
+def _ensure_bangkok_tz(index: pd.Index) -> pd.DatetimeIndex:
+    """Return a tz-aware DatetimeIndex in Asia/Bangkok regardless of input tz-ness."""
+    dt_index = pd.to_datetime(index)
+    if getattr(dt_index, "tz", None) is None:
+        dt_index = dt_index.tz_localize("UTC")
+    return dt_index.tz_convert(TZ_NAME)
+
+
+# =====================================================================================
+# SimulationTracer (fast + deterministic + cached)
+# =====================================================================================
+class SimulationTracer:
+    """Decode an encoded string and generate action array with deterministic RNG.
+
+    The calculation result is cached by the effective parameters so repeated calls are O(1).
+    """
+
+    def __init__(self, encoded_string: str):
+        self.encoded_string: str = str(encoded_string)
+        (
+            self.action_length,
+            self.mutation_rate,
+            self.dna_seed,
+            self.mutation_seeds,
+        ) = self._decode(encoded_string)
+        self.mutation_rate_float: float = self.mutation_rate / 100.0 if self.mutation_rate else 0.0
+
+    @staticmethod
+    def _decode(encoded_string: str) -> Tuple[int, int, int, List[int]]:
+        if not str(encoded_string).isdigit():
+            return 0, 0, 0, []
+        decoded_numbers: List[int] = []
+        idx = 0
+        try:
+            while idx < len(encoded_string):
+                length_of_number = int(encoded_string[idx])
+                idx += 1
+                number_str = encoded_string[idx : idx + length_of_number]
+                idx += length_of_number
+                decoded_numbers.append(int(number_str))
+        except (IndexError, ValueError):
+            return 0, 0, 0, []
+        if len(decoded_numbers) < 3:
+            return 0, 0, 0, []
+        return decoded_numbers[0], decoded_numbers[1], decoded_numbers[2], decoded_numbers[3:]
+
+    # ---- cached engine (returns tuple for hashability) ----
+    @staticmethod
+    @lru_cache(maxsize=1024)
+    def _compute_actions_cached(
+        action_length: int,
+        mutation_rate_float: float,
+        dna_seed: int,
+        mutation_seeds_tuple: Tuple[int, ...],
+    ) -> Tuple[int, ...]:
+        if action_length <= 0:
+            return tuple()
+        rng = np.random.default_rng(seed=dna_seed)
+        actions = rng.integers(0, 2, size=action_length)
+        actions[0] = 1
+        for m_seed in mutation_seeds_tuple:
+            m_rng = np.random.default_rng(seed=m_seed)
+            mask = m_rng.random(action_length) < mutation_rate_float
+            actions[mask] = 1 - actions[mask]
+            actions[0] = 1
+        return tuple(int(x) for x in actions.tolist())
+
+    def run(self) -> np.ndarray:
+        return np.asarray(
+            self._compute_actions_cached(
+                self.action_length,
+                self.mutation_rate_float,
+                self.dna_seed,
+                tuple(self.mutation_seeds),
+            )
+        )
+
+
+# =====================================================================================
+# Config loading
+# =====================================================================================
+@st.cache_data
+def load_config(file_path: str = "monitor_config.json") -> Dict:
+    if not os.path.exists(file_path):
+        st.error(f"Configuration file not found: {file_path}")
+        return {}
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    except json.JSONDecodeError as e:
+        st.error(f"Invalid JSON in config file: {e}")
+        return {}
+
+    # minimal validation
+    assets = cfg.get("assets", [])
+    if not isinstance(assets, list) or not assets:
+        st.error("No 'assets' list found in monitor_config.json")
+        return {}
+    return cfg
+
+
+CONFIG_DATA = load_config()
+if not CONFIG_DATA:
+    st.stop()
+
+ASSET_CONFIGS: List[Dict] = CONFIG_DATA.get("assets", [])
+GLOBAL_START_DATE: Optional[str] = CONFIG_DATA.get("global_settings", {}).get("start_date")
+
+
+# =====================================================================================
+# ThingSpeak clients (reused across reruns)
+# =====================================================================================
+@st.cache_resource
+def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
+    clients: Dict[int, thingspeak.Channel] = {}
+    unique_channels = set()
+    for cfg in configs:
+        mon = cfg.get("monitor_field", {})
+        asset = cfg.get("asset_field", {})
+        unique_channels.add((mon.get("channel_id"), mon.get("api_key")))
+        unique_channels.add((asset.get("channel_id"), asset.get("api_key")))
+
+    for channel_id, api_key in unique_channels:
+        if not channel_id or not api_key:
+            continue
+        try:
+            clients[channel_id] = thingspeak.Channel(channel_id, api_key, fmt="json")
+        except Exception as e:
+            st.error(f"Failed to create client for Channel ID {channel_id}: {e}")
+    return clients
+
+
+THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
+
+
+# =====================================================================================
+# Cache management
+# =====================================================================================
+
+def clear_all_caches():
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    try:
+        sell.cache_clear()
+        buy.cache_clear()
+    except Exception:
+        pass
+    ui_state_keys_to_preserve = ["select_key", "nex", "Nex_day_sell"]
+    keys_to_delete = [k for k in list(st.session_state.keys()) if k not in ui_state_keys_to_preserve]
+    for key in keys_to_delete:
+        del st.session_state[key]
+    st.success("🗑️ Data caches cleared! UI state preserved.")
+
+
+# =====================================================================================
+# Core calc utils (unchanged formulas, just typed)
+# =====================================================================================
+@lru_cache(maxsize=128)
+def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
+    if asset == 0:
+        return 0.0, 0, 0.0
+    unit_price = round((fix_c - Diff) / asset, 2)
+    adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
+    total = round(asset * unit_price + adjust_qty * unit_price, 2)
+    return unit_price, int(adjust_qty), total
+
+
+@lru_cache(maxsize=128)
+def buy(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
+    if asset == 0:
+        return 0.0, 0, 0.0
+    unit_price = round((fix_c + Diff) / asset, 2)
+    adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
+    total = round(asset * unit_price - adjust_qty * unit_price, 2)
+    return unit_price, int(adjust_qty), total
+
+
+# =====================================================================================
+# Market data
+# =====================================================================================
+@st.cache_data(ttl=HISTORY_TTL)
+def get_history_for_tickers(tickers: Tuple[str, ...]) -> Dict[str, pd.DataFrame]:
+    """Download full Close price history for many tickers in one call.
+    Returns dict[ticker] -> DataFrame[['Close']].
+    """
+    tickers = tuple(t for t in tickers if t)
+    if not tickers:
+        return {}
+
+    # yfinance handles up to ~200 tickers fine; this keeps network calls minimal
+    data = yf.download(
+        tickers=list(tickers), period="max", auto_adjust=False, progress=False
+    )
+    out: Dict[str, pd.DataFrame] = {}
+
+    # Single vs multi-ticker shape handling
+    if isinstance(data.columns, pd.MultiIndex):
+        for t in tickers:
+            if ("Close", t) in data.columns:
+                df = data[("Close", t)].to_frame(name="Close")
+                df.index = _ensure_bangkok_tz(df.index)
+                out[t] = df.round(3)
+    else:
+        # single ticker
+        if "Close" in data:
+            df = data[["Close"]]
+            df.index = _ensure_bangkok_tz(df.index)
+            out[tickers[0]] = df.round(3)
+    return out
+
+
+# Retry on exception OR on zero price (sometimes API returns 0)
+retry_policy = tenacity.retry(
+    wait=tenacity.wait_fixed(2),
+    stop=tenacity.stop_after_attempt(3),
+    retry=(
+        tenacity.retry_if_exception_type(Exception)
+        | tenacity.retry_if_result(lambda x: x is None or x == 0 or x == 0.0)
+    ),
+)
+
+
+@st.cache_data(ttl=PRICE_TTL)
+@retry_policy
+def get_cached_price(ticker: str) -> float:
+    info = yf.Ticker(ticker).fast_info
+    # yfinance changed keys in some versions; try multiple candidates
+    for key in ("lastPrice", "last_price", "last_trade_price"):
+        if key in info and info[key]:
+            return float(info[key])
+    # fallback to recent close
+    hist = yf.Ticker(ticker).history(period="1d")
+    if not hist.empty and "Close" in hist.columns:
+        return float(hist["Close"].iloc[-1])
+    return 0.0
+
+
+# =====================================================================================
+# Data fetching (parallel, cached)
+# =====================================================================================
+@st.cache_data(ttl=HISTORY_TTL)
+def fetch_all_data(configs: List[Dict], _clients_ref: Dict[int, thingspeak.Channel], start_date: Optional[str]) -> Dict[str, dict]:
+    monitor_results: Dict[str, Tuple[pd.DataFrame, str]] = {}
+    asset_results: Dict[str, float] = {}
+
+    tickers = tuple(cfg["ticker"] for cfg in configs)
+    history_map = get_history_for_tickers(tickers)
+
+    def fetch_monitor(asset_config: Dict) -> Tuple[str, Tuple[pd.DataFrame, str]]:
+        ticker = asset_config["ticker"]
+        try:
+            # price history
+            ticker_df = history_map.get(ticker, pd.DataFrame(columns=["Close"]))
+            if ticker_df.empty:
+                # last-resort per-ticker fetch (rare)
+                ticker_df = yf.Ticker(ticker).history(period="max")[['Close']].round(3)
+                ticker_df.index = _ensure_bangkok_tz(ticker_df.index)
+
+            if start_date:
+                try:
+                    ticker_df = ticker_df[ticker_df.index >= pd.Timestamp(start_date).tz_localize(TZ_NAME)]
+                except Exception:
+                    ticker_df = ticker_df
+
+            # read last field from ThingSpeak for encoded fx string
+            fx_js_str = "0"
+            try:
+                mon_field = asset_config["monitor_field"]
+                client = _clients_ref[mon_field["channel_id"]]
+                field_num = str(mon_field["field"])  # ThingSpeak uses 'field1', 'field2', ...
+                raw = client.get_field_last(field=field_num)
+                retrieved_val = json.loads(raw).get(f"field{field_num}")
+                if retrieved_val is not None:
+                    fx_js_str = str(retrieved_val)
+            except Exception:
+                pass
+
+            # build display df
+            df = ticker_df.copy()
+            df["index"] = np.arange(len(df))
+            df["action"] = ""
+
+            # append dummy future rows (+0..+n-1)
+            if DUMMY_ROWS > 0:
+                dummy = pd.DataFrame(index=[f"+{i}" for i in range(DUMMY_ROWS)], columns=df.columns)
+                df = pd.concat([df, dummy], axis=0)
+                df = df.fillna("")
+
+            # compute actions (same semantics as original)
+            try:
+                tracer = SimulationTracer(encoded_string=fx_js_str)
+                final_actions = tracer.run()
+                if final_actions.size > 0:
+                    n = min(len(df), final_actions.size)
+                    action_col_idx = df.columns.get_loc("action")
+                    df.iloc[0:n, action_col_idx] = final_actions[0:n]
+            except Exception as e:
+                st.warning(f"Tracer Error for {ticker}: {e}")
+
+            return ticker, (df.tail(7), fx_js_str)
+        except Exception as e:
+            st.error(f"Error in Monitor for {ticker}: {e}")
+            return ticker, (pd.DataFrame(), "0")
+
+    def fetch_asset(asset_config: Dict) -> Tuple[str, float]:
+        ticker = asset_config["ticker"]
+        try:
+            asset_field = asset_config["asset_field"]
+            client = _clients_ref[asset_field["channel_id"]]
+            field_name = str(asset_field["field"])  # e.g., "1" -> field1
+            data = client.get_field_last(field=field_name)
+            val = json.loads(data).get(field_name)
+            return ticker, float(val) if val is not None else 0.0
+        except Exception:
+            return ticker, 0.0
+
+    workers = max(1, min(len(configs), MAX_WORKERS))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        # monitors
+        for ticker, result in executor.map(fetch_monitor, configs):
+            monitor_results[ticker] = result
+        # assets
+        for ticker, result in executor.map(fetch_asset, configs):
+            asset_results[ticker] = result
+
+    return {"monitors": monitor_results, "assets": asset_results}
+
+
+# =====================================================================================
+# UI helpers
+# =====================================================================================
+
+def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float]) -> Dict[str, float]:
+    asset_inputs: Dict[str, float] = {}
+    cols = st.columns(len(configs)) if configs else []
+    for i, cfg in enumerate(configs):
+        with cols[i]:
+            ticker = cfg["ticker"]
+            last_val = float(last_assets.get(ticker, 0.0))
+            if cfg.get("option_config"):
+                option_val = float(cfg["option_config"].get("base_value", 0.0))
+                label = cfg["option_config"].get("label", f"{ticker}_ASSET")
+                real_val = st.number_input(label, step=0.001, value=last_val, key=f"input_{ticker}_real")
+                asset_inputs[ticker] = option_val + float(real_val)
+            else:
+                label = f"{ticker}_ASSET"
+                val = st.number_input(label, step=0.001, value=last_val, key=f"input_{ticker}_asset")
+                asset_inputs[ticker] = float(val)
+    return asset_inputs
+
+
+def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel]):
+    with st.expander("Update Assets on ThingSpeak"):
+        for cfg in configs:
+            ticker = cfg["ticker"]
+            asset_conf = cfg["asset_field"]
+            field_name = str(asset_conf["field"])  # e.g., "1"
+
+            if st.checkbox(f"@_{ticker}_ASSET", key=f"check_{ticker}"):
+                add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f"input_{ticker}")
+                if st.button(f"GO_{ticker}", key=f"btn_{ticker}"):
+                    try:
+                        client = clients[asset_conf["channel_id"]]
+                        client.update({field_name: add_val})
+                        st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
+                        clear_all_caches()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to update {ticker}: {e}")
+
+
+def trading_section(
+    config: Dict,
+    asset_val: float,
+    asset_last: float,
+    df_data: pd.DataFrame,
+    calc: Dict[str, Tuple[float, int, float]],
+    nex: int,
+    Nex_day_sell: int,
+    clients: Dict[int, thingspeak.Channel],
+):
+    ticker = config["ticker"]
+    asset_conf = config["asset_field"]
+    field_name = str(asset_conf["field"])  # e.g., "1"
+
+    def get_action_val() -> int:
+        try:
+            if df_data.empty or df_data.action.values[1 + nex] == "":
+                return 0
+            val = int(df_data.action.values[1 + nex])
+            return 1 - val if Nex_day_sell == 1 else val
+        except Exception:
+            return 0
+
+    action_val = get_action_val()
+    limit_order = st.checkbox(f"Limit_Order_{ticker}", value=bool(action_val), key=f"limit_order_{ticker}")
+    if not limit_order:
+        return
+
+    sell_calc, buy_calc = calc["sell"], calc["buy"]
+    st.write("sell", "    ", "A", buy_calc[1], "P", buy_calc[0], "C", buy_calc[2])
+    col1, col2, col3 = st.columns(3)
+    if col3.checkbox(f"sell_match_{ticker}"):
+        if col3.button(f"GO_SELL_{ticker}"):
+            try:
+                client = clients[asset_conf["channel_id"]]
+                new_asset_val = asset_last - buy_calc[1]
+                client.update({field_name: new_asset_val})
+                col3.write(f"Updated: {new_asset_val}")
+                clear_all_caches()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to SELL {ticker}: {e}")
+
+    try:
+        current_price = get_cached_price(ticker)
+        if current_price > 0:
+            pv = current_price * asset_val
+            fix_value = float(config["fix_c"])  # existing logic
+            pl_value = pv - fix_value
+            pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
+            st.markdown(
+                (
+                    f"Price: **{current_price:,.3f}** | Value: **{pv:,.2f}** | P/L (vs {fix_value:,}) : "
+                    f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>"
+                ),
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info(f"Price data for {ticker} is currently unavailable.")
+    except Exception:
+        st.warning(f"Could not retrieve price data for {ticker}.")
+
+    col4, col5, col6 = st.columns(3)
+    st.write("buy", "   ", "A", sell_calc[1], "P", sell_calc[0], "C", sell_calc[2])
+    if col6.checkbox(f"buy_match_{ticker}"):
+        if col6.button(f"GO_BUY_{ticker}"):
+            try:
+                client = clients[asset_conf["channel_id"]]
+                new_asset_val = asset_last + sell_calc[1]
+                client.update({field_name: new_asset_val})
+                col6.write(f"Updated: {new_asset_val}")
+                clear_all_caches()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to BUY {ticker}: {e}")
+
+
+# =====================================================================================
+# Main
+# =====================================================================================
+all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
+monitor_data_all = all_data["monitors"]
+last_assets_all = all_data["assets"]
+
+# Stable Session State
+if "select_key" not in st.session_state:
+    st.session_state.select_key = ""
+if "nex" not in st.session_state:
+    st.session_state.nex = 0
+if "Nex_day_sell" not in st.session_state:
+    st.session_state.Nex_day_sell = 0
+
+# Tabs
+tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
+
+with tab2:
+    Nex_day_ = st.checkbox("nex_day", value=(st.session_state.nex == 1))
+
+    if Nex_day_:
+        nex_col, Nex_day_sell_col, *_ = st.columns([1, 1, 3])
+        if nex_col.button("Nex_day"):
+            st.session_state.nex = 1
+            st.session_state.Nex_day_sell = 0
+        if Nex_day_sell_col.button("Nex_day_sell"):
+            st.session_state.nex = 1
+            st.session_state.Nex_day_sell = 1
+    else:
+        st.session_state.nex = 0
+        st.session_state.Nex_day_sell = 0
+
+    nex = st.session_state.nex
+    Nex_day_sell = st.session_state.Nex_day_sell
+
+    if Nex_day_:
+        st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
+
+    st.write("---")
+
+    x_2 = st.number_input("Diff", step=1, value=60)
+
+    st.write("---")
+
+    asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
+
+    st.write("---")
+
+    Start = st.checkbox("start")
+    if Start:
+        render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
+
+with tab1:
+    selectbox_labels: Dict[str, str] = {}
+    ticker_actions: Dict[str, Optional[int]] = {}
+
+    # prepare labels & actions shown in selectbox
+    for cfg in ASSET_CONFIGS:
+        ticker = cfg["ticker"]
+        df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
+        action_emoji, final_action_val = "", None
+        try:
+            if not df_data.empty and df_data.action.values[1 + st.session_state.nex] != "":
+                raw_action = int(df_data.action.values[1 + st.session_state.nex])
+                final_action_val = 1 - raw_action if st.session_state.Nex_day_sell == 1 else raw_action
+                if final_action_val == 1:
+                    action_emoji = "🟢 "
+                elif final_action_val == 0:
+                    action_emoji = "🔴 "
+        except (IndexError, ValueError, TypeError):
+            pass
+        ticker_actions[ticker] = final_action_val
+        selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
+
+    all_tickers = [cfg["ticker"] for cfg in ASSET_CONFIGS]
+    selectbox_options: List[str] = [""]
+    if st.session_state.nex == 1:
+        selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
+    selectbox_options.extend(all_tickers)
+
+    if st.session_state.select_key not in selectbox_options:
+        st.session_state.select_key = ""
+
+    def format_selectbox_options(option_name: str) -> str:
+        if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
+            return "Show All" if option_name == "" else option_name
+        return selectbox_labels.get(option_name, option_name).split(" (f(x):")[0]
+
+    st.selectbox(
+        "Select Ticker to View:",
+        options=selectbox_options,
+        format_func=format_selectbox_options,
+        key="select_key",
+    )
+    st.write("_____")
+
+    selected_option = st.session_state.select_key
+    if selected_option == "":
+        configs_to_display = ASSET_CONFIGS
+    elif selected_option == "Filter Buy Tickers":
+        buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
+        configs_to_display = [cfg for cfg in ASSET_CONFIGS if cfg["ticker"] in buy_tickers]
+    elif selected_option == "Filter Sell Tickers":
+        sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
+        configs_to_display = [cfg for cfg in ASSET_CONFIGS if cfg["ticker"] in sell_tickers]
+    else:
+        configs_to_display = [cfg for cfg in ASSET_CONFIGS if cfg["ticker"] == selected_option]
+
+    calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
+    for cfg in ASSET_CONFIGS:
+        ticker = cfg["ticker"]
+        asset_value = float(asset_inputs.get(ticker, 0.0))
+        fix_c = float(cfg["fix_c"])
+        calculations[ticker] = {
+            "sell": sell(asset_value, fix_c=fix_c, Diff=float(x_2)),
+            "buy": buy(asset_value, fix_c=fix_c, Diff=float(x_2)),
+        }
+
+    for cfg in configs_to_display:
+        ticker = cfg["ticker"]
+        df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
+        asset_last = float(last_assets_all.get(ticker, 0.0))
+        asset_val = float(asset_inputs.get(ticker, 0.0))
+        calc = calculations.get(ticker, {})
+
+        title_label = selectbox_labels.get(ticker, ticker)
+        st.write(title_label)
+
+        trading_section(
+            cfg,
+            asset_val,
+            asset_last,
+            df_data,
+            calc,
+            st.session_state.nex,
+            st.session_state.Nex_day_sell,
+            THINGSPEAK_CLIENTS,
+        )
+
+        with st.expander("Show Raw Data Action"):
+            st.dataframe(df_data, use_container_width=True)
+
+        st.write("_____")
+
+if st.sidebar.button("RERUN"):
+    clear_all_caches()
+    st.rerun()
