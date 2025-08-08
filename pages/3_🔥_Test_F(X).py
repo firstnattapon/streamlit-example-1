@@ -1,756 +1,360 @@
-# # main
-# import pandas as pd
-# import numpy as np
-# import yfinance as yf
-# import streamlit as st
-# from concurrent.futures import ThreadPoolExecutor, as_completed
-# from datetime import datetime
-# from typing import List, Tuple, Dict, Any
-
-# # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
-# from numba import njit
-
-# # ==============================================================================
-# # 1. Configuration & Constants
-# # ==============================================================================
-# st.set_page_config(page_title="Hybrid_Multi_Mutation", page_icon="🧬", layout="wide")
-
-# class Strategy:
-#     """คลาสสำหรับเก็บชื่อกลยุทธ์ต่างๆ เพื่อให้เรียกใช้ง่ายและลดข้อผิดพลาด"""
-#     REBALANCE_DAILY = "Rebalance Daily"
-#     PERFECT_FORESIGHT = "Perfect Foresight (Max)"
-#     HYBRID_MULTI_MUTATION = "Hybrid (Multi-Mutation)"
-#     ORIGINAL_DNA = "Original DNA (Pre-Mutation)"
-#     # NEW: Out-of-sample
-#     HYBRID_WALK_FORWARD = "Hybrid (Walk-Forward OOS)"
-
-# def load_config(filepath: str = "hybrid_seed_config.json") -> Dict[str, Any]:
-#     # In a real app, this might load from a JSON file. For simplicity, it's a dict.
-#     return {
-#         "assets": ["FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" , "DJT" ],
-#         "default_settings": {
-#             "selected_ticker": "FFWM", "start_date": "2024-01-01",
-#             "window_size": 30 , "num_seeds": 1000, "max_workers": 1,
-#             "mutation_rate": 10.0, "num_mutations": 5,
-#             # NEW: keep defaults zero/off so outputs stay identical
-#             "transaction_cost_bps": 0.0,
-#             "slippage_bps": 0.0,
-#             "use_costs_in_display": True,   # ใช้แสดงผลเท่านั้น ไม่ไปยุ่ง objective
-#             "walk_forward": False,
-#             "permtest_draws": 200
-#         }
-#     }
-
-# def initialize_session_state(config: Dict[str, Any]):
-#     defaults = config.get('default_settings', {})
-#     if 'test_ticker' not in st.session_state: st.session_state.test_ticker = defaults.get('selected_ticker', 'FFWM')
-#     if 'start_date' not in st.session_state:
-#         try: st.session_state.start_date = datetime.strptime(defaults.get('start_date', '2024-01-01'), '%Y-%m-%d').date()
-#         except ValueError: st.session_state.start_date = datetime(2024, 1, 1).date()
-#     if 'end_date' not in st.session_state: st.session_state.end_date = datetime.now().date()
-#     if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 30 )
-#     if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 1000)
-#     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
-#     if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 10.0)
-#     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
-#     # NEW: costs & validation toggles (defaults keep outputs unchanged)
-#     if 'transaction_cost_bps' not in st.session_state: st.session_state.transaction_cost_bps = defaults.get('transaction_cost_bps', 0.0)
-#     if 'slippage_bps' not in st.session_state: st.session_state.slippage_bps = defaults.get('slippage_bps', 0.0)
-#     if 'use_costs_in_display' not in st.session_state: st.session_state.use_costs_in_display = defaults.get('use_costs_in_display', True)
-#     if 'walk_forward' not in st.session_state: st.session_state.walk_forward = defaults.get('walk_forward', False)
-#     if 'permtest_draws' not in st.session_state: st.session_state.permtest_draws = defaults.get('permtest_draws', 200)
-
-# # ==============================================================================
-# # 2. Core Calculation & Data Functions
-# # ==============================================================================
-# @st.cache_data(ttl=3600)
-# def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
-#     try:
-#         data = yf.Ticker(ticker).history(start=start_date, end=end_date)[['Close']]
-#         if data.empty: return pd.DataFrame()
-#         if data.index.tz is None: data = data.tz_localize('UTC').tz_convert('Asia/Bangkok')
-#         else: data = data.tz_convert('Asia/Bangkok')
-#         return data
-#     except Exception as e:
-#         st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {str(e)}"); return pd.DataFrame()
-
-# @njit(cache=True)
-# def _calculate_net_profit_numba(action_array: np.ndarray, price_array: np.ndarray, fix: int = 1500) -> float:
-#     n = len(action_array)
-#     if n == 0 or len(price_array) == 0 or n > len(price_array): return -np.inf
-#     action_array_calc = action_array.copy(); action_array_calc[0] = 1
-#     initial_price = price_array[0]; initial_capital = fix * 2.0
-#     refer_net = -fix * np.log(initial_price / price_array[n-1])
-#     cash = float(fix); amount = float(fix) / initial_price
-#     for i in range(1, n):
-#         curr_price = price_array[i]
-#         if action_array_calc[i] != 0: cash += amount * curr_price - fix; amount = fix / curr_price
-#     final_sumusd = cash + (amount * price_array[n-1])
-#     net = final_sumusd - refer_net - initial_capital
-#     return net
-
-# def run_simulation(prices: List[float], actions: List[int], fix: int = 1500,
-#                    transaction_cost_bps: float = 0.0, slippage_bps: float = 0.0) -> pd.DataFrame:
-#     cost_rate = (transaction_cost_bps + slippage_bps) / 10000.0
-
-#     @njit
-#     def _full_sim_numba(action_arr, price_arr, fix_val, cost_rate_val):
-#         n = len(action_arr); empty = np.empty(0, dtype=np.float64)
-#         if n == 0 or len(price_arr) == 0: return empty, empty, empty, empty, empty, empty, empty
-#         action_calc = action_arr.copy(); action_calc[0] = 1
-#         amount = np.empty(n, dtype=np.float64); buffer = np.zeros(n, dtype=np.float64)
-#         cash = np.empty(n, dtype=np.float64); asset_val = np.empty(n, dtype=np.float64)
-#         sumusd_val = np.empty(n, dtype=np.float64); costs = np.zeros(n, dtype=np.float64)
-#         init_price = price_arr[0]; amount[0] = fix_val / init_price; cash[0] = fix_val
-#         asset_val[0] = amount[0] * init_price; sumusd_val[0] = cash[0] + asset_val[0]
-#         refer = -fix_val * np.log(init_price / price_arr[:n])
-
-#         for i in range(1, n):
-#             curr_price = price_arr[i]
-#             if action_calc[i] == 0:
-#                 amount[i] = amount[i-1]; buffer[i] = 0.0; trade_cost = 0.0
-#             else:
-#                 amount[i] = fix_val / curr_price
-#                 buffer[i] = amount[i-1] * curr_price - fix_val  # notional change
-#                 trade_cost = abs(buffer[i]) * cost_rate_val
-#             costs[i] = trade_cost
-#             cash[i] = cash[i-1] + buffer[i] - trade_cost
-#             asset_val[i] = amount[i] * curr_price
-#             sumusd_val[i] = cash[i] + asset_val[i]
-#         return buffer, sumusd_val, cash, asset_val, amount, refer, costs
-
-#     if not prices or not actions: return pd.DataFrame()
-#     min_len = min(len(prices), len(actions))
-#     prices_arr = np.array(prices[:min_len], dtype=np.float64); actions_arr = np.array(actions[:min_len], dtype=np.int32)
-#     buffer, sumusd, cash, asset_value, amount, refer, costs = _full_sim_numba(actions_arr, prices_arr, fix, cost_rate)
-#     if len(sumusd) == 0: return pd.DataFrame()
-#     initial_capital = sumusd[0]
-#     df = pd.DataFrame({
-#         'price': prices_arr, 'action': actions_arr, 'buffer': np.round(buffer, 2),
-#         'sumusd': np.round(sumusd, 2), 'cash': np.round(cash, 2), 'asset_value': np.round(asset_value, 2),
-#         'amount': np.round(amount, 6), 'refer': np.round(refer + initial_capital, 2),
-#         'net': np.round(sumusd - refer - initial_capital, 2),
-#         'costs': np.round(costs, 4)
-#     })
-#     return df
-
-# # ==============================================================================
-# # 3. Strategy Action Generation
-# # ==============================================================================
-# def generate_actions_rebalance_daily(num_days: int) -> np.ndarray: return np.ones(num_days, dtype=np.int32)
-
-# def generate_actions_perfect_foresight(prices: List[float], fix: int = 1500) -> np.ndarray:
-#     price_arr = np.asarray(prices, dtype=np.float64); n = len(price_arr)
-#     if n < 2: return np.ones(n, dtype=int)
-#     dp = np.zeros(n, dtype=np.float64); path = np.zeros(n, dtype=int); dp[0] = float(fix * 2)
-#     for i in range(1, n):
-#         j_indices = np.arange(i); profits = fix * ((price_arr[i] / price_arr[j_indices]) - 1)
-#         current_sumusd = dp[j_indices] + profits
-#         best_idx = np.argmax(current_sumusd); dp[i] = current_sumusd[best_idx]; path[i] = j_indices[best_idx]
-#     actions = np.zeros(n, dtype=int); current_day = np.argmax(dp)
-#     while current_day > 0: actions[current_day] = 1; current_day = path[current_day]
-#     actions[0] = 1
-#     return actions
-
-# def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int, max_workers: int) -> Tuple[int, float, np.ndarray]:
-#     window_len = len(prices_window)
-#     if window_len < 2: return 1, 0.0, np.ones(window_len, dtype=int)
-#     def evaluate_seed_batch(seed_batch: np.ndarray) -> List[Tuple[int, float]]:
-#         results = []
-#         for seed in seed_batch:
-#             rng = np.random.default_rng(seed)
-#             actions = rng.integers(0, 2, size=window_len)
-#             net = _calculate_net_profit_numba(actions, prices_window)
-#             results.append((seed, net))
-#         return results
-#     best_seed, max_net = -1, -np.inf
-#     random_seeds = np.arange(num_seeds_to_try)
-#     batch_size = max(1, num_seeds_to_try // (max_workers * 4 if max_workers > 0 else 1))
-#     seed_batches = [random_seeds[j:j+batch_size] for j in range(0, len(random_seeds), batch_size)]
-#     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-#         futures = [executor.submit(evaluate_seed_batch, batch) for batch in seed_batches]
-#         for future in as_completed(futures):
-#             for seed, final_net in future.result():
-#                 if final_net > max_net: max_net, best_seed = final_net, seed
-#     if best_seed >= 0:
-#         rng_best = np.random.default_rng(best_seed)
-#         best_actions = rng_best.integers(0, 2, size=window_len)
-#     else: best_seed, best_actions, max_net = 1, np.ones(window_len, dtype=int), 0.0
-#     best_actions[0] = 1
-#     return best_seed, max_net, best_actions
-
-# def find_best_mutation_for_sequence(
-#     original_actions: np.ndarray,
-#     prices_window: np.ndarray,
-#     num_mutation_seeds: int,
-#     mutation_rate: float,
-#     max_workers: int
-# ) -> Tuple[int, float, np.ndarray]:
-
-#     window_len = len(original_actions)
-#     if window_len < 2: return 1, -np.inf, original_actions
-
-#     def evaluate_mutation_seed_batch(seed_batch: np.ndarray) -> List[Tuple[int, float]]:
-#         results = []
-#         for seed in seed_batch:
-#             mutation_rng = np.random.default_rng(seed)
-#             mutated_actions = original_actions.copy()
-#             mutation_mask = mutation_rng.random(window_len) < mutation_rate
-#             mutated_actions[mutation_mask] = 1 - mutated_actions[mutation_mask]
-#             mutated_actions[0] = 1
-#             net = _calculate_net_profit_numba(mutated_actions, prices_window)
-#             results.append((seed, net))
-#         return results
-
-#     best_mutation_seed, max_mutated_net = -1, -np.inf
-#     mutation_seeds_to_try = np.arange(num_mutation_seeds)
-#     batch_size = max(1, num_mutation_seeds // (max_workers * 4 if max_workers > 0 else 1))
-#     seed_batches = [mutation_seeds_to_try[j:j+batch_size] for j in range(0, len(mutation_seeds_to_try), batch_size)]
-
-#     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-#         futures = [executor.submit(evaluate_mutation_seed_batch, batch) for batch in seed_batches]
-#         for future in as_completed(futures):
-#             for seed, net in future.result():
-#                 if net > max_mutated_net:
-#                     max_mutated_net = net
-#                     best_mutation_seed = seed
-
-#     if best_mutation_seed >= 0:
-#         mutation_rng = np.random.default_rng(best_mutation_seed)
-#         final_mutated_actions = original_actions.copy()
-#         mutation_mask = mutation_rng.random(window_len) < mutation_rate
-#         final_mutated_actions[mutation_mask] = 1 - final_mutated_actions[mutation_mask]
-#         final_mutated_actions[0] = 1
-#     else:
-#         best_mutation_seed = -1
-#         max_mutated_net = -np.inf
-#         final_mutated_actions = original_actions.copy()
-
-#     return best_mutation_seed, max_mutated_net, final_mutated_actions
-
-# def generate_actions_hybrid_multi_mutation(
-#     ticker_data: pd.DataFrame,
-#     window_size: int,
-#     num_seeds: int,
-#     max_workers: int,
-#     mutation_rate_pct: float,
-#     num_mutations: int
-# ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame]:
-
-#     prices = ticker_data['Close'].to_numpy()
-#     n = len(prices)
-#     final_actions = np.array([], dtype=int)
-#     original_actions_full = np.array([], dtype=int)
-#     window_details_list = []
-
-#     num_windows = (n + window_size - 1) // window_size
-#     progress_bar = st.progress(0, text="Initializing Hybrid Multi-Mutation Search...")
-#     mutation_rate = mutation_rate_pct / 100.0
-
-#     for i, start_index in enumerate(range(0, n, window_size)):
-#         progress_total_steps = num_mutations + 1
-
-#         end_index = min(start_index + window_size, n)
-#         prices_window = prices[start_index:end_index]
-#         if len(prices_window) < 2: continue
-
-#         progress_text = f"Window {i+1}/{num_windows} - Phase 1: Searching for Best DNA..."
-#         progress_bar.progress((i * progress_total_steps + 1) / (num_windows * progress_total_steps), text=progress_text)
-
-#         dna_seed, current_best_net, current_best_actions = find_best_seed_for_window(prices_window, num_seeds, max_workers)
-
-#         original_actions_window = current_best_actions.copy()
-#         original_net_for_display = current_best_net
-#         successful_mutation_seeds = []
-
-#         for mutation_round in range(num_mutations):
-#             progress_text = f"Window {i+1}/{num_windows} - Mutation Round {mutation_round+1}/{num_mutations}..."
-#             progress_bar.progress((i * progress_total_steps + 1 + mutation_round + 1) / (num_windows * progress_total_steps), text=progress_text)
-
-#             mutation_seed, mutated_net, mutated_actions = find_best_mutation_for_sequence(
-#                 current_best_actions, prices_window, num_seeds, mutation_rate, max_workers
-#             )
-
-#             if mutated_net > current_best_net:
-#                 current_best_net = mutated_net
-#                 current_best_actions = mutated_actions
-#                 successful_mutation_seeds.append(int(mutation_seed))
-
-#         final_actions = np.concatenate((final_actions, current_best_actions))
-#         original_actions_full = np.concatenate((original_actions_full, original_actions_window))
-
-#         start_date = ticker_data.index[start_index]; end_date = ticker_data.index[end_index-1]
-#         detail = {
-#             'window': i + 1, 'timeline': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
-#             'dna_seed': dna_seed,
-#             'mutation_seeds': str(successful_mutation_seeds) if successful_mutation_seeds else "None",
-#             'improvements': len(successful_mutation_seeds),
-#             'original_net': round(original_net_for_display, 2),
-#             'final_net': round(current_best_net, 2)
-#         }
-#         window_details_list.append(detail)
-
-#     progress_bar.empty()
-#     return original_actions_full, final_actions, pd.DataFrame(window_details_list)
-
-# # NEW: Walk-forward evaluation (train on window i, apply to window i+1)
-# def walk_forward_apply_actions(ticker_data: pd.DataFrame,
-#                                window_size: int,
-#                                actions_by_window: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-#     prices = ticker_data['Close'].to_numpy()
-#     n = len(prices)
-#     num_windows = (n + window_size - 1) // window_size
-#     applied_actions = []
-#     applied_prices = []
-#     for i in range(num_windows - 1):  # last window has no forward test
-#         # apply actions learned from window i to prices of window i+1
-#         start_test = (i+1) * window_size
-#         end_test = min(start_test + window_size, n)
-#         test_len = end_test - start_test
-#         if test_len < 2: break
-#         a = actions_by_window[i]
-#         a = a[:test_len]
-#         if len(a) < test_len:
-#             # pad with last action (usually 0) to match length if needed
-#             pad = np.zeros(test_len - len(a), dtype=int)
-#             a = np.concatenate([a, pad])
-#         a[0] = 1
-#         applied_actions.append(a)
-#         applied_prices.append(prices[start_test:end_test])
-#     if not applied_actions:
-#         return np.array([], dtype=int), np.array([], dtype=float)
-#     return np.concatenate(applied_actions), np.concatenate(applied_prices)
-
-# # ==============================================================================
-# # 4. Metrics & Validation Helpers (NEW)
-# # ==============================================================================
-# def compute_metrics_from_equity(df: pd.DataFrame) -> Dict[str, float]:
-#     # equity curve
-#     eq = df['sumusd'].values
-#     if len(eq) < 2: return {"CAGR": 0.0, "Sharpe": 0.0, "MaxDD": 0.0, "Turnover%": 0.0}
-#     rets = pd.Series(eq).pct_change().dropna()
-#     ann = 252
-#     cagr = (eq[-1] / eq[0]) ** (ann / max(1, len(eq))) - 1
-#     vol = rets.std() * np.sqrt(ann) if len(rets) > 1 else 0.0
-#     sharpe = (rets.mean() * ann) / vol if vol > 1e-12 else 0.0
-#     # Max drawdown on equity
-#     roll_max = np.maximum.accumulate(eq)
-#     dd = (eq - roll_max) / roll_max
-#     maxdd = dd.min() if len(dd) else 0.0
-#     # Turnover proxy: sum of abs(buffer) / final equity
-#     turnover = float(np.nansum(np.abs(df.get('buffer', pd.Series(np.zeros(len(df)))).values))) / max(1e-9, eq[-1]) * 100
-#     return {"CAGR": float(cagr), "Sharpe": float(sharpe), "MaxDD": float(maxdd), "Turnover%": float(turnover)}
-
-# def permutation_p_value(prices: np.ndarray, observed_net: float, draws: int = 200, fix: int = 1500) -> float:
-#     # keep day-0 = 1, sample Bernoulli with same p of action=1 as Hybrid’s actions estimate ≈ 0.5 by default
-#     n = len(prices)
-#     if n < 3: return 1.0
-#     rng = np.random.default_rng(42)
-#     cnt = 0
-#     for _ in range(draws):
-#         acts = rng.integers(0, 2, size=n).astype(np.int32)
-#         acts[0] = 1
-#         net = _calculate_net_profit_numba(acts, prices.astype(np.float64), fix)
-#         if net >= observed_net: cnt += 1
-#     return (cnt + 1) / (draws + 1)
-
-# # ==============================================================================
-# # 5. UI Rendering Functions
-# # ==============================================================================
-# def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
-#     if not results: st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
-#     valid_dfs = {name: df for name, df in results.items() if not df.empty and 'net' in df.columns}
-#     if not valid_dfs: st.warning("ไม่มีข้อมูล 'net' สำหรับสร้างกราฟ"); return
-#     try: longest_index = max((df.index for df in valid_dfs.values()), key=len, default=None)
-#     except ValueError: longest_index = None
-#     if longest_index is None: st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
-#     chart_data = pd.DataFrame(index=longest_index)
-#     for name, df in valid_dfs.items(): chart_data[name] = df['net'].reindex(longest_index).ffill()
-#     st.write(chart_title); st.line_chart(chart_data)
-
-# def render_settings_tab():
-#     st.write("⚙️ **การตั้งค่าพารามิเตอร์**")
-#     config = load_config()
-#     asset_list = config.get('assets', ['FFWM'])
-
-#     c1, c2 = st.columns(2)
-#     st.session_state.test_ticker = c1.selectbox("เลือก Ticker สำหรับทดสอบ", options=asset_list, index=asset_list.index(st.session_state.test_ticker) if st.session_state.test_ticker in asset_list else 0)
-#     st.session_state.window_size = c2.number_input("ขนาด Window (วัน)", min_value=2, value=st.session_state.window_size)
-
-#     c1, c2 = st.columns(2)
-#     st.session_state.start_date = c1.date_input("วันที่เริ่มต้น", value=st.session_state.start_date)
-#     st.session_state.end_date = c2.date_input("วันที่สิ้นสุด", value=st.session_state.end_date)
-#     if st.session_state.start_date >= st.session_state.end_date: st.error("❌ วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด")
-
-#     st.divider()
-#     st.subheader("พารามิเตอร์สำหรับกลยุทธ์")
-#     c1, c2 = st.columns(2)
-#     st.session_state.num_seeds = c1.number_input("จำนวน Seeds (สำหรับค้นหา DNA และ Mutation)", min_value=100, value=st.session_state.num_seeds, format="%d")
-#     st.session_state.max_workers = c2.number_input("จำนวน Workers (CPU Cores)", min_value=1, max_value=16, value=st.session_state.max_workers)
-
-#     c1, c2 = st.columns(2)
-#     st.session_state.mutation_rate = c1.slider("อัตราการกลายพันธุ์ (Mutation Rate) %", min_value=0.0, max_value=50.0, value=st.session_state.mutation_rate, step=0.5)
-#     st.session_state.num_mutations = c2.number_input("จำนวนรอบการกลายพันธุ์ (Multi-Mutation)", min_value=0, max_value=10, value=st.session_state.num_mutations, help="จำนวนครั้งที่จะพยายามพัฒนายีนส์ต่อจากตัวที่ดีที่สุดในแต่ละ Window")
-
-#     # NEW: Optional costs & validation toggles (default keep outputs same)
-#     with st.expander("🧪 Validation & Costs (optional)"):
-#         c1, c2, c3 = st.columns(3)
-#         st.session_state.transaction_cost_bps = c1.number_input("Transaction cost (bps)", min_value=0.0, max_value=100.0, value=st.session_state.transaction_cost_bps, step=0.5, help="เช่น 5 bps = 0.05% ต่อมูลค่าซื้อขาย")
-#         st.session_state.slippage_bps = c2.number_input("Slippage (bps)", min_value=0.0, max_value=200.0, value=st.session_state.slippage_bps, step=0.5)
-#         st.session_state.walk_forward = c3.checkbox("Walk-Forward OOS", value=st.session_state.walk_forward, help="เทรนที่หน้าต่าง i แล้วเอาไปใช้หน้าต่าง i+1 (ผลจะแสดงแยก)")
-#         st.session_state.permtest_draws = st.number_input("Permutation draws", min_value=50, max_value=2000, value=st.session_state.permtest_draws, step=50, help="จำนวนครั้งที่สุ่มเพื่อตีค่าความนัยสำคัญ (ยิ่งมากยิ่งช้า)")
-
-# def render_hybrid_multi_mutation_tab():
-#     st.write("---")
-#     st.markdown(f"### 🧬 {Strategy.HYBRID_MULTI_MUTATION}")
-#     st.info("ไอเดีย: ค้นหา DNA ที่ดีที่สุดในแต่ละ window แล้ว mutate ซ้ำๆ เพื่อไล่หา action ที่ให้ net สูงกว่า (กลไกเหมือน selective breeding)")
-
-#     with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (Multi-Mutation)"):
-#         st.markdown(
-#             """
-#             (ตัดให้สั้น) กระบวนการ: 1) ค้นหา DNA แชมป์ของ window 2) mutate หลายรอบถ้าดีขึ้นค่อยแทนแชมป์ 3) ต่อกันจนครบทุก window
-#             > ค่าเริ่มต้นยังเหมือนเดิมทั้งหมด เพื่อไม่ทำให้ผลเก่าคลาดเคลื่อน
-#             """
-#         )
-#         code = """ ตัวอย่าง code
-#         import numpy as np
-#         dna_rng = np.random.default_rng(seed=239)
-#         current_actions = dna_rng.integers(0, 2, size=30)
-#         default_actions = current_actions.copy()
-#         m_seed = 30
-#         mutation_rng = np.random.default_rng(seed=30)
-#         mutation_mask = mutation_rng.random(30) < 0.10
-#         current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
-#         current_actions[0] = 1; default_actions[0] = 1
-#         """
-#         st.code(code, language="python")
-
-#     if st.button(f"🚀 Start Hybrid Multi-Mutation", type="primary"):
-#         if st.session_state.start_date >= st.session_state.end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
-#         ticker = st.session_state.test_ticker
-#         with st.spinner(f"กำลังดึงข้อมูลและประมวลผลสำหรับ {ticker}..."):
-#             ticker_data = get_ticker_data(ticker, str(st.session_state.start_date), str(st.session_state.end_date))
-#             if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
-
-#             original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
-#                 ticker_data, st.session_state.window_size, st.session_state.num_seeds,
-#                 st.session_state.max_workers, st.session_state.mutation_rate,
-#                 st.session_state.num_mutations
-#             )
-
-#             prices = ticker_data['Close'].to_numpy()
-
-#             # display with (optional) costs — defaults are zeros so results unchanged
-#             tc = st.session_state.transaction_cost_bps if st.session_state.use_costs_in_display else 0.0
-#             sp = st.session_state.slippage_bps if st.session_state.use_costs_in_display else 0.0
-
-#             results = {
-#                 Strategy.HYBRID_MULTI_MUTATION: run_simulation(prices.tolist(), final_actions.tolist(), transaction_cost_bps=tc, slippage_bps=sp),
-#                 Strategy.ORIGINAL_DNA: run_simulation(prices.tolist(), original_actions.tolist(), transaction_cost_bps=tc, slippage_bps=sp),
-#                 Strategy.REBALANCE_DAILY: run_simulation(prices.tolist(), generate_actions_rebalance_daily(len(prices)).tolist(), transaction_cost_bps=tc, slippage_bps=sp),
-#                 Strategy.PERFECT_FORESIGHT: run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist(), transaction_cost_bps=tc, slippage_bps=sp)
-#             }
-#             for name, df in results.items():
-#                 if not df.empty: df.index = ticker_data.index[:len(df)]
-
-#             # NEW: Walk-forward OOS (optional)
-#             if st.session_state.walk_forward:
-#                 # collect actions per window for training windows
-#                 actions_by_window = []
-#                 n = len(prices)
-#                 for start in range(0, n, st.session_state.window_size):
-#                     end = min(start + st.session_state.window_size, n)
-#                     seg_len = end - start
-#                     if seg_len < 2: break
-#                     actions_by_window.append(final_actions[len(np.concatenate(actions_by_window)) : len(np.concatenate(actions_by_window)) + seg_len])
-#                 oos_actions, oos_prices = walk_forward_apply_actions(ticker_data, st.session_state.window_size, actions_by_window)
-#                 if len(oos_actions) > 0:
-#                     oos_df = run_simulation(oos_prices.tolist(), oos_actions.tolist(), transaction_cost_bps=tc, slippage_bps=sp)
-#                     oos_df.index = ticker_data.index[-len(oos_df):]  # align to end roughly
-#                     results[Strategy.HYBRID_WALK_FORWARD] = oos_df
-
-#             st.session_state.simulation_results = results
-#             st.session_state.df_windows_details = df_windows
-#             st.session_state.ticker_data_cache = ticker_data
-
-#     # --- Display results section (persist UI)
-#     if 'simulation_results' in st.session_state:
-#         st.success("การทดสอบเสร็จสมบูรณ์!")
-
-#         results = st.session_state.simulation_results
-#         chart_results = {k: v for k, v in results.items() if k != Strategy.ORIGINAL_DNA}
-#         display_comparison_charts(chart_results)
-
-#         st.divider()
-#         st.write("### 📈 สรุปผลลัพธ์")
-
-#         df_windows = st.session_state.get('df_windows_details', pd.DataFrame())
-
-#         if not df_windows.empty:
-#             def last_net(name): 
-#                 df = results.get(name)
-#                 return df['net'].iloc[-1] if df is not None and not df.empty else 0.0
-
-#             total_perfect_net = last_net(Strategy.PERFECT_FORESIGHT)
-#             total_hybrid_net = last_net(Strategy.HYBRID_MULTI_MUTATION)
-#             total_original_net = last_net(Strategy.ORIGINAL_DNA)
-#             total_rebalance_net = last_net(Strategy.REBALANCE_DAILY)
-#             total_hybrid_oos = last_net(Strategy.HYBRID_WALK_FORWARD)
-
-#             st.write("#### สรุปผลการดำเนินงานโดยรวม (Compounded Final Profit)")
-#             cols = st.columns(5)
-#             cols[0].metric("Perfect Foresight", f"${total_perfect_net:,.2f}")
-#             cols[1].metric("Hybrid Strategy", f"${total_hybrid_net:,.2f}")
-#             cols[2].metric("Original Profits", f"${total_original_net:,.2f}")
-#             cols[3].metric("Rebalance Daily", f"${total_rebalance_net:,.2f}")
-#             cols[4].metric("Hybrid OOS (WF)", f"${total_hybrid_oos:,.2f}")
-
-#             st.write("---")
-#             st.write("#### 📝 รายละเอียดผลลัพธ์ราย Window")
-#             st.dataframe(df_windows, use_container_width=True)
-#             ticker = st.session_state.get('test_ticker', 'TICKER')
-#             st.download_button("📥 Download Details (CSV)", df_windows.to_csv(index=False), f'hybrid_multi_mutation_{ticker}.csv', 'text/csv')
-
-#             # NEW: Risk metrics table
-#             with st.expander("📊 Risk & Cost-aware metrics"):
-#                 rows = []
-#                 for name, df in results.items():
-#                     if df is None or df.empty: continue
-#                     m = compute_metrics_from_equity(df)
-#                     rows.append({"Strategy": name, **{k: round(v, 4) for k,v in m.items()}, "Final Net": round(df['net'].iloc[-1], 2)})
-#                 if rows:
-#                     st.dataframe(pd.DataFrame(rows), use_container_width=True)
-
-#             # NEW: Quick permutation test
-#             with st.expander("🎲 Quick Shuffle Test (p-value คร่าวๆ)"):
-#                 if st.button("Run 200 randomizations (default)", key="perm_button"):
-#                     try:
-#                         prices = st.session_state.ticker_data_cache['Close'].to_numpy().astype(np.float64)
-#                         hybrid_df = results.get(Strategy.HYBRID_MULTI_MUTATION)
-#                         observed = float(hybrid_df['net'].iloc[-1]) if hybrid_df is not None and not hybrid_df.empty else 0.0
-#                         pval = permutation_p_value(prices, observed, draws=int(st.session_state.permtest_draws))
-#                         st.info(f"Approx. p-value = {pval:.4f}  → ยิ่งเล็กยิ่งมั่นใจว่าไม่ใช่ดวงล้วน")
-#                     except Exception as e:
-#                         st.error(f"Permutation test error: {e}")
-
-#             # Section to encode a specific window's data (unchanged)
-#             st.divider()
-#             st.markdown("#### 🎁 Generate Encoded String from Window Result")
-#             st.info("เลือกหมายเลข Window จากตารางด้านบนเพื่อสร้าง Encoded String สำหรับนำไปใช้ในแท็บ 'Tracer'")
-
-#             c1, c2 = st.columns([1, 3])
-#             with c1:
-#                 max_window = len(df_windows)
-#                 window_to_encode = st.number_input(
-#                     "Select Window #", min_value=1, max_value=max_window, value=1, key="window_encoder_input"
-#                 )
-
-#                 # Calculate the default action length for the selected window
-#                 try:
-#                     total_days = len(st.session_state.ticker_data_cache)
-#                     window_size = st.session_state.window_size
-#                     start_index = (window_to_encode - 1) * window_size
-#                     default_action_length = min(window_size, total_days - start_index) * 2  # Action Length
-#                 except (KeyError, TypeError):
-#                     default_action_length = st.session_state.get('window_size', 60)
-
-#                 # Add the Action Length input, pre-filled with the calculated value
-#                 action_length_for_encoder = st.number_input(
-#                     "Action Length",
-#                     min_value=1,
-#                     value=default_action_length,
-#                     key="action_length_for_encoder",
-#                     help="ความยาวของ action sequence สำหรับ window ที่เลือก (คำนวณอัตโนมัติ)"
-#                 )
-
-#             with c2:
-#                 st.write("")
-#                 st.write("")
-#                 if st.button("Encode Selected Window", key="window_encoder_button"):
-#                     try:
-#                         window_data = df_windows.iloc[window_to_encode - 1]
-
-#                         # Extract parameters
-#                         dna_seed = int(window_data['dna_seed'])
-#                         mutation_rate = int(st.session_state.mutation_rate)
-
-#                         # Safely parse mutation_seeds string like '[90, 219]' or 'None'
-#                         mutation_seeds_str = window_data['mutation_seeds']
-#                         mutation_seeds = []
-#                         if mutation_seeds_str not in ["None", "[]"]:
-#                             cleaned_str = mutation_seeds_str.strip('[]')
-#                             if cleaned_str:
-#                                 mutation_seeds = [int(s.strip()) for s in cleaned_str.split(',')]
-
-#                         action_length_to_use = int(action_length_for_encoder)
-
-#                         encoded_string = SimulationTracer.encode(
-#                             action_length=action_length_to_use,
-#                             mutation_rate=mutation_rate,
-#                             dna_seed=dna_seed,
-#                             mutation_seeds=mutation_seeds
-#                         )
-
-#                         st.success(f"**Encoded String for Window #{window_to_encode}:**")
-#                         st.code(encoded_string, language='text')
-
-#                     except (IndexError, KeyError):
-#                         st.error(f"ไม่สามารถหาข้อมูลสำหรับ Window #{window_to_encode} ได้")
-#                     except Exception as e:
-#                         st.error(f"เกิดข้อผิดพลาดระหว่างการเข้ารหัส: {e}")
-
-# def render_tracer_tab():
-#     st.markdown("### 🔍 Action Sequence Tracer & Encoder")
-#     st.info("เครื่องมือนี้ใช้สำหรับ 1. **ถอดรหัส (Decode)** String เพื่อจำลองผลลัพธ์ และ 2. **เข้ารหัส (Encode)** พารามิเตอร์เพื่อสร้าง String")
-
-#     st.markdown("---")
-#     st.markdown("#### 1. ถอดรหัส (Decode) String")
-
-#     encoded_string = st.text_input(
-#         "ป้อน Encoded String ที่นี่:",
-#         "26021034252903219354832053493",
-#         help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds",
-#         key="decoder_input"
-#     )
-
-#     if st.button("Trace & Simulate", type="primary", key="tracer_button"):
-#         if not encoded_string:
-#             st.warning("กรุณาป้อน Encoded String")
-#         else:
-#             with st.spinner(f"กำลังถอดรหัสและจำลองสำหรับ: {encoded_string[:20]}..."):
-#                 try:
-#                     tracer = SimulationTracer(encoded_string=encoded_string)
-#                     st.success("ถอดรหัสสำเร็จ!")
-#                     st.code(str(tracer), language='bash')
-#                     final_actions = tracer.run()
-#                     st.write("---")
-#                     st.markdown("#### 🎉 ผลลัพธ์ Action Sequence สุดท้าย:")
-#                     st.dataframe(pd.DataFrame(final_actions, columns=['Action']), use_container_width=True)
-#                     st.write("Raw Array:")
-#                     st.code(str(final_actions))
-#                 except ValueError as e:
-#                     st.error(f"❌ เกิดข้อผิดพลาดในการประมวลผล: {e}")
-
-#     st.divider()
-
-#     st.markdown("#### 2. เข้ารหัส (Encode) พารามิเตอร์")
-#     st.write("ป้อนพารามิเตอร์เพื่อสร้าง Encoded String สำหรับการทดลองซ้ำ")
-
-#     col1, col2 = st.columns(2)
-#     with col1:
-#         action_length_input = st.number_input("Action Length", min_value=1, value=60, key="enc_len", help="ความยาวของ action sequence")
-#         dna_seed_input = st.number_input("DNA Seed", min_value=0, value=900, format="%d", key="enc_dna", help="Seed สำหรับสร้าง DNA ดั้งเดิม")
-#     with col2:
-#         mutation_rate_input = st.number_input("Mutation Rate (%)", min_value=0, value=10, key="enc_rate", help="อัตราการกลายพันธุ์เป็นเปอร์เซ็นต์ (เช่น 5 สำหรับ 5%)")
-#         mutation_seeds_str = st.text_input(
-#             "Mutation Seeds (คั่นด้วยจุลภาค ,)",
-#             "899, 530, 35, 814, 646",
-#             key="enc_seeds_str",
-#             help="ชุดของ Seed สำหรับการกลายพันธุ์แต่ละรอบ คั่นด้วยเครื่องหมายจุลภาค"
-#         )
-
-#     if st.button("Encode Parameters", key="encoder_button"):
-#         try:
-#             if mutation_seeds_str.strip():
-#                 mutation_seeds_list = [int(s.strip()) for s in mutation_seeds_str.split(',')]
-#             else:
-#                 mutation_seeds_list = []
-
-#             generated_string = SimulationTracer.encode(
-#                 action_length=int(action_length_input),
-#                 mutation_rate=int(mutation_rate_input),
-#                 dna_seed=int(dna_seed_input),
-#                 mutation_seeds=mutation_seeds_list
-#             )
-
-#             st.success("เข้ารหัสสำเร็จ! สามารถคัดลอก String ด้านล่างไปใช้ได้")
-#             st.code(generated_string, language='text')
-
-#         except (ValueError, TypeError) as e:
-#             st.error(f"❌ เกิดข้อผิดพลาด: กรุณาตรวจสอบว่า Mutation Seeds เป็นตัวเลขที่คั่นด้วยจุลภาคเท่านั้น ({e})")
-
-# # ==============================================================================
-# # 6. Simulation Tracer Class (unchanged)
-# # ==============================================================================
-# class SimulationTracer:
-#     """
-#     คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
-#     ไปจนถึงการจำลองกระบวนการกลายพันธุ์ของ action sequence
-#     """
-
-#     def __init__(self, encoded_string: str):
-#         self.encoded_string: str = encoded_string
-#         self._decode_and_set_attributes()
-
-#     def _decode_and_set_attributes(self):
-#         encoded_string = self.encoded_string
-#         if not isinstance(encoded_string, str) or not encoded_string.isdigit():
-#             raise ValueError("Input ต้องเป็นสตริงที่ประกอบด้วยตัวเลขเท่านั้น")
-
-#         decoded_numbers = []
-#         idx = 0
-#         while idx < len(encoded_string):
-#             try:
-#                 length_of_number = int(encoded_string[idx]); idx += 1
-#                 number_str = encoded_string[idx : idx + length_of_number]; idx += length_of_number
-#                 decoded_numbers.append(int(number_str))
-#             except (IndexError, ValueError):
-#                 raise ValueError(f"รูปแบบของสตริงไม่ถูกต้องที่ตำแหน่ง {idx}")
-
-#         if len(decoded_numbers) < 3:
-#             raise ValueError("ข้อมูลในสตริงไม่ครบถ้วน (ต้องการอย่างน้อย 3 ค่า)")
-
-#         self.action_length: int = decoded_numbers[0]
-#         self.mutation_rate: int = decoded_numbers[1]
-#         self.dna_seed: int = decoded_numbers[2]
-#         self.mutation_seeds: List[int] = decoded_numbers[3:]
-#         self.mutation_rate_float: float = self.mutation_rate / 100.0
-
-#     def run(self) -> np.ndarray:
-#         dna_rng = np.random.default_rng(seed=self.dna_seed)
-#         current_actions = dna_rng.integers(0, 2, size=self.action_length)
-#         current_actions[0] = 1
-#         for m_seed in self.mutation_seeds:
-#             mutation_rng = np.random.default_rng(seed=m_seed)
-#             mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
-#             current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
-#             current_actions[0] = 1
-#         return current_actions
-
-#     def __str__(self) -> str:
-#         return (
-#             "✅ พารามิเตอร์ที่ถอดรหัสสำเร็จ:\n"
-#             f"- action_length: {self.action_length}\n"
-#             f"- mutation_rate: {self.mutation_rate} ({self.mutation_rate_float:.2f})\n"
-#             f"- dna_seed: {self.dna_seed}\n"
-#             f"- mutation_seeds: {self.mutation_seeds}"
-#         )
-
-#     @staticmethod
-#     def encode(action_length: int, mutation_rate: int, dna_seed: int, mutation_seeds: List[int]) -> str:
-#         all_numbers = [action_length, mutation_rate, dna_seed] + mutation_seeds
-#         encoded_parts = [f"{len(str(num))}{num}" for num in all_numbers]
-#         return "".join(encoded_parts)
-
-# # ==============================================================================
-# # 7. Main Application
-# # ==============================================================================
-# def main():
-#     st.markdown("### 🧬 Hybrid Strategy Lab (Multi-Mutation)")
-#     st.caption("เครื่องมือทดลองและพัฒนากลยุทธ์ด้วย Numba-Accelerated Parallel Random Search + Validation")
-
-#     config = load_config()
-#     initialize_session_state(config)
-
-#     tab_list = ["⚙️ การตั้งค่า", f"🧬 {Strategy.HYBRID_MULTI_MUTATION}", "🔍 Tracer"]
-#     tabs = st.tabs(tab_list)
-
-#     with tabs[0]:
-#         render_settings_tab()
-#     with tabs[1]:
-#         render_hybrid_multi_mutation_tab()
-#     with tabs[2]:
-#         render_tracer_tab()
-
-# if __name__ == "__main__":
-#     main()
+#main code
+import pandas as pd
+import numpy as np
+import yfinance as yf
+import streamlit as st
+import thingspeak
+import json
+import streamlit.components.v1 as components
+from typing import Dict, Any, Tuple, List
+
+# --- Page Configuration ---
+st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout= "centered" )
+
+# ### (No Change Here) ###
+# Initialize 'portfolio_cash' in session_state if it doesn't exist.
+if 'portfolio_cash' not in st.session_state:
+    st.session_state.portfolio_cash = 0.00
+
+# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (Unchanged) ---
+
+@st.cache_data
+def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
+    """Loads and parses the JSON configuration file."""
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        st.error(f"Error loading or parsing {filename}: {e}")
+        st.stop()
+
+@st.cache_resource
+def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
+    """Initializes ThingSpeak clients for the main channel and individual asset channels."""
+    main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
+    try:
+        client_main = thingspeak.Channel(main_channel_config['channel_id'], main_channel_config['write_api_key'])
+        asset_clients = {}
+        for asset in stock_assets:
+            ticker = asset['ticker']
+            channel_info = asset.get('holding_channel', {})
+            if channel_info.get('channel_id'):
+                asset_clients[ticker] = thingspeak.Channel(channel_info['channel_id'], channel_info['write_api_key'])
+
+        num_asset_clients = len(asset_clients)
+        num_option_assets = len(option_assets)
+        st.success(f"Initialized main client and {num_asset_clients} asset {num_option_assets} option holding clients.")
+
+        return client_main, asset_clients
+    except Exception as e:
+        st.error(f"Failed to initialize ThingSpeak clients: {e}")
+        st.stop()
+
+def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, Any]]:
+    """Fetches initial prices from yfinance and last holdings from ThingSpeak."""
+    initial_data = {}
+    tickers_to_fetch = {asset['ticker'].strip() for asset in stock_assets}
+    tickers_to_fetch.update({opt.get('underlying_ticker').strip() for opt in option_assets if opt.get('underlying_ticker')})
+
+    for ticker in tickers_to_fetch:
+        initial_data[ticker] = {}
+        try:
+            last_price = yf.Ticker(ticker).fast_info['lastPrice']
+            initial_data[ticker]['last_price'] = last_price
+        except Exception:
+            ref_price = next((a.get('reference_price', 0.0) for a in stock_assets if a['ticker'].strip() == ticker), 0.0)
+            initial_data[ticker]['last_price'] = ref_price
+            st.warning(f"Could not fetch price for {ticker}. Defaulting to reference price {ref_price}.")
+
+    for asset in stock_assets:
+        ticker = asset["ticker"].strip()
+        last_holding = 0.0
+        if ticker in asset_clients:
+            try:
+                client = asset_clients[ticker]
+                field = asset['holding_channel']['field']
+                last_asset_json_string = client.get_field_last(field=field)
+                if last_asset_json_string:
+                    data_dict = json.loads(last_asset_json_string)
+                    last_holding = float(data_dict[field])
+            except Exception as e:
+                st.warning(f"Could not fetch holding for {ticker}. Defaulting to 0. Error: {e}")
+        initial_data[ticker]['last_holding'] = last_holding
+    return initial_data
+
+# --- 2. UI & DISPLAY FUNCTIONS ---
+
+def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
+    """Renders all UI components and collects user inputs into a dictionary."""
+    user_inputs = {}
+    st.write("📊 Current Asset Prices")
+    current_prices = {}
+    all_tickers = {asset['ticker'].strip() for asset in stock_assets}
+    all_tickers.update({opt['underlying_ticker'].strip() for opt in option_assets if opt.get('underlying_ticker')})
+
+    for ticker in sorted(list(all_tickers)):
+        label = f"ราคา_{ticker}"
+        price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
+        current_prices[ticker] = st.number_input(label, value=price_value, key=f"price_{ticker}", format="%.2f")
+    user_inputs['current_prices'] = current_prices
+
+    st.divider()
+    st.write("📦 Stock Holdings")
+    current_holdings = {}
+    total_stock_value = 0.0
+    for asset in stock_assets:
+        ticker = asset["ticker"].strip()
+        holding_value = initial_data.get(ticker, {}).get('last_holding', 0.0)
+
+        asset_holding = st.number_input(
+            f"{ticker}_asset",
+            value=holding_value,
+            key=f"holding_{ticker}",
+            format="%.2f"
+        )
+
+        current_holdings[ticker] = asset_holding
+        individual_asset_value = asset_holding * current_prices.get(ticker, 0.0)
+        st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
+        total_stock_value += individual_asset_value
+
+    user_inputs['current_holdings'] = current_holdings
+    user_inputs['total_stock_value'] = total_stock_value
+
+    st.divider()
+    st.write("⚙️ Calculation Parameters")
+    user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
+    
+    st.number_input('Portfolio_cash', key='portfolio_cash', format="%.2f")
+    user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
+
+    return user_inputs
+
+# --- 3. DISPLAY & CHARTING FUNCTIONS (Unchanged) ---
+def display_results(metrics: Dict[str, float], options_pl: float, total_option_cost: float, config: Dict[str, Any]):
+    """Displays all calculated metrics, including a detailed breakdown of ln_weighted."""
+    st.divider()
+    with st.expander("📈 Results", expanded=True):
+        metric_label = (f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl:,.2f}) "
+                        f"| Max_Roll_Over: ({-total_option_cost:,.2f})")
+        st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
+
+        col1, col2 = st.columns(2)
+        col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
+        col2.metric('log_pv Adjustment (ln_weighted)', f"{metrics.get('ln_weighted', 0.0):,.2f}")
+
+        st.metric(f"Log PV (Calculated: {metrics.get('log_pv_baseline', 0.0):,.2f} + {metrics.get('ln_weighted', 0.0):,.2f})",
+                  f"{metrics['log_pv']:,.2f}")
+
+        st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
+
+        offset_display_val = -config.get('cashflow_offset', 0.0)
+        baseline_val = metrics.get('log_pv_baseline', 0.0)
+        product_cost = config.get('product_cost_default', 0)
+        baseline_label = f"💰 Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost} (Cost)  + {offset_display_val:.0f} (Lv) "
+        st.metric(label=baseline_label, value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
+
+        baseline_target = config.get('baseline_target', 0.0)
+        adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
+        final_value = baseline_target - adjusted_cf
+        st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
+
+    # ### MODIFIED PART 1: Update 'ln_weighted' Breakdown Display ###
+    with st.expander("Show 'ln_weighted' Calculation Breakdown"):
+        st.write("ค่า `ln_weighted` คือผลรวมของการเปลี่ยนแปลงทั้งหมด (`sum of b_offset` + `sum of ln part`)")
+        ln_breakdown_data = metrics.get('ln_breakdown', [])
+
+        total_dynamic_contribution = 0
+        for item in ln_breakdown_data:
+            total_dynamic_contribution += item['total_contribution']
+            # The formula now includes the b_offset term explicitly
+            if item['ref_price'] > 0:
+                formula_string = (
+                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [ {item['b_offset']:>7.2f} (b) + "
+                    f"{item['fix_c']} * ln( {item['live_price']:.2f} / {item['ref_price']:.2f} ) ]"
+                )
+            else:
+                formula_string = (
+                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [ {item['b_offset']:>7.2f} (b) + 0.00 ] "
+                    f"(Calculation skipped: ref_price is zero)"
+                )
+            st.code(formula_string, language='text')
+
+        st.code("-------------------------------------------------------------------------")
+        st.code(f"Total Sum (ln_weighted) = {total_dynamic_contribution:+51.4f}")
+
+
+def render_charts(config: Dict[str, Any]):
+    """Renders ThingSpeak charts using iframe components in a specific order."""
+    st.write("📊 ThingSpeak Charts")
+    main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
+    main_channel_id = main_channel_config.get('channel_id')
+    main_fields_map = main_channel_config.get('fields', {})
+
+    def create_chart_iframe(channel_id, field_name, chart_title):
+        if channel_id and field_name:
+            chart_number = field_name.replace('field', '')
+            url = f'https://thingspeak.com/channels/{channel_id}/charts/{chart_number}?bgcolor=%23ffffff&color=%23d62020&dynamic=true&results=60&type=line&update=15'
+            st.write(f"**{chart_title}**")
+            components.iframe(url, width=800, height=200)
+            st.divider()
+
+    # Display charts in the requested order
+    create_chart_iframe(main_channel_id, main_fields_map.get('net_cf'), 'Cashflow')
+    create_chart_iframe(main_channel_id, main_fields_map.get('now_pv'), 'Current Total Value')
+    create_chart_iframe(main_channel_id, main_fields_map.get('pure_alpha'), 'Pure_Alpha')
+    create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
+    create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
+
+
+# --- 4. CALCULATION FUNCTION ---
+# ### MODIFIED PART 2: Update Core Calculation Logic ###
+def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
+    """
+    Calculates all core metrics using the F = b + fix*ln(live/t0) model.
+    'ln_weighted' now represents the total adjustment from the baseline (sum of b + sum of ln parts).
+    """
+    metrics = {}
+    portfolio_cash = user_inputs['portfolio_cash']
+    current_prices = user_inputs['current_prices']
+    total_stock_value = user_inputs['total_stock_value']
+
+    # P/L calculation for options (unchanged)
+    total_options_pl, total_option_cost = 0.0, 0.0
+    for option in option_assets:
+        underlying_ticker = option.get("underlying_ticker", "").strip()
+        if not underlying_ticker: continue
+        last_price = current_prices.get(underlying_ticker, 0.0)
+        strike = option.get("strike", 0.0)
+        contracts = option.get("contracts_or_shares", 0.0)
+        premium = option.get("premium_paid_per_share", 0.0)
+        total_cost_basis = contracts * premium
+        total_option_cost += total_cost_basis
+        intrinsic_value = max(0, last_price - strike) * contracts
+        total_options_pl += intrinsic_value - total_cost_basis
+
+    metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
+
+    # New log_pv calculation logic incorporating b_offset
+    log_pv_baseline = 0.0  # This will remain sum(fix_c) for display consistency
+    ln_weighted = 0.0      # This will be the total dynamic adjustment
+    total_b_offset = 0.0   # Accumulator for all b_offsets
+    ln_breakdown = []      # List to store calculation details for display
+
+    for asset in stock_assets:
+        ticker = asset['ticker'].strip()
+        fix_c = asset.get('fix_c', 1500)
+        # Use .get() for b_offset for backward compatibility if a stock is missing it
+        b_offset = asset.get('b_offset', 0.0)
+        ref_price = asset.get('reference_price', 0.0)
+        live_price = current_prices.get(ticker, 0.0)
+
+        # Accumulate the baseline (sum of all fix_c values)
+        log_pv_baseline += fix_c
+        # Accumulate the total b_offset from past rollovers
+        total_b_offset += b_offset
+
+        # Calculate the dynamic part for the current period (since last roll)
+        ln_part_contribution = 0.0
+        if ref_price > 0 and live_price > 0:
+            ln_part_contribution = fix_c * np.log(live_price / ref_price)
+        
+        # Accumulate the ln() part
+        ln_weighted += ln_part_contribution
+
+        # Store detailed breakdown for each asset for display
+        ln_breakdown.append({
+            "ticker": ticker,
+            "b_offset": b_offset,
+            "fix_c": fix_c,
+            "live_price": live_price,
+            "ref_price": ref_price,
+            "total_contribution": b_offset + ln_part_contribution # The total F value for this asset's adjustment
+        })
+    
+    # Final assembly of metrics
+    metrics['log_pv_baseline'] = log_pv_baseline
+    # 'ln_weighted' is the sum of all adjustments: accumulated (b_offset) and current (ln part)
+    metrics['ln_weighted'] = total_b_offset + ln_weighted
+    # Total log_pv is the baseline control value + the total adjustment
+    metrics['log_pv'] = metrics['log_pv_baseline'] + metrics['ln_weighted']
+    metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
+    metrics['ln_breakdown'] = ln_breakdown
+
+    return metrics, total_options_pl, total_option_cost
+
+
+# --- 5. THINGSPEAK UPDATE FUNCTION (Unchanged) ---
+def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
+    """Handles the UI for confirming and sending data to ThingSpeak."""
+    client_main, asset_clients = clients
+    with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
+        if st.button("Confirm and Send All Data"):
+            diff = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
+            try:
+                fields_map = config.get('thingspeak_channels', {}).get('main_output', {}).get('fields', {})
+                payload = {
+                    fields_map.get('net_cf', 'field1'): diff,
+                    fields_map.get('pure_alpha', 'field2'): diff / user_inputs['product_cost'] if user_inputs['product_cost'] != 0 else 0,
+                    fields_map.get('buffer', 'field3'): user_inputs['portfolio_cash'],
+                    fields_map.get('cost_minus_cf', 'field4'): user_inputs['product_cost'] - diff,
+                    fields_map.get('now_pv', 'field5'): metrics.get('now_pv', 0.0)
+                }
+                client_main.update(payload)
+                st.success("✅ Successfully updated Main Channel on Thingspeak!")
+            except Exception as e:
+                st.error(f"❌ Failed to update Main Channel on Thingspeak: {e}")
+
+            st.divider()
+            for asset in stock_assets:
+                ticker = asset['ticker'].strip()
+                if ticker in asset_clients:
+                    try:
+                        current_holding = user_inputs['current_holdings'][ticker]
+                        field_to_update = asset['holding_channel']['field']
+                        asset_clients[ticker].update({field_to_update: current_holding})
+                        st.success(f"✅ Successfully updated holding for {ticker}.")
+                    except Exception as e:
+                        st.error(f"❌ Failed to update holding for {ticker}: {e}")
+
+# --- main() FUNCTION (Unchanged) ---
+def main():
+    """Main function to run the Streamlit application."""
+    config = load_config()
+    if not config: return
+
+    all_assets = config.get('assets', [])
+    stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
+    option_assets = [item for item in all_assets if item.get('type') == 'option']
+
+    clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
+    initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
+
+    user_inputs = render_ui_and_get_inputs(
+        stock_assets,
+        option_assets,
+        initial_data,
+        config.get('product_cost_default', 0.0)
+    )
+
+    if st.button("Recalculate"):
+        pass
+
+    # 1. Initial Calculation
+    metrics, options_pl, total_option_cost = calculate_metrics(stock_assets, option_assets, user_inputs, config)
+
+    # 2. Dynamic Cashflow Offset Calculation
+    log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
+    product_cost = user_inputs.get('product_cost', 0.0)
+    dynamic_offset = product_cost - log_pv_baseline
+
+    # Override the config value in memory for this run.
+    config['cashflow_offset'] = dynamic_offset
+
+    # 3. Display and Update using the new dynamic offset
+    display_results(metrics, options_pl, total_option_cost, config)
+    handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
+    render_charts(config)
+
+if __name__ == "__main__":
+    main()
