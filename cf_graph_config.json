@@ -7,12 +7,12 @@
     {
         "ticker": "NEGG",
         "entry_price": 25.20,
-        "comment": "1.26 @1500 , 25.20@(Asset Changes)"
+        "comment": "1.26 @1500 , 25.20 (Asset Changes)"
     },
     {
         "ticker": "RIVN",
         "entry_price": 14.20,
-        "comment": "10.07 @1500 , 14.20@(Realizing P/L)"
+        "comment": "10.07 @1500 , 14.20 (Realizing P/L)"
     },
     {
         "ticker": "APLS",
@@ -22,7 +22,7 @@
     {
         "ticker": "NVTS",
         "entry_price": 8.25,
-        "comment": "3.05 @1500 , 8.25@(Realizing P/L)"
+        "comment": "3.05 @1500 , 8.25 (Realizing P/L)"
     },
     {
         "ticker": "QXO",
