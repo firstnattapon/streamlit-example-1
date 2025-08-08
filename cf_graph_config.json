@@ -2,61 +2,61 @@
     {
         "ticker": "FFWM",
         "entry_price": 6.88,
-        "comment": "1500:6.88"
+        "comment": "6.88 @1500"
     },
     {
         "ticker": "NEGG",
         "entry_price": 25.20,
-        "comment": "1500:1.26 , 25.20 (Asset Changes)"
+        "comment": "1.26 @1500 , 25.20@(Asset Changes)"
     },
     {
         "ticker": "RIVN",
         "entry_price": 14.20,
-        "comment": "1500:10.07 , 14.20 (Realizing P/L)"
+        "comment": "10.07 @1500 , 14.20@(Realizing P/L)"
     },
     {
         "ticker": "APLS",
         "entry_price": 39.61,
-        "comment": "1500:39.61"
+        "comment": "39.61 @1500"
     },
     {
         "ticker": "NVTS",
         "entry_price": 8.25,
-        "comment": "1500:3.05 , 8.25 (Realizing P/L)"
+        "comment": "3.05 @1500 , 8.25@(Realizing P/L)"
     },
     {
         "ticker": "QXO",
         "entry_price": 19.00,
-        "comment": "1500:19.00"
+        "comment": "19.00 @1500"
     },
     {
         "ticker": "RXRX",
         "entry_price": 5.40,
-        "comment": "1500:5.40"
+        "comment": "5.40 @1500"
     },
     {
         "ticker": "AGL",
         "entry_price": 3.00,
-        "comment": "1500:3.00"
+        "comment": "3.00 @1500"
     },
     {
         "ticker": "FLNC",
         "entry_price": 7.00,
-        "comment": "1500:7.00"
+        "comment": "7.00 @1500"
     },
     {
         "ticker": "GERN",
         "entry_price": 1.85,
-        "comment": "1500:1.85"
+        "comment": "1.85 @1500"
     },
     {
         "ticker": "DYN",
         "entry_price": 12.60,
-        "comment": "1500:12.60"
+        "comment": "12.60 @1500"
     },
     {
         "ticker": "DJT",
         "entry_price": 20.40,
-        "comment": "2000:20.40"
+        "comment": "20.40 @2000"
     }
 ]
