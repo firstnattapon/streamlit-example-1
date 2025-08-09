@@ -84,20 +84,20 @@ except FileNotFoundError:
     st.stop() # หยุดการทำงานถ้าไม่มีไฟล์ config
 
 # 2. สร้างชื่อ Tab ทั้งหมด
-tab_names = ['BATA'] +  ['DATA'] + [asset['ticker'] for asset in assets_config]  
+tab_names = ['DATA'] +  ['BATA'] + [asset['ticker'] for asset in assets_config]  
 tabs = st.tabs(tab_names)
 
 # Dictionary สำหรับเก็บค่าที่รับจาก input
 current_prices = {}
 results_rf = {}
-with tabs[0]:
+with tabs[1]:
     with st.expander("หลักการ BATA"):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=ZXWCs9o2CUTfNzY2Bk73sP", width=1100 , height=1000  , scrolling=0)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=ZXWCs9o2CUTfNzY2Bk73sP", width=1100 , height=1000  , scrolling=1)
     with st.expander("หลักการ Rollover"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1100 , height=1000  , scrolling=0)
 
 # 3. สร้าง Tab "DATA" สำหรับรับ Input
-with tabs[1]:
+with tabs[0]:
     st.write("⚙️ ตั้งค่าทั่วไปและราคาอ้างอิง")
     
     # Input ส่วนกลาง
