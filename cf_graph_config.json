@@ -1,13 +1,13 @@
 [
     {
         "ticker": "FFWM",
-        "entry_price": 6.88,
-        "comment": "6.88 @1500"
+        "entry_price": 6.88, 
+        "comment": "6.88 @1500" 
     },
     {
         "ticker": "NEGG",
         "entry_price": 25.20,
-        "comment": "1.26 @1500 , 25.20 (Asset Changes)"
+        "comment": " 25.20 @1500 (Asset Changes) , 25.20 @1500 → 1000 (Reduce Risk)" 
     },
     {
         "ticker": "RIVN",
@@ -22,7 +22,7 @@
     {
         "ticker": "NVTS",
         "entry_price": 8.25,
-        "comment": "3.05 @1500 , 8.25 (Realizing P/L)"
+        "comment": "3.05 @1500 , 3.05 → 8.25 @1500 (Realizing P/L)" 
     },
     {
         "ticker": "QXO",
