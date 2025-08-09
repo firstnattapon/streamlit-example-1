@@ -92,7 +92,7 @@ current_prices = {}
 results_rf = {}
 with tabs[1]:
     with st.expander("หลักการ BATA"):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=ZXWCs9o2CUTfNzY2Bk73sP", width=1100 , height=1000  , scrolling=1)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=QNBQBhY8rmtzxf74FsjsVg", width=1100 , height=1000  , scrolling=1)
     with st.expander("หลักการ Rollover"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1100 , height=1000  , scrolling=0)
 
