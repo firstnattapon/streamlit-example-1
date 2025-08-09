@@ -170,12 +170,12 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
             # The formula now includes the b_offset term explicitly
             if item['ref_price'] > 0:
                 formula_string = (
-                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [ {item['b_offset']:>7.2f} (b) + "
+                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [{item['b_offset']:>7.2f} (b) + "
                     f"{item['fix_c']} * ln( {item['live_price']:.2f} / {item['ref_price']:.2f} ) ]"
                 )
             else:
                 formula_string = (
-                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [ {item['b_offset']:>7.2f} (b) + 0.00 ] "
+                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [{item['b_offset']:>7.2f} (b) + 0.00 ] "
                     f"(Calculation skipped: ref_price is zero)"
                 )
             st.code(formula_string, language='text')
