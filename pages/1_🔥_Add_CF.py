@@ -11,9 +11,8 @@ from typing import Dict, Any, Tuple, List
 # --- Page Configuration ---
 st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout= "centered" )
 
-# ### MODIFIED PART 1: Initialize Session State ###
+# ### (No Change Here) ###
 # Initialize 'portfolio_cash' in session_state if it doesn't exist.
-# This ensures the value persists across reruns and has a default value.
 if 'portfolio_cash' not in st.session_state:
     st.session_state.portfolio_cash = 0.00
 
@@ -126,11 +125,6 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
     
-    # ### MODIFIED PART 2: Link Input to Session State ###
-    # Use the 'key' parameter to directly link this input widget to 'st.session_state.portfolio_cash'.
-    # Any changes by the user will automatically update the session state.
-    # We then read from the session state to populate our local `user_inputs` dictionary,
-    # ensuring the data flow to other functions remains unchanged.
     st.number_input('Portfolio_cash', key='portfolio_cash', format="%.2f")
     user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
 
@@ -154,7 +148,6 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
 
         st.metric(label="💰 Net Cashflow (Combined)", value=f"{metrics['net_cf']:,.2f}")
 
-        # Use .get() with a default value of 0.0 in case 'cashflow_offset' is deleted from JSON
         offset_display_val = -config.get('cashflow_offset', 0.0)
         baseline_val = metrics.get('log_pv_baseline', 0.0)
         product_cost = config.get('product_cost_default', 0)
@@ -166,23 +159,29 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
 
+    # ### MODIFIED PART 1: Update 'ln_weighted' Breakdown Display ###
     with st.expander("Show 'ln_weighted' Calculation Breakdown"):
-        st.write("ค่า `ln_weighted` คำนวณมาจากผลรวมของหุ้นแต่ละตัว:")
+        st.write("ค่า `ln_weighted` คือผลรวมของการเปลี่ยนแปลงทั้งหมด (`sum of b_offset` + `sum of ln part`)")
         ln_breakdown_data = metrics.get('ln_breakdown', [])
 
+        total_dynamic_contribution = 0
         for item in ln_breakdown_data:
+            total_dynamic_contribution += item['total_contribution']
+            # The formula now includes the b_offset term explicitly
             if item['ref_price'] > 0:
                 formula_string = (
-                    f"{item['ticker']:<6}: {item['contribution']:+9.4f} = "
-                    f"[ {item['fix_c']} * ln( {item['live_price']:.2f} / {item['ref_price']:.2f} ) ]"
+                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [{item['b_offset']:>7.2f} (b) + "
+                    f"{item['fix_c']} * ln( {item['live_price']:.2f} / {item['ref_price']:.2f} ) ]"
                 )
             else:
-                formula_string = f"{item['ticker']:<6}: {item['contribution']:+9.4f}   (Calculation skipped: ref_price is zero)"
-
+                formula_string = (
+                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [{item['b_offset']:>7.2f} (b) + 0.00 ] "
+                    f"(Calculation skipped: ref_price is zero)"
+                )
             st.code(formula_string, language='text')
 
-        st.code("----------------------------------------------------------------")
-        st.code(f"Total Sum = {metrics.get('ln_weighted', 0.0):+51.4f}")
+        st.code("-------------------------------------------------------------------------")
+        st.code(f"Total Sum (ln_weighted) = {total_dynamic_contribution:+51.4f}")
 
 
 def render_charts(config: Dict[str, Any]):
@@ -208,9 +207,13 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
 
-# --- 4. CALCULATION FUNCTION (Unchanged) ---
+# --- 4. CALCULATION FUNCTION ---
+# ### MODIFIED PART 2: Update Core Calculation Logic ###
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
-    """Calculates all core metrics and saves a detailed breakdown of the ln_weighted calculation."""
+    """
+    Calculates all core metrics using the F = b + fix*ln(live/t0) model.
+    'ln_weighted' now represents the total adjustment from the baseline (sum of b + sum of ln parts).
+    """
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
@@ -232,39 +235,54 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
 
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
-    # New Per-Asset fix_c Calculation Logic
-    log_pv_baseline, ln_weighted = 0.0, 0.0
-    ln_breakdown = [] # List to store calculation details for display
+    # New log_pv calculation logic incorporating b_offset
+    log_pv_baseline = 0.0  # This will remain sum(fix_c) for display consistency
+    ln_weighted = 0.0      # This will be the total dynamic adjustment
+    total_b_offset = 0.0   # Accumulator for all b_offsets
+    ln_breakdown = []      # List to store calculation details for display
 
     for asset in stock_assets:
-        fix_c = asset.get('fix_c', 1500)
         ticker = asset['ticker'].strip()
+        fix_c = asset.get('fix_c', 1500)
+        # Use .get() for b_offset for backward compatibility if a stock is missing it
+        b_offset = asset.get('b_offset', 0.0)
         ref_price = asset.get('reference_price', 0.0)
         live_price = current_prices.get(ticker, 0.0)
 
+        # Accumulate the baseline (sum of all fix_c values)
         log_pv_baseline += fix_c
+        # Accumulate the total b_offset from past rollovers
+        total_b_offset += b_offset
 
-        contribution = 0.0
+        # Calculate the dynamic part for the current period (since last roll)
+        ln_part_contribution = 0.0
         if ref_price > 0 and live_price > 0:
-            contribution = fix_c * np.log(live_price / ref_price)
+            ln_part_contribution = fix_c * np.log(live_price / ref_price)
+        
+        # Accumulate the ln() part
+        ln_weighted += ln_part_contribution
 
-        ln_weighted += contribution
-
+        # Store detailed breakdown for each asset for display
         ln_breakdown.append({
             "ticker": ticker,
+            "b_offset": b_offset,
             "fix_c": fix_c,
             "live_price": live_price,
             "ref_price": ref_price,
-            "contribution": contribution
+            "total_contribution": b_offset + ln_part_contribution # The total F value for this asset's adjustment
         })
-
+    
+    # Final assembly of metrics
     metrics['log_pv_baseline'] = log_pv_baseline
-    metrics['ln_weighted'] = ln_weighted
-    metrics['log_pv'] = log_pv_baseline + ln_weighted
+    # 'ln_weighted' is the sum of all adjustments: accumulated (b_offset) and current (ln part)
+    metrics['ln_weighted'] = total_b_offset + ln_weighted
+    # Total log_pv is the baseline control value + the total adjustment
+    metrics['log_pv'] = metrics['log_pv_baseline'] + metrics['ln_weighted']
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
     return metrics, total_options_pl, total_option_cost
+
 
 # --- 5. THINGSPEAK UPDATE FUNCTION (Unchanged) ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
