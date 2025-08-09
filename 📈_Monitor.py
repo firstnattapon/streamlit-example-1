@@ -158,7 +158,7 @@ def get_cached_price(ticker: str) -> float:
 # --- Helper function to get the current date in New York (unchanged) ---
 @st.cache_data(ttl=60)
 def get_current_ny_date() -> datetime.date:
-    ny_tz = pytz.timezone('America/New_York')
+    ny_tz = pytz.timezone('Asia/bangkok')
     return datetime.datetime.now(ny_tz).date()
 
 # --- Data Fetching (MODIFIED tz_convert line) ---
@@ -178,7 +178,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
             
             # --- THIS IS THE KEY CHANGE ---
             # Ensure all data is consistently in the New York timezone for accurate date comparison.
-            tickerData.index = tickerData.index.tz_convert('America/New_York')
+            tickerData.index = tickerData.index.tz_convert('Asia/bangkok')
 
             if start_date:
                 tickerData = tickerData[tickerData.index >= start_date]
