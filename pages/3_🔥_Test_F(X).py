@@ -197,7 +197,7 @@ run_btn = st.sidebar.button("▶️ Run / คำนวณ", use_container_width=
 # 4) Main
 # =========================
 st.title("🧮 Advanced ln(F) Portfolio Engine (Matplotlib only)")
-st.caption("แกน f = b · ln(tₙ/t₀) + Risk-budgeted b + Regime + No-trade band + CF cap + Stress test")
+st.caption("แกน f = b · ln(tₙ/t₀) + Risk-budgeted b + Regime + No-trade band + CF cap + Stress test (ไม่มี Altair)")
 
 def parse_assets_json(txt: str) -> List[Dict]:
     try:
@@ -305,13 +305,29 @@ if run_btn and tickers:
     st.download_button("⬇️ ดาวน์โหลดผลลัพธ์ CSV", data=data_bytes, file_name=fname, mime="text/csv", use_container_width=True)
 
     # =========================
-    # 6) Stress Engine
+    # 6) Stress Engine (แก้บั๊ก slider)
     # =========================
     st.markdown("---")
     st.subheader("🧪 Stress Test (Shock Surface)")
-    shock_min, shock_max, shock_step = st.slider("ช่วง Shock (เช่น -40% ถึง +40%)",
-                                                 min_value=-0.9, max_value=0.9, value=(-0.4, 0.4), step=0.05)
-    shocks = np.round(np.arange(shock_min, shock_max + 1e-9, shock_step), 4)
+
+    # ✅ st.slider ให้ค่าได้ 2 ตัว (range) เท่านั้น — แยก step ออกมาเป็น number_input
+    shock_min, shock_max = st.slider(
+        "ช่วง Shock (เช่น -40% ถึง +40%)",
+        min_value=-0.9, max_value=0.9, value=(-0.4, 0.4)
+    )
+    shock_step = st.number_input(
+        "ความละเอียด (step)",
+        min_value=0.01, max_value=0.5, value=0.05, step=0.01
+    )
+    # guard เล็กน้อย
+    if shock_max <= shock_min:
+        st.warning("ช่วง shock ต้องมีค่าน้อย < ค่ามาก — จะใช้ค่าเริ่มต้นแทน")
+        shock_min, shock_max = -0.4, 0.4
+    if shock_step <= 0:
+        st.warning("step ต้องมากกว่า 0 — จะใช้ 0.05 แทน")
+        shock_step = 0.05
+
+    shocks = np.round(np.arange(shock_min, shock_max + 1e-12, shock_step), 4)
 
     assets_for_stress = [
         AssetInput(ticker=t, live_price=live_map[t], ref_price=ref_map[t], fix_c=fix_map[t], b=b_final[t])
