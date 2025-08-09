@@ -9,18 +9,18 @@ from functools import lru_cache
 import concurrent.futures
 import os
 from typing import List, Dict
-import tenacity  # เพิ่ม library นี้สำหรับ retry (pip install tenacity)
+import tenacity
+import pytz
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
-# --- SimulationTracer Class (added caching) ---
+# --- SimulationTracer Class (unchanged) ---
 class SimulationTracer:
     def __init__(self, encoded_string: str):
         self.encoded_string: str = str(encoded_string)
         self._decode_and_set_attributes()
 
     def _decode_and_set_attributes(self):
-        # (unchanged code here)
         encoded_string = self.encoded_string
         if not encoded_string.isdigit():
             self.action_length: int = 0
@@ -56,7 +56,7 @@ class SimulationTracer:
         self.mutation_seeds: List[int] = decoded_numbers[3:]
         self.mutation_rate_float: float = self.mutation_rate / 100.0
 
-    @lru_cache(maxsize=128)  # เพิ่ม caching สำหรับ run
+    @lru_cache(maxsize=128)
     def run(self) -> np.ndarray:
         if self.action_length <= 0:
             return np.array([])
@@ -73,7 +73,7 @@ class SimulationTracer:
                 current_actions[0] = 1
         return current_actions
 
-# --- Configuration Loading ---
+# --- Configuration Loading (unchanged) ---
 @st.cache_data
 def load_config(file_path='monitor_config.json') -> Dict:
     if not os.path.exists(file_path):
@@ -97,7 +97,7 @@ if not ASSET_CONFIGS:
     st.error("No 'assets' list found in monitor_config.json")
     st.stop()
 
-# --- ThingSpeak Clients ---
+# --- ThingSpeak Clients (unchanged) ---
 @st.cache_resource
 def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
     clients = {}
@@ -117,7 +117,7 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
 
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
-# --- Clear Caches Function (modified) ---
+# --- Clear Caches Function (unchanged) ---
 def clear_all_caches():
     st.cache_data.clear()
     st.cache_resource.clear()
@@ -146,7 +146,7 @@ def buy(asset, fix_c=1500, Diff=60):
     total = round(asset * unit_price - adjust_qty * unit_price, 2)
     return unit_price, adjust_qty, total
 
-# --- Price Fetching with Retry ---
+# --- Price Fetching with Retry (unchanged) ---
 @st.cache_data(ttl=300)
 @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(3))
 def get_cached_price(ticker: str) -> float:
@@ -155,7 +155,13 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
-# --- Data Fetching (optimized: combined) ---
+# --- Helper function to get the current date in New York (unchanged) ---
+@st.cache_data(ttl=60)
+def get_current_ny_date() -> datetime.date:
+    ny_tz = pytz.timezone('America/New_York')
+    return datetime.datetime.now(ny_tz).date()
+
+# --- Data Fetching (MODIFIED tz_convert line) ---
 @st.cache_data(ttl=300)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> Dict[str, tuple]:
     monitor_results = {}
@@ -169,10 +175,15 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
             field_num = monitor_field_config['field']
 
             tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-            tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+            
+            # --- THIS IS THE KEY CHANGE ---
+            # Ensure all data is consistently in the New York timezone for accurate date comparison.
+            tickerData.index = tickerData.index.tz_convert('America/New_York')
 
             if start_date:
                 tickerData = tickerData[tickerData.index >= start_date]
+
+            last_data_date = tickerData.index[-1].date() if not tickerData.empty else None
             
             fx_js_str = "0"
             try:
@@ -201,10 +212,10 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
             except Exception as e:
                 st.warning(f"Tracer Error for {ticker}: {e}")
 
-            return ticker, (df.tail(7), fx_js_str)
+            return ticker, (df.tail(7), fx_js_str, last_data_date)
         except Exception as e:
             st.error(f"Error in Monitor for {ticker}: {str(e)}")
-            return ticker, (pd.DataFrame(), "0")
+            return ticker, (pd.DataFrame(), "0", None)
 
     def fetch_asset(asset_config):
         ticker = asset_config['ticker']
@@ -230,7 +241,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
 
     return {'monitors': monitor_results, 'assets': asset_results}
 
-# --- UI Components (restored to original) ---
+# --- UI Components (unchanged) ---
 def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, float]:
     asset_inputs = {}
     cols = st.columns(len(configs))
@@ -332,7 +343,7 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
 
-# --- Main Logic ---
+# --- Main Logic (unchanged) ---
 all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
@@ -383,19 +394,28 @@ with tab2:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
 with tab1:
+    current_ny_date = get_current_ny_date()
+
     selectbox_labels = {}
     ticker_actions = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
-        df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
+        df_data, fx_js_str, last_data_date = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
+        
         action_emoji, final_action_val = "", None
-        try:
-            if not df_data.empty and df_data.action.values[1 + nex] != "":
-                raw_action = int(df_data.action.values[1 + nex])
-                final_action_val = 1 - raw_action if Nex_day_sell == 1 else raw_action
-                if final_action_val == 1: action_emoji = "🟢 "
-                elif final_action_val == 0: action_emoji = "🔴 "
-        except (IndexError, ValueError, TypeError): pass
+        
+        if nex == 0 and last_data_date and last_data_date < current_ny_date:
+            action_emoji = "🟡 "
+        else:
+            try:
+                if not df_data.empty and df_data.action.values[1 + nex] != "":
+                    raw_action = int(df_data.action.values[1 + nex])
+                    final_action_val = 1 - raw_action if Nex_day_sell == 1 else raw_action
+                    if final_action_val == 1: action_emoji = "🟢 "
+                    elif final_action_val == 0: action_emoji = "🔴 "
+            except (IndexError, ValueError, TypeError): 
+                pass
+
         ticker_actions[ticker] = final_action_val
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
 
@@ -445,7 +465,7 @@ with tab1:
 
     for config in configs_to_display:
         ticker = config['ticker']
-        df_data, fx_js_str = monitor_data_all.get(ticker, (pd.DataFrame(), "0"))
+        df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
         asset_last = last_assets_all.get(ticker, 0.0)
         asset_val = asset_inputs.get(ticker, 0.0)
         calc = calculations.get(ticker, {})
