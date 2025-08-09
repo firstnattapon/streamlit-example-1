@@ -84,15 +84,17 @@ except FileNotFoundError:
     st.stop() # หยุดการทำงานถ้าไม่มีไฟล์ config
 
 # 2. สร้างชื่อ Tab ทั้งหมด
-tab_names = ['DATA'] + [asset['ticker'] for asset in assets_config]
+tab_names = ['BATA'] +  ['DATA'] + [asset['ticker'] for asset in assets_config]  
 tabs = st.tabs(tab_names)
 
 # Dictionary สำหรับเก็บค่าที่รับจาก input
 current_prices = {}
 results_rf = {}
+with tabs[0]:
+    st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1100 , height=1000  , scrolling=0)
 
 # 3. สร้าง Tab "DATA" สำหรับรับ Input
-with tabs[0]:
+with tabs[1]:
     st.write("⚙️ ตั้งค่าทั่วไปและราคาอ้างอิง")
     
     # Input ส่วนกลาง
@@ -133,7 +135,7 @@ with tabs[0]:
         
 # 4. สร้าง Tab ของแต่ละ Asset และแสดงกราฟแบบวนลูป        
 for i, asset in enumerate(assets_config):
-    with tabs[i + 1]: # เริ่มจาก tab ที่ 1 (ถัดจาก DATA)
+    with tabs[i + 2]: # เริ่มจาก tab ที่ 1 (ถัดจาก DATA)
         ticker = asset['ticker']
         entry_price = asset['entry_price']
         
@@ -213,5 +215,4 @@ with st.expander("ดู Net PV ของแต่ละตัว"):
     for ticker, value in results_rf.items():
         st.write(f"{ticker}: ${value:,.2f}")
 
-st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1100 , height=1000  , scrolling=0)
 
