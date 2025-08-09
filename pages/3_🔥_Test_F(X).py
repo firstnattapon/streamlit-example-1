@@ -10,7 +10,7 @@ import concurrent.futures
 import os
 from typing import List, Dict
 import tenacity
-import pytz  # NEW: Library for timezones
+import pytz
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
@@ -155,14 +155,13 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
-# NEW: Helper function to get the current date in New York
-@st.cache_data(ttl=60) # Cache for 1 minute
+# --- Helper function to get the current date in New York (unchanged) ---
+@st.cache_data(ttl=60)
 def get_current_ny_date() -> datetime.date:
-    """Returns the current date in the America/New_York timezone."""
     ny_tz = pytz.timezone('America/New_York')
     return datetime.datetime.now(ny_tz).date()
 
-# MODIFICATION: Data Fetching now returns the last data date
+# --- Data Fetching (unchanged) ---
 @st.cache_data(ttl=300)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> Dict[str, tuple]:
     monitor_results = {}
@@ -181,7 +180,6 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
             if start_date:
                 tickerData = tickerData[tickerData.index >= start_date]
 
-            # MODIFICATION: Get the date of the last actual data point
             last_data_date = tickerData.index[-1].date() if not tickerData.empty else None
             
             fx_js_str = "0"
@@ -211,7 +209,6 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
             except Exception as e:
                 st.warning(f"Tracer Error for {ticker}: {e}")
 
-            # MODIFICATION: Return the last data date along with other results
             return ticker, (df.tail(7), fx_js_str, last_data_date)
         except Exception as e:
             st.error(f"Error in Monitor for {ticker}: {str(e)}")
@@ -394,24 +391,21 @@ with tab2:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
 
 with tab1:
-    # MODIFICATION: Get current NY date once before the loop
     current_ny_date = get_current_ny_date()
 
     selectbox_labels = {}
     ticker_actions = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
-        # MODIFICATION: Unpack the new last_data_date
         df_data, fx_js_str, last_data_date = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
         
         action_emoji, final_action_val = "", None
         
-        # MODIFICATION: Implement the data freshness check
-        # Check if the data is stale first
-        if last_data_date and last_data_date < current_ny_date:
-            action_emoji = "🟡 " # Yellow icon for stale data
+        # MODIFICATION: Stale data check (yellow icon) now ONLY runs if nex == 0.
+        if nex == 0 and last_data_date and last_data_date < current_ny_date:
+            action_emoji = "🟡 "
         else:
-            # If data is fresh, use the original logic
+            # This block runs for nex=1 (future view) OR for nex=0 if data is fresh.
             try:
                 if not df_data.empty and df_data.action.values[1 + nex] != "":
                     raw_action = int(df_data.action.values[1 + nex])
@@ -450,7 +444,6 @@ with tab1:
     if selected_option == "":
         configs_to_display = ASSET_CONFIGS
     elif selected_option == "Filter Buy Tickers":
-        # Note: Stale (yellow) tickers will not be in this list as final_action_val is None
         buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
         configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in buy_tickers]
     elif selected_option == "Filter Sell Tickers":
@@ -471,7 +464,6 @@ with tab1:
 
     for config in configs_to_display:
         ticker = config['ticker']
-        # MODIFICATION: Unpack last_data_date here as well, though it's not directly used in this section
         df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
         asset_last = last_assets_all.get(ticker, 0.0)
         asset_val = asset_inputs.get(ticker, 0.0)
