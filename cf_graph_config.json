@@ -9,11 +9,12 @@
   },
   {
       "ticker": "NEGG",
-      "Final": "25.2, 1000",
+      "Final": "25.2, 800",
       "Original": "ราคาอ้างอิง: 1.26, ทุนคงที่: 1500",
       "history_1": "ราคาอ้างอิง: 1.26 → 25.2, ทุนคงที่: 1500 → 1500",
       "history_2": "ราคาอ้างอิง: 25.2 → 25.2, ทุนคงที่: 1500 → 1000",
-      "comment": "Asset_Changes → Reduce_Risk"
+      "history_3": "ราคาอ้างอิง: 25.2 → 25.2, ทุนคงที่: 1000 → 800",
+      "comment": "Asset_Changes → Reduce_Risk → Reduce_Risk"
   },
   {
       "ticker": "RIVN",
