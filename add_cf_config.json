@@ -30,7 +30,7 @@
         { "type": "stock", "ticker": "RIVN", "reference_price": 14.20, "fix_c": 1500, "b_offset": 0.0 , "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field3" } },
         { "type": "stock", "ticker": "APLS", "reference_price": 39.61, "fix_c": 1500, "b_offset": 0.0, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field4" } },
         { "type": "stock", "ticker": "NVTS", "reference_price": 8.25, "fix_c": 1500, "b_offset": 0.0 , "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field5" } },
-        { "type": "stock", "ticker": "QXO", "reference_price": 19.00, "fix_c": 1500, "b_offset": 339.70, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field6" } },
+        { "type": "stock", "ticker": "QXO", "reference_price": 22.60, "fix_c": 2000, "b_offset": 339.70, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field6" } },
         { "type": "stock", "ticker": "RXRX", "reference_price": 5.40, "fix_c": 1500, "b_offset": 0.0, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field7" } },
         { "type": "stock", "ticker": "AGL", "reference_price": 3.00, "fix_c": 1500, "b_offset": 0.0, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field8" } },
         { "type": "stock", "ticker": "FLNC", "reference_price": 7.00, "fix_c": 1500, "b_offset": 0.0, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field1" } },
