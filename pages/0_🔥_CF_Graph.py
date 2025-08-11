@@ -80,142 +80,118 @@ try:
     with open('cf_graph_config.json', 'r', encoding='utf-8') as f:
         assets_config = json.load(f)
 except FileNotFoundError:
-    st.error("ไม่พบไฟล์ 'cf_graph_config.json'. กรุณาสร้างไฟล์และใส่ข้อมูล Asset")
-    st.stop() # หยุดการทำงานถ้าไม่มีไฟล์ config
+    st.error("ไม่พบไฟล์ 'cf_graph_config.json'. กรุณาสร้างไฟล์และใส่ข้อมูล Asset ตามโครงสร้างใหม่")
+    st.stop() 
 
 # 2. สร้างชื่อ Tab ทั้งหมด
-tab_names = ['DATA'] +  ['BATA'] + [asset['ticker'] for asset in assets_config]  
+tab_names = ['DATA', 'BATA'] + [asset['ticker'] for asset in assets_config]  
 tabs = st.tabs(tab_names)
 
-# Dictionary สำหรับเก็บค่าที่รับจาก input
+# Dictionary สำหรับเก็บค่าที่รับจาก input และค่าเฉพาะตัวของ Asset
 current_prices = {}
+asset_params = {}
 results_rf = {}
+
+# 3. สร้าง Tab "BATA" (หลักการ)
 with tabs[1]:
     with st.expander("หลักการ BATA" , expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=sK3gfn5iVhqdVMEgTNWHdP", width=1500 , height=1000  , scrolling=0)
     with st.expander("หลักการ Rollover"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1500 , height=1000  , scrolling=0)
 
-# 3. สร้าง Tab "DATA" สำหรับรับ Input
+# 4. สร้าง Tab "DATA" สำหรับรับ Input และแสดงประวัติ (REWORKED SECTION - FINAL V2)
 with tabs[0]:
-    st.write("⚙️ ตั้งค่าทั่วไปและราคาอ้างอิง")
+    st.write("⚙️ **ตั้งค่าทั่วไปและประวัติ Asset**")
     
-    # Input ส่วนกลาง
-    x_5 = st.number_input('Fixed_Asset_Value (ต่อตัว)', step=1.0, value=1500.)
-    x_6 = st.number_input('Cash_Balan (ต่อตัว)', step=1.0, value=0.)
+    x_6 = st.number_input('Cash_Balan เริ่มต้น (ใช้กับทุกตัว)', step=1.0, value=0.)
     st.write("---")
     
-    # สร้าง input สำหรับราคาแต่ละตัวแบบวนลูป
-    st.write("ราคาปัจจุบัน (อ้างอิง)")
     for asset in assets_config:
         ticker = asset['ticker']
-        entry_price = asset['entry_price']
-        
-        # --- ส่วนที่แก้ไข ---
-        # ดึงค่า comment จาก config, ถ้าไม่มีให้เป็นค่าว่าง
-        comment = asset.get('comment', '')
-        
-        try:
-            # ดึงราคาล่าสุดจาก yfinance เป็นค่าเริ่มต้น
-            last_price = yf.Ticker(ticker).fast_info.get('lastPrice', entry_price)
-        except Exception:
-            st.warning(f"ไม่สามารถดึงราคาล่าสุดของ {ticker} ได้, ใช้ราคา Entry แทน")
-            last_price = entry_price
-        
-        # สร้าง label ของ input โดยรวม comment เข้าไปด้วย (ถ้ามี)
-        label = f"ราคา_{ticker} (Entry: {entry_price})"
-        if comment:
-            label += f" | roll {comment}"
-        
-        # เก็บราคาปัจจุบันที่ผู้ใช้กรอกลงใน Dictionary
-        current_prices[ticker] = st.number_input(
-            label, 
-            step=0.01, 
-            value=float(last_price), 
-            key=f"price_{ticker}"
-        )
-        # --- จบส่วนที่แก้ไข ---
-        
-# 4. สร้าง Tab ของแต่ละ Asset และแสดงกราฟแบบวนลูป        
+        # ดึงค่า Final มาเพื่อใช้ใน Label ของ expander
+        final_str = asset.get('Final', 'N/A') 
+
+        # [แก้ไข] สร้าง expander label แบบไดนามิก
+        with st.expander(f"ตั้งค่าและดูประวัติ: **{ticker}** | \"{final_str}\""):
+            try:
+                # --- ส่วนประมวลผลข้อมูล (เบื้องหลัง) ---
+                # เรายังคงต้อง parse ค่า final_str เพื่อนำไปคำนวณ
+                final_parts = final_str.split(',')
+                final_price = float(final_parts[0].strip())
+                final_fav = float(final_parts[1].strip())
+
+                asset_params[ticker] = {'entry': final_price, 'fav': final_fav}
+
+                # --- ส่วนแสดงผลบน UI (ข้างใน Expander) ---
+                try:
+                    last_price = yf.Ticker(ticker).fast_info.get('lastPrice', final_price)
+                except Exception:
+                    st.warning(f"ไม่สามารถดึงราคาล่าสุดของ {ticker} ได้, ใช้ราคา Final แทน")
+                    last_price = final_price
+
+                current_prices[ticker] = st.number_input(
+                    "ราคาปัจจุบัน (สำหรับคำนวณ)", 
+                    step=0.01, 
+                    value=float(last_price), 
+                    key=f"price_{ticker}"
+                )
+                
+                st.write("---")
+                st.write("ข้อมูลดิบจาก Config:")
+                st.json(asset)
+
+            except Exception as e:
+                st.error(f"ข้อมูลใน config ของ {ticker} ผิดพลาด: {e}")
+                # กำหนดค่า default ป้องกันแอปพัง
+                asset_params[ticker] = {'entry': 0, 'fav': 0}
+                current_prices[ticker] = 0.0
+
+# 5. สร้าง Tab ของแต่ละ Asset และแสดงกราฟ (ส่วนนี้ทำงานได้ปกติ ไม่ต้องแก้ไข)
 for i, asset in enumerate(assets_config):
-    with tabs[i + 2]: # เริ่มจาก tab ที่ 1 (ถัดจาก DATA)
+    with tabs[i + 2]: 
         ticker = asset['ticker']
-        entry_price = asset['entry_price']
-        
-        # ดึงราคาอ้างอิงจาก Dictionary ที่เราเก็บไว้
-        ref_price = current_prices[ticker]
+        if ticker in current_prices and ticker in asset_params:
+            ref_price = current_prices.get(ticker, 0)
+            entry_price = asset_params[ticker].get('entry', 0)
+            fixed_asset_value = asset_params[ticker].get('fav', 0)
 
-        st.write('')
-        st.write(f"กราฟแสดงความสัมพันธ์ของ {ticker}")
-        
-        # เรียกใช้ฟังก์ชันคำนวณ
-        df, df_rf_value = CF_Graph(
-            entry=entry_price, 
-            ref=ref_price, 
-            Fixed_Asset_Value=x_5, 
-            Cash_Balan=x_6
-        )
-        
-        # เก็บผลลัพธ์ net_pv สำหรับการสรุปผลรวม
-        results_rf[ticker] = df_rf_value
-        
-        if not df.empty:
-            # พล็อตกราฟ
-            as_1 = df.set_index('Asset_Price')
-            as_1_py = px.line(as_1, title=f"Analysis for {ticker}")
-
-            # เพิ่มเส้นแนวตั้งสำหรับราคา Entry และราคาปัจจุบัน
-            as_1_py.add_vline(x=ref_price, line_width=1.5, line_dash="dash", line_color="red")
-            as_1_py.add_vline(x=entry_price, line_width=1.5, line_dash="solid", line_color="green", opacity=0.6)
-
-            # คำนวณหาตำแหน่งกึ่งกลางของแกน Y เพื่อวางข้อความ
-            y_position = df['net_pv'].median() 
-
-            # เพิ่มข้อความ (Annotation)
-            as_1_py.add_annotation(
-                x=ref_price, y=y_position,
-                text=f"Current: {ref_price:.2f}",
-                showarrow=False,
-                yshift=15, # ขยับข้อความขึ้นเล็กน้อย
-                font=dict(color="red", size=12),
-                bgcolor="rgba(255, 255, 255, 0.6)"
-            )
-            as_1_py.add_annotation(
-                x=entry_price, y=y_position,
-                text=f"Entry: {entry_price:.2f}",
-                showarrow=False,
-                yshift=-15, # ขยับข้อความลงเล็กน้อย
-                font=dict(color="green", size=12),
-                bgcolor="rgba(255, 255, 255, 0.6)"
-            )
-
-            st.plotly_chart(as_1_py, use_container_width=True)
+            st.write(f"### กราฟแสดงความสัมพันธ์ของ {ticker}")
             
-            st.metric(label=f"Net PV ของ {ticker} ที่ราคาปัจจุบัน", value=f"${df_rf_value:,.2f}")
-            st.write("_____") 
-
+            df, df_rf_value = CF_Graph(
+                entry=entry_price, ref=ref_price, 
+                Fixed_Asset_Value=fixed_asset_value, Cash_Balan=x_6
+            )
+            
+            results_rf[ticker] = df_rf_value
+            
+            if not df.empty:
+                as_1 = df.set_index('Asset_Price')
+                as_1_py = px.line(as_1, title=f"Analysis for {ticker} (Entry: {entry_price}, FAV: {fixed_asset_value:,.0f})")
+                as_1_py.add_vline(x=ref_price, line_width=1.5, line_dash="dash", line_color="red")
+                as_1_py.add_vline(x=entry_price, line_width=1.5, line_dash="solid", line_color="green", opacity=0.6)
+                y_position = df['net_pv'].median() 
+                as_1_py.add_annotation(x=ref_price, y=y_position, text=f"Current: {ref_price:.2f}", showarrow=False, yshift=15, font=dict(color="red", size=12), bgcolor="rgba(255, 255, 255, 0.6)")
+                as_1_py.add_annotation(x=entry_price, y=y_position, text=f"Entry: {entry_price:.2f}", showarrow=False, yshift=-15, font=dict(color="green", size=12), bgcolor="rgba(255, 255, 255, 0.6)")
+                st.plotly_chart(as_1_py, use_container_width=True)
+                st.metric(label=f"Net PV ของ {ticker} ที่ราคาปัจจุบัน", value=f"${df_rf_value:,.2f}")
+                st.write("_____") 
+            else:
+                st.warning("ไม่สามารถสร้างกราฟได้เนื่องจากไม่มีข้อมูล")
         else:
-            st.warning("ไม่สามารถสร้างกราฟได้เนื่องจากไม่มีข้อมูล")
+            st.warning(f"ไม่พบข้อมูลการตั้งค่าสำหรับ {ticker} ใน Tab DATA, กรุณาตรวจสอบไฟล์ config")
 
-# 5. แสดงผลสรุปรวม (คำนวณจาก Dictionary)
+# 6. แสดงผลสรุปรวม (ส่วนนี้ทำงานได้ปกติ ไม่ต้องแก้ไข)
 st.write("_______")
 st.header("สรุปผลรวมพอร์ต")
-
 total_rf = sum(results_rf.values())
 num_assets = len(assets_config)
-total_fixed_asset_value = x_5 * num_assets
+total_fixed_asset_value = sum(params['fav'] for params in asset_params.values())
 total_initial_cash = x_6 * num_assets
-
-st.metric("✅ SUM Net PV (ตามราคาอ้างอิง)", f"${total_rf:,.2f}")
-
+st.metric("✅ **SUM Net PV (ตามราคาอ้างอิงปัจจุบัน)**", f"${total_rf:,.2f}")
 col1, col2, col3 = st.columns(3)
 col1.metric("จำนวน Asset ทั้งหมด", f"{num_assets} ตัว")
 col2.metric("มูลค่า Fixed Asset รวม", f"${total_fixed_asset_value:,.2f}")
 col3.metric("เงินสดเริ่มต้นรวม", f"${total_initial_cash:,.2f}")
-
-# แสดงค่าแต่ละตัวใน Expander เพื่อตรวจสอบ
-with st.expander("ดู Net PV ของแต่ละตัว"):
+with st.expander("ดู Net PV ของแต่ละตัว (ตามราคาอ้างอิง)"):
     for ticker, value in results_rf.items():
         st.write(f"{ticker}: ${value:,.2f}")
-
-
