@@ -1,99 +1,99 @@
 [
   {
-      "ticker": "FFWM",
-      "Final": "6.88, 1500",
-      "Original": "ราคาอ้างอิง: 6.88, ทุนคงที่: 1500",
-      "history_1": "",
-      "history_2": "",
-      "comment": ""  
+    "ticker": "FFWM",
+    "Final": "6.88, 1500",
+    "Original": "ราคาอ้างอิง: 6.88, ทุนคงที่: 1500",
+    "history_1": "",
+    "history_2": "",
+    "comment": ""
   },
   {
-      "ticker": "NEGG",
-      "Final": "25.2, 800",
-      "Original": "ราคาอ้างอิง: 1.26, ทุนคงที่: 1500",
-      "history_1": "ราคาอ้างอิง: 1.26 → 25.2, ทุนคงที่: 1500 → 1500 , ราคาปัจจุบัน : 25.2 , b = 0"
-      "history_2": "ราคาอ้างอิง: 25.2 → 25.2, ทุนคงที่: 1500 → 1000 , ราคาปัจจุบัน : 25.2 , b = 0"
-      "history_3": "ราคาอ้างอิง: 25.2 → 25.2, ทุนคงที่: 1000 → 800  , ราคาปัจจุบัน : 79.79, b = 230.51"
-      "comment": "Asset_Changes → Reduce_Risk → Reduce_Risk"
+    "ticker": "NEGG",
+    "Final": "25.2, 800",
+    "Original": "ราคาอ้างอิง: 1.26, ทุนคงที่: 1500",
+    "history_1": "ราคาอ้างอิง: 1.26 → 25.2, ทุนคงที่: 1500 → 1500 , ราคาปัจจุบัน : 25.2 , b = 0",
+    "history_2": "ราคาอ้างอิง: 25.2 → 25.2, ทุนคงที่: 1500 → 1000 , ราคาปัจจุบัน : 25.2 , b = 0",
+    "history_3": "ราคาอ้างอิง: 25.2 → 25.2, ทุนคงที่: 1000 → 800  , ราคาปัจจุบัน : 79.79, b = 230.51",
+    "comment": "Asset_Changes → Reduce_Risk → Reduce_Risk"
   },
   {
-      "ticker": "RIVN",
-      "Final": "14.20, 1500",
-      "Original": "ราคาอ้างอิง: 10.07, ทุนคงที่: 1500",
-      "history_1": "ราคาอ้างอิง: 10.07 → 14.20, ทุนคงที่: 1500 → 1500 , ราคาปัจจุบัน : 14.20 , b = 0"
-      "history_2": "",
-      "comment": "Realizing P/L"
+    "ticker": "RIVN",
+    "Final": "14.20, 1500",
+    "Original": "ราคาอ้างอิง: 10.07, ทุนคงที่: 1500",
+    "history_1": "ราคาอ้างอิง: 10.07 → 14.20, ทุนคงที่: 1500 → 1500 , ราคาปัจจุบัน : 14.20 , b = 0",
+    "history_2": "",
+    "comment": "Realizing P/L"
   },
   {
-      "ticker": "APLS",
-      "Final": "39.61, 1500",
-      "Original": "ราคาอ้างอิง: 39.61, ทุนคงที่: 1500",
-      "history_1": "",
-      "history_2": "",
-      "comment": ""
+    "ticker": "APLS",
+    "Final": "39.61, 1500",
+    "Original": "ราคาอ้างอิง: 39.61, ทุนคงที่: 1500",
+    "history_1": "",
+    "history_2": "",
+    "comment": ""
   },
   {
-      "ticker": "NVTS",
-      "Final": "8.25, 1500",
-      "Original": "ราคาอ้างอิง: 3.05, ทุนคงที่: 1500",
-      "history_1": "ราคาอ้างอิง: 3.05 → 8.25, ทุนคงที่: 1500 → 1500 , ราคาปัจจุบัน : 8.25 , b = 0"
-      "history_2": "",
-      "comment": "Realizing P/L" 
+    "ticker": "NVTS",
+    "Final": "8.25, 1500",
+    "Original": "ราคาอ้างอิง: 3.05, ทุนคงที่: 1500",
+    "history_1": "ราคาอ้างอิง: 3.05 → 8.25, ทุนคงที่: 1500 → 1500 , ราคาปัจจุบัน : 8.25 , b = 0",
+    "history_2": "",
+    "comment": "Realizing P/L"
   },
   {
-      "ticker": "QXO",
-      "Final": "19.00, 1500",
-      "Original": "ราคาอ้างอิง: 19.00, ทุนคงที่: 1500",
-      "history_1": "",
-      "history_2": "",
-      "comment": ""
+    "ticker": "QXO",
+    "Final": "19.00, 1500",
+    "Original": "ราคาอ้างอิง: 19.00, ทุนคงที่: 1500",
+    "history_1": "",
+    "history_2": "",
+    "comment": ""
   },
   {
-      "ticker": "RXRX",
-      "Final": "5.40, 1500",
-      "Original": "ราคาอ้างอิง: 5.40, ทุนคงที่: 1500",
-      "history_1": "",
-      "history_2": "",
-      "comment": ""
+    "ticker": "RXRX",
+    "Final": "5.40, 1500",
+    "Original": "ราคาอ้างอิง: 5.40, ทุนคงที่: 1500",
+    "history_1": "",
+    "history_2": "",
+    "comment": ""
   },
   {
-      "ticker": "AGL",
-      "Final": "3.00, 1500",
-      "Original": "ราคาอ้างอิง: 3.00, ทุนคงที่: 1500",
-      "history_1": "",
-      "history_2": "",
-      "comment": ""
+    "ticker": "AGL",
+    "Final": "3.00, 1500",
+    "Original": "ราคาอ้างอิง: 3.00, ทุนคงที่: 1500",
+    "history_1": "",
+    "history_2": "",
+    "comment": ""
   },
   {
-      "ticker": "FLNC",
-      "Final": "7.00, 1500",
-      "Original": "ราคาอ้างอิง: 7.00, ทุนคงที่: 1500",
-      "history_1": "",
-      "history_2": "",
-      "comment": ""
+    "ticker": "FLNC",
+    "Final": "7.00, 1500",
+    "Original": "ราคาอ้างอิง: 7.00, ทุนคงที่: 1500",
+    "history_1": "",
+    "history_2": "",
+    "comment": ""
   },
   {
-      "ticker": "GERN",
-      "Final": "1.85, 1500",
-      "Original": "ราคาอ้างอิง: 1.85, ทุนคงที่: 1500",
-      "history_1": "",
-      "history_2": "",
-      "comment": ""
+    "ticker": "GERN",
+    "Final": "1.85, 1500",
+    "Original": "ราคาอ้างอิง: 1.85, ทุนคงที่: 1500",
+    "history_1": "",
+    "history_2": "",
+    "comment": ""
   },
   {
-      "ticker": "DYN",
-      "Final": "12.60, 1500",
-      "Original": "ราคาอ้างอิง: 12.60, ทุนคงที่: 1500",
-      "history_1": "",
-      "history_2": "",
-      "comment": ""
+    "ticker": "DYN",
+    "Final": "12.60, 1500",
+    "Original": "ราคาอ้างอิง: 12.60, ทุนคงที่: 1500",
+    "history_1": "",
+    "history_2": "",
+    "comment": ""
   },
   {
-      "ticker": "DJT",
-      "Final": "20.40, 2000",
-      "Original": "ราคาอ้างอิง: 20.40, ทุนคงที่: 2000",
-      "history_1": "",
-      "history_2": "",
-      "comment": ""
+    "ticker": "DJT",
+    "Final": "20.40, 2000",
+    "Original": "ราคาอ้างอิง: 20.40, ทุนคงที่: 2000",
+    "history_1": "",
+    "history_2": "",
+    "comment": ""
   }
 ]
