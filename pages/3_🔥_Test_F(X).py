@@ -81,7 +81,7 @@ try:
         assets_config = json.load(f)
 except FileNotFoundError:
     st.error("ไม่พบไฟล์ 'cf_graph_config.json'. กรุณาสร้างไฟล์และใส่ข้อมูล Asset ตามโครงสร้างใหม่")
-    st.stop() # หยุดการทำงานถ้าไม่มีไฟล์ config
+    st.stop() 
 
 # 2. สร้างชื่อ Tab ทั้งหมด
 tab_names = ['DATA', 'BATA'] + [asset['ticker'] for asset in assets_config]  
@@ -99,63 +99,57 @@ with tabs[1]:
     with st.expander("หลักการ Rollover"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1500 , height=1000  , scrolling=0)
 
-# 4. สร้าง Tab "DATA" สำหรับรับ Input และแสดงประวัติ (REWORKED SECTION)
+# 4. สร้าง Tab "DATA" สำหรับรับ Input และแสดงประวัติ (REWORKED SECTION - V2)
 with tabs[0]:
-    st.write("⚙️ **ตั้งค่าและประวัติของแต่ละ Asset**")
+    st.write("⚙️ **ตั้งค่าทั่วไปและราคาอ้างอิง**")
     
     # Input ส่วนกลางเหลือแค่ Cash Balance
     x_6 = st.number_input('Cash_Balan เริ่มต้น (ใช้กับทุกตัว)', step=1.0, value=0.)
     st.write("---")
     
-    # สร้าง Expander และ Input สำหรับแต่ละ Asset
+    st.write("ราคาปัจจุบัน (อ้างอิง)")
+    
+    # สร้าง Input สำหรับราคาปัจจุบัน และ Expander สำหรับดูข้อมูลดิบของแต่ละ Asset
     for asset in assets_config:
         ticker = asset['ticker']
         
-        with st.expander(f"ประวัติและตั้งค่าสำหรับ: **{ticker}**"):
+        try:
+            # --- ส่วนประมวลผลข้อมูล (เบื้องหลัง) ---
+            # แยกค่า Final ออกเป็น Entry Price และ Fixed Asset Value
+            final_parts = asset.get('Final', '0,0').split(',')
+            final_price = float(final_parts[0].strip())
+            final_fav = float(final_parts[1].strip())
+
+            # เก็บค่าเฉพาะตัวของ asset นี้ไว้ใน Dictionary เพื่อใช้คำนวณกราฟ
+            asset_params[ticker] = {
+                'entry': final_price,
+                'fav': final_fav
+            }
+
+            # --- ส่วนแสดงผลบน UI ---
+            # ดึงราคาล่าสุดจาก yfinance เป็นค่าเริ่มต้น
             try:
-                # แยกค่า Final ออกเป็น Entry Price และ Fixed Asset Value
-                final_parts = asset.get('Final', '0,0').split(',')
-                final_price = float(final_parts[0].strip())
-                final_fav = float(final_parts[1].strip())
+                last_price = yf.Ticker(ticker).fast_info.get('lastPrice', final_price)
+            except Exception:
+                st.warning(f"ไม่สามารถดึงราคาล่าสุดของ {ticker} ได้, ใช้ราคา Final แทน")
+                last_price = final_price
 
-                # เก็บค่าเฉพาะตัวของ asset นี้ไว้ใน Dictionary
-                asset_params[ticker] = {
-                    'entry': final_price,
-                    'fav': final_fav
-                }
-                
-                # --- แสดงข้อมูลประวัติ ---
-                st.markdown(f"**สถานะสุดท้าย (Final):** ราคาอ้างอิง: `{final_price}`, ทุนคงที่: `{final_fav}`")
-                
-                if 'Original' in asset and asset['Original']:
-                    st.text(f"Original: {asset['Original']}")
-                if 'history_1' in asset and asset['history_1']:
-                    st.text(f"History 1: {asset['history_1']}")
-                if 'history_2' in asset and asset['history_2']:
-                    st.text(f"History 2: {asset['history_2']}")
-                if 'comment' in asset and asset['comment']:
-                    st.info(f"Comment: {asset['comment']}")
-                
-                st.write("---")
+            # [แก้ไข] สร้าง number_input ไว้นอก expander
+            current_prices[ticker] = st.number_input(
+                f"ราคา {ticker}", 
+                step=0.01, 
+                value=float(last_price), 
+                key=f"price_{ticker}"
+            )
 
-                # --- Input สำหรับราคาปัจจุบัน ---
-                try:
-                    # ดึงราคาล่าสุดจาก yfinance เป็นค่าเริ่มต้น
-                    last_price = yf.Ticker(ticker).fast_info.get('lastPrice', final_price)
-                except Exception:
-                    st.warning(f"ไม่สามารถดึงราคาล่าสุดของ {ticker} ได้, ใช้ราคา Final แทน")
-                    last_price = final_price
+            # [แก้ไข] สร้าง expander เพื่อแสดงข้อมูลดิบจาก JSON
+            with st.expander(f"ดูข้อมูล Config ของ {ticker}"):
+                st.json(asset) # แสดงข้อมูลดิบทั้งหมดของ asset นั้นๆ
 
-                # เก็บราคาปัจจุบันที่ผู้ใช้กรอกลงใน Dictionary
-                current_prices[ticker] = st.number_input(
-                    f"ราคาปัจจุบันของ {ticker} (สำหรับคำนวณ)", 
-                    step=0.01, 
-                    value=float(last_price), 
-                    key=f"price_{ticker}"
-                )
-
-            except Exception as e:
-                st.error(f"ข้อมูลใน config ของ {ticker} ผิดพลาด: {e}")
+        except Exception as e:
+            st.error(f"ข้อมูลใน config ของ {ticker} ผิดพลาด: {e}")
+            # สร้าง input เปล่าๆ ไว้เพื่อไม่ให้แอปพัง
+            current_prices[ticker] = 0.0 
 
 
 # 5. สร้าง Tab ของแต่ละ Asset และแสดงกราฟ (REWORKED SECTION)
