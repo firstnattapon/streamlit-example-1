@@ -1,3 +1,4 @@
+#code
 import streamlit as st
 import numpy as np
 import datetime
@@ -60,7 +61,7 @@ class SimulationTracer:
     def run(self) -> np.ndarray:
         if self.action_length <= 0:
             return np.array([])
-            
+
         dna_rng = np.random.default_rng(seed=self.dna_seed)
         current_actions = dna_rng.integers(0, 2, size=self.action_length)
         if self.action_length > 0:
@@ -161,12 +162,12 @@ def get_current_ny_date() -> datetime.date:
     ny_tz = pytz.timezone('America/New_York')
     return datetime.datetime.now(ny_tz).date()
 
-# --- Data Fetching (MODIFIED tz_convert line) ---
+# --- Data Fetching (unchanged) ---
 @st.cache_data(ttl=300)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> Dict[str, tuple]:
     monitor_results = {}
     asset_results = {}
-    
+
     def fetch_monitor(asset_config):
         ticker = asset_config['ticker']
         try:
@@ -175,16 +176,13 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
             field_num = monitor_field_config['field']
 
             tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-            
-            # --- THIS IS THE KEY CHANGE ---
-            # Ensure all data is consistently in the New York timezone for accurate date comparison.
             tickerData.index = tickerData.index.tz_convert('Asia/bangkok')
 
             if start_date:
                 tickerData = tickerData[tickerData.index >= start_date]
 
             last_data_date = tickerData.index[-1].date() if not tickerData.empty else None
-            
+
             fx_js_str = "0"
             try:
                 field_data = client.get_field_last(field=str(field_num))
@@ -195,7 +193,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
                 pass
 
             tickerData['index'] = list(range(len(tickerData)))
-            
+
             dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
             df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
             df['action'] = ""
@@ -203,12 +201,12 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
             try:
                 tracer = SimulationTracer(encoded_string=fx_js_str)
                 final_actions = tracer.run()
-                
+
                 num_to_assign = min(len(df), len(final_actions))
                 if num_to_assign > 0:
                     action_col_idx = df.columns.get_loc('action')
                     df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
-            
+
             except Exception as e:
                 st.warning(f"Tracer Error for {ticker}: {e}")
 
@@ -233,7 +231,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
         for future in concurrent.futures.as_completed(monitor_futures):
             ticker, result = future.result()
             monitor_results[ticker] = result
-        
+
         asset_futures = [executor.submit(fetch_asset, asset) for asset in configs]
         for future in concurrent.futures.as_completed(asset_futures):
             ticker, result = future.result()
@@ -241,24 +239,61 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
 
     return {'monitors': monitor_results, 'assets': asset_results}
 
-# --- UI Components (unchanged) ---
+
+# --- UI Components ---
+
+# --- MODIFIED FUNCTION ---
 def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, float]:
+    """
+    Renders asset input widgets using the `help` parameter for details.
+    """
     asset_inputs = {}
     cols = st.columns(len(configs))
     for i, config in enumerate(configs):
         with cols[i]:
             ticker = config['ticker']
             last_val = last_assets.get(ticker, 0.0)
+
+            # --- Logic to get the raw label string ---
+            if config.get('option_config'):
+                raw_label = config['option_config']['label']
+            else:
+                # For assets without option_config, just use the ticker name.
+                # This handles cases like "NEGG_ASSET" by generating "NEGG" as the base label.
+                raw_label = ticker
+
+            # --- Parse raw_label into display_label and help_text ---
+            display_label = raw_label
+            help_text = ""
+            split_pos = raw_label.find('(')
+            if split_pos != -1:
+                display_label = raw_label[:split_pos].strip()
+                help_text = raw_label[split_pos:].strip()
+            else: # Handle cases like "NEGG" which now has no parenthesis
+                help_text = "(NULL)"
+
+            # --- Render the number_input with label and help text ---
             if config.get('option_config'):
                 option_val = config['option_config']['base_value']
-                label = config['option_config']['label']
-                real_val = st.number_input(label, step=0.001, value=last_val, key=f"input_{ticker}_real")
+                real_val = st.number_input(
+                    label=display_label,
+                    help=help_text,
+                    step=0.001,
+                    value=last_val,
+                    key=f"input_{ticker}_real"
+                )
                 asset_inputs[ticker] = option_val + real_val
             else:
-                label = f'{ticker}_ASSET'
-                val = st.number_input(label, step=0.001, value=last_val, key=f"input_{ticker}_asset")
+                val = st.number_input(
+                    label=display_label,
+                    help=help_text,
+                    step=0.001,
+                    value=last_val,
+                    key=f"input_{ticker}_asset"
+                )
                 asset_inputs[ticker] = val
     return asset_inputs
+
 
 def render_asset_update_controls(configs: List[Dict], clients: Dict):
     with st.expander("Update Assets on ThingSpeak"):
@@ -266,7 +301,7 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict):
             ticker = config['ticker']
             asset_conf = config['asset_field']
             field_name = asset_conf['field']
-            
+
             if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
                 add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
@@ -380,11 +415,11 @@ with tab2:
         st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
 
     st.write("---")
-    
+
     x_2 = st.number_input('Diff', step=1, value=60)
-    
+
     st.write("---")
-    
+
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
 
     st.write("---")
@@ -401,9 +436,9 @@ with tab1:
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
         df_data, fx_js_str, last_data_date = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
-        
+
         action_emoji, final_action_val = "", None
-        
+
         if nex == 0 and last_data_date and last_data_date < current_ny_date:
             action_emoji = "🟡 "
         else:
@@ -413,14 +448,14 @@ with tab1:
                     final_action_val = 1 - raw_action if Nex_day_sell == 1 else raw_action
                     if final_action_val == 1: action_emoji = "🟢 "
                     elif final_action_val == 0: action_emoji = "🔴 "
-            except (IndexError, ValueError, TypeError): 
+            except (IndexError, ValueError, TypeError):
                 pass
 
         ticker_actions[ticker] = final_action_val
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
 
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
-    selectbox_options = [""] 
+    selectbox_options = [""]
     if nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
@@ -456,7 +491,7 @@ with tab1:
     calculations = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
-        asset_value = asset_inputs.get(ticker, 0.0) 
+        asset_value = asset_inputs.get(ticker, 0.0)
         fix_c = config['fix_c']
         calculations[ticker] = {
             'sell': sell(asset_value, fix_c=fix_c, Diff=x_2),
@@ -469,15 +504,15 @@ with tab1:
         asset_last = last_assets_all.get(ticker, 0.0)
         asset_val = asset_inputs.get(ticker, 0.0)
         calc = calculations.get(ticker, {})
-        
+
         title_label = selectbox_labels.get(ticker, ticker)
         st.write(title_label)
 
         trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
-        
+
         with st.expander("Show Raw Data Action"):
             st.dataframe(df_data, use_container_width=True)
-            
+
         st.write("_____")
 
 if st.sidebar.button("RERUN"):
