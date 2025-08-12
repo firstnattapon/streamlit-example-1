@@ -158,7 +158,7 @@ def get_cached_price(ticker: str) -> float:
 # --- Helper function to get the current date in New York (unchanged) ---
 @st.cache_data(ttl=60)
 def get_current_ny_date() -> datetime.date:
-    ny_tz = pytz.timezone('Asia/bangkok')
+    ny_tz = pytz.timezone('America/New_York')
     return datetime.datetime.now(ny_tz).date()
 
 # --- Data Fetching (MODIFIED tz_convert line) ---
