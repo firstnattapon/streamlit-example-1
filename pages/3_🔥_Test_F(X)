@@ -242,27 +242,10 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
 
 # --- UI Components ---
 
-# --- NEW HELPER FUNCTION ---
-def format_asset_label(label_str: str) -> str:
-    """
-    Formats a label string into a two-line HTML string for Streamlit Markdown.
-    e.g., "AGL(LV:15@1.83)" -> "AGL<br>(LV:15@1.83)"
-    e.g., "NEGG_ASSET" -> "NEGG_ASSET<br>(NULL)"
-    """
-    if not label_str:
-        return "(NULL)"
-    split_pos = label_str.find('(')
-    if split_pos != -1:
-        part1 = label_str[:split_pos].strip()
-        part2 = label_str[split_pos:].strip()
-        return f"**{part1}**<br>{part2}"
-    else:
-        return f"**{label_str}**<br>(NULL)"
-
 # --- MODIFIED FUNCTION ---
 def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, float]:
     """
-    Renders the asset input widgets in the 'Controls' tab with two-line labels.
+    Renders asset input widgets using the `help` parameter for details.
     """
     asset_inputs = {}
     cols = st.columns(len(configs))
@@ -271,35 +254,40 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, flo
             ticker = config['ticker']
             last_val = last_assets.get(ticker, 0.0)
 
-            # Logic to get the raw label string
-            raw_label = ""
+            # --- Logic to get the raw label string ---
             if config.get('option_config'):
                 raw_label = config['option_config']['label']
             else:
                 raw_label = f'{ticker}_ASSET'
 
-            # Format the label and display it using Markdown
-            formatted_label = format_asset_label(raw_label)
-            st.markdown(formatted_label, unsafe_allow_html=True)
+            # --- Parse raw_label into display_label and help_text ---
+            display_label = raw_label
+            help_text = ""
+            split_pos = raw_label.find('(')
+            if split_pos != -1:
+                display_label = raw_label[:split_pos].strip()
+                help_text = raw_label[split_pos:].strip()
+            else: # Handle cases like "NEGG_ASSET"
+                help_text = "(NULL)"
 
-            # Render the number_input with an empty label
+            # --- Render the number_input with label and help text ---
             if config.get('option_config'):
                 option_val = config['option_config']['base_value']
                 real_val = st.number_input(
-                    label="", # Use empty label
+                    label=display_label,
+                    help=help_text,
                     step=0.001,
                     value=last_val,
-                    key=f"input_{ticker}_real",
-                    label_visibility="collapsed" # Hide label space
+                    key=f"input_{ticker}_real"
                 )
                 asset_inputs[ticker] = option_val + real_val
             else:
                 val = st.number_input(
-                    label="", # Use empty label
+                    label=display_label,
+                    help=help_text,
                     step=0.001,
                     value=last_val,
-                    key=f"input_{ticker}_asset",
-                    label_visibility="collapsed" # Hide label space
+                    key=f"input_{ticker}_asset"
                 )
                 asset_inputs[ticker] = val
     return asset_inputs
