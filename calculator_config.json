@@ -4,13 +4,13 @@
     "field": 1,
     "channel_id": 2394198,
     "write_api_key": "OVZNYQBL57GJW5JF",
-    "offset": 1967.68 ,
-    "max_roll_over": 3150.00  , 
+    "offset": 1967.68,
+    "max_roll_over": 3150.00,
     "filter_date_cf": "2025-07-13 12:00:00+07:00"
   },
   "monitor_config": {
     "filter_date": "2025-06-09 12:00:00+07:00"
-  }, 
+  },
   "assets": [
     {
       "ticker": "FFWM",
@@ -48,7 +48,7 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 30.20,,
+        "t0": 30.20,
         "fix": 2500.0
       }
     },
@@ -91,7 +91,7 @@
         "t0": 1.83,
         "fix": 1500.0
       }
-    } , 
+    },
     {
       "ticker": "FLNC",
       "monitor_field": 1,
@@ -101,7 +101,7 @@
         "t0": 7.0,
         "fix": 1500.0
       }
-    } , 
+    },
     {
       "ticker": "GERN",
       "monitor_field": 2,
@@ -111,7 +111,7 @@
         "t0": 1.85,
         "fix": 1500.0
       }
-    } , 
+    },
     {
       "ticker": "DYN",
       "monitor_field": 3,
@@ -121,7 +121,7 @@
         "t0": 12.60,
         "fix": 1500.0
       }
-    } , 
+    },
     {
       "ticker": "DJT",
       "monitor_field": 4,
@@ -131,7 +131,7 @@
         "t0": 20.40,
         "fix": 2000.0
       }
-    } , 
+    },
     {
       "ticker": "IBRX",
       "monitor_field": 5,
@@ -141,7 +141,7 @@
         "t0": 3.25,
         "fix": 1600.0
       }
-    } , 
+    },
     {
       "ticker": "SG",
       "monitor_field": 6,
