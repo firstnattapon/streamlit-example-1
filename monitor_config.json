@@ -7,7 +7,7 @@
      "fix_c": 1500, "option_config": {"base_value": 1500.0, "label": "AGL(LV:15@1.83)"}},
 
     {"ticker": "APLS", "monitor_field": {"field": 5, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field4", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
-     "fix_c": 1500, "option_config": null},
+     "fix_c": 2500, "option_config": null},
 
     {"ticker": "DJT", "monitor_field": {"field": 4, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V"}, "asset_field": {"field": "field4", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP"},
      "fix_c": 2000, "option_config": {"base_value": 100.0, "label": "DJT(LV:1@20.40)"}},
@@ -24,6 +24,9 @@
     {"ticker": "GERN", "monitor_field": {"field": 2, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V"}, "asset_field": {"field": "field2", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP"},
      "fix_c": 1500, "option_config": {"base_value": 800.0, "label": "GERN(LV:8@1.85)"}},
 
+    {"ticker": "IBRX", "monitor_field": {"field": 5, "channel_id": 2988808, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field5", "channel_id": 2988802, "api_key": "2E65V8XEIPH9B2VV"},
+     "fix_c": 1600, "option_config": {"base_value": 600.0, "label": "IBRX(LV:6@3.25)"}}
+
     {"ticker": "NEGG", "monitor_field": {"field": 3, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field2", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
      "fix_c": 800, "option_config": null},
 
@@ -37,6 +40,40 @@
      "fix_c": 1500, "option_config": {"base_value": 100.0, "label": "RIVN(LV:1@14.2)"}},
 
     {"ticker": "RXRX", "monitor_field": {"field": 8, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field7", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
-     "fix_c": 1500, "option_config": {"base_value": 200.0, "label": "RXRX(LV:2@5.4)"}}
+     "fix_c": 1500, "option_config": {"base_value": 200.0, "label": "RXRX(LV:2@5.4)"}},
+
+    {"ticker": "SG", "monitor_field": {"field": 6, "channel_id": 2988808, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field6", "channel_id": 2988802, "api_key": "2E65V8XEIPH9B2VV"},
+     "fix_c": 1500, "option_config": {"base_value": 100.0, "label": "SG(LV:1@12.0)"}}
   ]
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
