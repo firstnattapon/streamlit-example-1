@@ -1,4 +1,4 @@
-#code
+# -*- coding: utf-8 -*-
 import streamlit as st
 import numpy as np
 import datetime
@@ -61,7 +61,6 @@ class SimulationTracer:
     def run(self) -> np.ndarray:
         if self.action_length <= 0:
             return np.array([])
-
         dna_rng = np.random.default_rng(seed=self.dna_seed)
         current_actions = dna_rng.integers(0, 2, size=self.action_length)
         if self.action_length > 0:
@@ -118,33 +117,35 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
 
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
-# ####################################################################
-# ################    START OF THE ONLY MODIFICATION    ################
-# ####################################################################
 # --- Clear Caches Function (MODIFIED) ---
 def clear_all_caches():
-    # Clear streamlit's data caches
+    # เคลียร์ cache
     st.cache_data.clear()
     st.cache_resource.clear()
-    
-    # Clear function-specific LRU caches
     sell.cache_clear()
     buy.cache_clear()
-    
-    # Define the session_state keys that control the UI and should NOT be deleted
-    ui_state_keys_to_preserve = ['select_key', 'nex', 'Nex_day_sell']
-    
-    # Create a list of keys to delete by finding all keys that are NOT in our preserve list
-    keys_to_delete = [k for k in st.session_state.keys() if k not in ui_state_keys_to_preserve]
-    
-    # Loop and delete only the non-essential keys
+
+    # เก็บคีย์ UI สำคัญ
+    ui_state_keys_to_preserve = {'select_key', 'nex', 'Nex_day_sell'}
+    keys_to_delete = [k for k in list(st.session_state.keys()) if k not in ui_state_keys_to_preserve]
     for key in keys_to_delete:
-        del st.session_state[key]
-        
+        try:
+            del st.session_state[key]
+        except Exception:
+            pass
+
     st.success("🗑️ Data caches cleared! UI state preserved.")
-# ##################################################################
-# #################    END OF THE ONLY MODIFICATION    #################
-# ##################################################################
+
+# --- Helper: rerun keeping selection (NEW) ---
+def rerun_keep_selection(ticker: str):
+    # บังคับจำ selection ปัจจุบัน
+    st.session_state.select_key = ticker
+    # ออปชัน: ผูกกับ URL เพื่อกัน selection หายแม้ refresh หน้า
+    try:
+        st.query_params["sel"] = ticker
+    except Exception:
+        pass
+    st.rerun()
 
 # --- Calculation Utils (unchanged) ---
 @lru_cache(maxsize=128)
@@ -168,17 +169,17 @@ def buy(asset, fix_c=1500, Diff=60):
 @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(3))
 def get_cached_price(ticker: str) -> float:
     try:
-        return yf.Ticker(ticker).fast_info['lastPrice']
+        return float(yf.Ticker(ticker).fast_info['lastPrice'])
     except Exception:
         return 0.0
 
-# --- Helper function to get the current date in New York (unchanged) ---
+# --- Helper: current date in New York (unchanged) ---
 @st.cache_data(ttl=60)
 def get_current_ny_date() -> datetime.date:
     ny_tz = pytz.timezone('America/New_York')
     return datetime.datetime.now(ny_tz).date()
 
-# --- Data Fetching (unchanged) ---
+# --- Data Fetching (minor robust tz fix) ---
 @st.cache_data(ttl=300)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> Dict[str, tuple]:
     monitor_results = {}
@@ -192,7 +193,11 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
             field_num = monitor_field_config['field']
 
             tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-            tickerData.index = tickerData.index.tz_convert('Asia/bangkok')
+            # Robust tz convert to Asia/Bangkok
+            try:
+                tickerData.index = tickerData.index.tz_convert('Asia/Bangkok')
+            except TypeError:
+                tickerData.index = tickerData.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
 
             if start_date:
                 tickerData = tickerData[tickerData.index >= start_date]
@@ -222,7 +227,6 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
                 if num_to_assign > 0:
                     action_col_idx = df.columns.get_loc('action')
                     df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
-
             except Exception as e:
                 st.warning(f"Tracer Error for {ticker}: {e}")
 
@@ -255,8 +259,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
 
     return {'monitors': monitor_results, 'assets': asset_results}
 
-
-# --- UI Components (unchanged) ---
+# --- UI Components ---
 
 def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, float]:
     """
@@ -269,20 +272,23 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, flo
             ticker = config['ticker']
             last_val = last_assets.get(ticker, 0.0)
 
+            # --- Logic to get the raw label string ---
             if config.get('option_config'):
                 raw_label = config['option_config']['label']
             else:
-                raw_label = ticker
+                raw_label = ticker  # handles cases like "NEGG_ASSET" -> "NEGG"
 
+            # --- Parse raw_label into display_label and help_text ---
             display_label = raw_label
             help_text = ""
             split_pos = raw_label.find('(')
             if split_pos != -1:
                 display_label = raw_label[:split_pos].strip()
                 help_text = raw_label[split_pos:].strip()
-            else: 
+            else:
                 help_text = "(NULL)"
 
+            # --- Render the number_input with label and help text ---
             if config.get('option_config'):
                 option_val = config['option_config']['base_value']
                 real_val = st.number_input(
@@ -304,7 +310,6 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, flo
                 asset_inputs[ticker] = val
     return asset_inputs
 
-
 def render_asset_update_controls(configs: List[Dict], clients: Dict):
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
@@ -320,7 +325,8 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict):
                         client.update({field_name: add_val})
                         st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
                         clear_all_caches()
-                        st.rerun()
+                        # สำคัญ: คง selection แล้ว rerun
+                        rerun_keep_selection(ticker)
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
 
@@ -333,7 +339,7 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
         try:
             if df_data.empty or df_data.action.values[1 + nex] == "":
                 return 0
-            val = df_data.action.values[1 + nex]
+            val = int(df_data.action.values[1 + nex])
             return 1 - val if Nex_day_sell == 1 else val
         except Exception:
             return 0
@@ -345,6 +351,7 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
 
     sell_calc, buy_calc = calc['sell'], calc['buy']
     st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
+
     col1, col2, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
@@ -354,7 +361,8 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
                 client.update({field_name: new_asset_val})
                 col3.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
-                st.rerun()
+                # สำคัญ: คง selection แล้ว rerun
+                rerun_keep_selection(ticker)
             except Exception as e:
                 st.error(f"Failed to SELL {ticker}: {e}")
 
@@ -366,7 +374,8 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
             st.markdown(
-                f"Price: **{current_price:,.3f}** | Value: **{pv:,.2f}** | P/L (vs {fix_value:,}) : <span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>",
+                f"Price: **{current_price:,.3f}** | Value: **{pv:,.2f}** | P/L (vs {fix_value:,}) : "
+                f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>",
                 unsafe_allow_html=True
             )
         else:
@@ -384,11 +393,12 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
                 client.update({field_name: new_asset_val})
                 col6.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
-                st.rerun()
+                # สำคัญ: คง selection แล้ว rerun
+                rerun_keep_selection(ticker)
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
 
-# --- Main Logic (unchanged) ---
+# --- Main Logic ---
 all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
@@ -400,6 +410,17 @@ if 'nex' not in st.session_state:
     st.session_state.nex = 0
 if 'Nex_day_sell' not in st.session_state:
     st.session_state.Nex_day_sell = 0
+
+# (ออปชัน) restore selection จาก URL ถ้ามี
+try:
+    sel_from_url = st.query_params.get("sel")
+    if sel_from_url and st.session_state.select_key == "":
+        # restore เฉพาะกรณีที่ยังไม่มีค่าเลือก
+        known_tickers = [c['ticker'] for c in ASSET_CONFIGS]
+        if sel_from_url in known_tickers:
+            st.session_state.select_key = sel_from_url
+except Exception:
+    pass
 
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
@@ -449,13 +470,13 @@ with tab1:
 
         action_emoji, final_action_val = "", None
 
-        if nex == 0 and last_data_date and last_data_date < current_ny_date:
+        if st.session_state.nex == 0 and last_data_date and last_data_date < current_ny_date:
             action_emoji = "🟡 "
         else:
             try:
-                if not df_data.empty and df_data.action.values[1 + nex] != "":
-                    raw_action = int(df_data.action.values[1 + nex])
-                    final_action_val = 1 - raw_action if Nex_day_sell == 1 else raw_action
+                if not df_data.empty and df_data.action.values[1 + st.session_state.nex] != "":
+                    raw_action = int(df_data.action.values[1 + st.session_state.nex])
+                    final_action_val = 1 - raw_action if st.session_state.Nex_day_sell == 1 else raw_action
                     if final_action_val == 1: action_emoji = "🟢 "
                     elif final_action_val == 0: action_emoji = "🔴 "
             except (IndexError, ValueError, TypeError):
@@ -466,16 +487,22 @@ with tab1:
 
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
     selectbox_options = [""]
-    if nex == 1:
+    if st.session_state.nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
 
+    # ผ่อนปรน guard: ถ้า select_key ไม่อยู่ใน options แต่เป็น ticker จริง → ใส่กลับเข้า options กันหลุด
     if st.session_state.select_key not in selectbox_options:
-        st.session_state.select_key = ""
+        known_tickers = set(all_tickers)
+        if st.session_state.select_key in known_tickers:
+            selectbox_options.append(st.session_state.select_key)
+        else:
+            st.session_state.select_key = ""
 
     def format_selectbox_options(option_name):
         if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
             return "Show All" if option_name == "" else option_name
+        # แสดงเฉพาะส่วนหน้า (อีโมจิ+Ticker)
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
     st.selectbox(
@@ -498,6 +525,7 @@ with tab1:
     else:
         configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_option]
 
+    # เตรียมคำนวณราคา/จำนวน (sell/buy)
     calculations = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
@@ -518,13 +546,18 @@ with tab1:
         title_label = selectbox_labels.get(ticker, ticker)
         st.write(title_label)
 
-        trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
+        trading_section(config, asset_val, asset_last, df_data, calc, st.session_state.nex, st.session_state.Nex_day_sell, THINGSPEAK_CLIENTS)
 
         with st.expander("Show Raw Data Action"):
             st.dataframe(df_data, use_container_width=True)
 
         st.write("_____")
 
+# Sidebar RERUN: คง selection ถ้ามี
 if st.sidebar.button("RERUN"):
+    current_sel = st.session_state.get("select_key", "")
     clear_all_caches()
-    st.rerun()
+    if current_sel in [c['ticker'] for c in ASSET_CONFIGS]:
+        rerun_keep_selection(current_sel)
+    else:
+        st.rerun()
