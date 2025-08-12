@@ -25,7 +25,7 @@
      "fix_c": 1500, "option_config": {"base_value": 800.0, "label": "GERN(LV:8@1.85)"}},
 
     {"ticker": "IBRX", "monitor_field": {"field": 5, "channel_id": 2988808, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field5", "channel_id": 2988802, "api_key": "2E65V8XEIPH9B2VV"},
-     "fix_c": 1600, "option_config": {"base_value": 600.0, "label": "IBRX(LV:6@3.25)"}}
+     "fix_c": 1600, "option_config": {"base_value": 600.0, "label": "IBRX(LV:6@3.25)"}},
 
     {"ticker": "NEGG", "monitor_field": {"field": 3, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field2", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
      "fix_c": 800, "option_config": null},
@@ -46,34 +46,3 @@
      "fix_c": 1500, "option_config": {"base_value": 100.0, "label": "SG(LV:1@12.0)"}}
   ]
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
