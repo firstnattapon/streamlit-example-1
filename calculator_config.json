@@ -49,7 +49,7 @@
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
         "t0": 39.61,
-        "fix": 1500.0
+        "fix": 2500.0
       }
     },
     {
@@ -130,6 +130,26 @@
       "production_params": {
         "t0": 20.40,
         "fix": 2000.0
+      }
+    } , 
+    {
+      "ticker": "IBRX",
+      "monitor_field": 5,
+      "channel_id": 2988808,
+      "write_api_key": "QBIPN1AIZ88QQW5V",
+      "production_params": {
+        "t0": 3.25,
+        "fix": 1600.0
+      }
+    } , 
+    {
+      "ticker": "SG",
+      "monitor_field": 6,
+      "channel_id": 2988808,
+      "write_api_key": "QBIPN1AIZ88QQW5V",
+      "production_params": {
+        "t0": 12.00,
+        "fix": 1500.0
       }
     }
   ]
