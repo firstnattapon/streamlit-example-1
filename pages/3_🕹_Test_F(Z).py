@@ -9,7 +9,7 @@ import json
 from functools import lru_cache
 import concurrent.futures
 import os
-from typing import List, Dict
+from typing import List, Dict, Optional
 import tenacity
 import pytz
 
@@ -117,7 +117,7 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
 
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
-# --- Clear Caches Function (PRESERVE UI KEYS) ---
+# --- (MODIFIED) Clear Caches Function (PRESERVE UI KEYS) ---
 def clear_all_caches():
     # Clear caches
     st.cache_data.clear()
@@ -125,7 +125,7 @@ def clear_all_caches():
     sell.cache_clear()
     buy.cache_clear()
 
-    # Preserve key UI states
+    # Preserve key UI states to prevent reset on data refresh
     ui_state_keys_to_preserve = {'select_key', 'nex', 'Nex_day_sell'}
     keys_to_delete = [k for k in list(st.session_state.keys()) if k not in ui_state_keys_to_preserve]
     for key in keys_to_delete:
@@ -136,13 +136,12 @@ def clear_all_caches():
 
     st.success("🗑️ Data caches cleared! UI state preserved.")
 
-# --- (NEW) Helper: rerun keeping selection via PENDING KEY ---
+# --- (NEW) Helper function to rerun app while keeping the selectbox selection ---
 def rerun_keep_selection(ticker: str):
     """
-    Sets a pending key in session_state and reruns the app.
+    Sets a temporary key in session_state and reruns the app.
     This ensures the selectbox maintains its selection on the next run.
     """
-    # ฝากค่า Ticker ที่ต้องการเลือกไว้ใน session_state ชั่วคราว
     st.session_state["_pending_select_key"] = ticker
     st.rerun()
 
@@ -256,7 +255,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
 
     return {'monitors': monitor_results, 'assets': asset_results}
 
-# --- UI Components (unchanged except for trading_section) ---
+# --- UI Components ---
 
 def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, float]:
     asset_inputs = {}
@@ -306,30 +305,46 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict):
                         client.update({field_name: add_val})
                         st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
                         clear_all_caches()
-                        rerun_keep_selection(st.session_state.get("select_key", "")) # MODIFIED
+                        # (MODIFIED) Use helper to keep selection after update
+                        rerun_keep_selection(st.session_state.get("select_key", ""))
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
 
-# (MODIFIED) trading_section calls the new helper function
+# --- (MODIFIED) trading_section ---
+# This is the core of the required change.
 def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: pd.DataFrame, calc: Dict, nex: int, Nex_day_sell: int, clients: Dict):
     ticker = config['ticker']
     asset_conf = config['asset_field']
     field_name = asset_conf['field']
 
-    def get_action_val():
+    # (MODIFIED) This inner function now returns Optional[int] (int or None)
+    # It returns None if there's no signal, and 0 or 1 if a signal exists.
+    def get_action_val() -> Optional[int]:
         try:
+            # Check for invalid states first
             if df_data.empty or df_data.action.values[1 + nex] == "":
-                return 0
-            val = int(df_data.action.values[1 + nex])
-            return 1 - val if Nex_day_sell == 1 else val
-        except Exception:
-            return 0
+                return None # No signal
+            
+            # If we have a signal, calculate it
+            raw_action = int(df_data.action.values[1 + nex])
+            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
+            return final_action
+        except (IndexError, ValueError, TypeError):
+            # Any error in processing means no valid signal
+            return None
 
     action_val = get_action_val()
-    limit_order = st.checkbox(f'Limit_Order_{ticker}', value=bool(action_val), key=f'limit_order_{ticker}')
-    if not limit_order:
+    
+    # (MODIFIED) The checkbox value is True if a signal exists (action_val is not None)
+    # This works for both buy (1) and sell (0) signals.
+    has_signal = action_val is not None
+    limit_order_checked = st.checkbox(f'Limit_Order_{ticker}', value=has_signal, key=f'limit_order_{ticker}')
+
+    # If the checkbox is not checked (either by user or because no signal), show nothing else.
+    if not limit_order_checked:
         return
 
+    # The rest of the logic remains the same, executing only when the checkbox is ticked.
     sell_calc, buy_calc = calc['sell'], calc['buy']
     st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
     col1, col2, col3 = st.columns(3)
@@ -341,7 +356,7 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
                 client.update({field_name: new_asset_val})
                 col3.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
-                rerun_keep_selection(ticker) # USE HELPER
+                rerun_keep_selection(ticker) # (MODIFIED) Use helper
             except Exception as e:
                 st.error(f"Failed to SELL {ticker}: {e}")
 
@@ -371,7 +386,7 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
                 client.update({field_name: new_asset_val})
                 col6.write(f"Updated: {new_asset_val}")
                 clear_all_caches()
-                rerun_keep_selection(ticker) # USE HELPER
+                rerun_keep_selection(ticker) # (MODIFIED) Use helper
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
 
@@ -388,13 +403,12 @@ if 'nex' not in st.session_state:
 if 'Nex_day_sell' not in st.session_state:
     st.session_state.Nex_day_sell = 0
 
-
 # --- (NEW) BOOTSTRAP selection BEFORE creating any widgets ---
-# ดึงค่าจาก pending key ที่ฝากไว้ในการรันครั้งก่อน มาใส่ใน key จริง
+# This part ensures that the selectbox remembers the last selected ticker after a rerun.
+# ดึงค่าจาก temporary key ที่ฝากไว้ในการรันครั้งก่อน มาใส่ใน key จริง
 pending = st.session_state.pop("_pending_select_key", None)
 if pending:
     st.session_state.select_key = pending
-
 
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
@@ -512,10 +526,10 @@ with tab1:
         st.write("_____")
 
 if st.sidebar.button("RERUN"):
-    # (MODIFIED) Make sidebar rerun also keep selection
+    # (MODIFIED) Make sidebar rerun also keep selection for better UX
     current_selection = st.session_state.get("select_key", "")
     clear_all_caches()
-    # Only try to keep selection if it's a valid ticker
+    # Only try to keep selection if it's a valid ticker (not a filter option)
     if current_selection in [c['ticker'] for c in ASSET_CONFIGS]:
         rerun_keep_selection(current_selection)
     else:
