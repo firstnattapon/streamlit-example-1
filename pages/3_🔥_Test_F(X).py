@@ -258,7 +258,9 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, flo
             if config.get('option_config'):
                 raw_label = config['option_config']['label']
             else:
-                raw_label = f'{ticker}_ASSET'
+                # For assets without option_config, just use the ticker name.
+                # This handles cases like "NEGG_ASSET" by generating "NEGG" as the base label.
+                raw_label = ticker
 
             # --- Parse raw_label into display_label and help_text ---
             display_label = raw_label
@@ -267,7 +269,7 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, flo
             if split_pos != -1:
                 display_label = raw_label[:split_pos].strip()
                 help_text = raw_label[split_pos:].strip()
-            else: # Handle cases like "NEGG_ASSET"
+            else: # Handle cases like "NEGG" which now has no parenthesis
                 help_text = "(NULL)"
 
             # --- Render the number_input with label and help text ---
