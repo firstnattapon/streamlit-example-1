@@ -5,16 +5,46 @@ import yfinance as yf
 import streamlit as st
 import thingspeak
 import json
+import requests  # <<< MODIFIED START >>>: Import the requests library
 import streamlit.components.v1 as components
 from typing import Dict, Any, Tuple, List
 
 # --- Page Configuration ---
-st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout= "centered" )
+st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout="centered")
 
-# ### (No Change Here) ###
-# Initialize 'portfolio_cash' in session_state if it doesn't exist.
+# --- MODIFIED START: Function to fetch initial cash from ThingSpeak API ---
+@st.cache_data
+def fetch_initial_portfolio_cash() -> float:
+    """
+    Fetches the initial portfolio cash value from the ThingSpeak API.
+    Returns 0.00 if the fetch fails for any reason.
+    """
+    url = "https://api.thingspeak.com/channels/2394198/fields/3.json?results=1"
+    try:
+        response = requests.get(url, timeout=5)  # Set a timeout for safety
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        data = response.json()
+        
+        # Safely access the nested value
+        last_feed = data.get("feeds", [])
+        if last_feed:
+            cash_value_str = last_feed[0].get("field3")
+            if cash_value_str is not None:
+                st.success(f"Successfully fetched initial cash from ThingSpeak: {float(cash_value_str):,.2f}")
+                return float(cash_value_str)
+
+        st.warning("ThingSpeak API returned data but in an unexpected format. Defaulting cash to 0.00.")
+        return 0.00
+    except (requests.exceptions.RequestException, json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
+        st.warning(f"Could not fetch initial cash from ThingSpeak API: {e}. Defaulting to 0.00.")
+        return 0.00
+
+# --- MODIFIED START: Initialize 'portfolio_cash' in session_state using the fetch function ---
 if 'portfolio_cash' not in st.session_state:
-    st.session_state.portfolio_cash = 0.00
+    # This now calls our new function to get the dynamic default value
+    st.session_state.portfolio_cash = fetch_initial_portfolio_cash()
+# --- MODIFIED END ---
+
 
 # --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (Unchanged) ---
 
@@ -125,6 +155,8 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
     
+    # This line remains unchanged. It correctly uses the session_state key,
+    # which we've now initialized with the API value.
     st.number_input('Portfolio_cash', key='portfolio_cash', format="%.2f")
     user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
 
