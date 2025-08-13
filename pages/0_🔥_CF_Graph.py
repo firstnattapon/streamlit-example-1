@@ -95,7 +95,7 @@ results_rf = {}
 # 3. สร้าง Tab "BATA" (หลักการ)
 with tabs[1]:
     with st.expander("หลักการ BATA" , expanded=True):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=RasfQBf9SRwnrLNwV9j3JQ", width=1500 , height=1000  , scrolling=0)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=a3cRH7RVEHvBTjPhBC5Hd7", width=1500 , height=1000  , scrolling=0)
     with st.expander("หลักการ Rollover"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1500 , height=1000  , scrolling=0)
 
