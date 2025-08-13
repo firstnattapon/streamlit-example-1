@@ -4,7 +4,7 @@
   },
   "assets": [
     {"ticker": "AGL", "monitor_field": {"field": 1, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field8", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
-     "fix_c": 1500, "option_config": {"base_value": 1500.0, "label": "AGL(LV:1500@1.83)"}},
+     "fix_c": 1500, "option_config": {"base_value": 1400.0, "label": "AGL(LV:1400@1.83)"}},
 
     {"ticker": "APLS", "monitor_field": {"field": 5, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field4", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
      "fix_c": 2500, "option_config": {"base_value": 100.0, "label": "APLS(LV:100@30.2)"}},
