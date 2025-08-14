@@ -9,7 +9,7 @@ from functools import lru_cache
 import concurrent.futures
 import os
 from typing import List, Dict, Optional
-import tenacity
+import tenacity 
 import pytz
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
