@@ -11,27 +11,20 @@ from typing import List, Dict, Optional, Tuple
 import tenacity
 import pytz
 
-# --- Optional dependency (ThingSpeak) ---------------------------------------------------------
-# App supports two modes: Offline (no-API) and Online (ThingSpeak). Offline is the default.
 try:
-    import thingspeak  # type: ignore
+    import thingspeak
     THINGSPEAK_AVAILABLE = True
 except Exception:
-    thingspeak = None  # type: ignore
+    thingspeak = None
     THINGSPEAK_AVAILABLE = False
 
-# ---------------------------------- App Setup -------------------------------------------------
 st.set_page_config(page_title="Monitor (Semi‑Auto Pro)", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
-STATE_FILE = "portfolio_state.json"          # local persistence for assets (offline mode)
-BLOTTER_FILE = "trade_blotter.csv"           # local trade blotter
-CONFIG_FILE = "monitor_config.json"          # existing config file
+STATE_FILE = "portfolio_state.json"
+BLOTTER_FILE = "trade_blotter.csv"
+CONFIG_FILE = "monitor_config.json"
 
-# ================================== Utilities =================================================
 class SimulationTracer:
-    """Unchanged logic. Decodes an encoded string and produces a 0/1 action array.
-    Keeps first action = 1 by design, then mutates with given seeds and rate.
-    """
     def __init__(self, encoded_string: str):
         self.encoded_string: str = str(encoded_string)
         self._decode_and_set_attributes()
@@ -39,11 +32,11 @@ class SimulationTracer:
     def _decode_and_set_attributes(self):
         encoded_string = self.encoded_string
         if not encoded_string.isdigit():
-            self.action_length: int = 0
-            self.mutation_rate: int = 0
-            self.dna_seed: int = 0
-            self.mutation_seeds: List[int] = []
-            self.mutation_rate_float: float = 0.0
+            self.action_length = 0
+            self.mutation_rate = 0
+            self.dna_seed = 0
+            self.mutation_seeds = []
+            self.mutation_rate_float = 0.0
             return
         decoded_numbers = []
         idx = 0
@@ -85,88 +78,13 @@ class SimulationTracer:
                 current_actions[0] = 1
         return current_actions
 
-# ----------------------------- Local persistence (Offline mode) -------------------------------
-@st.cache_data(show_spinner=False)
-def _load_json(path: str, default):
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return default
-
-@st.cache_data(show_spinner=False)
-def load_config(file_path: str = CONFIG_FILE) -> Dict:
-    cfg = _load_json(file_path, {})
-    if not cfg:
-        st.error(f"Configuration file not found or invalid: {file_path}")
-    return cfg
-
-CONFIG_DATA = load_config()
-if not CONFIG_DATA:
-    st.stop()
-
-ASSET_CONFIGS: List[Dict] = CONFIG_DATA.get("assets", [])
-GLOBAL_START_DATE = CONFIG_DATA.get("global_settings", {}).get("start_date")
-if not ASSET_CONFIGS:
-    st.error("No 'assets' list found in monitor_config.json")
-    st.stop()
-
-# --- helpers for asset state ---
-DEFAULT_STATE = {cfg["ticker"]: 0.0 for cfg in ASSET_CONFIGS}
-
-@st.cache_data(show_spinner=False)
-def load_portfolio_state() -> Dict[str, float]:
-    data = _load_json(STATE_FILE, DEFAULT_STATE)
-    # sanitize
-    for t in DEFAULT_STATE:
-        if t not in data:
-            data[t] = 0.0
-    try:
-        # convert numeric-like strings
-        data = {k: float(v) for k, v in data.items()}
-    except Exception:
-        pass
-    return data
-
-# Not cached: we want to persist immediately
-
-def save_portfolio_state(state: Dict[str, float]):
-    try:
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-        st.toast("💾 Saved portfolio_state.json")
-    except Exception as e:
-        st.error(f"Failed to save {STATE_FILE}: {e}")
-
-# --- Trade blotter helpers ---
-BLOTTER_COLS = [
-    "ts", "ticker", "side", "qty", "limit_price", "status", "note",
-    "signal", "suggested_by", "exec_ts", "exec_price", "fees", "slippage",
-]
-
-@st.cache_data(show_spinner=False)
-def load_blotter() -> pd.DataFrame:
-    if os.path.exists(BLOTTER_FILE):
-        try:
-            df = pd.read_csv(BLOTTER_FILE)
-            # ensure columns
-            for c in BLOTTER_COLS:
-                if c not in df.columns:
-                    df[c] = np.nan
-            return df[BLOTTER_COLS]
-        except Exception:
-            pass
-    return pd.DataFrame(columns=BLOTTER_COLS)
-
-
-def save_blotter(df: pd.DataFrame]):
+def save_blotter(df: pd.DataFrame):
     try:
         df.to_csv(BLOTTER_FILE, index=False)
         st.toast("🧾 Blotter saved")
     except Exception as e:
         st.error(f"Failed to save blotter: {e}")
+
 
 # --------------------------------- Mode & external clients -----------------------------------
 MODE = st.sidebar.radio("Mode", ["Offline (no‑API)", "Online (ThingSpeak)"] if THINGSPEAK_AVAILABLE else ["Offline (no‑API)"])
