@@ -34,7 +34,7 @@
      "fix_c": 1500, "option_config": {"base_value": 100.0, "label": "NVTS(LV:100@8.25)"}},
 
     {"ticker": "QXO", "monitor_field": {"field": 7, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field6", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
-     "fix_c": 2200, "option_config": {"base_value": 90.0, "label": "QXO(LV:90@22.6)"}},
+     "fix_c": 2200, "option_config": {"base_value": 100.0, "label": "QXO(LV:100@22.6)"}},
 
     {"ticker": "RIVN", "monitor_field": {"field": 4, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field3", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
      "fix_c": 1500, "option_config": {"base_value": 100.0, "label": "RIVN(LV:100@14.2)"}},
