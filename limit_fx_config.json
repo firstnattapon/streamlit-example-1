@@ -83,6 +83,12 @@
       "field": 6,
       "channel_id": 2988808,
       "write_api_key": "QBIPN1AIZ88QQW5V"
+    },
+    {
+      "symbol": "CLSK",
+      "field": 7,
+      "channel_id": 2988808,
+      "write_api_key": "QBIPN1AIZ88QQW5V"
     }
   ]
 }
