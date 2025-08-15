@@ -28,7 +28,7 @@
      "fix_c": 1800, "option_config": {"base_value": 600.0, "label": "IBRX(LV:600@3.25)"}},
 
     {"ticker": "NEGG", "monitor_field": {"field": 3, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field2", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
-     "fix_c": 800, "option_config": null},
+     "fix_c": 500, "option_config": null},
 
     {"ticker": "NVTS", "monitor_field": {"field": 6, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field5", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
      "fix_c": 1500, "option_config": {"base_value": 100.0, "label": "NVTS(LV:100@8.25)"}},
