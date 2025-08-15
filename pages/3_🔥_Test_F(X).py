@@ -5,123 +5,123 @@ import streamlit as st
 import json
 import plotly.express as px
 import numpy_financial as npf
+from datetime import datetime, timezone
 
-# ------------------- ฟังก์ชันสำหรับโหลด Config -------------------
-def load_config(filename="un15_fx_config.json"):
-    """
-    Loads configurations from a JSON file.
-    It expects a special key '__DEFAULT_CONFIG__' for default values.
-    Returns a tuple: (ticker_configs, default_config)
+# =============================================================
+# Un_15_F(X) — Dynamic c as Risk Parity (full, drop‑in)
+# -------------------------------------------------------------
+# What changed vs your previous file:
+# 1) Adds a "Dynamic c (Risk Parity)" section that computes new c
+#    (Fixed_Asset_Value per ticker) using inverse‑volatility weights.
+# 2) Lets you APPLY those c values to the simulation without altering
+#    your original JSON, and also DOWNLOAD an updated JSON.
+# 3) Keeps your KPIs / charts, but initial capital now sums actual c
+#    (so when dynamic c is applied, it reflects in KPIs automatically).
+# 4) Robust ticker cleanup (trims accidental spaces like " SG", " CLSK").
+# 5) Safer pandas usage (avoids chained assignment warnings where relevant).
+# =============================================================
+
+# ------------------- Helpers -------------------
+def _to_bangkok(ts: pd.DatetimeIndex) -> pd.DatetimeIndex:
+    try:
+        return ts.tz_convert("Asia/Bangkok")
+    except Exception:
+        # If index is naive, set to UTC first then convert
+        return ts.tz_localize("UTC").tz_convert("Asia/Bangkok")
+
+
+def _parse_filter_date(s: str) -> pd.Timestamp:
+    try:
+        return pd.to_datetime(s).tz_convert("Asia/Bangkok")
+    except Exception:
+        return pd.Timestamp("2024-01-01 12:00:00", tz="Asia/Bangkok")
+
+
+def _clean_ticker(t: str) -> str:
+    return (t or "").strip().upper()
+
+
+# ------------------- Load Config -------------------
+def load_config(filename: str = "un15_fx_config.json"):
+    """Loads configurations from JSON and cleans tickers.
+    Returns (ticker_configs, default_config).
     """
     try:
         with open(filename, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+            raw = json.load(f)
     except FileNotFoundError:
         st.error(f"Error: Configuration file '{filename}' not found.")
-        return {}, {}  # คืนค่า dict ว่าง
+        return {}, {}
     except json.JSONDecodeError:
         st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
-        return {}, {}  # คืนค่า dict ว่าง
+        return {}, {}
 
     fallback_default = {
-        "Fixed_Asset_Value": 1500.0, "Cash_Balan": 650.0, "step": 0.01,
-        "filter_date": "2024-01-01 12:00:00+07:00", "pred": 1
+        "Fixed_Asset_Value": 1500.0,
+        "Cash_Balan": 650.0,
+        "step": 0.01,
+        "filter_date": "2024-01-01 12:00:00+07:00",
+        "pred": 1,
     }
-    default_config = data.pop('__DEFAULT_CONFIG__', fallback_default)
-    ticker_configs = data
-    return ticker_configs, default_config
 
-# ------------------- ฟังก์ชันใหม่สำหรับ Risk Parity (Goal 1) -------------------
-def compute_risk_parity_allocations(active_configs):
-    """
-    Computes dynamic Fixed_Asset_Value (c) based on risk parity.
-    - Calculates volatility (std of daily log returns) from historical data.
-    - Adjusts allocations to equalize risk contribution.
-    - Output: New configs with adjusted Fixed_Asset_Value, and a DF for display.
-    """
-    volatilities = {}
-    for ticker, config in active_configs.items():
-        try:
-            hist = yf.Ticker(ticker).history(period='max')
-            if hist.empty:
-                continue
-            hist.index = hist.index.tz_convert(tz='Asia/Bangkok')
-            hist = hist[hist.index >= config['filter_date']]['Close']
-            if len(hist) < 2:
-                continue
-            returns = np.log(hist / hist.shift(1)).dropna()
-            vol = returns.std() if returns.std() > 0 else 1e-6  # Fallback to small value
-            volatilities[ticker] = vol
-        except Exception:
-            volatilities[ticker] = 1e-6  # Fallback
+    default_config = raw.pop("__DEFAULT_CONFIG__", fallback_default)
 
-    if not volatilities:
-        st.warning("No volatility data available for risk parity. Using original values.")
-        return active_configs, pd.DataFrame()
+    # Clean keys and embedded Ticker fields
+    cleaned = {}
+    for key, val in raw.items():
+        if not isinstance(val, dict):
+            continue
+        tkr = _clean_ticker(val.get("Ticker", key))
+        cfg = {
+            **val,
+            "Ticker": tkr,
+            "Fixed_Asset_Value": float(val.get("Fixed_Asset_Value", fallback_default["Fixed_Asset_Value"]))
+        }
+        cleaned[_clean_ticker(key)] = cfg
 
-    # Calculate weights: inverse volatility
-    weights = {t: 1 / v for t, v in volatilities.items()}
-    total_weight = sum(weights.values())
-    normalized_weights = {t: w / total_weight for t, w in weights.items()}
+    return cleaned, default_config
 
-    # Total fixed capital from original configs
-    total_fixed = sum(config['Fixed_Asset_Value'] for config in active_configs.values())
 
-    # Adjust Fixed_Asset_Value
-    new_configs = {t: config.copy() for t, config in active_configs.items()}
-    adjustments = []
-    for t in new_configs:
-        new_c = total_fixed * normalized_weights.get(t, 0)
-        original_c = new_configs[t]['Fixed_Asset_Value']
-        new_configs[t]['Fixed_Asset_Value'] = new_c
-        adjustments.append({
-            'Ticker': t,
-            'Original c': original_c,
-            'New c (Risk Parity)': new_c,
-            'Volatility': volatilities.get(t, 0)
-        })
-
-    adjustments_df = pd.DataFrame(adjustments)
-    return new_configs, adjustments_df
-
-# ------------------- ฟังก์ชันคำนวณหลัก (คงเดิม) -------------------
-def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
+# ------------------- Core Model -------------------
+def calculate_cash_balance_model(entry: float, step: float, Fixed_Asset_Value: float, Cash_Balan: float) -> pd.DataFrame:
     """Calculates the core cash balance model DataFrame."""
     if entry >= 10000 or entry <= 0:
         return pd.DataFrame()
 
     samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
-    
+
     df = pd.DataFrame()
     df['Asset_Price'] = np.around(samples, 2)
     df['Fixed_Asset_Value'] = Fixed_Asset_Value
     df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
 
+    # --- Upper branch ---
     df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
     if not df_top.empty:
         df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
         df_top.fillna(0, inplace=True)
-        
-        np_Cash_Balan_top = df_top['Cash_Balan_top'].values
+
+        np_Cash_Balan_top = df_top['Cash_Balan_top'].to_numpy()
         xx = np.zeros(len(np_Cash_Balan_top))
         y_0 = Cash_Balan
         for idx, v_0 in enumerate(np_Cash_Balan_top):
             z_0 = y_0 + v_0
             y_0 = z_0
             xx[idx] = y_0
-            
+
         df_top['Cash_Balan'] = xx
         df_top = df_top.sort_values(by='Amount_Asset')[:-1]
     else:
         df_top = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
 
+    # --- Lower branch ---
     df_down = df[df.Asset_Price <= np.around(entry, 2)].copy()
     if not df_down.empty:
         df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
         df_down.fillna(0, inplace=True)
         df_down = df_down.sort_values(by='Asset_Price', ascending=False)
-        
-        np_Cash_Balan_down = df_down['Cash_Balan_down'].values
+
+        np_Cash_Balan_down = df_down['Cash_Balan_down'].to_numpy()
         xxx = np.zeros(len(np_Cash_Balan_down))
         y_1 = Cash_Balan
         for idx, v_1 in enumerate(np_Cash_Balan_down):
@@ -136,93 +136,103 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     combined_df = pd.concat([df_top, df_down], axis=0, ignore_index=True)
     return combined_df[['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan']]
 
-def delta_1(asset_config):
-    """Calculates Production_Costs based on asset configuration."""
+
+def delta_1(asset_config: dict):
+    """Calculates Production_Costs proxy based on asset configuration."""
     try:
-        ticker_data = yf.Ticker(asset_config['Ticker'])
-        entry = ticker_data.fast_info['lastPrice']
+        tkr = _clean_ticker(asset_config['Ticker'])
+        entry = None
+        try:
+            entry = yf.Ticker(tkr).fast_info.get('lastPrice', None)
+        except Exception:
+            entry = None
+        if entry is None:
+            hist = yf.Ticker(tkr).history(period='5d')
+            if hist.empty:
+                return None
+            entry = float(hist['Close'].iloc[-1])
         df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
         if not df_model.empty:
             production_costs = df_model['Cash_Balan'].iloc[-1] - asset_config['Cash_Balan']
-            return abs(production_costs)
-    except Exception as e:
+            return abs(float(production_costs))
+    except Exception:
         return None
 
-def delta6(asset_config):
-    """Performs historical simulation based on asset configuration."""
+
+def delta6(asset_config: dict) -> pd.DataFrame | None:
+    """Historical simulation based on asset configuration."""
     try:
-        ticker_hist = yf.Ticker(asset_config['Ticker']).history(period='max')
-        if ticker_hist.empty:
-            return None
-            
-        ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
-        ticker_hist = ticker_hist[ticker_hist.index >= asset_config['filter_date']][['Close']]
-        
-        if ticker_hist.empty:
+        tkr = _clean_ticker(asset_config['Ticker'])
+        hist = yf.Ticker(tkr).history(period='max', auto_adjust=True)
+        if hist.empty:
             return None
 
-        entry = ticker_hist['Close'].iloc[0]
+        hist.index = _to_bangkok(hist.index)
+        fdate = _parse_filter_date(asset_config['filter_date'])
+        hist = hist[hist.index >= fdate][['Close']]
+        if hist.empty:
+            return None
+
+        entry = float(hist['Close'].iloc[0])
         df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
-        
         if df_model.empty:
             return None
 
-        ticker_data = ticker_hist.copy()
-        ticker_data['Close'] = np.around(ticker_data['Close'].values, 2)
-        ticker_data['pred'] = asset_config['pred']
-        ticker_data['Fixed_Asset_Value'] = asset_config['Fixed_Asset_Value']
-        ticker_data['Amount_Asset'] = 0.0
-        ticker_data['re'] = 0.0
-        ticker_data['Cash_Balan'] = asset_config['Cash_Balan']
-        ticker_data['Amount_Asset'].iloc[0] = ticker_data['Fixed_Asset_Value'].iloc[0] / ticker_data['Close'].iloc[0]
+        # Build simulation frame
+        df_sim = hist.copy()
+        df_sim['Close'] = np.around(df_sim['Close'].to_numpy(), 2)
+        df_sim['pred'] = int(asset_config['pred'])
+        df_sim['Fixed_Asset_Value'] = float(asset_config['Fixed_Asset_Value'])
+        df_sim['Amount_Asset'] = 0.0
+        df_sim['re'] = 0.0
+        df_sim['Cash_Balan'] = float(asset_config['Cash_Balan'])
 
-        close_vals = ticker_data['Close'].values
-        pred_vals = ticker_data['pred'].values
-        amount_asset_vals = ticker_data['Amount_Asset'].values
-        re_vals = ticker_data['re'].values
-        cash_balan_sim_vals = ticker_data['Cash_Balan'].values
+        # Initialize first row amount
+        first_amt = df_sim['Fixed_Asset_Value'].iloc[0] / df_sim['Close'].iloc[0]
+        df_sim.loc[df_sim.index[0], 'Amount_Asset'] = first_amt
+
+        close_vals = df_sim['Close'].to_numpy()
+        pred_vals = df_sim['pred'].to_numpy()
+        amount_asset_vals = df_sim['Amount_Asset'].to_numpy()
+        re_vals = df_sim['re'].to_numpy()
+        cash_balan_sim_vals = df_sim['Cash_Balan'].to_numpy()
 
         for idx in range(1, len(amount_asset_vals)):
             if pred_vals[idx] == 1:
-                amount_asset_vals[idx] = asset_config['Fixed_Asset_Value'] / close_vals[idx]
-                re_vals[idx] = (amount_asset_vals[idx-1] * close_vals[idx]) - asset_config['Fixed_Asset_Value']
-            else: 
+                amount_asset_vals[idx] = df_sim['Fixed_Asset_Value'].iloc[idx] / close_vals[idx]
+                re_vals[idx] = (amount_asset_vals[idx-1] * close_vals[idx]) - df_sim['Fixed_Asset_Value'].iloc[idx]
+            else:
                 amount_asset_vals[idx] = amount_asset_vals[idx-1]
-                re_vals[idx] = 0
+                re_vals[idx] = 0.0
             cash_balan_sim_vals[idx] = cash_balan_sim_vals[idx-1] + re_vals[idx]
 
-        original_index = ticker_data.index
-        ticker_data = ticker_data.merge(df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}), 
-                                        left_on='Close', right_on='Asset_Price', how='left').drop('Asset_Price', axis=1)
-        ticker_data.set_index(original_index, inplace=True)
+        # Merge reference model
+        df_ref = df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'})
+        df_sim = df_sim.merge(df_ref, left_on='Close', right_on='Asset_Price', how='left').drop(columns=['Asset_Price'])
+        df_sim['refer_model'] = df_sim['refer_model'].interpolate(method='linear').bfill().ffill()
 
-        ticker_data['refer_model'].interpolate(method='linear', inplace=True)
-        ticker_data.fillna(method='bfill', inplace=True)
-        ticker_data.fillna(method='ffill', inplace=True)
+        # Portfolio values
+        df_sim['pv'] = df_sim['Cash_Balan'] + (df_sim['Amount_Asset'] * df_sim['Close'])
+        df_sim['refer_pv'] = df_sim['refer_model'] + df_sim['Fixed_Asset_Value']
+        df_sim['net_pv'] = df_sim['pv'] - df_sim['refer_pv']
+        return df_sim[['net_pv', 're']]
 
-        ticker_data['pv'] = ticker_data['Cash_Balan'] + (ticker_data['Amount_Asset'] * ticker_data['Close'])
-        ticker_data['refer_pv'] = ticker_data['refer_model'] + asset_config['Fixed_Asset_Value']
-        ticker_data['net_pv'] = ticker_data['pv'] - ticker_data['refer_pv']
-        
-        return ticker_data[['net_pv', 're']]
-        
-    except Exception as e:
+    except Exception:
         return None
 
-def un_16(active_configs):
+
+def un_16(active_configs: dict) -> pd.DataFrame:
     """Aggregates results from multiple assets specified in active_configs."""
-    all_re = []
-    all_net_pv = []
-    
-    for ticker_name, config in active_configs.items():
-        result_df = delta6(config)
-        if result_df is not None and not result_df.empty:
-            all_re.append(result_df[['re']].rename(columns={"re": f"{ticker_name}_re"}))
-            all_net_pv.append(result_df[['net_pv']].rename(columns={"net_pv": f"{ticker_name}_net_pv"}))
-    
+    all_re, all_net_pv = [], []
+    for tkr, cfg in active_configs.items():
+        res = delta6(cfg)
+        if res is not None and not res.empty:
+            all_re.append(res[['re']].rename(columns={"re": f"{tkr}_re"}))
+            all_net_pv.append(res[['net_pv']].rename(columns={"net_pv": f"{tkr}_net_pv"}))
+
     if not all_re:
         return pd.DataFrame()
-        
+
     df_re = pd.concat(all_re, axis=1)
     df_net_pv = pd.concat(all_net_pv, axis=1)
 
@@ -235,164 +245,311 @@ def un_16(active_configs):
     final_df = pd.concat([df_re, df_net_pv], axis=1)
     return final_df
 
-# ------------------- ส่วนแสดงผล STREAMLIT -------------------
+
+# ------------------- Risk Parity (Dynamic c) -------------------
+def fetch_returns(ticker: str, start: pd.Timestamp | None) -> pd.Series:
+    """Fetch daily % returns for ticker from start date (Bangkok tz)."""
+    tkr = _clean_ticker(ticker)
+    hist = yf.Ticker(tkr).history(period='max', auto_adjust=True)
+    if hist.empty:
+        return pd.Series(dtype=float)
+    hist.index = _to_bangkok(hist.index)
+    if start is not None:
+        hist = hist[hist.index >= start]
+    if hist.empty:
+        return pd.Series(dtype=float)
+    rets = hist['Close'].pct_change().dropna()
+    return rets
+
+
+def compute_inverse_vol_weights(active_configs: dict, window_days: int | None, use_since_filter: bool = True) -> pd.DataFrame:
+    """Compute inverse‑vol weights (risk parity heuristic).
+
+    Parameters
+    ----------
+    active_configs : dict
+        Selected tickers' configs.
+    window_days : int | None
+        If provided, use only the last N trading days. If None and use_since_filter=True,
+        use data since each ticker's filter_date; otherwise use all available.
+    use_since_filter : bool
+        Respect each asset's filter_date when window_days is None.
+
+    Returns
+    -------
+    DataFrame with columns: [ticker, vol, inv_vol, weight].
+    """
+    rows = []
+    for tkr, cfg in active_configs.items():
+        fdate = _parse_filter_date(cfg.get('filter_date', '2024-01-01 12:00:00+07:00')) if use_since_filter else None
+        rets = fetch_returns(cfg['Ticker'], fdate)
+        if window_days is not None and len(rets) > window_days:
+            rets = rets.iloc[-window_days:]
+        vol = float(rets.std()) if len(rets) > 1 else np.nan
+        rows.append({
+            'ticker': tkr,
+            'vol': vol,
+        })
+    df = pd.DataFrame(rows)
+
+    # Handle zero/NaN vols
+    eps = 1e-6
+    df['vol_filled'] = df['vol'].fillna(df['vol'].median()).replace(0.0, eps)
+    df['inv_vol'] = 1.0 / df['vol_filled']
+    df['weight'] = df['inv_vol'] / df['inv_vol'].sum()
+    return df[['ticker', 'vol', 'weight']]
+
+
+def apply_dynamic_c(base_configs: dict, weights_df: pd.DataFrame) -> dict:
+    """Return a new config dict with Fixed_Asset_Value scaled by weights.
+    Total budget = sum of current Fixed_Asset_Value across selected.
+    """
+    total_budget = sum(float(cfg['Fixed_Asset_Value']) for cfg in base_configs.values())
+    wmap = dict(zip(weights_df['ticker'], weights_df['weight']))
+
+    new_cfg = {}
+    for tkr, cfg in base_configs.items():
+        w = float(wmap.get(tkr, 0.0))
+        new_c = float(total_budget * w)
+        upd = {**cfg, 'Fixed_Asset_Value': new_c}
+        new_cfg[tkr] = upd
+    return new_cfg
+
+
+def build_updated_json(full_config: dict, updated_c_map: dict, default_config: dict) -> str:
+    """Build a JSON string with updated Fixed_Asset_Value for keys in updated_c_map."""
+    out = {'__DEFAULT_CONFIG__': default_config}
+    for k, v in full_config.items():
+        if k in updated_c_map:
+            nv = float(updated_c_map[k])
+            obj = {**v, 'Fixed_Asset_Value': nv}
+        else:
+            obj = v
+        out[k] = obj
+    return json.dumps(out, ensure_ascii=False, indent=2)
+
+
+# ------------------- STREAMLIT UI -------------------
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
 
-# 1. โหลด config
 full_config, DEFAULT_CONFIG = load_config()
 
-if full_config or DEFAULT_CONFIG:
-    # 2. ตั้งค่า Session State
-    if 'custom_tickers' not in st.session_state:
-        st.session_state.custom_tickers = {}
+if not full_config and not DEFAULT_CONFIG:
+    st.stop()
 
-    # 3. ส่วนควบคุมบนหน้าหลัก
-    control_col1, control_col2 = st.columns([1, 2])
-    with control_col1:
-        st.subheader("Add New Ticker")
-        new_ticker = st.text_input("Ticker (e.g., AAPL):", key="new_ticker_input").upper()
-        if st.button("Add Ticker", key="add_ticker_button", use_container_width=True):
-            if new_ticker and new_ticker not in full_config and new_ticker not in st.session_state.custom_tickers:
-                st.session_state.custom_tickers[new_ticker] = {"Ticker": new_ticker, **DEFAULT_CONFIG}
-                st.success(f"Added {new_ticker}!")
-                st.rerun() 
-            elif new_ticker in full_config:
-                st.warning(f"{new_ticker} already exists in config file.")
-            elif new_ticker in st.session_state.custom_tickers:
-                st.warning(f"{new_ticker} has already been added.")
-            else:
-                st.warning("Please enter a ticker symbol.")
+# Session state init
+if 'custom_tickers' not in st.session_state:
+    st.session_state.custom_tickers = {}
+if 'dyn_c_table' not in st.session_state:
+    st.session_state.dyn_c_table = None
+if 'dyn_c_applied' not in st.session_state:
+    st.session_state.dyn_c_applied = False
+if 'dyn_c_values' not in st.session_state:
+    st.session_state.dyn_c_values = {}
 
-    with control_col2:
-        st.subheader("Select Tickers to Analyze")
-        all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
-        default_selection = [t for t in list(full_config.keys()) if t in all_tickers]
-        selected_tickers = st.multiselect(
-            "Select from available tickers:",
-            options=all_tickers,
-            default=default_selection
-        )
-    st.divider()
-
-    # 4. สร้าง Dict Config ของ Ticker ที่เลือก
-    active_configs = {ticker: full_config.get(ticker, st.session_state.custom_tickers.get(ticker)) for ticker in selected_tickers}
-
-    if not active_configs:
-        st.warning("Please select at least one ticker to start the analysis.")
-    else:
-        # เพิ่มส่วน Risk Parity (Goal 1 & Goal 2: UI)
-        with st.expander("Risk Parity Adjustments (Dynamic c)"):
-            new_configs, adjustments_df = compute_risk_parity_allocations(active_configs)
-            if not adjustments_df.empty:
-                st.write("Adjusted Fixed_Asset_Value (c) for Risk Parity:")
-                st.dataframe(adjustments_df)
-            else:
-                st.info("No adjustments made (using original values).")
-
-        # 5. รันการคำนวณ โดยใช้ new_configs (Goal 1 & Goal 2: Calculation)
-        with st.spinner('Calculating... Please wait.'):
-            data = un_16(new_configs)  # ใช้ new_configs แทน active_configs
-
-        if data.empty:
-            st.error("Failed to generate data. This might happen if tickers have no historical data for the selected period or another error occurred.")
+# --- Controls: add/select tickers ---
+control_col1, control_col2 = st.columns([1, 2])
+with control_col1:
+    st.subheader("Add New Ticker")
+    new_ticker = st.text_input("Ticker (e.g., AAPL):", key="new_ticker_input").upper().strip()
+    if st.button("Add Ticker", key="add_ticker_button", use_container_width=True):
+        if new_ticker and new_ticker not in full_config and new_ticker not in st.session_state.custom_tickers:
+            st.session_state.custom_tickers[new_ticker] = {"Ticker": new_ticker, **DEFAULT_CONFIG}
+            st.success(f"Added {new_ticker}!")
+            st.rerun()
+        elif new_ticker in full_config:
+            st.warning(f"{new_ticker} already exists in config file.")
+        elif new_ticker in st.session_state.custom_tickers:
+            st.warning(f"{new_ticker} has already been added.")
         else:
-            # 6. คำนวณค่าสำหรับแสดงผล (คงเดิม แต่ใช้ new values)
-            df_new = data.copy()
-            roll_over = []
-            max_dd_values = df_new.maxcash_dd.values
-            for i in range(len(max_dd_values)):
-                roll = max_dd_values[:i]
-                roll_min = np.min(roll) if len(roll) > 0 else 0
-                roll_over.append(roll_min)
-            
-            cf_values = df_new.cf.values
-            df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
-            
-            # --- START: GOAL 1 MODIFICATION - Redefine True Alpha ---
-            # คำนวณต้นทุนรวมที่ใช้ในการลงทุนตามสูตรใหม่
-            # ต้นทุนรวม = (เงินลงทุนเริ่มต้น) + (เงินสดสำรองที่ใช้ไปสูงสุด)
-            num_selected_tickers = len(selected_tickers)
-            initial_capital = sum(config['Fixed_Asset_Value'] for config in new_configs.values())  # ใช้ sum จาก new values
-            max_buffer_used = abs(np.min(roll_over))  # เงินสดสำรองที่ใช้ไปสูงสุด (Max Drawdown)
+            st.warning("Please enter a ticker symbol.")
 
-            # ต้นทุนรวมที่ใช้เป็นตัวหาร (Total Capital at Risk)
-            total_capital_at_risk = initial_capital + max_buffer_used
-            
-            # ป้องกันการหารด้วยศูนย์
-            if total_capital_at_risk == 0:
-                total_capital_at_risk = 1 
+with control_col2:
+    st.subheader("Select Tickers to Analyze")
+    all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
+    default_selection = [t for t in list(full_config.keys()) if t in all_tickers]
+    selected_tickers = st.multiselect(
+        "Select from available tickers:",
+        options=all_tickers,
+        default=default_selection
+    )
 
-            # คำนวณ True Alpha ใหม่ โดยใช้ "ต้นทุนรวม" เป็นตัวหาร
-            # True Alpha = (กำไรสะสม / ต้นทุนรวม) * 100
-            true_alpha_values = (df_new.cf.values / total_capital_at_risk) * 100
-            df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
-            # --- END: GOAL 1 MODIFICATION ---
+st.divider()
 
+# Active configs (base)
+base_active_configs = {t: full_config.get(t, st.session_state.custom_tickers.get(t)) for t in selected_tickers}
 
-            # 7. แสดงผล KPI (คงเดิม)
-            st.subheader("Key Performance Indicators (Adjusted for Risk Parity)")
-            final_sum_delta = df_all.Sum_Delta.iloc[-1]
-            final_max_buffer = df_all.Max_Sum_Buffer.iloc[-1]
-            final_true_alpha = df_all_2.True_Alpha.iloc[-1]
-            num_days = len(df_new)
-            avg_cf = final_sum_delta / num_days if num_days > 0 else 0
-            avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
+# =================== Dynamic c (Risk Parity) ===================
+rp = st.expander("⚖️ Dynamic c (Risk Parity)", expanded=True)
+with rp:
+    left, right = st.columns([2, 1])
+    with left:
+        st.markdown("**Method:** Inverse‑Volatility (equalize risk via 1/σ weights)")
+        mode = st.radio(
+            "Volatility lookback",
+            ["Use entire period since filter_date", "Use last N trading days"],
+            horizontal=False,
+        )
+        window_days = None
+        use_since_filter = True
+        if mode == "Use last N trading days":
+            window_days = int(st.number_input("N (days)", min_value=20, max_value=2000, value=252, step=10))
+            use_since_filter = False
 
-            # --- MIRR CALCULATION (UNCHANGED) ---
-            mirr_value = 0.0
-            
-            # Per your formula: Initial Investment = (sum new Fixed_Asset_Value) + (Max Cash Buffer Used * -1)
-            initial_investment = initial_capital + abs(final_max_buffer)
-            
-            if initial_investment > 0:
-                # Per your formula: Annual Cash Flows = Year(Avg. Daily Profit * 252 วัน)
-                annual_cash_flow = avg_cf * 252
-                
-                # Per your formula: Exit Multiple = Initial Investment * 0.5
-                exit_multiple = initial_investment * 0.5
-                
-                # Construct cash flows for 3-year project duration
-                cash_flows = [
-                    -initial_investment,
-                    annual_cash_flow,
-                    annual_cash_flow,
-                    annual_cash_flow + exit_multiple
-                ]
-                
-                # Finance rate (cost of capital) and reinvestment rate are both 0% per your spec
-                finance_rate = 0.0
-                reinvest_rate = 0.0
-                
-                mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate)
-            # --- END MIRR CALCULATION ---
+        if st.button("Compute Dynamic c", type="primary"):
+            if not base_active_configs:
+                st.warning("Please select at least one ticker.")
+            else:
+                with st.spinner("Computing inverse‑vol weights ..."):
+                    wdf = compute_inverse_vol_weights(base_active_configs, window_days, use_since_filter)
+                    # Build new c
+                    new_cfg = apply_dynamic_c(base_active_configs, wdf)
+                    rows = []
+                    for t, cfg in base_active_configs.items():
+                        old_c = float(cfg['Fixed_Asset_Value'])
+                        new_c = float(new_cfg[t]['Fixed_Asset_Value'])
+                        vol = float(wdf.loc[wdf['ticker'] == t, 'vol'].values[0]) if (wdf['ticker'] == t).any() else np.nan
+                        wt = float(wdf.loc[wdf['ticker'] == t, 'weight'].values[0]) if (wdf['ticker'] == t).any() else np.nan
+                        rows.append({
+                            'Ticker': t,
+                            'Volatility (σ)': vol,
+                            'Weight': wt,
+                            'c_old': old_c,
+                            'c_new (risk‑parity)': new_c,
+                            'Δc %': (new_c - old_c) / (old_c if old_c != 0 else 1) * 100.0,
+                        })
+                    tbl = pd.DataFrame(rows)
+                    st.session_state.dyn_c_table = tbl
+                    st.session_state.dyn_c_values = {r['Ticker']: r['c_new (risk‑parity)'] for _, r in tbl.iterrows()}
+                    st.session_state.dyn_c_applied = False
 
-            # --- KPI Display (UNCHANGED) ---
-            kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
-            kpi1.metric(label="Total Net Profit (cf)", value=f"{final_sum_delta:,.2f}")
-            kpi2.metric(label="Max Cash Buffer Used", value=f"{final_max_buffer:,.2f}")
-            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}%")  # ค่านี้จะเปลี่ยนไปตามสูตรใหม่
-            kpi4.metric(label="Avg. Daily Profit", value=f"{avg_cf:,.2f}")
-            kpi5.metric(label="Avg. Daily Buffer Used", value=f"{avg_burn_cash:,.2f}")
-            kpi6.metric(label="MIRR (3-Year)", value=f"{mirr_value:.2%}")
-            
-            st.divider()
+        # Show table if available
+        if st.session_state.dyn_c_table is not None:
+            st.dataframe(st.session_state.dyn_c_table, use_container_width=True)
 
-            # 8. แสดงผลกราฟ (คงเดิม)
-            st.subheader("Performance Charts")
-            graph_col1, graph_col2 = st.columns(2)
-            
-            graph_col1.plotly_chart(px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"), use_container_width=True)
-            graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)  # กราฟนี้จะเปลี่ยนไปตามสูตรใหม่
-            
-            st.divider()
-            
-            st.subheader("Detailed Simulation Data")
-            for ticker in selected_tickers:
-                col_name = f'{ticker}_re'
-                if col_name in df_new.columns:
-                    df_new[col_name] = df_new[col_name].cumsum()
-            
-            st.plotly_chart(px.line(df_new, title="Portfolio Simulation Details"), use_container_width=True)
+            # Visualization
+            fig = px.bar(
+                st.session_state.dyn_c_table.melt(id_vars=['Ticker', 'Volatility (σ)', 'Weight'], value_vars=['c_old', 'c_new (risk‑parity)'],
+                                                   var_name='Type', value_name='c'),
+                x='Ticker', y='c', color='Type', barmode='group', title='c (Fixed_Asset_Value) — old vs risk‑parity'
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-else:
-    st.error("Could not load any configuration. Please check that 'un15_fx_config.json' exists and is correctly formatted.")
+    with right:
+        st.caption("Apply or export the computed c values.")
+        apply_now = st.button("Apply dynamic c to simulation", use_container_width=True)
+        if apply_now and st.session_state.dyn_c_values:
+            st.session_state.dyn_c_applied = True
+            st.success("Dynamic c applied to this session's simulation.")
+
+        if st.session_state.dyn_c_values:
+            # Build downloadable JSON merging into full_config
+            updated_json_str = build_updated_json(full_config, st.session_state.dyn_c_values, DEFAULT_CONFIG)
+            st.download_button(
+                label="Download updated config (risk‑parity c)",
+                data=updated_json_str.encode('utf-8'),
+                file_name="un15_fx_config_risk_parity.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+
+st.divider()
+
+# Build active configs for SIM (override c if applied)
+active_configs = {t: dict(base_active_configs[t]) for t in base_active_configs}
+if st.session_state.dyn_c_applied and st.session_state.dyn_c_values:
+    for t in active_configs:
+        if t in st.session_state.dyn_c_values:
+            active_configs[t]['Fixed_Asset_Value'] = float(st.session_state.dyn_c_values[t])
+
+if not active_configs:
+    st.warning("Please select at least one ticker to start the analysis.")
+    st.stop()
+
+# ------------------- Run Simulation -------------------
+with st.spinner('Calculating... Please wait.'):
+    data = un_16(active_configs)
+
+if data.empty:
+    st.error("Failed to generate data. This might happen if tickers have no historical data for the selected period or another error occurred.")
+    st.stop()
+
+# Roll stats for KPIs
+df_new = data.copy()
+roll_over = []
+max_dd_values = df_new.maxcash_dd.values
+for i in range(len(max_dd_values)):
+    roll = max_dd_values[:i]
+    roll_min = np.min(roll) if len(roll) > 0 else 0.0
+    roll_over.append(roll_min)
+
+cf_values = df_new.cf.values
+
+df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
+
+# --- True Alpha (unchanged idea, but uses actual capital) ---
+# total initial capital = sum of c (Fixed_Asset_Value) actually in use
+initial_capital = float(sum(cfg['Fixed_Asset_Value'] for cfg in active_configs.values()))
+max_buffer_used = abs(float(np.min(roll_over)))
+
+total_capital_at_risk = initial_capital + max_buffer_used
+if total_capital_at_risk == 0:
+    total_capital_at_risk = 1.0
+
+true_alpha_values = (df_new.cf.values / total_capital_at_risk) * 100.0
+
+df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
+
+# ------------------- KPIs -------------------
+st.subheader("Key Performance Indicators")
+final_sum_delta = float(df_all.Sum_Delta.iloc[-1])
+final_max_buffer = float(df_all.Max_Sum_Buffer.iloc[-1])
+final_true_alpha = float(df_all_2.True_Alpha.iloc[-1])
+num_days = int(len(df_new))
+avg_cf = final_sum_delta / num_days if num_days > 0 else 0.0
+avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0.0
+
+# MIRR
+mirr_value = 0.0
+initial_investment = initial_capital + abs(final_max_buffer)
+if initial_investment > 0:
+    annual_cash_flow = avg_cf * 252
+    exit_multiple = initial_investment * 0.5
+    cash_flows = [
+        -initial_investment,
+        annual_cash_flow,
+        annual_cash_flow,
+        annual_cash_flow + exit_multiple,
+    ]
+    finance_rate = 0.0
+    reinvest_rate = 0.0
+    try:
+        mirr_value = float(npf.mirr(cash_flows, finance_rate, reinvest_rate))
+    except Exception:
+        mirr_value = 0.0
+
+kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
+kpi1.metric(label="Total Net Profit (cf)", value=f"{final_sum_delta:,.2f}")
+kpi2.metric(label="Max Cash Buffer Used", value=f"{final_max_buffer:,.2f}")
+kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}%")
+kpi4.metric(label="Avg. Daily Profit", value=f"{avg_cf:,.2f}")
+kpi5.metric(label="Avg. Daily Buffer Used", value=f"{avg_burn_cash:,.2f}")
+kpi6.metric(label="MIRR (3-Year)", value=f"{mirr_value:.2%}")
+
+st.divider()
+
+# ------------------- Charts -------------------
+st.subheader("Performance Charts")
+colA, colB = st.columns(2)
+colA.plotly_chart(px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"), use_container_width=True)
+colB.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)
+
+st.divider()
+
+st.subheader("Detailed Simulation Data")
+# Cumulative re per ticker for detail chart
+for c in df_new.columns:
+    if c.endswith('_re'):
+        df_new[c] = df_new[c].cumsum()
+
+st.plotly_chart(px.line(df_new, title="Portfolio Simulation Details"), use_container_width=True)
