@@ -124,5 +124,13 @@
     "Equation": "b += c · ln(P / t) - c' · ln(P / t') ; แล้วตั้ง P = P' , t = t', c = c' ",
     "history_1": "",
     "comment": ""
+  },
+  {
+    "ticker": "CLSK",
+    "Final": "12.50, 2200",
+    "Original": "ราคาอ้างอิง: 12.50 , ทุนคงที่: 2200",
+    "Equation": "b += c · ln(P / t) - c' · ln(P / t') ; แล้วตั้ง P = P' , t = t', c = c' ",
+    "history_1": "",
+    "comment": ""
   }
 ]
