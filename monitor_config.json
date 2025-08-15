@@ -7,7 +7,7 @@
      "fix_c": 1500, "option_config": {"base_value": 1300.0, "label": "AGL(LV:1300@1.83)"}},
 
     {"ticker": "APLS", "monitor_field": {"field": 5, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field4", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
-     "fix_c": 2500, "option_config": {"base_value": 90.0, "label": "APLS(LV:90@30.2)"}},
+     "fix_c": 2500, "option_config": {"base_value": 80.0, "label": "APLS(LV:100@30.2) discount_option:20"}},
 
     {"ticker": "DJT", "monitor_field": {"field": 4, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V"}, "asset_field": {"field": "field4", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP"},
      "fix_c": 2000, "option_config": {"base_value": 100.0, "label": "DJT(LV:100@20.40)"}},
