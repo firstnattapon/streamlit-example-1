@@ -7,7 +7,7 @@
      "fix_c": 1500, "option_config": {"base_value": 1300.0, "label": "AGL(LV:1300@1.83)"}},
 
     {"ticker": "APLS", "monitor_field": {"field": 5, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field4", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
-     "fix_c": 2500, "option_config": {"base_value": 80.0, "label": "APLS(LV:100@30.2) Discount_option:20"}},
+     "fix_c": 2500, "option_config": {"base_value": 80.0, "label": "APLS(LV:100@30.2) | Discount_option:20"}},
 
     {"ticker": "CLSK", "monitor_field": {"field": 7, "channel_id": 2988808, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field7", "channel_id": 2988802, "api_key": "2E65V8XEIPH9B2VV"},
      "fix_c": 2200, "option_config": {"base_value": 200.0, "label": "CLSK(LV:200@12.5)"}},
@@ -37,7 +37,7 @@
      "fix_c": 1500, "option_config": {"base_value": 100.0, "label": "NVTS(LV:100@8.25)"}},
 
     {"ticker": "QXO", "monitor_field": {"field": 7, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field6", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
-     "fix_c": 2200, "option_config": {"base_value": 100.0, "label": "QXO(LV:100@22.6)"}},
+     "fix_c": 2200, "option_config": {"base_value": 80.0, "label": "QXO(LV:100@22.6) | Discount_option:20"}},
 
     {"ticker": "RIVN", "monitor_field": {"field": 4, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field3", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
      "fix_c": 1500, "option_config": {"base_value": 100.0, "label": "RIVN(LV:100@14.2)"}},
