@@ -25,7 +25,7 @@
         { "type": "option", "name": "NVTS Call @ 8.25", "underlying_ticker": "NVTS", "contracts_or_shares": 100, "premium_paid_per_share": 1.26, "strike": 7.0 },
         { "type": "option", "name": "DJT Call @ 20.40", "underlying_ticker": "DJT", "contracts_or_shares": 100, "premium_paid_per_share": 2.93, "strike": 17.5 },
         { "type": "option", "name": "RIVN Call @ 14.20", "underlying_ticker": "RIVN", "contracts_or_shares": 100, "premium_paid_per_share": 1.70, "strike": 12.5 },
-        { "type": "option", "name": "QXO Call @ 22.60", "underlying_ticker": "QXO", "contracts_or_shares": 100, "premium_paid_per_share": 2.60, "strike": 20.0 },
+        { "type": "option", "name": "QXO Call @ 22.60", "underlying_ticker": "QXO", "contracts_or_shares": 80 , "premium_paid_per_share": 3.25, "strike": 20.0 },
         { "type": "option", "name": "IBRX Call @ 3.25", "underlying_ticker": "IBRX", "contracts_or_shares": 600, "premium_paid_per_share": 0.75, "strike": 2.5 },
         { "type": "option", "name": "SG Call @ 12.00", "underlying_ticker": "SG", "contracts_or_shares": 100, "premium_paid_per_share": 1.95, "strike": 10.0 },
         { "type": "option", "name": "APLS Call @ 30.20 ", "underlying_ticker": "APLS", "contracts_or_shares": 100, "premium_paid_per_share": 4.2, "strike": 26.0 },
