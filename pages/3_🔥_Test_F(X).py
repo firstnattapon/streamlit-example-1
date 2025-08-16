@@ -18,9 +18,7 @@ from urllib.request import urlopen
 
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
-# -----------------------------
-# SimulationTracer (unchanged)
-# -----------------------------
+# --- SimulationTracer Class (unchanged) ---
 class SimulationTracer:
     def __init__(self, encoded_string: str):
         self.encoded_string: str = str(encoded_string)
@@ -78,9 +76,7 @@ class SimulationTracer:
                 current_actions[0] = 1
         return current_actions
 
-# -----------------------------
-# Config
-# -----------------------------
+# --- Configuration Loading (unchanged) ---
 @st.cache_data
 def load_config(file_path='monitor_config.json') -> Dict:
     if not os.path.exists(file_path):
@@ -104,9 +100,7 @@ if not ASSET_CONFIGS:
     st.error("No 'assets' list found in monitor_config.json")
     st.stop()
 
-# -----------------------------
-# ThingSpeak Clients
-# -----------------------------
+# --- ThingSpeak Clients (unchanged) ---
 @st.cache_resource
 def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
     clients = {}
@@ -116,6 +110,7 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
         unique_channels.add((mon_conf['channel_id'], mon_conf['api_key']))
         asset_conf = config['asset_field']
         unique_channels.add((asset_conf['channel_id'], asset_conf['api_key']))
+
     for channel_id, api_key in unique_channels:
         try:
             clients[channel_id] = thingspeak.Channel(channel_id, api_key, fmt='json')
@@ -125,15 +120,15 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
 
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
-# -----------------------------
-# Cache/Ctrl Helpers
-# -----------------------------
+# --- (MODIFIED) Clear Caches Function (PRESERVE UI KEYS) ---
 def clear_all_caches():
+    # Clear caches
     st.cache_data.clear()
     st.cache_resource.clear()
     sell.cache_clear()
     buy.cache_clear()
 
+    # Preserve key UI states to prevent reset on data refresh
     ui_state_keys_to_preserve = {'select_key', 'nex', 'Nex_day_sell'}
     keys_to_delete = [k for k in list(st.session_state.keys()) if k not in ui_state_keys_to_preserve]
     for key in keys_to_delete:
@@ -141,15 +136,15 @@ def clear_all_caches():
             del st.session_state[key]
         except Exception:
             pass
+
     st.success("🗑️ Data caches cleared! UI state preserved.")
 
+# --- (NEW) Helper function to rerun app while keeping the selectbox selection ---
 def rerun_keep_selection(ticker: str):
     st.session_state["_pending_select_key"] = ticker
     st.rerun()
 
-# -----------------------------
-# Calc utils
-# -----------------------------
+# --- Calculation Utils (unchanged) ---
 @lru_cache(maxsize=128)
 def sell(asset, fix_c=1500, Diff=60):
     if asset == 0: return 0, 0, 0
@@ -166,9 +161,7 @@ def buy(asset, fix_c=1500, Diff=60):
     total = round(asset * unit_price - adjust_qty * unit_price, 2)
     return unit_price, adjust_qty, total
 
-# -----------------------------
-# Price (yf)
-# -----------------------------
+# --- Price Fetching with Retry (unchanged) ---
 @st.cache_data(ttl=300)
 @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(3))
 def get_cached_price(ticker: str) -> float:
@@ -177,15 +170,15 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
+# --- Helper: current date in New York (unchanged) ---
 @st.cache_data(ttl=60)
 def get_current_ny_date() -> datetime.date:
     ny_tz = pytz.timezone('America/New_York')
     return datetime.datetime.now(ny_tz).date()
 
-# -----------------------------
-# net_today counter
-# -----------------------------
+# ========== (NEW) Daily Trade Counter (net_today) ==========
 def _field_number(field_value) -> Optional[int]:
+    """Accepts 1 or 'field1' and returns 1"""
     if isinstance(field_value, int):
         return field_value
     m = re.search(r'(\d+)', str(field_value))
@@ -203,7 +196,9 @@ def _http_get_json(url: str, params: Dict) -> Dict:
 @st.cache_data(ttl=180)
 def fetch_net_trades_today(asset_field_conf: Dict) -> int:
     """
-    net_today = (# ขึ้น) - (# ลง) สำหรับค่าฟิลด์ใน 'วันนี้' (Asia/Bangkok)
+    Count trade 'events' today for given ThingSpeak field:
+      +1 for each upward change (buy), -1 for each downward change (sell).
+    Uses Asia/Bangkok calendar day.
     """
     try:
         channel_id = int(asset_field_conf['channel_id'])
@@ -212,9 +207,11 @@ def fetch_net_trades_today(asset_field_conf: Dict) -> int:
             return 0
         field_key = f"field{fnum}"
 
+        # Pull last 1 day of data (ThingSpeak returns up to last day by default; results<=8000)
+        # Provide api_key when available for private channels.
         params = {'results': 8000}
         if asset_field_conf.get('api_key'):
-            params['api_key'] = asset_field_conf['api_key']
+            params['api_key'] = asset_field_conf['api_key']  # read key if private :contentReference[oaicite:0]{index=0}
 
         url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
         data = _http_get_json(url, params)
@@ -222,6 +219,7 @@ def fetch_net_trades_today(asset_field_conf: Dict) -> int:
         if not feeds:
             return 0
 
+        # Sort by time just in case
         tz = pytz.timezone('Asia/Bangkok')
         def _parse_row(r):
             try:
@@ -238,6 +236,7 @@ def fetch_net_trades_today(asset_field_conf: Dict) -> int:
         rows.sort(key=lambda x: x[0])
 
         today = datetime.datetime.now(tz).date()
+        # Find last value before today to set baseline
         prev_val = None
         for dt_local, v in rows:
             if dt_local.date() < today:
@@ -249,6 +248,7 @@ def fetch_net_trades_today(asset_field_conf: Dict) -> int:
                 break
 
         buys, sells = 0, 0
+        # Walk today's values and compare to previous
         for dt_local, v in rows:
             if dt_local.date() != today:
                 continue
@@ -267,9 +267,7 @@ def fetch_net_trades_today(asset_field_conf: Dict) -> int:
     except Exception:
         return 0
 
-# -----------------------------
-# Fetch data bundle (incl. nets)
-# -----------------------------
+# --- Data Fetching (unchanged core + (NEW) nets) ---
 @st.cache_data(ttl=300)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> Dict[str, dict]:
     monitor_results = {}
@@ -360,9 +358,8 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> 
 
     return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results}
 
-# -----------------------------
-# UI Components
-# -----------------------------
+# --- UI Components ---
+
 def render_asset_inputs(configs: List[Dict], last_assets: Dict, net_today_map: Dict[str, int]) -> Dict[str, float]:
     asset_inputs = {}
     cols = st.columns(len(configs))
@@ -370,38 +367,35 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict, net_today_map: D
         with cols[i]:
             ticker = config['ticker']
             last_val = last_assets.get(ticker, 0.0)
-            raw_label = config['option_config']['label'] if config.get('option_config') else ticker
+            if config.get('option_config'):
+                raw_label = config['option_config']['label']
+            else:
+                raw_label = ticker
 
-            # Label คงเดิม, แต่ help ให้แสดง "เลขล้วน"
+            # Build help text: include requested "net_today = {}"
             display_label = raw_label
+            base_help = ""
             split_pos = raw_label.find('(')
             if split_pos != -1:
                 display_label = raw_label[:split_pos].strip()
-
-            net_num_str = str(net_today_map.get(ticker, 0))  # <-- CHANGED: number only
+                base_help = raw_label[split_pos:].strip()
+            else:
+                base_help = "(NULL)"
+            help_text_final = f"net_today = {net_today_map.get(ticker, 0)}" if not base_help else f"{base_help} | net_today = {net_today_map.get(ticker, 0)}"
 
             if config.get('option_config'):
                 option_val = config['option_config']['base_value']
                 real_val = st.number_input(
-                    label=display_label,
-                    help=net_num_str,              # <-- CHANGED
-                    step=0.001,
-                    value=last_val,
-                    key=f"input_{ticker}_real"
+                    label=display_label, help=help_text_final,
+                    step=0.001, value=last_val, key=f"input_{ticker}_real"
                 )
                 asset_inputs[ticker] = option_val + real_val
             else:
                 val = st.number_input(
-                    label=display_label,
-                    help=net_num_str,              # <-- CHANGED
-                    step=0.001,
-                    value=last_val,
-                    key=f"input_{ticker}_asset"
+                    label=display_label, help=help_text_final,
+                    step=0.001, value=last_val, key=f"input_{ticker}_asset"
                 )
                 asset_inputs[ticker] = val
-
-            # help-only widget: แสดง tooltip เป็น "เลขล้วน"
-            st.button(" ", help=net_num_str, disabled=True, key=f"help_btn_{ticker}")  # <-- CHANGED
     return asset_inputs
 
 def render_asset_update_controls(configs: List[Dict], clients: Dict):
@@ -422,9 +416,7 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict):
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
 
-# -----------------------------
-# Trading section
-# -----------------------------
+# --- (MODIFIED) trading_section ---
 def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: pd.DataFrame, calc: Dict, nex: int, Nex_day_sell: int, clients: Dict):
     ticker = config['ticker']
     asset_conf = config['asset_field']
@@ -441,8 +433,10 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
             return None
 
     action_val = get_action_val()
+
     has_signal = action_val is not None
     limit_order_checked = st.checkbox(f'Limit_Order_{ticker}', value=has_signal, key=f'limit_order_{ticker}')
+
     if not limit_order_checked:
         return
 
@@ -491,15 +485,13 @@ def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: 
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
 
-# -----------------------------
-# Main
-# -----------------------------
+# --- Main Logic ---
 all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
 trade_nets_all = all_data['nets']  # {ticker: net_today}
 
-# Stable session state
+# Stable Session State Initialization
 if 'select_key' not in st.session_state:
     st.session_state.select_key = ""
 if 'nex' not in st.session_state:
@@ -507,6 +499,7 @@ if 'nex' not in st.session_state:
 if 'Nex_day_sell' not in st.session_state:
     st.session_state.Nex_day_sell = 0
 
+# --- (NEW) BOOTSTRAP selection BEFORE creating any widgets ---
 pending = st.session_state.pop("_pending_select_key", None)
 if pending:
     st.session_state.select_key = pending
@@ -565,8 +558,9 @@ with tab1:
                 pass
         ticker_actions[ticker] = final_action_val
 
-        # Label (กลับเป็นแบบเดิม ไม่มี help{...})
-        selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
+        # (NEW) append help{net_today=...}
+        net_today_str = trade_nets_all.get(ticker, 0)
+        selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str}) help{{net_today={net_today_str}}}"
 
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
     selectbox_options = [""]
@@ -580,15 +574,14 @@ with tab1:
     def format_selectbox_options(option_name):
         if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
             return "Show All" if option_name == "" else option_name
+        # Keep the label short inside the dropdown
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
-    # Tooltip ของ selectbox เป็น "เลขล้วน"
     st.selectbox(
         "Select Ticker to View:",
         options=selectbox_options,
         format_func=format_selectbox_options,
-        key="select_key",
-        help=str(trade_nets_all.get(st.session_state.select_key, 0) if st.session_state.select_key in trade_nets_all else 0)  # <-- CHANGED
+        key="select_key"
     )
     st.write("_____")
 
@@ -600,6 +593,8 @@ with tab1:
         configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in buy_tickers]
     elif selected_option == "Filter Sell Tickers":
         sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
+        configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in sell_tickers]
+    else:
         configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_option]
 
     calculations = {}
