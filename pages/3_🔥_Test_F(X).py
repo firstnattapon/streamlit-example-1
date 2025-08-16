@@ -381,7 +381,7 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict, net_today_map: D
                 base_help = raw_label[split_pos:].strip()
             else:
                 base_help = "(NULL)"
-            help_text_final = f"net_today = {net_today_map.get(ticker, 0)}" if not base_help else f"{base_help}}"
+            help_text_final = f"net_today = {net_today_map.get(ticker, 0)}" if not base_help else f"{base_help}"
 
             if config.get('option_config'):
                 option_val = config['option_config']['base_value']
