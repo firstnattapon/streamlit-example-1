@@ -1,427 +1,642 @@
+# -*- coding: utf-8 -*-
+import streamlit as st
 import numpy as np
+import datetime
+import thingspeak
 import pandas as pd
 import yfinance as yf
-import streamlit as st
 import json
-import plotly.express as px
-import numpy_financial as npf
+from functools import lru_cache
+import concurrent.futures
+import os
+from typing import List, Dict, Optional
+import tenacity
+import pytz
 
-# ------------------- ฟังก์ชันสำหรับโหลด Config -------------------
-def load_config(filename="un15_fx_config.json"):
-    """
-    Loads configurations from a JSON file.
-    It expects a special key '__DEFAULT_CONFIG__' for default values.
-    Returns a tuple: (ticker_configs, default_config)
-    """
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        st.error(f"Error: Configuration file '{filename}' not found.")
-        return {}, {} # คืนค่า dict ว่าง
-    except json.JSONDecodeError:
-        st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
-        return {}, {} # คืนค่า dict ว่าง
+st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
-    fallback_default = {
-        "Fixed_Asset_Value": 1500.0, "Cash_Balan": 650.0, "step": 0.01,
-        "filter_date": "2024-01-01 12:00:00+07:00", "pred": 1
-    }
-    default_config = data.pop('__DEFAULT_CONFIG__', fallback_default)
-    ticker_configs = data
-    return ticker_configs, default_config
+# --- SimulationTracer Class (unchanged) ---
+class SimulationTracer:
+    def __init__(self, encoded_string: str):
+        self.encoded_string: str = str(encoded_string)
+        self._decode_and_set_attributes()
 
-# ------------------- ฟังก์ชันคำนวณหลัก -------------------
-def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
-    """Calculates the core cash balance model DataFrame."""
-    if entry >= 10000 or entry <= 0:
-        return pd.DataFrame()
+    def _decode_and_set_attributes(self):
+        encoded_string = self.encoded_string
+        if not encoded_string.isdigit():
+            self.action_length: int = 0
+            self.mutation_rate: int = 0
+            self.dna_seed: int = 0
+            self.mutation_seeds: List[int] = []
+            self.mutation_rate_float: float = 0.0
+            return
 
-    samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
-    
-    df = pd.DataFrame()
-    df['Asset_Price'] = np.around(samples, 2)
-    df['Fixed_Asset_Value'] = Fixed_Asset_Value
-    df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
-
-    df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
-    if not df_top.empty:
-        df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
-        df_top.fillna(0, inplace=True)
-        
-        np_Cash_Balan_top = df_top['Cash_Balan_top'].values
-        xx = np.zeros(len(np_Cash_Balan_top))
-        y_0 = Cash_Balan
-        for idx, v_0 in enumerate(np_Cash_Balan_top):
-            z_0 = y_0 + v_0
-            y_0 = z_0
-            xx[idx] = y_0
-            
-        df_top['Cash_Balan'] = xx
-        df_top = df_top.sort_values(by='Amount_Asset')[:-1]
-    else:
-        df_top = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
-
-    df_down = df[df.Asset_Price <= np.around(entry, 2)].copy()
-    if not df_down.empty:
-        df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
-        df_down.fillna(0, inplace=True)
-        df_down = df_down.sort_values(by='Asset_Price', ascending=False)
-        
-        np_Cash_Balan_down = df_down['Cash_Balan_down'].values
-        xxx = np.zeros(len(np_Cash_Balan_down))
-        y_1 = Cash_Balan
-        for idx, v_1 in enumerate(np_Cash_Balan_down):
-            z_1 = y_1 + v_1
-            y_1 = z_1
-            xxx[idx] = y_1
-
-        df_down['Cash_Balan'] = xxx
-    else:
-        df_down = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
-
-    combined_df = pd.concat([df_top, df_down], axis=0, ignore_index=True)
-    return combined_df[['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan']]
-
-def delta_1(asset_config):
-    """Calculates Production_Costs based on asset configuration."""
-    try:
-        ticker_data = yf.Ticker(asset_config['Ticker'])
-        entry = ticker_data.fast_info['lastPrice']
-        df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
-        if not df_model.empty:
-            production_costs = df_model['Cash_Balan'].iloc[-1] - asset_config['Cash_Balan']
-            return abs(production_costs)
-    except Exception as e:
-        return None
-
-def delta6(asset_config, hist_data=None):
-    """Performs historical simulation based on asset configuration. Use cached hist_data if provided."""
-    try:
-        if hist_data is None:
-            ticker_hist = yf.Ticker(asset_config['Ticker']).history(period='max')
-        else:
-            ticker_hist = hist_data
-        if ticker_hist.empty:
-            return None
-            
-        ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
-        ticker_hist = ticker_hist[ticker_hist.index >= asset_config['filter_date']][['Close']]
-        
-        if ticker_hist.empty:
-            return None
-
-        entry = ticker_hist['Close'].iloc[0]
-        df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
-        
-        if df_model.empty:
-            return None
-
-        ticker_data = ticker_hist.copy()
-        ticker_data['Close'] = np.around(ticker_data['Close'].values, 2)
-        ticker_data['pred'] = asset_config['pred']
-        ticker_data['Fixed_Asset_Value'] = asset_config['Fixed_Asset_Value']
-        ticker_data['Amount_Asset'] = 0.0
-        ticker_data['re'] = 0.0
-        ticker_data['Cash_Balan'] = asset_config['Cash_Balan']
-        ticker_data['Amount_Asset'].iloc[0] = ticker_data['Fixed_Asset_Value'].iloc[0] / ticker_data['Close'].iloc[0]
-
-        close_vals = ticker_data['Close'].values
-        pred_vals = ticker_data['pred'].values
-        amount_asset_vals = ticker_data['Amount_Asset'].values
-        re_vals = ticker_data['re'].values
-        cash_balan_sim_vals = ticker_data['Cash_Balan'].values
-
-        for idx in range(1, len(amount_asset_vals)):
-            if pred_vals[idx] == 1:
-                amount_asset_vals[idx] = asset_config['Fixed_Asset_Value'] / close_vals[idx]
-                re_vals[idx] = (amount_asset_vals[idx-1] * close_vals[idx]) - asset_config['Fixed_Asset_Value']
-            else: 
-                amount_asset_vals[idx] = amount_asset_vals[idx-1]
-                re_vals[idx] = 0
-            cash_balan_sim_vals[idx] = cash_balan_sim_vals[idx-1] + re_vals[idx]
-
-        original_index = ticker_data.index
-        ticker_data = ticker_data.merge(df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}), 
-                                        left_on='Close', right_on='Asset_Price', how='left').drop('Asset_Price', axis=1)
-        ticker_data.set_index(original_index, inplace=True)
-
-        ticker_data['refer_model'].interpolate(method='linear', inplace=True)
-        ticker_data.fillna(method='bfill', inplace=True)
-        ticker_data.fillna(method='ffill', inplace=True)
-
-        ticker_data['pv'] = ticker_data['Cash_Balan'] + (ticker_data['Amount_Asset'] * ticker_data['Close'])
-        ticker_data['refer_pv'] = ticker_data['refer_model'] + asset_config['Fixed_Asset_Value']
-        ticker_data['net_pv'] = ticker_data['pv'] - ticker_data['refer_pv']
-        
-        return ticker_data[['net_pv', 're']]
-        
-    except Exception as e:
-        return None
-
-def un_16(active_configs, hist_cache=None):
-    """Aggregates results from multiple assets specified in active_configs. Use hist_cache if provided."""
-    all_re = []
-    all_net_pv = []
-    
-    for ticker_name, config in active_configs.items():
-        hist_data = hist_cache.get(ticker_name) if hist_cache else None
-        result_df = delta6(config, hist_data)
-        if result_df is not None and not result_df.empty:
-            all_re.append(result_df[['re']].rename(columns={"re": f"{ticker_name}_re"}))
-            all_net_pv.append(result_df[['net_pv']].rename(columns={"net_pv": f"{ticker_name}_net_pv"}))
-    
-    if not all_re:
-        return pd.DataFrame()
-        
-    df_re = pd.concat(all_re, axis=1)
-    df_net_pv = pd.concat(all_net_pv, axis=1)
-
-    df_re.fillna(0, inplace=True)
-    df_net_pv.fillna(0, inplace=True)
-
-    df_re['maxcash_dd'] = df_re.sum(axis=1).cumsum()
-    df_net_pv['cf'] = df_net_pv.sum(axis=1)
-
-    final_df = pd.concat([df_re, df_net_pv], axis=1)
-    return final_df
-
-# --- NEW: Optimization Function for Goal 1 ---
-def optimize_cash_balan(active_configs, range_max=3000):
-    """Optimize Cash_Balan for each Ticker to maximize MIRR."""
-    optimal_cash_balans = {}
-    hist_cache = {}  # Cache historical data to speed up
-
-    # Cache hist data for all tickers first
-    for ticker in active_configs:
+        decoded_numbers = []
+        idx = 0
         try:
-            hist_cache[ticker] = yf.Ticker(active_configs[ticker]['Ticker']).history(period='max')
-        except:
+            while idx < len(encoded_string):
+                length_of_number = int(encoded_string[idx])
+                idx += 1
+                number_str = encoded_string[idx : idx + length_of_number]
+                idx += length_of_number
+                decoded_numbers.append(int(number_str))
+        except (IndexError, ValueError):
             pass
 
-    progress_bar = st.progress(0)
-    total_steps = len(active_configs) * range_max
-    current_step = 0
+        if len(decoded_numbers) < 3:
+            self.action_length: int = 0
+            self.mutation_rate: int = 0
+            self.dna_seed: int = 0
+            self.mutation_seeds: List[int] = []
+            self.mutation_rate_float: float = 0.0
+            return
 
-    for ticker, config in active_configs.items():
-        max_mirr = -np.inf
-        best_cash_balan = config['Cash_Balan']  # Default fallback
-        
-        for cash_balan in range(range_max):
-            current_step += 1
-            progress_bar.progress(min(current_step / total_steps, 1.0))
-            
-            temp_config = config.copy()
-            temp_config['Cash_Balan'] = float(cash_balan)
-            temp_configs = {ticker: temp_config}  # Test per ticker, but aggregate as all (per goal_1)
-            
-            data = un_16(temp_configs, hist_cache)
-            if data.empty:
-                continue
+        self.action_length: int = decoded_numbers[0]
+        self.mutation_rate: int = decoded_numbers[1]
+        self.dna_seed: int = decoded_numbers[2]
+        self.mutation_seeds: List[int] = decoded_numbers[3:]
+        self.mutation_rate_float: float = self.mutation_rate / 100.0
 
-            # Calculate MIRR (adapted from main code)
-            df_new = data.copy()
-            roll_over = []
-            max_dd_values = df_new.maxcash_dd.values
-            for i in range(len(max_dd_values)):
-                roll = max_dd_values[:i]
-                roll_min = np.min(roll) if len(roll) > 0 else 0
-                roll_over.append(roll_min)
-            
-            cf_values = df_new.cf.values
-            df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
-            
-            final_sum_delta = df_all.Sum_Delta.iloc[-1]
-            final_max_buffer = df_all.Max_Sum_Buffer.iloc[-1]
-            num_days = len(df_new)
-            avg_cf = final_sum_delta / num_days if num_days > 0 else 0
-            
-            num_selected_tickers = 1  # Since testing per ticker
-            initial_investment = (num_selected_tickers * config['Fixed_Asset_Value']) + abs(final_max_buffer)
-            
-            if initial_investment > 0:
-                annual_cash_flow = avg_cf * 252
-                exit_multiple = initial_investment * 0.5
-                cash_flows = [
-                    -initial_investment,
-                    annual_cash_flow,
-                    annual_cash_flow,
-                    annual_cash_flow + exit_multiple
-                ]
-                finance_rate = 0.0
-                reinvest_rate = 0.0
-                mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate)
-                
-                if mirr_value > max_mirr:
-                    max_mirr = mirr_value
-                    best_cash_balan = float(cash_balan)
-        
-        optimal_cash_balans[ticker] = best_cash_balan
+    @lru_cache(maxsize=128)
+    def run(self) -> np.ndarray:
+        if self.action_length <= 0:
+            return np.array([])
+        dna_rng = np.random.default_rng(seed=self.dna_seed)
+        current_actions = dna_rng.integers(0, 2, size=self.action_length)
+        if self.action_length > 0:
+            current_actions[0] = 1
+        for m_seed in self.mutation_seeds:
+            mutation_rng = np.random.default_rng(seed=m_seed)
+            mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
+            current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
+            if self.action_length > 0:
+                current_actions[0] = 1
+        return current_actions
+
+# --- NEW: Trade Counter Class ---
+class TradeCounter:
+    """Handles trade counting logic for daily trade tracking"""
     
-    return optimal_cash_balans
-
-# ------------------- ส่วนแสดงผล STREAMLIT -------------------
-st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
-
-# 1. โหลด config
-full_config, DEFAULT_CONFIG = load_config()
-
-if full_config or DEFAULT_CONFIG:
-    # 2. ตั้งค่า Session State
-    if 'custom_tickers' not in st.session_state:
-        st.session_state.custom_tickers = {}
-
-    # 3. ส่วนควบคุมบนหน้าหลัก
-    control_col1, control_col2 = st.columns([1, 2])
-    with control_col1:
-        st.subheader("Add New Ticker")
-        new_ticker = st.text_input("Ticker (e.g., AAPL):", key="new_ticker_input").upper()
-        if st.button("Add Ticker", key="add_ticker_button", use_container_width=True):
-            if new_ticker and new_ticker not in full_config and new_ticker not in st.session_state.custom_tickers:
-                st.session_state.custom_tickers[new_ticker] = {"Ticker": new_ticker, **DEFAULT_CONFIG}
-                st.success(f"Added {new_ticker}!")
-                st.rerun() 
-            elif new_ticker in full_config:
-                st.warning(f"{new_ticker} already exists in config file.")
-            elif new_ticker in st.session_state.custom_tickers:
-                st.warning(f"{new_ticker} has already been added.")
-            else:
-                st.warning("Please enter a ticker symbol.")
-
-    with control_col2:
-        st.subheader("Select Tickers to Analyze")
-        all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
-        default_selection = [t for t in list(full_config.keys()) if t in all_tickers]
-        selected_tickers = st.multiselect(
-            "Select from available tickers:",
-            options=all_tickers,
-            default=default_selection
-        )
-    st.divider()
-
-    # 4. สร้าง Dict Config ของ Ticker ที่เลือก
-    active_configs = {ticker: full_config.get(ticker, st.session_state.custom_tickers.get(ticker)) for ticker in selected_tickers}
-
-    if not active_configs:
-        st.warning("Please select at least one ticker to start the analysis.")
-    else:
-        # --- NEW: Optimize Cash_Balan before main calculation ---
-        with st.spinner('Optimizing Cash_Balan for max MIRR... Please wait.'):
-            optimal_cash_balans = optimize_cash_balan(active_configs)
+    def __init__(self):
+        self.daily_trades = {}  # Format: {ticker: {date: net_count}}
+        self.trade_history = []  # List of all trades for history tracking
+    
+    def get_current_date(self) -> str:
+        """Get current date in YYYY-MM-DD format"""
+        ny_tz = pytz.timezone('America/New_York')
+        return datetime.datetime.now(ny_tz).strftime('%Y-%m-%d')
+    
+    def record_trade(self, ticker: str, trade_type: str, quantity: float):
+        """Record a trade (buy: +quantity, sell: -quantity)"""
+        current_date = self.get_current_date()
         
-        # Update active_configs with optimal values
-        for ticker, opt_cash in optimal_cash_balans.items():
-            active_configs[ticker]['Cash_Balan'] = opt_cash
+        # Initialize ticker if not exists
+        if ticker not in self.daily_trades:
+            self.daily_trades[ticker] = {}
+        
+        # Initialize date if not exists
+        if current_date not in self.daily_trades[ticker]:
+            self.daily_trades[ticker][current_date] = 0
+        
+        # Update net trade count
+        trade_value = quantity if trade_type.lower() == 'buy' else -quantity
+        self.daily_trades[ticker][current_date] += trade_value
+        
+        # Record in history
+        self.trade_history.append({
+            'timestamp': datetime.datetime.now(),
+            'date': current_date,
+            'ticker': ticker,
+            'type': trade_type,
+            'quantity': quantity,
+            'net_value': trade_value
+        })
+    
+    def get_net_today(self, ticker: str) -> float:
+        """Get net trades for ticker today"""
+        current_date = self.get_current_date()
+        return self.daily_trades.get(ticker, {}).get(current_date, 0)
+    
+    def get_trade_summary(self, ticker: str) -> str:
+        """Get formatted trade summary for display"""
+        net_today = self.get_net_today(ticker)
+        return f"net_today = {net_today}"
+    
+    def reset_daily_trades(self, date: str = None):
+        """Reset trades for a specific date or today"""
+        if date is None:
+            date = self.get_current_date()
+        
+        for ticker in self.daily_trades:
+            if date in self.daily_trades[ticker]:
+                self.daily_trades[ticker][date] = 0
 
-        # 5. รันการคำนวณ
-        with st.spinner('Calculating... Please wait.'):
-            data = un_16(active_configs)
+# Initialize global trade counter
+if 'trade_counter' not in st.session_state:
+    st.session_state.trade_counter = TradeCounter()
 
-        if data.empty:
-            st.error("Failed to generate data. This might happen if tickers have no historical data for the selected period or another error occurred.")
+trade_counter = st.session_state.trade_counter
+
+# --- Configuration Loading (unchanged) ---
+@st.cache_data
+def load_config(file_path='monitor_config.json') -> Dict:
+    if not os.path.exists(file_path):
+        st.error(f"Configuration file not found: {file_path}")
+        return {}
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        st.error(f"Invalid JSON in config file: {e}")
+        return {}
+
+CONFIG_DATA = load_config()
+if not CONFIG_DATA:
+    st.stop()
+
+ASSET_CONFIGS = CONFIG_DATA.get('assets', [])
+GLOBAL_START_DATE = CONFIG_DATA.get('global_settings', {}).get('start_date')
+
+if not ASSET_CONFIGS:
+    st.error("No 'assets' list found in monitor_config.json")
+    st.stop()
+
+# --- ThingSpeak Clients (unchanged) ---
+@st.cache_resource
+def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
+    clients = {}
+    unique_channels = set()
+    for config in configs:
+        mon_conf = config['monitor_field']
+        unique_channels.add((mon_conf['channel_id'], mon_conf['api_key']))
+        asset_conf = config['asset_field']
+        unique_channels.add((asset_conf['channel_id'], asset_conf['api_key']))
+
+    for channel_id, api_key in unique_channels:
+        try:
+            clients[channel_id] = thingspeak.Channel(channel_id, api_key, fmt='json')
+        except Exception as e:
+            st.error(f"Failed to create client for Channel ID {channel_id}: {e}")
+    return clients
+
+THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
+
+# --- (MODIFIED) Clear Caches Function (PRESERVE UI KEYS) ---
+def clear_all_caches():
+    # Clear caches
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    sell.cache_clear()
+    buy.cache_clear()
+
+    # Preserve key UI states to prevent reset on data refresh
+    ui_state_keys_to_preserve = {'select_key', 'nex', 'Nex_day_sell', 'trade_counter'}
+    keys_to_delete = [k for k in list(st.session_state.keys()) if k not in ui_state_keys_to_preserve]
+    for key in keys_to_delete:
+        try:
+            del st.session_state[key]
+        except Exception:
+            pass
+
+    st.success("🗑️ Data caches cleared! UI state preserved.")
+
+# --- (NEW) Helper function to rerun app while keeping the selectbox selection ---
+def rerun_keep_selection(ticker: str):
+    """
+    Sets a temporary key in session_state and reruns the app.
+    This ensures the selectbox maintains its selection on the next run.
+    """
+    st.session_state["_pending_select_key"] = ticker
+    st.rerun()
+
+# --- Calculation Utils (unchanged) ---
+@lru_cache(maxsize=128)
+def sell(asset, fix_c=1500, Diff=60):
+    if asset == 0: return 0, 0, 0
+    unit_price = round((fix_c - Diff) / asset, 2)
+    adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
+    total = round(asset * unit_price + adjust_qty * unit_price, 2)
+    return unit_price, adjust_qty, total
+
+@lru_cache(maxsize=128)
+def buy(asset, fix_c=1500, Diff=60):
+    if asset == 0: return 0, 0, 0
+    unit_price = round((fix_c + Diff) / asset, 2)
+    adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
+    total = round(asset * unit_price - adjust_qty * unit_price, 2)
+    return unit_price, adjust_qty, total
+
+# --- Price Fetching with Retry (unchanged) ---
+@st.cache_data(ttl=300)
+@tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(3))
+def get_cached_price(ticker: str) -> float:
+    try:
+        return float(yf.Ticker(ticker).fast_info['lastPrice'])
+    except Exception:
+        return 0.0
+
+# --- Helper: current date in New York (unchanged) ---
+@st.cache_data(ttl=60)
+def get_current_ny_date() -> datetime.date:
+    ny_tz = pytz.timezone('America/New_York')
+    return datetime.datetime.now(ny_tz).date()
+
+# --- Data Fetching (unchanged, with minor robust tz fix) ---
+@st.cache_data(ttl=300)
+def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: str) -> Dict[str, tuple]:
+    monitor_results = {}
+    asset_results = {}
+
+    def fetch_monitor(asset_config):
+        ticker = asset_config['ticker']
+        try:
+            monitor_field_config = asset_config['monitor_field']
+            client = _clients_ref[monitor_field_config['channel_id']]
+            field_num = monitor_field_config['field']
+
+            tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
+            try:
+                tickerData.index = tickerData.index.tz_convert('Asia/Bangkok')
+            except TypeError:
+                tickerData.index = tickerData.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+
+            if start_date:
+                tickerData = tickerData[tickerData.index >= start_date]
+
+            last_data_date = tickerData.index[-1].date() if not tickerData.empty else None
+
+            fx_js_str = "0"
+            try:
+                field_data = client.get_field_last(field=str(field_num))
+                retrieved_val = json.loads(field_data)[f"field{field_num}"]
+                if retrieved_val is not None:
+                    fx_js_str = str(retrieved_val)
+            except Exception:
+                pass
+
+            tickerData['index'] = list(range(len(tickerData)))
+
+            dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
+            df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
+            df['action'] = ""
+
+            try:
+                tracer = SimulationTracer(encoded_string=fx_js_str)
+                final_actions = tracer.run()
+                num_to_assign = min(len(df), len(final_actions))
+                if num_to_assign > 0:
+                    action_col_idx = df.columns.get_loc('action')
+                    df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
+            except Exception as e:
+                st.warning(f"Tracer Error for {ticker}: {e}")
+
+            return ticker, (df.tail(7), fx_js_str, last_data_date)
+        except Exception as e:
+            st.error(f"Error in Monitor for {ticker}: {str(e)}")
+            return ticker, (pd.DataFrame(), "0", None)
+
+    def fetch_asset(asset_config):
+        ticker = asset_config['ticker']
+        try:
+            asset_conf = asset_config['asset_field']
+            client = _clients_ref[asset_conf['channel_id']]
+            field_name = asset_conf['field']
+            data = client.get_field_last(field=field_name)
+            return ticker, float(json.loads(data)[field_name])
+        except Exception:
+            return ticker, 0.0
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(configs)) as executor:
+        monitor_futures = [executor.submit(fetch_monitor, asset) for asset in configs]
+        for future in concurrent.futures.as_completed(monitor_futures):
+            ticker, result = future.result()
+            monitor_results[ticker] = result
+
+        asset_futures = [executor.submit(fetch_asset, asset) for asset in configs]
+        for future in concurrent.futures.as_completed(asset_futures):
+            ticker, result = future.result()
+            asset_results[ticker] = result
+
+    return {'monitors': monitor_results, 'assets': asset_results}
+
+# --- UI Components ---
+
+def render_asset_inputs(configs: List[Dict], last_assets: Dict) -> Dict[str, float]:
+    asset_inputs = {}
+    cols = st.columns(len(configs))
+    for i, config in enumerate(configs):
+        with cols[i]:
+            ticker = config['ticker']
+            last_val = last_assets.get(ticker, 0.0)
+            if config.get('option_config'):
+                raw_label = config['option_config']['label']
+            else:
+                raw_label = ticker
+            display_label = raw_label
+            help_text = ""
+            split_pos = raw_label.find('(')
+            if split_pos != -1:
+                display_label = raw_label[:split_pos].strip()
+                help_text = raw_label[split_pos:].strip()
+            else:
+                help_text = "(NULL)"
+            if config.get('option_config'):
+                option_val = config['option_config']['base_value']
+                real_val = st.number_input(
+                    label=display_label, help=help_text,
+                    step=0.001, value=last_val, key=f"input_{ticker}_real"
+                )
+                asset_inputs[ticker] = option_val + real_val
+            else:
+                val = st.number_input(
+                    label=display_label, help=help_text,
+                    step=0.001, value=last_val, key=f"input_{ticker}_asset"
+                )
+                asset_inputs[ticker] = val
+    return asset_inputs
+
+def render_asset_update_controls(configs: List[Dict], clients: Dict):
+    with st.expander("Update Assets on ThingSpeak"):
+        for config in configs:
+            ticker = config['ticker']
+            asset_conf = config['asset_field']
+            field_name = asset_conf['field']
+            if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
+                add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
+                if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
+                    try:
+                        client = clients[asset_conf['channel_id']]
+                        client.update({field_name: add_val})
+                        st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
+                        clear_all_caches()
+                        # (MODIFIED) Use helper to keep selection after update
+                        rerun_keep_selection(st.session_state.get("select_key", ""))
+                    except Exception as e:
+                        st.error(f"Failed to update {ticker}: {e}")
+
+# --- (MODIFIED) trading_section with Trade Counting ---
+def trading_section(config: Dict, asset_val: float, asset_last: float, df_data: pd.DataFrame, calc: Dict, nex: int, Nex_day_sell: int, clients: Dict):
+    ticker = config['ticker']
+    asset_conf = config['asset_field']
+    field_name = asset_conf['field']
+
+    # Get trade count for display
+    net_today = trade_counter.get_net_today(ticker)
+    trade_summary = trade_counter.get_trade_summary(ticker)
+
+    # (MODIFIED) This inner function now returns Optional[int] (int or None)
+    # It returns None if there's no signal, and 0 or 1 if a signal exists.
+    def get_action_val() -> Optional[int]:
+        try:
+            # Check for invalid states first
+            if df_data.empty or df_data.action.values[1 + nex] == "":
+                return None # No signal
+            
+            # If we have a signal, calculate it
+            raw_action = int(df_data.action.values[1 + nex])
+            final_action = 1 - raw_action if Nex_day_sell == 1 else raw_action
+            return final_action
+        except (IndexError, ValueError, TypeError):
+            # Any error in processing means no valid signal
+            return None
+
+    action_val = get_action_val()
+    
+    # (MODIFIED) The checkbox value is True if a signal exists (action_val is not None)
+    # This works for both buy (1) and sell (0) signals.
+    has_signal = action_val is not None
+    limit_order_checked = st.checkbox(f'Limit_Order_{ticker}', value=has_signal, key=f'limit_order_{ticker}')
+
+    # If the checkbox is not checked (either by user or because no signal), show nothing else.
+    if not limit_order_checked:
+        return
+
+    # The rest of the logic remains the same, executing only when the checkbox is ticked.
+    sell_calc, buy_calc = calc['sell'], calc['buy']
+    st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
+    col1, col2, col3 = st.columns(3)
+    if col3.checkbox(f'sell_match_{ticker}'):
+        if col3.button(f"GO_SELL_{ticker}"):
+            try:
+                client = clients[asset_conf['channel_id']]
+                new_asset_val = asset_last - buy_calc[1]
+                client.update({field_name: new_asset_val})
+                
+                # Record the trade
+                trade_counter.record_trade(ticker, 'sell', buy_calc[1])
+                
+                col3.write(f"Updated: {new_asset_val}")
+                col3.write(f"Trade recorded: SELL {buy_calc[1]}")
+                clear_all_caches()
+                rerun_keep_selection(ticker)
+            except Exception as e:
+                st.error(f"Failed to SELL {ticker}: {e}")
+
+    try:
+        current_price = get_cached_price(ticker)
+        if current_price > 0:
+            pv = current_price * asset_val
+            fix_value = config['fix_c']
+            pl_value = pv - fix_value
+            pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
+            st.markdown(
+                f"Price: **{current_price:,.3f}** | Value: **{pv:,.2f}** | P/L (vs {fix_value:,}) : <span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>",
+                unsafe_allow_html=True
+            )
         else:
-            # 6. คำนวณค่าสำหรับแสดงผล
-            df_new = data.copy()
-            roll_over = []
-            max_dd_values = df_new.maxcash_dd.values
-            for i in range(len(max_dd_values)):
-                roll = max_dd_values[:i]
-                roll_min = np.min(roll) if len(roll) > 0 else 0
-                roll_over.append(roll_min)
-            
-            cf_values = df_new.cf.values
-            df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
-            
-            # --- START: GOAL 1 MODIFICATION - Redefine True Alpha ---
-            # คำนวณต้นทุนรวมที่ใช้ในการลงทุนตามสูตรใหม่
-            # ต้นทุนรวม = (เงินลงทุนเริ่มต้น) + (เงินสดสำรองที่ใช้ไปสูงสุด)
-            num_selected_tickers = len(selected_tickers)
-            initial_capital = num_selected_tickers * 1500.0 # เงินลงทุนเริ่มต้นตาม Fixed_Asset_Value ต่อ Ticker
-            max_buffer_used = abs(np.min(roll_over)) # เงินสดสำรองที่ใช้ไปสูงสุด (Max Drawdown)
+            st.info(f"Price data for {ticker} is currently unavailable.")
+    except Exception:
+        st.warning(f"Could not retrieve price data for {ticker}.")
 
-            # ต้นทุนรวมที่ใช้เป็นตัวหาร (Total Capital at Risk)
-            total_capital_at_risk = initial_capital + max_buffer_used
-            
-            # ป้องกันการหารด้วยศูนย์
-            if total_capital_at_risk == 0:
-                total_capital_at_risk = 1 
-
-            # คำนวณ True Alpha ใหม่ โดยใช้ "ต้นทุนรวม" เป็นตัวหาร
-            # True Alpha = (กำไรสะสม / ต้นทุนรวม) * 100
-            true_alpha_values = (df_new.cf.values / total_capital_at_risk) * 100
-            df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
-            # --- END: GOAL 1 MODIFICATION ---
-
-
-            # 7. แสดงผล KPI
-            st.subheader("Key Performance Indicators")
-            final_sum_delta = df_all.Sum_Delta.iloc[-1]
-            final_max_buffer = df_all.Max_Sum_Buffer.iloc[-1]
-            final_true_alpha = df_all_2.True_Alpha.iloc[-1]
-            num_days = len(df_new)
-            avg_cf = final_sum_delta / num_days if num_days > 0 else 0
-            avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
-
-            # --- MIRR CALCULATION (UNCHANGED) ---
-            mirr_value = 0.0
-            
-            # Per your formula: Initial Investment = (len(tickers) * 1500) + (Max Cash Buffer Used * -1)
-            initial_investment = (num_selected_tickers * 1500) + abs(final_max_buffer)
-            
-            if initial_investment > 0:
-                # Per your formula: Annual Cash Flows = Year(Avg. Daily Profit * 252 วัน)
-                annual_cash_flow = avg_cf * 252
+    col4, col5, col6 = st.columns(3)
+    st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
+    if col6.checkbox(f'buy_match_{ticker}'):
+        if col6.button(f"GO_BUY_{ticker}"):
+            try:
+                client = clients[asset_conf['channel_id']]
+                new_asset_val = asset_last + sell_calc[1]
+                client.update({field_name: new_asset_val})
                 
-                # Per your formula: Exit Multiple = Initial Investment * 0.5
-                exit_multiple = initial_investment * 0.5
+                # Record the trade
+                trade_counter.record_trade(ticker, 'buy', sell_calc[1])
                 
-                # Construct cash flows for 3-year project duration
-                cash_flows = [
-                    -initial_investment,
-                    annual_cash_flow,
-                    annual_cash_flow,
-                    annual_cash_flow + exit_multiple
-                ]
-                
-                # Finance rate (cost of capital) and reinvestment rate are both 0% per your spec
-                finance_rate = 0.0
-                reinvest_rate = 0.0
-                
-                mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate)
-            # --- END MIRR CALCULATION ---
+                col6.write(f"Updated: {new_asset_val}")
+                col6.write(f"Trade recorded: BUY {sell_calc[1]}")
+                clear_all_caches()
+                rerun_keep_selection(ticker)
+            except Exception as e:
+                st.error(f"Failed to BUY {ticker}: {e}")
 
-            # --- KPI Display (WITH NEW OPTIMAL CASH BALAN) ---
-            kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
-            kpi1.metric(label="Total Net Profit (cf)", value=f"{final_sum_delta:,.2f}")
-            kpi2.metric(label="Max Cash Buffer Used", value=f"{final_max_buffer:,.2f}")
-            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}%") # ค่านี้จะเปลี่ยนไปตามสูตรใหม่
-            kpi4.metric(label="Avg. Daily Profit", value=f"{avg_cf:,.2f}")
-            kpi5.metric(label="Avg. Daily Buffer Used", value=f"{avg_burn_cash:,.2f}")
-            kpi6.metric(label="MIRR (3-Year)", value=f"{mirr_value:.2%}")
-            
-            # NEW: Display Optimal Cash_Balan
-            st.subheader("Optimal Cash_Balan per Ticker (for Max MIRR)")
-            opt_df = pd.DataFrame(list(optimal_cash_balans.items()), columns=['Ticker', 'Optimal Cash_Balan'])
-            st.table(opt_df)
-            
-            st.divider()
+# --- Main Logic ---
+all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE)
+monitor_data_all = all_data['monitors']
+last_assets_all = all_data['assets']
 
-            # 8. แสดงผลกราฟ
-            st.subheader("Performance Charts")
-            graph_col1, graph_col2 = st.columns(2)
-            
-            graph_col1.plotly_chart(px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"), use_container_width=True)
-            graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True) # กราฟนี้จะเปลี่ยนไปตามสูตรใหม่
-            
-            st.divider()
-            
-            st.subheader("Detailed Simulation Data")
-            for ticker in selected_tickers:
-                col_name = f'{ticker}_re'
-                if col_name in df_new.columns:
-                    df_new[col_name] = df_new[col_name].cumsum()
-            
-            st.plotly_chart(px.line(df_new, title="Portfolio Simulation Details"), use_container_width=True)
+# Stable Session State Initialization
+if 'select_key' not in st.session_state:
+    st.session_state.select_key = ""
+if 'nex' not in st.session_state:
+    st.session_state.nex = 0
+if 'Nex_day_sell' not in st.session_state:
+    st.session_state.Nex_day_sell = 0
 
-else:
-    st.error("Could not load any configuration. Please check that 'un15_fx_config.json' exists and is correctly formatted.")
+# --- (NEW) BOOTSTRAP selection BEFORE creating any widgets ---
+# This part ensures that the selectbox remembers the last selected ticker after a rerun.
+pending = st.session_state.pop("_pending_select_key", None)
+if pending:
+    st.session_state.select_key = pending
+
+tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
+
+with tab2:
+    Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
+
+    if Nex_day_:
+        nex_col, Nex_day_sell_col, *_ = st.columns([1,1,3])
+        if nex_col.button("Nex_day"):
+            st.session_state.nex = 1
+            st.session_state.Nex_day_sell = 0
+        if Nex_day_sell_col.button("Nex_day_sell"):
+            st.session_state.nex = 1
+            st.session_state.Nex_day_sell = 1
+    else:
+        st.session_state.nex = 0
+        st.session_state.Nex_day_sell = 0
+
+    nex = st.session_state.nex
+    Nex_day_sell = st.session_state.Nex_day_sell
+
+    if Nex_day_:
+        st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
+
+    st.write("---")
+    x_2 = st.number_input('Diff', step=1, value=60)
+    st.write("---")
+    asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all)
+    st.write("---")
+    
+    # NEW: Trade Counter Controls
+    st.subheader("🔢 Trade Counter Controls")
+    
+    col_reset, col_summary = st.columns(2)
+    with col_reset:
+        if st.button("🗑️ Reset Today's Trades"):
+            trade_counter.reset_daily_trades()
+            st.success("Today's trade counts reset!")
+    
+    with col_summary:
+        if st.button("📊 Show Trade Summary"):
+            st.write("### Today's Trade Summary")
+            current_date = trade_counter.get_current_date()
+            for config in ASSET_CONFIGS:
+                ticker = config['ticker']
+                net_count = trade_counter.get_net_today(ticker)
+                if net_count != 0:
+                    st.write(f"**{ticker}**: {net_count}")
+            
+            if len([t for t in [trade_counter.get_net_today(c['ticker']) for c in ASSET_CONFIGS] if t != 0]) == 0:
+                st.info("No trades recorded today")
+    
+    st.write("---")
+    Start = st.checkbox('start')
+    if Start:
+        render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
+
+with tab1:
+    current_ny_date = get_current_ny_date()
+
+    selectbox_labels = {}
+    ticker_actions = {}
+    for config in ASSET_CONFIGS:
+        ticker = config['ticker']
+        df_data, fx_js_str, last_data_date = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
+        action_emoji, final_action_val = "", None
+        if nex == 0 and last_data_date and last_data_date < current_ny_date:
+            action_emoji = "🟡 "
+        else:
+            try:
+                if not df_data.empty and df_data.action.values[1 + nex] != "":
+                    raw_action = int(df_data.action.values[1 + nex])
+                    final_action_val = 1 - raw_action if Nex_day_sell == 1 else raw_action
+                    if final_action_val == 1: action_emoji = "🟢 "
+                    elif final_action_val == 0: action_emoji = "🔴 "
+            except (IndexError, ValueError, TypeError):
+                pass
+        ticker_actions[ticker] = final_action_val
+        
+        # NEW: Add trade count to label
+        trade_summary = trade_counter.get_trade_summary(ticker)
+        selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str}) {trade_summary}"
+
+    all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
+    selectbox_options = [""]
+    if nex == 1:
+        selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
+    selectbox_options.extend(all_tickers)
+
+    if st.session_state.select_key not in selectbox_options:
+        st.session_state.select_key = ""
+
+    def format_selectbox_options(option_name):
+        if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
+            return "Show All" if option_name == "" else option_name
+        return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
+
+    st.selectbox(
+        "Select Ticker to View:",
+        options=selectbox_options,
+        format_func=format_selectbox_options,
+        key="select_key"
+    )
+    st.write("_____")
+
+    selected_option = st.session_state.select_key
+    if selected_option == "":
+        configs_to_display = ASSET_CONFIGS
+    elif selected_option == "Filter Buy Tickers":
+        buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
+        configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in buy_tickers]
+    elif selected_option == "Filter Sell Tickers":
+        sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
+        configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in sell_tickers]
+    else:
+        configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_option]
+
+    calculations = {}
+    for config in ASSET_CONFIGS:
+        ticker = config['ticker']
+        asset_value = asset_inputs.get(ticker, 0.0)
+        fix_c = config['fix_c']
+        calculations[ticker] = {
+            'sell': sell(asset_value, fix_c=fix_c, Diff=x_2),
+            'buy': buy(asset_value, fix_c=fix_c, Diff=x_2)
+        }
+
+    for config in configs_to_display:
+        ticker = config['ticker']
+        df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
+        asset_last = last_assets_all.get(ticker, 0.0)
+        asset_val = asset_inputs.get(ticker, 0.0)
+        calc = calculations.get(ticker, {})
+
+        # NEW: Enhanced title with trade count
+        net_today = trade_counter.get_net_today(ticker)
+        trade_summary = trade_counter.get_trade_summary(ticker)
+        title_label = f"{selectbox_labels.get(ticker, ticker)} {trade_summary}"
+        st.write(title_label)
+
+        trading_section(config, asset_val, asset_last, df_data, calc, nex, Nex_day_sell, THINGSPEAK_CLIENTS)
+
+        with st.expander("Show Raw Data Action"):
+            st.dataframe(df_data, use_container_width=True)
+        st.write("_____")
+
+if st.sidebar.button("RERUN"):
+    # (MODIFIED) Make sidebar rerun also keep selection for better UX
+    current_selection = st.session_state.get("select_key", "")
+    clear_all_caches()
+    # Only try to keep selection if it's a valid ticker (not a filter option)
+    if current_selection in [c['ticker'] for c in ASSET_CONFIGS]:
+        rerun_keep_selection(current_selection)
+    else:
+        st.rerun()
