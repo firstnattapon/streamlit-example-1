@@ -372,22 +372,19 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict, net_today_map: D
             last_val = last_assets.get(ticker, 0.0)
             raw_label = config['option_config']['label'] if config.get('option_config') else ticker
 
+            # Label คงเดิม, แต่ help ให้แสดง "เลขล้วน"
             display_label = raw_label
-            base_help = ""
             split_pos = raw_label.find('(')
             if split_pos != -1:
                 display_label = raw_label[:split_pos].strip()
-                base_help = raw_label[split_pos:].strip()
-            else:
-                base_help = "(NULL)"
-            help_text_final = f"{base_help} | {net_today_map.get(ticker, 0)}"
 
-            # อินพุตหลัก + help แสดง net_today
+            net_num_str = str(net_today_map.get(ticker, 0))  # <-- CHANGED: number only
+
             if config.get('option_config'):
                 option_val = config['option_config']['base_value']
                 real_val = st.number_input(
                     label=display_label,
-                    help=help_text_final,
+                    help=net_num_str,              # <-- CHANGED
                     step=0.001,
                     value=last_val,
                     key=f"input_{ticker}_real"
@@ -396,16 +393,15 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict, net_today_map: D
             else:
                 val = st.number_input(
                     label=display_label,
-                    help=help_text_final,
+                    help=net_num_str,              # <-- CHANGED
                     step=0.001,
                     value=last_val,
                     key=f"input_{ticker}_asset"
                 )
                 asset_inputs[ticker] = val
 
-            # help-only widget (ไม่ให้กด ใช้โชว์ tooltip อย่างเดียว)
-            st.button(" ", help=f"net_today = {net_today_map.get(ticker, 0)}",
-                      disabled=True, key=f"help_btn_{ticker}")
+            # help-only widget: แสดง tooltip เป็น "เลขล้วน"
+            st.button(" ", help=net_num_str, disabled=True, key=f"help_btn_{ticker}")  # <-- CHANGED
     return asset_inputs
 
 def render_asset_update_controls(configs: List[Dict], clients: Dict):
@@ -569,7 +565,7 @@ with tab1:
                 pass
         ticker_actions[ticker] = final_action_val
 
-        # >>> CHANGED: remove "help{net_today=...}" from label (back to original style)
+        # Label (กลับเป็นแบบเดิม ไม่มี help{...})
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
 
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
@@ -586,13 +582,13 @@ with tab1:
             return "Show All" if option_name == "" else option_name
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
-    # หมายเหตุ: ยังใส่ help= เพื่อดู net_today ของตัวที่เลือก (แสดงใน tooltip ของ selectbox เอง—ไม่อยู่ใน label)
+    # Tooltip ของ selectbox เป็น "เลขล้วน"
     st.selectbox(
         "Select Ticker to View:",
         options=selectbox_options,
         format_func=format_selectbox_options,
         key="select_key",
-        help=f"net_today = {trade_nets_all.get(st.session_state.select_key, 0) if st.session_state.select_key in trade_nets_all else 0}"
+        help=str(trade_nets_all.get(st.session_state.select_key, 0) if st.session_state.select_key in trade_nets_all else 0)  # <-- CHANGED
     )
     st.write("_____")
 
@@ -604,8 +600,6 @@ with tab1:
         configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in buy_tickers]
     elif selected_option == "Filter Sell Tickers":
         sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
-        configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] in sell_tickers]
-    else:
         configs_to_display = [config for config in ASSET_CONFIGS if config['ticker'] == selected_option]
 
     calculations = {}
