@@ -560,7 +560,7 @@ with tab1:
 
         # (NEW) append help{net_today=...}
         net_today_str = trade_nets_all.get(ticker, 0)
-        selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_today_str}}}"
+        selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_today_str}}"
 
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
     selectbox_options = [""]
