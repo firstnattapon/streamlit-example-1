@@ -1,6 +1,6 @@
 {
   "global_settings": {
-    "start_date": "2025-06-09 12:00:00+07:00"
+    "start_date": "2025-07-23  12:00:00+07:00"
   },
   "assets": [
     {"ticker": "AGL", "monitor_field": {"field": 1, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8"}, "asset_field": {"field": "field8", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV"},
