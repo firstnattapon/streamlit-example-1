@@ -569,9 +569,8 @@ with tab1:
                 pass
         ticker_actions[ticker] = final_action_val
 
-        # label + แถม help{net_today=...} ต่อท้าย
-        net_today_str = trade_nets_all.get(ticker, 0)
-        selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str}) help{{net_today={net_today_str}}}"
+        # >>> CHANGED: remove "help{net_today=...}" from label (back to original style)
+        selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})"
 
     all_tickers = [config['ticker'] for config in ASSET_CONFIGS]
     selectbox_options = [""]
@@ -587,6 +586,7 @@ with tab1:
             return "Show All" if option_name == "" else option_name
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
+    # หมายเหตุ: ยังใส่ help= เพื่อดู net_today ของตัวที่เลือก (แสดงใน tooltip ของ selectbox เอง—ไม่อยู่ใน label)
     st.selectbox(
         "Select Ticker to View:",
         options=selectbox_options,
