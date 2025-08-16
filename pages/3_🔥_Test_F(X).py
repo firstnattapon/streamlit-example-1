@@ -380,7 +380,7 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict, net_today_map: D
                 base_help = raw_label[split_pos:].strip()
             else:
                 base_help = "(NULL)"
-            help_text_final = f"{base_help} | net_today = {net_today_map.get(ticker, 0)}"
+            help_text_final = f"{base_help} | {net_today_map.get(ticker, 0)}"
 
             # อินพุตหลัก + help แสดง net_today
             if config.get('option_config'):
