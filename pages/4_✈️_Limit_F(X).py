@@ -1,416 +1,503 @@
+# -*- coding: utf-8 -*-
+"""
+Cash_Balan Optimizer — Maximize Portfolio MIRR (3Y) + Risk Parity / Risk Budgeting
+- อ่าน un15_fx_config.json
+- ดึงราคาเดือน (≤36 เดือนล่าสุดบนจุดตัดร่วม)
+- โหมดจัดสรร:
+    1) Greedy (ตาม Score per $1)
+    2) Risk Parity (Equal Risk Contribution; ERC)
+    3) Risk Budgeting (Risk Contribution สัดส่วนตาม Score^α)
+- ข้อจำกัด Cash_Balan: 1 ≤ b_i ≤ 3000 และล็อกงบรวมตามฐาน (ยกเลิกได้)
+- แถม: ตาราง Risk Contribution หลังจัดสรร (ตรวจสอบได้)
+- รวม hotfix กัน ValueError เวลา Series/DataFrame ambiguous
+"""
+import streamlit as st
 import pandas as pd
 import numpy as np
-from numba import njit
-import yfinance as yf
-import streamlit as st
-import thingspeak
 import json
-import streamlit.components.v1 as components
+import numpy_financial as npf
+import yfinance as yf
+from typing import Dict, List, Tuple
 
-# === CONFIG & INITIAL SETUP ===
-st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
+st.set_page_config(page_title="Cash_Balan Optimizer (MIRR 3Y + Risk Parity)", page_icon="🚀", layout="wide")
 
-@st.cache_data
-def load_config(path='limit_fx_config.json'):
-    """Loads the asset configuration from a JSON file."""
+CONFIG_FILE = "un15_fx_config.json"
+
+# ------------------- Config I/O -------------------
+@st.cache_data(show_spinner=False)
+def load_config(filename: str = CONFIG_FILE) -> Tuple[Dict, Dict]:
     try:
-        with open(path, 'r') as f:
-            config = json.load(f)
-        return config['assets']
+        with open(filename, "r", encoding="utf-8") as f:
+            data = json.load(f)
     except FileNotFoundError:
-        st.error(f"Configuration file '{path}' not found. Please ensure it exists.")
-        return None
-    except (json.JSONDecodeError, KeyError) as e:
-        st.error(f"Error reading or parsing '{path}': {e}")
-        return None
+        st.error(f"ไม่พบไฟล์คอนฟิก: {filename}")
+        return {}, {}
+    except json.JSONDecodeError:
+        st.error(f"รูปแบบ JSON ของ {filename} ไม่ถูกต้อง")
+        return {}, {}
 
-ASSETS = load_config()
-if not ASSETS:
-    st.stop()
+    default_cfg = data.get("__DEFAULT_CONFIG__", {})
+    tickers = {k: v for k, v in data.items() if k != "__DEFAULT_CONFIG__"}
 
-TICKERS = [a['symbol'] for a in ASSETS]
-FILTER_DATE = '2024-01-01 12:00:00+07:00'
-FIX_VALUE = 1500.0
+    for t, cfg in tickers.items():
+        for k, v in default_cfg.items():
+            cfg.setdefault(k, v)
+        cfg.setdefault("Ticker", t)
+    return tickers, default_cfg
 
-# === DATA FETCHING & CORE CALCULATION FUNCTIONS ===
+@st.cache_data(show_spinner=False)
+def dump_json_patch(updated_cash: Dict[str, float]) -> str:
+    patch = {t: {"Cash_Balan": float(v)} for t, v in updated_cash.items()}
+    return json.dumps(patch, indent=2, ensure_ascii=False)
 
-@st.cache_data(ttl=600)
-def get_prices(tickers, start_date):
-    """Fetches historical price data for a list of tickers."""
-    df_list = []
-    for ticker in tickers:
-        try:
-            data = yf.Ticker(ticker).history(period='max')[['Close']]
-            if not data.empty:
-                data.index = data.index.tz_convert(tz='Asia/Bangkok')
-                data = data[data.index >= start_date]
-                data = data.rename(columns={'Close': f"{ticker}_price"})
-                df_list.append(data)
-        except Exception as e:
-            st.warning(f"Could not fetch data for {ticker}: {e}")
-    if not df_list:
-        return pd.DataFrame()
-    return pd.concat(df_list, axis=1).ffill()
-
-@st.cache_data(ttl=300)
-def get_act_from_thingspeak(channel_id, api_key, field):
-    """Fetches the last value from a ThingSpeak channel field."""
-    try:
-        client = thingspeak.Channel(channel_id, api_key, fmt='json')
-        act_json = client.get_field_last(field=str(field))
-        value = json.loads(act_json).get(f"field{field}")
-        if value is None:
-            st.warning(f"Field {field} on channel {channel_id} returned null. Using 0.")
-            return 0
-        return int(value)
-    except Exception as e:
-        st.error(f"ThingSpeak Error (Channel: {channel_id}, Field: {field}): {e}")
-        return 0
-
-@njit(fastmath=True)
-def calculate_optimized(action_list, price_list, fix=FIX_VALUE):
-    action_array = np.asarray(action_list, dtype=np.int32)
-    action_array[0] = 1
-    price_array = np.asarray(price_list, dtype=np.float64)
-    n = len(action_array)
-    amount = np.empty(n, dtype=np.float64)
-    buffer = np.zeros(n, dtype=np.float64)
-    cash = np.empty(n, dtype=np.float64)
-    asset_value = np.empty(n, dtype=np.float64)
-    sumusd = np.empty(n, dtype=np.float64)
-    if price_array.shape[0] == 0:
-        return buffer, sumusd, cash, asset_value, amount, np.empty(0, dtype=np.float64)
-    initial_price = price_array[0]
-    amount[0] = fix / initial_price
-    cash[0] = fix
-    asset_value[0] = amount[0] * initial_price
-    sumusd[0] = cash[0] + asset_value[0]
-    refer = -fix * np.log(initial_price / price_array)
-    for i in range(1, n):
-        curr_price = price_array[i]
-        if action_array[i] == 0:
-            amount[i] = amount[i-1]
-            buffer[i] = 0
-        else:
-            amount[i] = fix / curr_price
-            buffer[i] = amount[i-1] * curr_price - fix
-        cash[i] = cash[i-1] + buffer[i]
-        asset_value[i] = amount[i] * curr_price
-        sumusd[i] = cash[i] + asset_value[i]
-    return buffer, sumusd, cash, asset_value, amount, refer
-
-def get_max_action(price_list, fix=FIX_VALUE):
-    prices = np.asarray(price_list, dtype=np.float64)
-    n = len(prices)
-    if n < 2:
-        return np.ones(n, dtype=int)
-    dp = np.zeros(n, dtype=np.float64)
-    path = np.zeros(n, dtype=int)
-    initial_capital = float(fix * 2)
-    dp[0] = initial_capital
-    for i in range(1, n):
-        max_prev_sumusd = 0
-        best_j = 0
-        for j in range(i):
-            profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1)
-            current_sumusd = dp[j] + profit_from_j_to_i
-            if current_sumusd > max_prev_sumusd:
-                max_prev_sumusd = current_sumusd
-                best_j = j
-        dp[i] = max_prev_sumusd
-        path[i] = best_j
-    actions = np.zeros(n, dtype=int)
-    last_action_day = np.argmax(dp)
-    current_day = last_action_day
-    while current_day > 0:
-        actions[current_day] = 1
-        current_day = path[current_day]
-    actions[0] = 1
-    return actions
-
-@st.cache_data(ttl=600)
-def Limit_fx(Ticker, start_date=FILTER_DATE, act=-1):
-    """Main calculation engine for a single ticker."""
-    try:
-        tickerData = yf.Ticker(Ticker).history(period='max')[['Close']]
-        if tickerData.empty: return pd.DataFrame()
-        tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
-        tickerData = tickerData[tickerData.index >= start_date]
-        prices = tickerData.Close.values.astype(np.float64)
-    except Exception as e:
-        st.warning(f"Could not get yfinance data for {Ticker}: {e}")
-        return pd.DataFrame()
-
-    if len(prices) == 0: return pd.DataFrame()
-
-    if act == -1: actions = np.ones(len(prices), dtype=np.int64)
-    elif act == -2: actions = get_max_action(prices)
-    else: actions = np.random.default_rng(act).integers(0, 2, len(prices))
-
-    buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
-    initial_capital = sumusd[0] if len(sumusd) > 0 else 0
-    return pd.DataFrame({
-        'price': prices, 'action': actions, 'buffer': buffer, 'sumusd': sumusd,
-        'cash': cash, 'asset_value': asset_value, 'amount': amount,
-        'refer': refer + initial_capital,
-        'net': sumusd - refer - initial_capital
-    }, index=tickerData.index)
-
-# === ANALYSIS & DATA PREPARATION FUNCTIONS ===
-
-@st.cache_data
-def prepare_base_data(tickers):
-    """Pre-calculates and caches base dataframes (min, max) for all tickers."""
-    base_dfs = {}
-    for ticker in tickers:
-        df_min = Limit_fx(ticker, act=-1)
-        if not df_min.empty:
-            base_dfs[ticker] = {'min': df_min, 'max': Limit_fx(ticker, act=-2)}
-    return base_dfs
-
-def align_ticker_data(base_dfs, column_name):
-    """Aligns a specific column from all base dataframes for combined analysis."""
-    dfs_to_align = []
-    for symbol, data in base_dfs.items():
-        if not data['min'].empty:
-            renamed_df = data['min'][[column_name]].rename(columns={column_name: f'{column_name}_{symbol}'})
-            dfs_to_align.append(renamed_df)
-    if not dfs_to_align:
-        return pd.DataFrame()
-    return pd.concat(dfs_to_align, axis=1).ffill().dropna()
-
-def calculate_max_drawdown(series: pd.Series) -> float:
-    """Calculates the maximum drawdown (peak-to-trough)."""
-    if series.empty or series.isnull().all():
-        return 0.0
-    running_max = series.cummax()
-    drawdown = series - running_max  # This will be negative or zero
-    return abs(drawdown.min())
-
-@st.cache_data
-def generate_ref_log_data(base_dfs, prices_df):
-    """Generates the combined dataframe for the Ref_index_Log tab."""
-    if prices_df.empty: return pd.DataFrame()
-
-    sumusd_aligned_df = align_ticker_data(base_dfs, 'sumusd')
-    if sumusd_aligned_df.empty: return pd.DataFrame()
-    
-    combined_df = pd.concat([prices_df, sumusd_aligned_df], axis=1).ffill().dropna()
-
-    price_cols = [col for col in combined_df.columns if '_price' in col]
-    sumusd_cols = [col for col in combined_df.columns if 'sumusd_' in col]
-    
-    if not price_cols or not sumusd_cols: return pd.DataFrame()
-
-    initial_capital_per_asset = FIX_VALUE * 2
-    initial_capital_ref_index = initial_capital_per_asset * len(price_cols)
-
-    # Vectorized calculation for 'ref_log'
-    price_prod = combined_df[price_cols].prod(axis=1)
-    int_st = price_prod.iloc[0]
-    safe_ratio = int_st / price_prod.replace(0, np.nan)
-    combined_df['ref_log'] = initial_capital_ref_index + (-FIX_VALUE * np.log(safe_ratio))
-    combined_df['ref_log'] = combined_df['ref_log'].fillna(initial_capital_ref_index)
-    
-    combined_df['daily_sumusd'] = combined_df[sumusd_cols].sum(axis=1)
-    
-    total_initial_capital = sum(
-        base_dfs[s]['min'].sumusd.iloc[0] for s in base_dfs if not base_dfs[s]['min'].empty
+# ------------------- Price Data -------------------
+@st.cache_data(show_spinner=False)
+def fetch_monthly_adjclose(ticker: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
+    df = yf.download(
+        ticker,
+        start=start - pd.DateOffset(days=10),
+        end=end + pd.DateOffset(days=3),
+        interval="1mo",
+        auto_adjust=True,
+        progress=False,
     )
+    if df.empty:
+        return pd.DataFrame(columns=["Date", "price"])
+    price_col = "Adj Close" if "Adj Close" in df.columns else "Close"
+    out = (
+        df.reset_index()
+          .rename(columns={price_col: "price"})
+          .loc[:, ["Date", "price"]]
+          .dropna()
+          .sort_values("Date")
+    )
+    out["Date"] = pd.to_datetime(out["Date"]).dt.tz_localize(None)
+    return out
 
-    net_raw = combined_df['daily_sumusd'] - combined_df['ref_log'] - total_initial_capital
-    net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
-    combined_df['net'] = net_raw - net_at_index_0
-    
-    return combined_df
+def to_month_end_index(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    tmp = df.copy()
+    tmp["Date"] = tmp["Date"].dt.to_period("M").dt.to_timestamp("M")
+    tmp = tmp.groupby("Date", as_index=False)["price"].last()
+    return tmp.set_index("Date")
 
-@st.cache_data
-def generate_burn_cash_data(base_dfs):
-    """Generates the combined dataframe for the Burn_Cash tab."""
-    buffer_aligned_df = align_ticker_data(base_dfs, 'buffer')
-    if buffer_aligned_df.empty:
+def align_prices(raw: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    frames = []
+    for t, df in raw.items():
+        if df is None or df.empty:
+            continue
+        me = to_month_end_index(df).rename(columns={"price": t})
+        frames.append(me)
+    if not frames:
         return pd.DataFrame()
-    
-    buffer_aligned_df['daily_burn'] = buffer_aligned_df.sum(axis=1)
-    buffer_aligned_df['cumulative_burn'] = buffer_aligned_df['daily_burn'].cumsum()
-    return buffer_aligned_df
+    wide = pd.concat(frames, axis=1).sort_index()
+    return wide
 
-# === UI FUNCTIONS ===
-def plot_individual_asset(symbol, act, base_dfs):
-    """Displays charts and data for a single asset."""
-    df_min = base_dfs[symbol]['min']
-    df_max = base_dfs[symbol]['max']
-    df_fx = Limit_fx(symbol, act=act)
+def build_common_timeline(price_wide: pd.DataFrame, months_limit: int = 36) -> pd.DataFrame:
+    full = price_wide.dropna(how="any")
+    if full.empty:
+        return full
+    if len(full) > months_limit:
+        full = full.iloc[-months_limit:]
+    return full
 
-    if df_min.empty or df_fx.empty or df_max.empty:
-        st.error(f"Could not generate plot for {symbol} due to missing data.")
-        return
+# ------------------- DCA + MIRR -------------------
+def dca_terminal_value_per_dollar(prices) -> float:
+    import pandas as pd
+    import numpy as np
+    if isinstance(prices, pd.DataFrame):
+        if prices.shape[1] == 0:
+            return np.nan
+        prices = prices.iloc[:, 0]
+    prices = pd.to_numeric(pd.Series(prices), errors="coerce").dropna()
+    if prices.empty:
+        return np.nan
+    inv_sum = (1.0 / prices).sum()
+    last_p = float(prices.iloc[-1])
+    return last_p * float(inv_sum)
 
-    chart_data = pd.DataFrame({
-        'min_net': df_min.net,
-        f'fx_{act}_net': df_fx.net,
-        'max_net': df_max.net
-    })
-    st.write('Refer_Log Net Performance')
-    st.line_chart(chart_data)
+def make_portfolio_cashflows(prices_df: pd.DataFrame, cash_per_ticker: Dict[str, float]) -> List[float]:
+    N = len(prices_df.index)
+    if N == 0:
+        return []
+    total_b = sum(cash_per_ticker.values())
+    outflows = [-total_b] * N
+    terminal = 0.0
+    for t, b in cash_per_ticker.items():
+        if t not in prices_df.columns:
+            continue
+        col = prices_df[[t]].squeeze()
+        tv = dca_terminal_value_per_dollar(col)
+        if not np.isnan(tv):
+            terminal += b * tv
+    return outflows + [terminal]
 
-    df_plot_burn = df_min[['buffer']].cumsum()
-    st.write('Burn_Cash (Cumulative)')
-    st.line_chart(df_plot_burn)
+def mirr_of_portfolio(cashflows: List[float], finance_rate: float, reinvest_rate: float) -> float:
+    if not cashflows or len(cashflows) < 2:
+        return np.nan
+    try:
+        return float(npf.mirr(cashflows, finance_rate, reinvest_rate))
+    except Exception:
+        return np.nan
 
-    with st.expander("Detailed Data (Min Action)"):
-        st.dataframe(df_min)
+# ------------------- Risk Parity / Risk Budgeting -------------------
+def returns_and_cov(prices_df: pd.DataFrame) -> Tuple[pd.DataFrame, np.ndarray]:
+    """Monthly simple returns & covariance with small ridge for stability."""
+    rets = prices_df.pct_change().dropna(how="any")
+    if rets.empty:
+        return rets, np.array([[]])
+    cov = np.cov(rets.values, rowvar=False)
+    # ridge for numerical stability
+    ridge = 1e-8 * np.trace(cov) / cov.shape[0] if cov.shape[0] > 0 else 0.0
+    cov = cov + ridge * np.eye(cov.shape[0])
+    return rets, cov
 
-def iframe(frame='', width=1500, height=800):
-    """Embeds an iframe component."""
-    components.iframe(frame, width=width, height=height, scrolling=True)
+def risk_budgeting_weights(cov: np.ndarray, budget: np.ndarray, max_iter: int = 10_000, tol: float = 1e-9) -> np.ndarray:
+    """
+    Risk Budgeting via fixed-point iteration:
+        target RC_i = b_i * (w^T Σ w)
+        update: w <- target / (Σ w), then renormalize sum(w)=1
+    - เมื่อ Σ เป็นเส้นทแยงมุม: คำตอบ w_i ∝ sqrt(b_i)/σ_i
+    """
+    n = cov.shape[0]
+    b = np.array(budget, dtype=float)
+    b = np.maximum(b, 1e-16)
+    b = b / b.sum()
+    # init: inverse-vol
+    iv = 1.0 / np.sqrt(np.maximum(np.diag(cov), 1e-16))
+    w = iv / iv.sum()
 
+    for _ in range(max_iter):
+        m = cov @ w                    # marginal risk
+        T = float(w @ m)               # total variance
+        target = b * T                 # target risk contribution
+        w_new = target / np.maximum(m, 1e-16)
+        w_new = np.maximum(w_new, 1e-16)
+        w_new = w_new / w_new.sum()
+        if np.linalg.norm(w_new - w, 1) < tol:
+            w = w_new
+            break
+        w = w_new
+    return w
 
-# === MAIN APP LAYOUT ===
+def risk_contributions(cov: np.ndarray, w: np.ndarray) -> np.ndarray:
+    m = cov @ w
+    rc = w * m
+    return rc
 
-# --- Pre-calculate all base data ---
-base_dataframes = prepare_base_data(TICKERS)
-if not base_dataframes:
-    st.error("Failed to fetch or calculate data for all assets. Stopping.")
+def allocate_with_bounds_from_weights(
+    weights: Dict[str, float],
+    all_tickers: List[str],
+    total_budget: float,
+    lower: float,
+    upper: float,
+) -> Dict[str, float]:
+    """
+    เริ่มต้นให้ขั้นต่ำกับทุกตัว จากนั้นกระจาย 'ส่วนที่เหลือ' ตาม weights (เฉพาะตัวที่มี weight)
+    แล้วเคารพเพดาน/พื้น ด้วยการรีดิสทริบิวต์ซ้ำจนเหลือเศษน้อยมากหรือทุกตัวชนเพดาน
+    """
+    n_all = len(all_tickers)
+    alloc = {t: float(lower) for t in all_tickers}
+    remaining = total_budget - lower * n_all
+    remaining = float(max(0.0, remaining))
+
+    active = [t for t, w in weights.items() if w > 0 and t in all_tickers]
+    if not active or remaining <= 1e-12:
+        return {t: float(max(lower, min(upper, v))) for t, v in alloc.items()}
+
+    w_vec = np.array([weights[t] for t in active], dtype=float)
+    w_vec = np.maximum(w_vec, 0.0)
+    if w_vec.sum() <= 0:
+        w_vec = np.ones_like(w_vec) / len(w_vec)
+    else:
+        w_vec = w_vec / w_vec.sum()
+
+    add = remaining * w_vec
+    for t, a in zip(active, add):
+        alloc[t] += a
+
+    # enforce caps with redistribution
+    def excess(t): return max(0.0, alloc[t] - upper)
+    def deficit(t): return max(0.0, lower - alloc[t])
+
+    for _ in range(20):
+        # clip to [lower, upper]
+        clipped = False
+        excess_amt = 0.0
+        for t in all_tickers:
+            if alloc[t] > upper:
+                excess_amt += alloc[t] - upper
+                alloc[t] = upper
+                clipped = True
+            elif alloc[t] < lower:
+                # (ปกติจะไม่ต่ำกว่าเพราะเริ่มด้วย lower)
+                pass
+        if not clipped or excess_amt <= 1e-12:
+            break
+        # redistribute excess to non-capped actives by weight
+        room = np.array([max(0.0, upper - alloc[t]) if t in active else 0.0 for t in all_tickers])
+        if room.sum() <= 1e-12:
+            break
+        room_weights = np.array([weights.get(t, 0.0) if t in active else 0.0 for t in all_tickers])
+        room_weights = room_weights * (room > 0)
+        if room_weights.sum() <= 0:
+            # fallback: proportional to room
+            distrib = excess_amt * (room / room.sum())
+        else:
+            room_weights = room_weights / room_weights.sum()
+            distrib = excess_amt * room_weights
+        for i, t in enumerate(all_tickers):
+            if room[i] > 0:
+                add_i = min(room[i], distrib[i])
+                alloc[t] += add_i
+
+    # final clamp
+    alloc = {t: float(max(lower, min(upper, v))) for t, v in alloc.items()}
+    return alloc
+
+# ------------------- Greedy (เดิม) -------------------
+def greedy_optimize(prices_df: pd.DataFrame, base_cash: Dict[str, float], lower: float = 1.0, upper: float = 3000.0) -> Dict[str, float]:
+    tickers = [t for t in base_cash.keys() if t in prices_df.columns]
+    if not tickers:
+        return {}
+    alloc = {t: float(lower) for t in base_cash.keys()}
+    total_budget = float(sum(base_cash.values()))
+    min_total = float(lower) * len(alloc)
+    if total_budget <= 0:
+        return {t: 0.0 for t in alloc.keys()}
+    if total_budget < min_total:
+        scale = total_budget / (min_total + 1e-12)
+        return {t: float(lower) * float(scale) for t in alloc.keys()}
+    scores = {}
+    for t in tickers:
+        col = prices_df[[t]].squeeze()
+        tv = dca_terminal_value_per_dollar(col)
+        scores[t] = -np.inf if np.isnan(tv) else float(tv)
+    remaining = total_budget - sum(alloc.values())
+    order = sorted(tickers, key=lambda x: scores.get(x, -np.inf), reverse=True)
+    for t in order:
+        if remaining <= 1e-12:
+            break
+        cap = float(upper) - alloc[t]
+        if cap <= 0:
+            continue
+        add = min(cap, remaining)
+        alloc[t] += add
+        remaining -= add
+    # spread leftover if any
+    if remaining > 1e-9:
+        i = 0
+        active = [t for t in order if alloc[t] < upper]
+        L = len(active)
+        while remaining > 1e-9 and L > 0:
+            t = active[i % L]
+            cap = float(upper) - alloc[t]
+            if cap > 0:
+                add = min(cap, remaining)
+                alloc[t] += add
+                remaining -= add
+            i += 1
+    alloc = {t: float(max(lower, min(upper, v))) for t, v in alloc.items()}
+    return alloc
+
+# ------------------- UI -------------------
+st.title("🚀 Cash_Balan Optimizer — Maximize 3Y MIRR + Risk Parity")
+
+tickers_cfg, default_cfg = load_config()
+if not tickers_cfg:
     st.stop()
-    
-# --- Create Tabs ---
-tab_names = TICKERS + ['Burn_Cash', 'Ref_index_Log', 'cf_log']
-tabs = st.tabs(tab_names)
-tab_dict = dict(zip(tab_names, tabs))
 
-# --- Individual Asset Tabs ---
-for asset in ASSETS:
-    symbol = asset['symbol']
-    if symbol in tab_dict and symbol in base_dataframes:
-        with tab_dict[symbol]:
-            act = get_act_from_thingspeak(
-                channel_id=asset['channel_id'],
-                api_key=asset['write_api_key'],
-                field=asset['field']
-            )
-            plot_individual_asset(symbol, act, base_dataframes)
+all_tickers = sorted(list(tickers_cfg.keys()))
+base_cash_orig = {t: float(tickers_cfg[t].get("Cash_Balan", 1.0)) for t in all_tickers}
+total_base_cash = float(sum(base_cash_orig.values()))
 
-# --- Ref_index_Log Tab ---
-with tab_dict['Ref_index_Log']:
-    prices_df = get_prices(list(base_dataframes.keys()), FILTER_DATE)
-    ref_log_df = generate_ref_log_data(base_dataframes, prices_df)
+left, right = st.columns([1.3, 1.0], gap="large")
 
-    if not ref_log_df.empty:
-        st.header("Net Performance Analysis (vs. Reference)")
-        st.info("Performance analysis of the portfolio's net value against the logarithmic reference index.")
+with left:
+    st.subheader("1) Settings")
+    today = pd.Timestamp.today(tz="Asia/Bangkok").tz_localize(None)
+    three_years_ago = today - pd.DateOffset(years=3)
 
-        net_series = ref_log_df['net']
-        daily_changes = net_series.diff()
-        
-        # --- CF Analysis Radio Button ---
-        analysis_type = st.radio(
-            "Select Cash Flow (CF) Analysis Type:",
-            ('Worst Case', 'Average Case'),
-            horizontal=True,
-            key='cf_analysis_type'
-        )
+    # default start = max(filter_date, today-3y)
+    cfg_dates = []
+    for t, cfg in tickers_cfg.items():
+        d = pd.to_datetime(cfg.get("filter_date", three_years_ago), errors="coerce")
+        if d is not None and not pd.isna(d):
+            try:
+                d = d.tz_convert("Asia/Bangkok").tz_localize(None)
+            except Exception:
+                d = d.tz_localize(None) if getattr(d, "tzinfo", None) else d
+            cfg_dates.append(d)
+    default_start = max(three_years_ago, max(cfg_dates) if cfg_dates else three_years_ago)
 
-        # --- Metric Calculation based on selection ---
-        if analysis_type == 'Worst Case':
-            metric_1d_val = daily_changes.min()
-            label_1d = "📉 1-Day CF (Worst Day)"
-        else: # Average Case
-            metric_1d_val = daily_changes.mean()
-            label_1d = "📊 1-Day CF (Average Day)"
-        
-        # Rolling metrics (can be added here if needed, kept simple for clarity)
+    start_date = st.date_input("Start (≤ 3Y back, จุดตัดร่วม)", default_start.date())
+    start_date = pd.Timestamp(start_date)
+    end_date = st.date_input("End (วันนี้หรือล่าสุด)", today.date())
+    end_date = pd.Timestamp(end_date)
+    if end_date > today:
+        end_date = today
+    if start_date > end_date:
+        st.warning("Start > End → ปรับ Start = End-36 เดือน")
+        start_date = end_date - pd.DateOffset(months=36)
 
-        # Max Run-up (Trough-to-Peak Gain)
-        trough_to_peak_gain = 0
-        if not net_series.empty:
-            trough_index = net_series.idxmin()
-            peak_after_trough = net_series.loc[trough_index:].max()
-            trough_value = net_series.loc[trough_index]
-            trough_to_peak_gain = peak_after_trough - trough_value
+    finance_rate = st.number_input("Finance rate (ต่อคาบเดือน)", min_value=-1.0, max_value=1.0, value=0.0, step=0.001)
+    reinvest_rate = st.number_input("Reinvest rate (ต่อคาบเดือน)", min_value=-1.0, max_value=1.0, value=0.0, step=0.001)
 
-        # --- Display Metrics ---
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric(label=label_1d, value=f"{metric_1d_val:,.2f} USD")
-        with col2:
-            st.metric(label="📈 Trough-to-Peak Gain (Max Run-up)", value=f"{trough_to_peak_gain:,.2f} USD")
-
-        st.markdown("---")
-        st.subheader("Net Performance Over Time")
-        st.line_chart(ref_log_df['net'])
-        with st.expander("View Data"):
-            st.dataframe(ref_log_df)
+    lock_total = st.checkbox("Lock: ใช้งบรวมเท่ากับผลรวม Cash_Balan เดิม", value=True)
+    if lock_total:
+        base_cash = dict(base_cash_orig)
     else:
-        st.warning("Could not generate Ref_index_Log data.")
+        manual_total = st.number_input("งบรวมต่อเดือน (USD)", min_value=1.0, value=max(1.0, total_base_cash), step=1.0)
+        s = sum(base_cash_orig.values())
+        base_cash = {t: (v * manual_total / s if s > 0 else manual_total / max(1, len(base_cash_orig))) for t, v in base_cash_orig.items()}
 
-# --- Burn_Cash Tab ---
-with tab_dict['Burn_Cash']:
-    burn_cash_df = generate_burn_cash_data(base_dataframes)
-    
-    if not burn_cash_df.empty:
-        st.header("Cash Burn Risk Analysis")
-        st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
-        
-        cumulative_burn_series = burn_cash_df['cumulative_burn']
-        
-        # --- Risk Calculation ---
-        max_daily_burn = burn_cash_df['daily_burn'].min()
-        
-        # **FIXED**: Correct Max Drawdown calculation
-        max_drawdown_burn = calculate_max_drawdown(cumulative_burn_series)
-        
-        # Rolling burn calculations
-        max_30_day_burn = 0
-        if len(cumulative_burn_series) >= 30:
-            rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-            max_30_day_burn = rolling_30_day_change.min()
-        
-        max_90_day_burn = 0
-        if len(cumulative_burn_series) >= 90:
-            rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-            max_90_day_burn = rolling_90_day_change.min()
+# ดึงราคา
+with st.spinner("ดาวน์โหลดราคา (เดือน)…"):
+    raw_prices = {t: fetch_monthly_adjclose(t, start_date, end_date) for t in all_tickers}
+price_wide = align_prices(raw_prices)
+if price_wide.empty:
+    st.error("ไม่พบราคาที่ใช้งานได้")
+    st.stop()
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Short-Term Risk")
-            st.metric(label="🔥 1-Day Burn (Worst Day)", value=f"{max_daily_burn:,.2f} USD")
-            st.metric(label="🔥 30-Day Burn (Worst Month)", value=f"{max_30_day_burn:,.2f} USD")
-        
-        with col2:
-            st.subheader("Medium to Long-Term Risk")
-            st.metric(label="🔥 90-Day Burn (Worst Quarter)", value=f"{max_90_day_burn:,.2f} USD")
-            st.metric(
-                label="🏔️ Max Drawdown (Peak to Trough)", 
-                value=f"{-max_drawdown_burn:,.2f} USD",
-                help="The largest drop in cumulative cash from any peak to a subsequent trough."
-            )
+prices = build_common_timeline(price_wide, months_limit=36)
+if prices.empty:
+    st.error("ไม่มีช่วงเวลาที่ข้อมูลครบทุก Ticker (จุดตัดร่วมเป็นค่าว่าง)")
+    st.stop()
+if len(prices) < 6:
+    st.warning("จำนวนงวดจุดตัดร่วม < 6 เดือน — MIRR อาจไม่นิ่ง")
 
-        st.markdown("---")
-        st.subheader("Cumulative Cash Burn Over Time")
-        st.line_chart(cumulative_burn_series)
-        
-        with st.expander("View Detailed Burn Data"):
-            st.dataframe(burn_cash_df)
+# คะแนนต่อ $1 (terminal wealth factor)
+scores = {t: dca_terminal_value_per_dollar(prices[[t]].squeeze()) for t in prices.columns}
+scores_ser = pd.Series(scores, dtype=float).replace([np.inf, -np.inf], np.nan).sort_values(ascending=False)
+
+with left:
+    st.subheader("2) Allocation Method")
+    method = st.selectbox(
+        "เลือกวิธีจัดสรร",
+        ["Greedy (Score per $1)", "Risk Parity (Equal RC)", "Risk Budgeting (RC ∝ Score^α)"],
+        index=0
+    )
+    c1, c2, c3 = st.columns([1,1,1])
+    with c1:
+        lower = st.number_input("ขั้นต่ำต่อ Ticker", min_value=0.0, value=1.0, step=1.0)
+    with c2:
+        upper = st.number_input("ขั้นสูงสุดต่อ Ticker", min_value=1.0, value=3000.0, step=50.0)
+    with c3:
+        alpha = st.number_input("α (เฉพาะ Risk Budgeting)", min_value=0.0, value=1.0, step=0.25)
+
+    run = st.button("✅ Run Optimizer", type="primary", use_container_width=True)
+
+# ------------------- Run -------------------
+if run:
+    if method == "Greedy (Score per $1)":
+        alloc_opt = greedy_optimize(prices, base_cash, lower, upper)
+
+        # MIRR ก่อน/หลัง
+        cf_before = make_portfolio_cashflows(prices, base_cash)
+        cf_after  = make_portfolio_cashflows(prices, alloc_opt)
+        mirr_before = mirr_of_portfolio(cf_before, finance_rate, reinvest_rate)
+        mirr_after  = mirr_of_portfolio(cf_after, finance_rate, reinvest_rate)
+
+        st.success("Optimization (Greedy) เสร็จ")
+        m1, m2 = st.columns(2)
+        with m1:
+            st.metric("Portfolio MIRR (Before)", f"{(mirr_before*100) if not np.isnan(mirr_before) else 0:,.3f} % /period")
+        with m2:
+            st.metric("Portfolio MIRR (After)",  f"{(mirr_after*100) if not np.isnan(mirr_after) else 0:,.3f} % /period")
+
+        df_view = pd.DataFrame({
+            "Score per $1 (terminal wealth)": [scores.get(t, np.nan) for t in prices.columns],
+            "Cash_Balan (Before)": [base_cash.get(t, np.nan) for t in prices.columns],
+            "Cash_Balan (After)":  [alloc_opt.get(t, np.nan) for t in prices.columns],
+        }, index=prices.columns).sort_values("Score per $1 (terminal wealth)", ascending=False)
+        st.dataframe(df_view.style.format({
+            "Score per $1 (terminal wealth)": "{:,.4f}",
+            "Cash_Balan (Before)": "{:,.2f}",
+            "Cash_Balan (After)": "{:,.2f}",
+        }), use_container_width=True)
+
+        patch = dump_json_patch(alloc_opt)
+        st.download_button("⬇️ ดาวน์โหลด JSON patch (Cash_Balan)", data=patch.encode("utf-8"),
+                           file_name="cash_balan_patch.json", mime="application/json",
+                           use_container_width=True)
+
     else:
-        st.error("Cannot calculate burn cash due to missing data.")
+        # ===== Risk Parity / Risk Budgeting =====
+        rets, cov = returns_and_cov(prices)
+        if rets.empty or cov.size == 0:
+            st.error("คำนวณ covariance ไม่ได้ (ข้อมูลไม่พอ)")
+            st.stop()
 
-# --- cf_log Tab ---
-with tab_dict['cf_log']:
+        act = list(prices.columns)
+        n = len(act)
+
+        if method == "Risk Parity (Equal RC)":
+            budget = np.ones(n) / n
+        else:
+            # Risk Budgeting — งบความเสี่ยงตาม Score^α
+            # ถ้า score บางตัว NaN/<=0 ให้แทนเป็นค่าน้อย ๆ เพื่อไม่ทิ้งตัวนั้น
+            raw = np.array([scores.get(t, np.nan) for t in act], dtype=float)
+            raw = np.where(np.isfinite(raw) & (raw > 0), raw, 1e-6)
+            budget = raw ** float(alpha)
+            budget = budget / budget.sum()
+
+        w = risk_budgeting_weights(cov, budget)
+        # ตรวจ RC%
+        rc = risk_contributions(cov, w)
+        rc_pct = rc / rc.sum() if rc.sum() > 0 else rc
+
+        # แปลงเป็น Cash_Balan ภายใต้กรอบ 1–3000 และมีขั้นต่ำทุกตัว (รวมถึง non-active)
+        total_budget = float(sum(base_cash.values()))
+        weights_map = {t: float(w[i]) for i, t in enumerate(act)}
+        alloc_opt = allocate_with_bounds_from_weights(weights_map, all_tickers, total_budget, lower, upper)
+
+        # MIRR ก่อน/หลัง
+        cf_before = make_portfolio_cashflows(prices, base_cash)
+        cf_after  = make_portfolio_cashflows(prices, alloc_opt)
+        mirr_before = mirr_of_portfolio(cf_before, finance_rate, reinvest_rate)
+        mirr_after  = mirr_of_portfolio(cf_after, finance_rate, reinvest_rate)
+
+        # แสดงผล
+        title = "Risk Parity (Equal RC)" if method.startswith("Risk Parity") else f"Risk Budgeting (α={alpha})"
+        st.success(f"Optimization — {title} เสร็จ")
+
+        m1, m2 = st.columns(2)
+        with m1:
+            st.metric("Portfolio MIRR (Before)", f"{(mirr_before*100) if not np.isnan(mirr_before) else 0:,.3f} % /period")
+        with m2:
+            st.metric("Portfolio MIRR (After)",  f"{(mirr_after*100) if not np.isnan(mirr_after) else 0:,.3f} % /period")
+
+        df_alloc = pd.DataFrame({
+            "Cash_Balan (Before)": [base_cash.get(t, np.nan) for t in prices.columns],
+            "Cash_Balan (After)":  [alloc_opt.get(t, np.nan) for t in prices.columns],
+            "Score per $1":        [scores.get(t, np.nan) for t in prices.columns],
+            "Weight (w)":          [weights_map.get(t, np.nan) for t in prices.columns],
+            "RC %":                [float(rc_pct[i]) if i < len(rc_pct) else np.nan for i, t in enumerate(prices.columns)],
+        }, index=prices.columns).sort_values("RC %", ascending=False)
+
+        st.dataframe(df_alloc.style.format({
+            "Cash_Balan (Before)": "{:,.2f}",
+            "Cash_Balan (After)": "{:,.2f}",
+            "Score per $1": "{:,.4f}",
+            "Weight (w)": "{:,.4%}",
+            "RC %": "{:,.2%}",
+        }), use_container_width=True)
+
+        patch = dump_json_patch(alloc_opt)
+        st.download_button("⬇️ ดาวน์โหลด JSON patch (Cash_Balan)", data=patch.encode("utf-8"),
+                           file_name="cash_balan_patch.json", mime="application/json",
+                           use_container_width=True)
+
+with right:
+    st.subheader("Reference / Scores")
+    st.caption("คะแนนยิ่งสูง → ควรได้รับงบมากกว่า (ในโหมด Greedy) หรือเป็น 'งบความเสี่ยงเป้า' ในโหมด Risk Budgeting")
+    st.table(scores_ser.to_frame("Score per $1").style.format("{:,.4f}"))
+
+    st.subheader("Notes")
     st.markdown("""
-    - **Rebalance**: `-fix * ln(t0 / tn)`
-    - **Net Profit**: `sumusd - refer - sumusd[0]` (ต้นทุนเริ่มต้น)
-    - **Ref_index_Log**: `initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))`
-    - **Net in Ref_index_Log**: `(daily_sumusd - ref_log - total_initial_capital) - net_at_index_0`
-    - **Option P/L**: `(max(0, ราคาหุ้นปัจจุบัน - Strike) * contracts_or_shares) - (contracts_or_shares * premium_paid_per_share)`
-    ---
-    """)
-    iframe("https://monica.im/share/artifact?id=Su47FeHfaWtyXmqDqmqp9W")
-    st.markdown("---")
-    iframe("https://monica.im/share/artifact?id=qpAkuKjBpuVz2cp9nNFRs3")
-    st.markdown("---")
-    iframe("https://monica.im/share/artifact?id=wEjeaMxVW6MgDDm3xAZatX")
-    st.markdown("---")
-    iframe("https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK")
-    st.markdown("---")
-    iframe("https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")
+- Risk Parity = Equal Risk Contribution (ERC): ให้แต่ละตัว **มีส่วนแบ่งความเสี่ยงเท่ากัน**  
+- Risk Budgeting (RC ∝ Score^α): ตั้ง **งบความเสี่ยงเป้า** ตาม Score per $1 (ยกกำลัง α) แล้วแก้ w ให้ RC_i ตามสัดส่วนดังกล่าว  
+- หลังได้ weight จะถูกแปลงเป็น Cash_Balan และเคารพกรอบ 1–3000 ด้วยการรีดิสทริบิวต์ส่วนเกิน/ขาดอัตโนมัติ  
+- Covariance ใช้ผลตอบแทนรายเดือน (simple return) บนช่วงจุดตัดร่วม และมีใส่ ridge เล็กน้อยเพื่อความเสถียรเชิงตัวเลข
+""")
