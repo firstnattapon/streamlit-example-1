@@ -99,52 +99,52 @@ with tabs[1]:
     with st.expander("หลักการ Rollover"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1500 , height=1000  , scrolling=0)
 
-# # 4. สร้าง Tab "DATA" สำหรับรับ Input และแสดงประวัติ (REWORKED SECTION - FINAL V2)
-# with tabs[0]:
-#     st.write("⚙️ **ตั้งค่าทั่วไปและประวัติ Asset**")
+# 4. สร้าง Tab "DATA" สำหรับรับ Input และแสดงประวัติ (REWORKED SECTION - FINAL V2)
+with tabs[0]:
+    st.write("⚙️ **ตั้งค่าทั่วไปและประวัติ Asset**")
     
-#     x_6 = st.number_input('Cash_Balan เริ่มต้น (ใช้กับทุกตัว)', step=1.0, value=0.)
-#     st.write("---")
+    x_6 = st.number_input('Cash_Balan เริ่มต้น (ใช้กับทุกตัว)', step=1.0, value=0.)
+    st.write("---")
     
-#     for asset in assets_config:
-#         ticker = asset['ticker']
-#         # ดึงค่า Final มาเพื่อใช้ใน Label ของ expander
-#         final_str = asset.get('Final', 'N/A') 
+    for asset in assets_config:
+        ticker = asset['ticker']
+        # ดึงค่า Final มาเพื่อใช้ใน Label ของ expander
+        final_str = asset.get('Final', 'N/A') 
 
-#         # [แก้ไข] สร้าง expander label แบบไดนามิก
-#         with st.expander(f"ตั้งค่าและดูประวัติ: **{ticker}** | \"{final_str}\""):
-#             try:
-#                 # --- ส่วนประมวลผลข้อมูล (เบื้องหลัง) ---
-#                 # เรายังคงต้อง parse ค่า final_str เพื่อนำไปคำนวณ
-#                 final_parts = final_str.split(',')
-#                 final_price = float(final_parts[0].strip())
-#                 final_fav = float(final_parts[1].strip())
+        # [แก้ไข] สร้าง expander label แบบไดนามิก
+        with st.expander(f"ตั้งค่าและดูประวัติ: **{ticker}** | \"{final_str}\""):
+            try:
+                # --- ส่วนประมวลผลข้อมูล (เบื้องหลัง) ---
+                # เรายังคงต้อง parse ค่า final_str เพื่อนำไปคำนวณ
+                final_parts = final_str.split(',')
+                final_price = float(final_parts[0].strip())
+                final_fav = float(final_parts[1].strip())
 
-#                 asset_params[ticker] = {'entry': final_price, 'fav': final_fav}
+                asset_params[ticker] = {'entry': final_price, 'fav': final_fav}
 
-#                 # --- ส่วนแสดงผลบน UI (ข้างใน Expander) ---
-#                 try:
-#                     last_price = yf.Ticker(ticker).fast_info.get('lastPrice', final_price)
-#                 except Exception:
-#                     st.warning(f"ไม่สามารถดึงราคาล่าสุดของ {ticker} ได้, ใช้ราคา Final แทน")
-#                     last_price = final_price
+                # --- ส่วนแสดงผลบน UI (ข้างใน Expander) ---
+                try:
+                    last_price = yf.Ticker(ticker).fast_info.get('lastPrice', final_price)
+                except Exception:
+                    st.warning(f"ไม่สามารถดึงราคาล่าสุดของ {ticker} ได้, ใช้ราคา Final แทน")
+                    last_price = final_price
 
-#                 current_prices[ticker] = st.number_input(
-#                     "ราคาปัจจุบัน (สำหรับคำนวณ)", 
-#                     step=0.01, 
-#                     value=float(last_price), 
-#                     key=f"price_{ticker}"
-#                 )
+                current_prices[ticker] = st.number_input(
+                    "ราคาปัจจุบัน (สำหรับคำนวณ)", 
+                    step=0.01, 
+                    value=float(last_price), 
+                    key=f"price_{ticker}"
+                )
                 
-#                 st.write("---")
-#                 st.write("ข้อมูลดิบจาก Config:")
-#                 st.json(asset)
+                st.write("---")
+                st.write("ข้อมูลดิบจาก Config:")
+                st.json(asset)
 
-#             except Exception as e:
-#                 st.error(f"ข้อมูลใน config ของ {ticker} ผิดพลาด: {e}")
-#                 # กำหนดค่า default ป้องกันแอปพัง
-#                 asset_params[ticker] = {'entry': 0, 'fav': 0}
-#                 current_prices[ticker] = 0.0
+            except Exception as e:
+                st.error(f"ข้อมูลใน config ของ {ticker} ผิดพลาด: {e}")
+                # กำหนดค่า default ป้องกันแอปพัง
+                asset_params[ticker] = {'entry': 0, 'fav': 0}
+                current_prices[ticker] = 0.0
 
 # # 5. สร้าง Tab ของแต่ละ Asset และแสดงกราฟ (ส่วนนี้ทำงานได้ปกติ ไม่ต้องแก้ไข)
 # for i, asset in enumerate(assets_config):
