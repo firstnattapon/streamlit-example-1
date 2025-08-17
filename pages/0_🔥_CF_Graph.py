@@ -102,9 +102,8 @@ with tabs[1]:
 # 4. สร้าง Tab "DATA" สำหรับรับ Input และแสดงประวัติ (REWORKED SECTION - FINAL V2)
 with tabs[0]:
     st.write("⚙️ **ตั้งค่าทั่วไปและประวัติ Asset**")
-    
     # x_6 = st.number_input('Cash_Balan เริ่มต้น (ใช้กับทุกตัว)', step=1.0, value=0.)
-    st.write("---")
+    # st.write("---")
     
     for asset in assets_config:
         ticker = asset['ticker']
