@@ -103,7 +103,7 @@ with tabs[1]:
 with tabs[0]:
     st.write("⚙️ **ตั้งค่าทั่วไปและประวัติ Asset**")
     
-    x_6 = st.number_input('Cash_Balan เริ่มต้น (ใช้กับทุกตัว)', step=1.0, value=0.)
+    # x_6 = st.number_input('Cash_Balan เริ่มต้น (ใช้กับทุกตัว)', step=1.0, value=0.)
     st.write("---")
     
     for asset in assets_config:
