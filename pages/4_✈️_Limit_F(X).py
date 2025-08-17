@@ -1,16 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Cash_Balan Optimizer — Maximize Portfolio MIRR (3Y) + Risk Parity / Risk Budgeting
-- อ่าน un15_fx_config.json
-- ดึงราคาเดือน (≤36 เดือนล่าสุดบนจุดตัดร่วม)
-- โหมดจัดสรร:
-    1) Greedy (ตาม Score per $1)
-    2) Risk Parity (Equal Risk Contribution; ERC)
-    3) Risk Budgeting (Risk Contribution สัดส่วนตาม Score^α)
-- ข้อจำกัด Cash_Balan: 1 ≤ b_i ≤ 3000 และล็อกงบรวมตามฐาน (ยกเลิกได้)
-- แถม: ตาราง Risk Contribution หลังจัดสรร (ตรวจสอบได้)
-- รวม hotfix กัน ValueError เวลา Series/DataFrame ambiguous
-"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np
