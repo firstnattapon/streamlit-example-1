@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Cash_Balan Optimizer — Maximize Portfolio MIRR (3Y)
+Cash_Balan Optimizer — Maximize Portfolio MIRR (3Y) + Risk Parity / Risk Budgeting
 - อ่าน un15_fx_config.json
-- ดึงราคาแบบรายเดือนย้อนหลัง ≤36 เดือน (จุดตัดร่วมทุก Ticker)
-- จำลอง DCA รายเดือน: ลงเงิน b_i ต่อเดือน/ต่อ Ticker
-- จัดสรรงบรวม (เท่ากับผลรวม Cash_Balan เดิม เว้นแต่ผู้ใช้ยกเลิก lock)
-- ข้อจำกัด 1 ≤ b_i ≤ 3000
-- ใช้ greedy บน "terminal wealth per $1" ต่อ Ticker
-- คำนวณ MIRR ของพอร์ต (กระแสเงินสดรวม)
-!! รวม hotfix กัน ValueError กรณี Series/DataFrame ambiguity
+- ดึงราคาเดือน (≤36 เดือนล่าสุดบนจุดตัดร่วม)
+- โหมดจัดสรร:
+    1) Greedy (ตาม Score per $1)
+    2) Risk Parity (Equal Risk Contribution; ERC)
+    3) Risk Budgeting (Risk Contribution สัดส่วนตาม Score^α)
+- ข้อจำกัด Cash_Balan: 1 ≤ b_i ≤ 3000 และล็อกงบรวมตามฐาน (ยกเลิกได้)
+- แถม: ตาราง Risk Contribution หลังจัดสรร (ตรวจสอบได้)
+- รวม hotfix กัน ValueError เวลา Series/DataFrame ambiguous
 """
 import streamlit as st
 import pandas as pd
@@ -18,7 +19,7 @@ import numpy_financial as npf
 import yfinance as yf
 from typing import Dict, List, Tuple
 
-st.set_page_config(page_title="Cash_Balan Optimizer (MIRR 3Y)", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Cash_Balan Optimizer (MIRR 3Y + Risk Parity)", page_icon="🚀", layout="wide")
 
 CONFIG_FILE = "un15_fx_config.json"
 
@@ -38,7 +39,6 @@ def load_config(filename: str = CONFIG_FILE) -> Tuple[Dict, Dict]:
     default_cfg = data.get("__DEFAULT_CONFIG__", {})
     tickers = {k: v for k, v in data.items() if k != "__DEFAULT_CONFIG__"}
 
-    # fill defaults + set Ticker key
     for t, cfg in tickers.items():
         for k, v in default_cfg.items():
             cfg.setdefault(k, v)
@@ -53,7 +53,6 @@ def dump_json_patch(updated_cash: Dict[str, float]) -> str:
 # ------------------- Price Data -------------------
 @st.cache_data(show_spinner=False)
 def fetch_monthly_adjclose(ticker: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
-    # add small padding days to ensure last month included
     df = yf.download(
         ticker,
         start=start - pd.DateOffset(days=10),
@@ -72,7 +71,6 @@ def fetch_monthly_adjclose(ticker: str, start: pd.Timestamp, end: pd.Timestamp) 
           .dropna()
           .sort_values("Date")
     )
-    # normalize to month-end timestamps without tz
     out["Date"] = pd.to_datetime(out["Date"]).dt.tz_localize(None)
     return out
 
@@ -97,10 +95,6 @@ def align_prices(raw: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     return wide
 
 def build_common_timeline(price_wide: pd.DataFrame, months_limit: int = 36) -> pd.DataFrame:
-    """
-    คืน DataFrame ที่เหลือเฉพาะ 'แถวที่ทุกคอลัมน์ไม่ใช่ NaN' (จุดตัดร่วม)
-    และจำกัดไม่เกิน 36 เดือนล่าสุด
-    """
     full = price_wide.dropna(how="any")
     if full.empty:
         return full
@@ -110,40 +104,25 @@ def build_common_timeline(price_wide: pd.DataFrame, months_limit: int = 36) -> p
 
 # ------------------- DCA + MIRR -------------------
 def dca_terminal_value_per_dollar(prices) -> float:
-    """
-    Robust ต่อ Series/DataFrame:
-    - ถ้าได้ DataFrame เข้ามา: ใช้คอลัมน์แรก
-    - แปลงเป็นตัวเลข + dropna
-    - terminal wealth ต่อ $1/เดือน = last_price * Σ(1/price_m)
-    """
     import pandas as pd
     import numpy as np
-
     if isinstance(prices, pd.DataFrame):
         if prices.shape[1] == 0:
             return np.nan
         prices = prices.iloc[:, 0]
-
     prices = pd.to_numeric(pd.Series(prices), errors="coerce").dropna()
     if prices.empty:
         return np.nan
-
     inv_sum = (1.0 / prices).sum()
     last_p = float(prices.iloc[-1])
     return last_p * float(inv_sum)
 
 def make_portfolio_cashflows(prices_df: pd.DataFrame, cash_per_ticker: Dict[str, float]) -> List[float]:
-    """
-    สมมติ DCA รายเดือน N งวด:
-      เดือน 1..N: outflow = -Σ b_i
-      งวดสุดท้าย: inflow = Σ_i (b_i * terminal_value_per_$1_i)
-    """
     N = len(prices_df.index)
     if N == 0:
         return []
     total_b = sum(cash_per_ticker.values())
     outflows = [-total_b] * N
-
     terminal = 0.0
     for t, b in cash_per_ticker.items():
         if t not in prices_df.columns:
@@ -162,54 +141,141 @@ def mirr_of_portfolio(cashflows: List[float], finance_rate: float, reinvest_rate
     except Exception:
         return np.nan
 
-# ------------------- Greedy Optimizer -------------------
-def greedy_optimize(
-    prices_df: pd.DataFrame,
-    base_cash: Dict[str, float],
-    lower: float = 1.0,
-    upper: float = 3000.0,
+# ------------------- Risk Parity / Risk Budgeting -------------------
+def returns_and_cov(prices_df: pd.DataFrame) -> Tuple[pd.DataFrame, np.ndarray]:
+    """Monthly simple returns & covariance with small ridge for stability."""
+    rets = prices_df.pct_change().dropna(how="any")
+    if rets.empty:
+        return rets, np.array([[]])
+    cov = np.cov(rets.values, rowvar=False)
+    # ridge for numerical stability
+    ridge = 1e-8 * np.trace(cov) / cov.shape[0] if cov.shape[0] > 0 else 0.0
+    cov = cov + ridge * np.eye(cov.shape[0])
+    return rets, cov
+
+def risk_budgeting_weights(cov: np.ndarray, budget: np.ndarray, max_iter: int = 10_000, tol: float = 1e-9) -> np.ndarray:
+    """
+    Risk Budgeting via fixed-point iteration:
+        target RC_i = b_i * (w^T Σ w)
+        update: w <- target / (Σ w), then renormalize sum(w)=1
+    - เมื่อ Σ เป็นเส้นทแยงมุม: คำตอบ w_i ∝ sqrt(b_i)/σ_i
+    """
+    n = cov.shape[0]
+    b = np.array(budget, dtype=float)
+    b = np.maximum(b, 1e-16)
+    b = b / b.sum()
+    # init: inverse-vol
+    iv = 1.0 / np.sqrt(np.maximum(np.diag(cov), 1e-16))
+    w = iv / iv.sum()
+
+    for _ in range(max_iter):
+        m = cov @ w                    # marginal risk
+        T = float(w @ m)               # total variance
+        target = b * T                 # target risk contribution
+        w_new = target / np.maximum(m, 1e-16)
+        w_new = np.maximum(w_new, 1e-16)
+        w_new = w_new / w_new.sum()
+        if np.linalg.norm(w_new - w, 1) < tol:
+            w = w_new
+            break
+        w = w_new
+    return w
+
+def risk_contributions(cov: np.ndarray, w: np.ndarray) -> np.ndarray:
+    m = cov @ w
+    rc = w * m
+    return rc
+
+def allocate_with_bounds_from_weights(
+    weights: Dict[str, float],
+    all_tickers: List[str],
+    total_budget: float,
+    lower: float,
+    upper: float,
 ) -> Dict[str, float]:
     """
-    ล็อก 'งบรวม' = sum(base_cash) และบังคับ 1 ≤ b_i ≤ 3000
-    ขั้นตอน:
-      1) ให้ขั้นต่ำทุกตัว
-      2) คำนวณคะแนน per $1: terminal wealth factor จาก DCA
-      3) เติมงบส่วนที่เหลือให้ Ticker คะแนนสูงสุดก่อน (จนชนเพดาน)
+    เริ่มต้นให้ขั้นต่ำกับทุกตัว จากนั้นกระจาย 'ส่วนที่เหลือ' ตาม weights (เฉพาะตัวที่มี weight)
+    แล้วเคารพเพดาน/พื้น ด้วยการรีดิสทริบิวต์ซ้ำจนเหลือเศษน้อยมากหรือทุกตัวชนเพดาน
     """
+    n_all = len(all_tickers)
+    alloc = {t: float(lower) for t in all_tickers}
+    remaining = total_budget - lower * n_all
+    remaining = float(max(0.0, remaining))
+
+    active = [t for t, w in weights.items() if w > 0 and t in all_tickers]
+    if not active or remaining <= 1e-12:
+        return {t: float(max(lower, min(upper, v))) for t, v in alloc.items()}
+
+    w_vec = np.array([weights[t] for t in active], dtype=float)
+    w_vec = np.maximum(w_vec, 0.0)
+    if w_vec.sum() <= 0:
+        w_vec = np.ones_like(w_vec) / len(w_vec)
+    else:
+        w_vec = w_vec / w_vec.sum()
+
+    add = remaining * w_vec
+    for t, a in zip(active, add):
+        alloc[t] += a
+
+    # enforce caps with redistribution
+    def excess(t): return max(0.0, alloc[t] - upper)
+    def deficit(t): return max(0.0, lower - alloc[t])
+
+    for _ in range(20):
+        # clip to [lower, upper]
+        clipped = False
+        excess_amt = 0.0
+        for t in all_tickers:
+            if alloc[t] > upper:
+                excess_amt += alloc[t] - upper
+                alloc[t] = upper
+                clipped = True
+            elif alloc[t] < lower:
+                # (ปกติจะไม่ต่ำกว่าเพราะเริ่มด้วย lower)
+                pass
+        if not clipped or excess_amt <= 1e-12:
+            break
+        # redistribute excess to non-capped actives by weight
+        room = np.array([max(0.0, upper - alloc[t]) if t in active else 0.0 for t in all_tickers])
+        if room.sum() <= 1e-12:
+            break
+        room_weights = np.array([weights.get(t, 0.0) if t in active else 0.0 for t in all_tickers])
+        room_weights = room_weights * (room > 0)
+        if room_weights.sum() <= 0:
+            # fallback: proportional to room
+            distrib = excess_amt * (room / room.sum())
+        else:
+            room_weights = room_weights / room_weights.sum()
+            distrib = excess_amt * room_weights
+        for i, t in enumerate(all_tickers):
+            if room[i] > 0:
+                add_i = min(room[i], distrib[i])
+                alloc[t] += add_i
+
+    # final clamp
+    alloc = {t: float(max(lower, min(upper, v))) for t, v in alloc.items()}
+    return alloc
+
+# ------------------- Greedy (เดิม) -------------------
+def greedy_optimize(prices_df: pd.DataFrame, base_cash: Dict[str, float], lower: float = 1.0, upper: float = 3000.0) -> Dict[str, float]:
     tickers = [t for t in base_cash.keys() if t in prices_df.columns]
     if not tickers:
         return {}
-
-    # ขั้นต่ำ
-    alloc = {t: float(max(lower, 0.0)) for t in base_cash.keys()}  # รวม key เดิม แม้บางตัวไม่มีข้อมูล
+    alloc = {t: float(lower) for t in base_cash.keys()}
     total_budget = float(sum(base_cash.values()))
     min_total = float(lower) * len(alloc)
-
     if total_budget <= 0:
         return {t: 0.0 for t in alloc.keys()}
-
     if total_budget < min_total:
-        # scale ต่ำกว่าขั้นต่ำรวม: กระจายแบบสัดส่วน
         scale = total_budget / (min_total + 1e-12)
         return {t: float(lower) * float(scale) for t in alloc.keys()}
-
-    # คะแนนต่อ $1
-    scores: Dict[str, float] = {}
+    scores = {}
     for t in tickers:
         col = prices_df[[t]].squeeze()
         tv = dca_terminal_value_per_dollar(col)
         scores[t] = -np.inf if np.isnan(tv) else float(tv)
-
-    # ให้ขั้นต่ำก่อน
-    alloc = {t: float(lower) for t in alloc.keys()}
     remaining = total_budget - sum(alloc.values())
-    if remaining <= 1e-12:
-        return alloc
-
-    # เรียงจากคะแนนสูง→ต่ำ (เฉพาะที่มีข้อมูล)
     order = sorted(tickers, key=lambda x: scores.get(x, -np.inf), reverse=True)
-
-    # เติมงบตามลำดับคะแนน
     for t in order:
         if remaining <= 1e-12:
             break
@@ -219,26 +285,24 @@ def greedy_optimize(
         add = min(cap, remaining)
         alloc[t] += add
         remaining -= add
-
-    # เศษเล็ก ๆ ถ้ายังเหลือ ให้ปัดกระจาย
+    # spread leftover if any
     if remaining > 1e-9:
         i = 0
-        L = len(order)
+        active = [t for t in order if alloc[t] < upper]
+        L = len(active)
         while remaining > 1e-9 and L > 0:
-            t = order[i % L]
+            t = active[i % L]
             cap = float(upper) - alloc[t]
             if cap > 0:
                 add = min(cap, remaining)
                 alloc[t] += add
                 remaining -= add
             i += 1
-
-    # clamp เผื่อเลขทศนิยม
     alloc = {t: float(max(lower, min(upper, v))) for t, v in alloc.items()}
     return alloc
 
 # ------------------- UI -------------------
-st.title("🚀 Cash_Balan Optimizer — Maximize 3-Year MIRR (Portfolio)")
+st.title("🚀 Cash_Balan Optimizer — Maximize 3Y MIRR + Risk Parity")
 
 tickers_cfg, default_cfg = load_config()
 if not tickers_cfg:
@@ -255,7 +319,7 @@ with left:
     today = pd.Timestamp.today(tz="Asia/Bangkok").tz_localize(None)
     three_years_ago = today - pd.DateOffset(years=3)
 
-    # กำหนด start จาก max(filter_date, today-3y)
+    # default start = max(filter_date, today-3y)
     cfg_dates = []
     for t, cfg in tickers_cfg.items():
         d = pd.to_datetime(cfg.get("filter_date", three_years_ago), errors="coerce")
@@ -267,14 +331,14 @@ with left:
             cfg_dates.append(d)
     default_start = max(three_years_ago, max(cfg_dates) if cfg_dates else three_years_ago)
 
-    start_date = st.date_input("Start (≤ 3Y back, ใช้จุดตัดร่วม)", default_start.date())
+    start_date = st.date_input("Start (≤ 3Y back, จุดตัดร่วม)", default_start.date())
     start_date = pd.Timestamp(start_date)
     end_date = st.date_input("End (วันนี้หรือล่าสุด)", today.date())
     end_date = pd.Timestamp(end_date)
     if end_date > today:
         end_date = today
     if start_date > end_date:
-        st.warning("Start > End → ปรับ Start = End-36 เดือนอัตโนมัติ")
+        st.warning("Start > End → ปรับ Start = End-36 เดือน")
         start_date = end_date - pd.DateOffset(months=36)
 
     finance_rate = st.number_input("Finance rate (ต่อคาบเดือน)", min_value=-1.0, max_value=1.0, value=0.0, step=0.001)
@@ -300,25 +364,33 @@ prices = build_common_timeline(price_wide, months_limit=36)
 if prices.empty:
     st.error("ไม่มีช่วงเวลาที่ข้อมูลครบทุก Ticker (จุดตัดร่วมเป็นค่าว่าง)")
     st.stop()
-
 if len(prices) < 6:
     st.warning("จำนวนงวดจุดตัดร่วม < 6 เดือน — MIRR อาจไม่นิ่ง")
 
-# คะแนนต่อ $1 (terminal wealth factor) สำหรับแนะนำการจัดสรร
+# คะแนนต่อ $1 (terminal wealth factor)
 scores = {t: dca_terminal_value_per_dollar(prices[[t]].squeeze()) for t in prices.columns}
 scores_ser = pd.Series(scores, dtype=float).replace([np.inf, -np.inf], np.nan).sort_values(ascending=False)
 
 with left:
-    st.subheader("2) Optimize")
-    c1, c2, _ = st.columns([1, 1, 1])
+    st.subheader("2) Allocation Method")
+    method = st.selectbox(
+        "เลือกวิธีจัดสรร",
+        ["Greedy (Score per $1)", "Risk Parity (Equal RC)", "Risk Budgeting (RC ∝ Score^α)"],
+        index=0
+    )
+    c1, c2, c3 = st.columns([1,1,1])
     with c1:
         lower = st.number_input("ขั้นต่ำต่อ Ticker", min_value=0.0, value=1.0, step=1.0)
     with c2:
         upper = st.number_input("ขั้นสูงสุดต่อ Ticker", min_value=1.0, value=3000.0, step=50.0)
+    with c3:
+        alpha = st.number_input("α (เฉพาะ Risk Budgeting)", min_value=0.0, value=1.0, step=0.25)
 
     run = st.button("✅ Run Optimizer", type="primary", use_container_width=True)
 
-    if run:
+# ------------------- Run -------------------
+if run:
+    if method == "Greedy (Score per $1)":
         alloc_opt = greedy_optimize(prices, base_cash, lower, upper)
 
         # MIRR ก่อน/หลัง
@@ -327,8 +399,7 @@ with left:
         mirr_before = mirr_of_portfolio(cf_before, finance_rate, reinvest_rate)
         mirr_after  = mirr_of_portfolio(cf_after, finance_rate, reinvest_rate)
 
-        st.success("Optimization เสร็จ")
-
+        st.success("Optimization (Greedy) เสร็จ")
         m1, m2 = st.columns(2)
         with m1:
             st.metric("Portfolio MIRR (Before)", f"{(mirr_before*100) if not np.isnan(mirr_before) else 0:,.3f} % /period")
@@ -340,35 +411,93 @@ with left:
             "Cash_Balan (Before)": [base_cash.get(t, np.nan) for t in prices.columns],
             "Cash_Balan (After)":  [alloc_opt.get(t, np.nan) for t in prices.columns],
         }, index=prices.columns).sort_values("Score per $1 (terminal wealth)", ascending=False)
+        st.dataframe(df_view.style.format({
+            "Score per $1 (terminal wealth)": "{:,.4f}",
+            "Cash_Balan (Before)": "{:,.2f}",
+            "Cash_Balan (After)": "{:,.2f}",
+        }), use_container_width=True)
 
-        st.dataframe(
-            df_view.style.format({
-                "Score per $1 (terminal wealth)": "{:,.4f}",
-                "Cash_Balan (Before)": "{:,.2f}",
-                "Cash_Balan (After)": "{:,.2f}",
-            }),
-            use_container_width=True
-        )
-
-        # JSON Patch เฉพาะ Cash_Balan
         patch = dump_json_patch(alloc_opt)
-        st.download_button(
-            "⬇️ ดาวน์โหลด JSON patch (อัปเดตเฉพาะ Cash_Balan)",
-            data=patch.encode("utf-8"),
-            file_name="cash_balan_patch.json",
-            mime="application/json",
-            use_container_width=True
-        )
+        st.download_button("⬇️ ดาวน์โหลด JSON patch (Cash_Balan)", data=patch.encode("utf-8"),
+                           file_name="cash_balan_patch.json", mime="application/json",
+                           use_container_width=True)
+
+    else:
+        # ===== Risk Parity / Risk Budgeting =====
+        rets, cov = returns_and_cov(prices)
+        if rets.empty or cov.size == 0:
+            st.error("คำนวณ covariance ไม่ได้ (ข้อมูลไม่พอ)")
+            st.stop()
+
+        act = list(prices.columns)
+        n = len(act)
+
+        if method == "Risk Parity (Equal RC)":
+            budget = np.ones(n) / n
+        else:
+            # Risk Budgeting — งบความเสี่ยงตาม Score^α
+            # ถ้า score บางตัว NaN/<=0 ให้แทนเป็นค่าน้อย ๆ เพื่อไม่ทิ้งตัวนั้น
+            raw = np.array([scores.get(t, np.nan) for t in act], dtype=float)
+            raw = np.where(np.isfinite(raw) & (raw > 0), raw, 1e-6)
+            budget = raw ** float(alpha)
+            budget = budget / budget.sum()
+
+        w = risk_budgeting_weights(cov, budget)
+        # ตรวจ RC%
+        rc = risk_contributions(cov, w)
+        rc_pct = rc / rc.sum() if rc.sum() > 0 else rc
+
+        # แปลงเป็น Cash_Balan ภายใต้กรอบ 1–3000 และมีขั้นต่ำทุกตัว (รวมถึง non-active)
+        total_budget = float(sum(base_cash.values()))
+        weights_map = {t: float(w[i]) for i, t in enumerate(act)}
+        alloc_opt = allocate_with_bounds_from_weights(weights_map, all_tickers, total_budget, lower, upper)
+
+        # MIRR ก่อน/หลัง
+        cf_before = make_portfolio_cashflows(prices, base_cash)
+        cf_after  = make_portfolio_cashflows(prices, alloc_opt)
+        mirr_before = mirr_of_portfolio(cf_before, finance_rate, reinvest_rate)
+        mirr_after  = mirr_of_portfolio(cf_after, finance_rate, reinvest_rate)
+
+        # แสดงผล
+        title = "Risk Parity (Equal RC)" if method.startswith("Risk Parity") else f"Risk Budgeting (α={alpha})"
+        st.success(f"Optimization — {title} เสร็จ")
+
+        m1, m2 = st.columns(2)
+        with m1:
+            st.metric("Portfolio MIRR (Before)", f"{(mirr_before*100) if not np.isnan(mirr_before) else 0:,.3f} % /period")
+        with m2:
+            st.metric("Portfolio MIRR (After)",  f"{(mirr_after*100) if not np.isnan(mirr_after) else 0:,.3f} % /period")
+
+        df_alloc = pd.DataFrame({
+            "Cash_Balan (Before)": [base_cash.get(t, np.nan) for t in prices.columns],
+            "Cash_Balan (After)":  [alloc_opt.get(t, np.nan) for t in prices.columns],
+            "Score per $1":        [scores.get(t, np.nan) for t in prices.columns],
+            "Weight (w)":          [weights_map.get(t, np.nan) for t in prices.columns],
+            "RC %":                [float(rc_pct[i]) if i < len(rc_pct) else np.nan for i, t in enumerate(prices.columns)],
+        }, index=prices.columns).sort_values("RC %", ascending=False)
+
+        st.dataframe(df_alloc.style.format({
+            "Cash_Balan (Before)": "{:,.2f}",
+            "Cash_Balan (After)": "{:,.2f}",
+            "Score per $1": "{:,.4f}",
+            "Weight (w)": "{:,.4%}",
+            "RC %": "{:,.2%}",
+        }), use_container_width=True)
+
+        patch = dump_json_patch(alloc_opt)
+        st.download_button("⬇️ ดาวน์โหลด JSON patch (Cash_Balan)", data=patch.encode("utf-8"),
+                           file_name="cash_balan_patch.json", mime="application/json",
+                           use_container_width=True)
 
 with right:
     st.subheader("Reference / Scores")
-    st.caption("คะแนนยิ่งสูง → ควรได้รับงบมากกว่า (ภายใต้กรอบ 1–3000)")
+    st.caption("คะแนนยิ่งสูง → ควรได้รับงบมากกว่า (ในโหมด Greedy) หรือเป็น 'งบความเสี่ยงเป้า' ในโหมด Risk Budgeting")
     st.table(scores_ser.to_frame("Score per $1").style.format("{:,.4f}"))
 
-    st.caption("หมายเหตุ")
+    st.subheader("Notes")
     st.markdown("""
-- ใช้ DCA รายเดือนบนจุดตัดร่วม ≤ 36 เดือน เพื่อให้ MIRR รวมคำนวณบนจำนวนงวดเท่ากัน  
-- MIRR ใช้กระแสเงินสดรวม: เดือน 1..N เป็นเงินออกเท่ากัน (ผลรวม Cash_Balan ของพอร์ต), งวดสุดท้ายเป็นเงินเข้า (มูลค่าปิดรวม)  
-- ค่าธรรมเนียม/สเปรด/ภาษี = 0 (เพิ่มได้ในรุ่นถัดไป)
-- Hotfix: ป้องกัน `ValueError: The truth value of a Series is ambiguous` โดยบังคับ Series 1D และไม่ใช้เช็ค boolean บน Series/DF ตรง ๆ
+- Risk Parity = Equal Risk Contribution (ERC): ให้แต่ละตัว **มีส่วนแบ่งความเสี่ยงเท่ากัน**  
+- Risk Budgeting (RC ∝ Score^α): ตั้ง **งบความเสี่ยงเป้า** ตาม Score per $1 (ยกกำลัง α) แล้วแก้ w ให้ RC_i ตามสัดส่วนดังกล่าว  
+- หลังได้ weight จะถูกแปลงเป็น Cash_Balan และเคารพกรอบ 1–3000 ด้วยการรีดิสทริบิวต์ส่วนเกิน/ขาดอัตโนมัติ  
+- Covariance ใช้ผลตอบแทนรายเดือน (simple return) บนช่วงจุดตัดร่วม และมีใส่ ridge เล็กน้อยเพื่อความเสถียรเชิงตัวเลข
 """)
