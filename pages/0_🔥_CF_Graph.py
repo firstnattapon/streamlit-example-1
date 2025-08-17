@@ -24,6 +24,10 @@ with tabs[1]:
     with st.expander("หลักการ Rollover"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1500, height=1000, scrolling=0)
 
+with tabs[2]:
+    with st.expander("หลักการ BATA", expanded=True):
+        st.components.v1.iframe("https://monica.im/share/artifact?id=7sRjgYJTTXSKcRxFLtAKXi", width=1500, height=1000, scrolling=0)
+
 def parse_final_two_numbers(s):
     nums = re.findall(r"[-+]?\d*\.?\d+", str(s))
     a = float(nums[0]) if len(nums) > 0 else 0.0
