@@ -12,7 +12,7 @@ except FileNotFoundError:
     st.error("ไม่พบไฟล์ 'cf_graph_config.json'. กรุณาสร้างไฟล์และใส่ข้อมูล Asset ตามโครงสร้างใหม่")
     st.stop()
 
-tab_names = ["DATA", "BATA"] + [asset["ticker"] for asset in assets_config]
+tab_names = ["DATA", "BATA" , "All_Ticker"]  
 tabs = st.tabs(tab_names)
 
 current_prices = {}
@@ -25,7 +25,7 @@ with tabs[1]:
         st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1500, height=1000, scrolling=0)
 
 with tabs[2]:
-    with st.expander("หลักการ BATA", expanded=True):
+    with st.expander("All_Ticker", expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=7sRjgYJTTXSKcRxFLtAKXi", width=1500, height=1000, scrolling=0)
 
 def parse_final_two_numbers(s):
