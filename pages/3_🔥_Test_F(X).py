@@ -1,336 +1,499 @@
-# -*- coding: utf-8 -*-
-"""
-Cash_Balan Optimizer — 3‑Year MIRR + Risk‑Parity (Score‑aware)
------------------------------------------------------------------
-Goal
-  • Allocate Cash_Balan (budget $1–$3000) across tickers to maximize portfolio MIRR (3Y proxy)
-  • Start from Score per $1, then apply Risk Parity where higher Score reduces risk (per user rule)
-  • Keep the rest of the app unchanged; this can be a standalone Streamlit page
-
-How it works (high level)
-  1) Fetch 3Y monthly prices via yfinance (Adj Close)
-  2) Compute per‑ticker 3Y MIRR (annualized) using monthly cash‑flows [-1, 0, …, FinalValueRatio]
-  3) Compute volatility (monthly stdev of returns)
-  4) Build Score per $1 (configurable formula; default = FV factor ‑ 1)
-  5) Risk Parity weights: w ∝ 1 / (σ * (1 + γ * score_norm))  → higher Score → lower weight
-  6) Allocate budget B using those weights; report table + portfolio MIRR proxy (weighted MIRR)
-
-Notes
-  • MIRR of a combined portfolio is not exactly a weighted average of component MIRRs; we use a clean proxy
-  • You can tune the score → risk link via γ (gamma) and choose the score formula
-  • Designed to not alter your existing outputs; treat this as a new page (e.g., pages/8_MIRR_RP_Optimizer.py)
-
-Dependencies
-  pip install streamlit yfinance numpy numpy_financial pandas plotly
-"""
-
-import math
-import json
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
-
 import numpy as np
 import pandas as pd
-import streamlit as st
 import yfinance as yf
-import numpy_financial as npf
+import streamlit as st
+import json
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import numpy_financial as npf
+from concurrent.futures import ThreadPoolExecutor
+import warnings
+warnings.filterwarnings('ignore')
 
-# -----------------------------
-# Config & Defaults
-# -----------------------------
-DEFAULT_TICKERS: List[str] = [
-    # Based on tickers appearing in prior runs/messages
-    "NEGG", "NVTS", "QXO", "RIVN", "APLS", "FFWM", "CLSK", "RXRX", "FLNC",
-    "IBRX", "DJT", "DYN", "GERN", "SG", "AGL"
-]
-
-CONFIG_FILE = "un15_fx_config.json"  # optional; if present, can seed tickers and sliders
-
-@dataclass
-class AppConfig:
-    tickers: List[str]
-    min_budget: int = 1
-    max_budget: int = 3000
-    default_budget: int = 650  # aligns with prior default Cash_Balan in your JSON
-    finance_rate: float = 0.00  # MIRR finance rate
-    reinvest_rate: float = 0.00  # MIRR reinvestment rate
-
-
-def load_optional_config() -> AppConfig:
+# ------------------- ฟังก์ชันสำหรับโหลด Config -------------------
+def load_config(filename="un15_fx_config.json"):
+    """
+    Loads configurations from a JSON file.
+    It expects a special key '__DEFAULT_CONFIG__' for default values.
+    Returns a tuple: (ticker_configs, default_config)
+    """
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-        # If your JSON has a __DEFAULT_CONFIG__ block and per‑ticker entries, prefer its keys
-        tickers = []
-        for k, v in raw.items():
-            if k == "__DEFAULT_CONFIG__":
-                continue
-            if isinstance(v, dict) and v.get("Ticker"):
-                tickers.append(v["Ticker"])
-        if not tickers:
-            tickers = DEFAULT_TICKERS
-        default_budget = (
-            raw.get("__DEFAULT_CONFIG__", {}).get("Cash_Balan", 650.0)
-        )
-        return AppConfig(tickers=list(dict.fromkeys(tickers)), default_budget=int(default_budget))
-    except Exception:
-        return AppConfig(tickers=DEFAULT_TICKERS)
+        with open(filename, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        st.error(f"Error: Configuration file '{filename}' not found.")
+        return {}, {} # คืนค่า dict ว่าง
+    except json.JSONDecodeError:
+        st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
+        return {}, {} # คืนค่า dict ว่าง
 
+    fallback_default = {
+        "Fixed_Asset_Value": 1500.0, "Cash_Balan": 650.0, "step": 0.01,
+        "filter_date": "2024-01-01 12:00:00+07:00", "pred": 1
+    }
+    default_config = data.pop('__DEFAULT_CONFIG__', fallback_default)
+    ticker_configs = data
+    return ticker_configs, default_config
 
-# -----------------------------
-# Data Layer
-# -----------------------------
-@st.cache_data(show_spinner=False, ttl=60 * 30)
-def fetch_monthly_prices(tickers: List[str], years: int = 3) -> pd.DataFrame:
-    """Download monthly adj close for past `years` (buffered to be safe)."""
-    period = f"{years + 1}y"  # buffer to ensure ≥ 36 monthly points
-    df = yf.download(
-        tickers=tickers,
-        period=period,
-        interval="1mo",
-        auto_adjust=True,
-        progress=False,
-        group_by="ticker",
-        threads=True,
-    )
-    # Normalize to a wide DataFrame of Adj Close
-    if isinstance(df.columns, pd.MultiIndex):
-        # yfinance returns (Ticker, Field)
-        closes = {
-            t: df[t]["Close"].rename(t) if "Close" in df[t].columns else df[t]["Adj Close"].rename(t)
-            for t in tickers
-            if t in df.columns.get_level_values(0)
-        }
-        out = pd.concat(closes.values(), axis=1)
+# ------------------- ฟังก์ชันคำนวณหลัก -------------------
+def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
+    """Calculates the core cash balance model DataFrame."""
+    if entry >= 10000 or entry <= 0:
+        return pd.DataFrame()
+
+    samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
+    
+    df = pd.DataFrame()
+    df['Asset_Price'] = np.around(samples, 2)
+    df['Fixed_Asset_Value'] = Fixed_Asset_Value
+    df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
+
+    df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
+    if not df_top.empty:
+        df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
+        df_top.fillna(0, inplace=True)
+        
+        np_Cash_Balan_top = df_top['Cash_Balan_top'].values
+        xx = np.zeros(len(np_Cash_Balan_top))
+        y_0 = Cash_Balan
+        for idx, v_0 in enumerate(np_Cash_Balan_top):
+            z_0 = y_0 + v_0
+            y_0 = z_0
+            xx[idx] = y_0
+            
+        df_top['Cash_Balan'] = xx
+        df_top = df_top.sort_values(by='Amount_Asset')[:-1]
     else:
-        # Single ticker
-        out = df.rename(columns={"Close": tickers[0], "Adj Close": tickers[0]})[[tickers[0]]]
-    out = out.dropna(how="all")
-    # Keep last 36 months if available
-    return out.tail(36)
+        df_top = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
 
+    df_down = df[df.Asset_Price <= np.around(entry, 2)].copy()
+    if not df_down.empty:
+        df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
+        df_down.fillna(0, inplace=True)
+        df_down = df_down.sort_values(by='Asset_Price', ascending=False)
+        
+        np_Cash_Balan_down = df_down['Cash_Balan_down'].values
+        xxx = np.zeros(len(np_Cash_Balan_down))
+        y_1 = Cash_Balan
+        for idx, v_1 in enumerate(np_Cash_Balan_down):
+            z_1 = y_1 + v_1
+            y_1 = z_1
+            xxx[idx] = y_1
 
-def monthly_returns(prices: pd.Series) -> pd.Series:
-    return prices.pct_change().dropna()
+        df_down['Cash_Balan'] = xxx
+    else:
+        df_down = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
 
+    combined_df = pd.concat([df_top, df_down], axis=0, ignore_index=True)
+    return combined_df[['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan']]
 
-# -----------------------------
-# Metrics
-# -----------------------------
-
-def mirr_from_prices(prices: pd.Series, finance_rate: float, reinvest_rate: float) -> Optional[float]:
-    """Annualized MIRR from monthly prices using simple two‑point cashflow: [-1, 0, …, FV].
-    Returns annualized MIRR (per year). None if insufficient data."""
-    prices = prices.dropna()
-    if len(prices) < 2:
-        return None
-    ratio = float(prices.iloc[-1] / prices.iloc[0])
-    n = len(prices) - 1  # periods (months between first and last)
-    flows = np.zeros(n + 1)
-    flows[0] = -1.0
-    flows[-1] = ratio  # redeem at terminal value
+def delta_1(asset_config):
+    """Calculates Production_Costs based on asset configuration."""
     try:
-        per_period_mirr = npf.mirr(flows, finance_rate / 12.0, reinvest_rate / 12.0)
-        if per_period_mirr is None or np.isnan(per_period_mirr):
+        ticker_data = yf.Ticker(asset_config['Ticker'])
+        entry = ticker_data.fast_info['lastPrice']
+        df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
+        if not df_model.empty:
+            production_costs = df_model['Cash_Balan'].iloc[-1] - asset_config['Cash_Balan']
+            return abs(production_costs)
+    except Exception as e:
+        return None
+
+def delta6(asset_config):
+    """Performs historical simulation based on asset configuration."""
+    try:
+        ticker_hist = yf.Ticker(asset_config['Ticker']).history(period='max')
+        if ticker_hist.empty:
             return None
-        annual = (1.0 + per_period_mirr) ** 12 - 1.0
-        return float(annual)
-    except Exception:
+            
+        ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
+        ticker_hist = ticker_hist[ticker_hist.index >= asset_config['filter_date']][['Close']]
+        
+        if ticker_hist.empty:
+            return None
+
+        entry = ticker_hist['Close'].iloc[0]
+        df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
+        
+        if df_model.empty:
+            return None
+
+        ticker_data = ticker_hist.copy()
+        ticker_data['Close'] = np.around(ticker_data['Close'].values, 2)
+        ticker_data['pred'] = asset_config['pred']
+        ticker_data['Fixed_Asset_Value'] = asset_config['Fixed_Asset_Value']
+        ticker_data['Amount_Asset'] = 0.0
+        ticker_data['re'] = 0.0
+        ticker_data['Cash_Balan'] = asset_config['Cash_Balan']
+        ticker_data['Amount_Asset'].iloc[0] = ticker_data['Fixed_Asset_Value'].iloc[0] / ticker_data['Close'].iloc[0]
+
+        close_vals = ticker_data['Close'].values
+        pred_vals = ticker_data['pred'].values
+        amount_asset_vals = ticker_data['Amount_Asset'].values
+        re_vals = ticker_data['re'].values
+        cash_balan_sim_vals = ticker_data['Cash_Balan'].values
+
+        for idx in range(1, len(amount_asset_vals)):
+            if pred_vals[idx] == 1:
+                amount_asset_vals[idx] = asset_config['Fixed_Asset_Value'] / close_vals[idx]
+                re_vals[idx] = (amount_asset_vals[idx-1] * close_vals[idx]) - asset_config['Fixed_Asset_Value']
+            else: 
+                amount_asset_vals[idx] = amount_asset_vals[idx-1]
+                re_vals[idx] = 0
+            cash_balan_sim_vals[idx] = cash_balan_sim_vals[idx-1] + re_vals[idx]
+
+        original_index = ticker_data.index
+        ticker_data = ticker_data.merge(df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}), 
+                                        left_on='Close', right_on='Asset_Price', how='left').drop('Asset_Price', axis=1)
+        ticker_data.set_index(original_index, inplace=True)
+
+        ticker_data['refer_model'].interpolate(method='linear', inplace=True)
+        ticker_data.fillna(method='bfill', inplace=True)
+        ticker_data.fillna(method='ffill', inplace=True)
+
+        ticker_data['pv'] = ticker_data['Cash_Balan'] + (ticker_data['Amount_Asset'] * ticker_data['Close'])
+        ticker_data['refer_pv'] = ticker_data['refer_model'] + asset_config['Fixed_Asset_Value']
+        ticker_data['net_pv'] = ticker_data['pv'] - ticker_data['refer_pv']
+        
+        return ticker_data[['net_pv', 're']]
+        
+    except Exception as e:
         return None
 
+def un_16(active_configs):
+    """Aggregates results from multiple assets specified in active_configs."""
+    all_re = []
+    all_net_pv = []
+    
+    for ticker_name, config in active_configs.items():
+        result_df = delta6(config)
+        if result_df is not None and not result_df.empty:
+            all_re.append(result_df[['re']].rename(columns={"re": f"{ticker_name}_re"}))
+            all_net_pv.append(result_df[['net_pv']].rename(columns={"net_pv": f"{ticker_name}_net_pv"}))
+    
+    if not all_re:
+        return pd.DataFrame()
+        
+    df_re = pd.concat(all_re, axis=1)
+    df_net_pv = pd.concat(all_net_pv, axis=1)
 
-def score_per_dollar(
-    prices: pd.Series,
-    mirr_annual: Optional[float],
-    method: str = "fv_gain",
-) -> Optional[float]:
-    """Compute Score per $1.
-    • fv_gain: (Final/Start - 1)
-    • mirr: annualized MIRR (as decimal)
-    • hybrid: 0.5 * (Final/Start - 1) + 0.5 * MIRR
-    """
-    prices = prices.dropna()
-    if len(prices) < 2:
-        return None
-    fv_gain = float(prices.iloc[-1] / prices.iloc[0] - 1.0)
-    if method == "fv_gain":
-        return fv_gain
-    if method == "mirr" and mirr_annual is not None:
-        return float(mirr_annual)
-    if method == "hybrid" and mirr_annual is not None:
-        return 0.5 * fv_gain + 0.5 * float(mirr_annual)
-    # fallback
-    return fv_gain
+    df_re.fillna(0, inplace=True)
+    df_net_pv.fillna(0, inplace=True)
 
+    df_re['maxcash_dd'] = df_re.sum(axis=1).cumsum()
+    df_net_pv['cf'] = df_net_pv.sum(axis=1)
 
-# -----------------------------
-# Risk Parity (Score‑aware)
-# -----------------------------
+    final_df = pd.concat([df_re, df_net_pv], axis=1)
+    return final_df
 
-def rp_weights(
-    vols: pd.Series,
-    scores: pd.Series,
-    gamma: float = 1.0,
-    score_transform: str = "minmax",
-) -> pd.Series:
-    """Compute risk‑parity weights with score‑aware scaling.
-    w_i ∝ 1 / (σ_i * (1 + γ * score_norm_i))
-    Higher Score → larger denominator → smaller weight (reduce risk when Score is high).
-    """
-    vols = vols.copy()
-    scores = scores.copy()
-
-    # Normalize scores → [0,1]
-    if score_transform == "minmax":
-        s_min, s_max = np.nanmin(scores.values), np.nanmax(scores.values)
-        if not np.isfinite(s_min) or not np.isfinite(s_max) or s_max <= s_min:
-            s_norm = pd.Series(0.5, index=scores.index)  # flat
+# ------------------- NEW: Cash_Balan Optimization Functions -------------------
+def calculate_mirr_for_cash_balan(cash_balan_value, active_configs, num_selected_tickers):
+    """Calculate MIRR for a specific Cash_Balan value."""
+    try:
+        # Update all configs with new Cash_Balan
+        test_configs = {}
+        for ticker, config in active_configs.items():
+            test_config = config.copy()
+            test_config['Cash_Balan'] = cash_balan_value
+            test_configs[ticker] = test_config
+        
+        # Run simulation
+        data = un_16(test_configs)
+        if data.empty:
+            return cash_balan_value, 0.0, 0.0, 0.0
+        
+        # Calculate metrics
+        df_new = data.copy()
+        roll_over = []
+        max_dd_values = df_new.maxcash_dd.values
+        for i in range(len(max_dd_values)):
+            roll = max_dd_values[:i]
+            roll_min = np.min(roll) if len(roll) > 0 else 0
+            roll_over.append(roll_min)
+        
+        final_sum_delta = df_new.cf.iloc[-1]
+        final_max_buffer = roll_over[-1] if roll_over else 0
+        num_days = len(df_new)
+        avg_cf = final_sum_delta / num_days if num_days > 0 else 0
+        
+        # MIRR calculation
+        initial_investment = (num_selected_tickers * 1500) + abs(final_max_buffer)
+        if initial_investment > 0:
+            annual_cash_flow = avg_cf * 252
+            exit_multiple = initial_investment * 0.5
+            
+            cash_flows = [
+                -initial_investment,
+                annual_cash_flow,
+                annual_cash_flow,
+                annual_cash_flow + exit_multiple
+            ]
+            
+            finance_rate = 0.0
+            reinvest_rate = 0.0
+            mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate)
         else:
-            s_norm = (scores - s_min) / (s_max - s_min)
-    elif score_transform == "rank":
-        s_norm = scores.rank(pct=True)
-    else:
-        s_norm = scores.copy()
+            mirr_value = 0.0
+        
+        # Score per 1 USD calculation
+        score_per_usd = (avg_cf * 252) / cash_balan_value if cash_balan_value > 0 else 0
+        
+        return cash_balan_value, mirr_value, score_per_usd, avg_cf * 252
+    
+    except Exception as e:
+        return cash_balan_value, 0.0, 0.0, 0.0
 
-    denom = vols.replace(0, np.nan) * (1.0 + gamma * s_norm)
-    inv = 1.0 / denom
-    inv = inv.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    if inv.sum() <= 0:
-        return pd.Series(0.0, index=vols.index)
-    w = inv / inv.sum()
-    return w
-
-
-# -----------------------------
-# Streamlit UI
-# -----------------------------
-
-def main():
-    st.set_page_config(page_title="Cash_Balan Optimizer (MIRR + RP)", page_icon="📈", layout="wide")
-    st.title("🚀 Cash_Balan Optimizer — 3Y MIRR × Risk Parity (Score‑aware)")
-    st.caption("Goal: allocate $1–$3000 across tickers to maximize MIRR proxy; higher Score → lower risk weight.")
-
-    cfg = load_optional_config()
-
-    with st.sidebar:
-        st.header("Controls")
-        tickers_input = st.text_area(
-            "Tickers (comma‑separated)",
-            value=", ".join(cfg.tickers),
-            help="Override the list here."
+def optimize_cash_balan(active_configs, selected_tickers, optimization_range=(1, 3000, 50)):
+    """Optimize Cash_Balan to maximize MIRR."""
+    start_val, end_val, step_val = optimization_range
+    cash_balan_values = list(range(start_val, end_val + 1, step_val))
+    num_selected_tickers = len(selected_tickers)
+    
+    optimization_results = []
+    
+    # Use progress bar
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    for i, cash_val in enumerate(cash_balan_values):
+        status_text.text(f'Optimizing Cash_Balan: {cash_val} USD ({i+1}/{len(cash_balan_values)})')
+        progress_bar.progress((i + 1) / len(cash_balan_values))
+        
+        cash_val, mirr, score_per_usd, annual_profit = calculate_mirr_for_cash_balan(
+            cash_val, active_configs, num_selected_tickers
         )
-        tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
-        budget = st.slider("Cash_Balan budget ($)", min_value=cfg.min_budget, max_value=cfg.max_budget, value=cfg.default_budget, step=1)
-        st.divider()
-        st.subheader("MIRR")
-        finance_rate = st.number_input("Finance rate (annual, e.g. borrow cost)", value=cfg.finance_rate, step=0.01, format="%.4f")
-        reinvest_rate = st.number_input("Reinvest rate (annual)", value=cfg.reinvest_rate, step=0.01, format="%.4f")
-        st.subheader("Score per $1")
-        score_method = st.selectbox("Score method", ["fv_gain", "mirr", "hybrid"], index=0, help="How to compute Score per $1")
-        st.subheader("Risk Parity (Score‑aware)")
-        gamma = st.slider("Gamma (Score → risk strength)", 0.0, 5.0, 1.0, 0.1)
-        transform = st.selectbox("Score normalization", ["minmax", "rank"], index=0)
-        st.caption("Higher gamma reduces weights for high‑Score names more aggressively.")
-
-    if not tickers:
-        st.warning("No tickers provided.")
-        return
-
-    with st.status("Fetching monthly prices…", expanded=False):
-        px_monthly = fetch_monthly_prices(tickers)
-
-    # Align per‑ticker series
-    results: List[Dict] = []
-    for t in tickers:
-        s = px_monthly.get(t)
-        if s is None:
-            results.append({"Ticker": t})
-            continue
-        mirr_ann = mirr_from_prices(s, finance_rate, reinvest_rate)
-        vol_m = monthly_returns(s).std() if s.dropna().size > 2 else None
-        score = score_per_dollar(s, mirr_ann, method=score_method)
-        fv_factor = float(s.dropna().iloc[-1] / s.dropna().iloc[0]) if s.dropna().size > 1 else None
-        results.append({
-            "Ticker": t,
-            "MIRR_annual": mirr_ann,
-            "Vol_monthly": vol_m,
-            "Score_per_$1": score,
-            "FV_factor": fv_factor,
-            "Start": float(s.dropna().iloc[0]) if s.dropna().size else None,
-            "End": float(s.dropna().iloc[-1]) if s.dropna().size else None,
-            "Months": int(s.dropna().size)
+        
+        optimization_results.append({
+            'Cash_Balan': cash_val,
+            'MIRR': mirr,
+            'Score_per_USD': score_per_usd,
+            'Annual_Profit': annual_profit
         })
+    
+    progress_bar.empty()
+    status_text.empty()
+    
+    return pd.DataFrame(optimization_results)
 
-    df = pd.DataFrame(results).set_index("Ticker")
+# ------------------- ส่วนแสดงผล STREAMLIT -------------------
+st.set_page_config(page_title="Optimized F(X) System", page_icon="🚀", layout="wide")
 
-    # Build RP weights
-    rp_w = rp_weights(
-        vols=df["Vol_monthly"].astype(float),
-        scores=df["Score_per_$1"].astype(float),
-        gamma=gamma,
-        score_transform=transform,
-    )
+# 1. โหลด config
+full_config, DEFAULT_CONFIG = load_config()
 
-    # Dollar allocation
-    alloc = (rp_w * float(budget)).round(2)
+if full_config or DEFAULT_CONFIG:
+    # 2. ตั้งค่า Session State
+    if 'custom_tickers' not in st.session_state:
+        st.session_state.custom_tickers = {}
+    if 'optimization_results' not in st.session_state:
+        st.session_state.optimization_results = None
+    if 'optimal_cash_balan' not in st.session_state:
+        st.session_state.optimal_cash_balan = DEFAULT_CONFIG.get('Cash_Balan', 650.0)
 
-    # Portfolio MIRR proxy (weighted by weights where MIRR available)
-    mirr_series = df["MIRR_annual"].copy()
-    # Only weight tickers with MIRR present:
-    valid_mask = mirr_series.notna() & rp_w.notna()
-    if valid_mask.any() and rp_w[valid_mask].sum() > 0:
-        # re‑normalize weights to valid subset for proxy calc
-        w_valid = rp_w[valid_mask] / rp_w[valid_mask].sum()
-        port_mirr_proxy = float((w_valid * mirr_series[valid_mask]).sum())
-    else:
-        port_mirr_proxy = float("nan")
+    # 3. ส่วนควบคุมบนหน้าหลัก
+    st.title("🚀 Optimized F(X) System with Cash_Balan Optimization")
+    
+    control_col1, control_col2 = st.columns([1, 2])
+    with control_col1:
+        st.subheader("Add New Ticker")
+        new_ticker = st.text_input("Ticker (e.g., AAPL):", key="new_ticker_input").upper()
+        if st.button("Add Ticker", key="add_ticker_button", use_container_width=True):
+            if new_ticker and new_ticker not in full_config and new_ticker not in st.session_state.custom_tickers:
+                st.session_state.custom_tickers[new_ticker] = {"Ticker": new_ticker, **DEFAULT_CONFIG}
+                st.success(f"Added {new_ticker}!")
+                st.rerun() 
+            elif new_ticker in full_config:
+                st.warning(f"{new_ticker} already exists in config file.")
+            elif new_ticker in st.session_state.custom_tickers:
+                st.warning(f"{new_ticker} has already been added.")
+            else:
+                st.warning("Please enter a ticker symbol.")
 
-    # Final table
-    out = df.copy()
-    out["RP_weight"] = rp_w
-    out["Cash_alloc_$"] = alloc
-    out["Exp_MIRR_contrib"] = rp_w * df["MIRR_annual"].fillna(0.0)
+    with control_col2:
+        st.subheader("Select Tickers to Analyze")
+        all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
+        default_selection = [t for t in list(full_config.keys())[:5] if t in all_tickers]  # Limit default selection
+        selected_tickers = st.multiselect(
+            "Select from available tickers:",
+            options=all_tickers,
+            default=default_selection
+        )
 
-    st.subheader("Optimization Output")
-    st.dataframe(
-        out[[
-            "Months", "Start", "End", "FV_factor", "MIRR_annual", "Vol_monthly", "Score_per_$1", "RP_weight", "Cash_alloc_$", "Exp_MIRR_contrib"
-        ]].sort_values("Cash_alloc_$", ascending=False),
-        use_container_width=True,
-    )
+    # 4. Optimization Section
+    st.divider()
+    st.subheader("🎯 Cash_Balan Optimization")
+    
+    opt_col1, opt_col2, opt_col3 = st.columns([1, 1, 1])
+    with opt_col1:
+        min_cash = st.number_input("Min Cash_Balan (USD)", min_value=1, max_value=2999, value=100, step=50)
+    with opt_col2:
+        max_cash = st.number_input("Max Cash_Balan (USD)", min_value=2, max_value=3000, value=1500, step=50)
+    with opt_col3:
+        step_cash = st.number_input("Step Size (USD)", min_value=10, max_value=200, value=50, step=10)
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.metric("Budget ($)", f"{budget:,.0f}")
-    with c2:
-        st.metric("Σ weights", f"{rp_w.sum():.3f}")
-    with c3:
-        st.metric("Portfolio MIRR (proxy, annual)", f"{port_mirr_proxy:.2%}" if math.isfinite(port_mirr_proxy) else "NA")
+    if st.button("🔍 Run Cash_Balan Optimization", use_container_width=True, type="primary"):
+        if not selected_tickers:
+            st.error("Please select at least one ticker to run optimization.")
+        else:
+            active_configs = {ticker: full_config.get(ticker, st.session_state.custom_tickers.get(ticker)) 
+                            for ticker in selected_tickers}
+            
+            with st.spinner('🔍 Running Cash_Balan optimization... This may take a few minutes.'):
+                st.session_state.optimization_results = optimize_cash_balan(
+                    active_configs, 
+                    selected_tickers, 
+                    (min_cash, max_cash, step_cash)
+                )
+            
+            if not st.session_state.optimization_results.empty:
+                # Find optimal Cash_Balan
+                best_result = st.session_state.optimization_results.loc[
+                    st.session_state.optimization_results['MIRR'].idxmax()
+                ]
+                st.session_state.optimal_cash_balan = best_result['Cash_Balan']
+                
+                st.success(f"✅ Optimization Complete! Optimal Cash_Balan: {st.session_state.optimal_cash_balan} USD")
+                st.success(f"📊 Max MIRR: {best_result['MIRR']:.2%}")
+                st.success(f"🎯 Score per USD: {best_result['Score_per_USD']:.4f}")
+
+    # 5. Display Optimization Results
+    if st.session_state.optimization_results is not None and not st.session_state.optimization_results.empty:
+        st.divider()
+        st.subheader("📈 Optimization Results")
+        
+        # Create optimization charts
+        opt_results = st.session_state.optimization_results
+        
+        # Charts
+        chart_col1, chart_col2 = st.columns(2)
+        
+        with chart_col1:
+            fig_mirr = px.line(opt_results, x='Cash_Balan', y='MIRR', 
+                              title='MIRR vs Cash_Balan',
+                              labels={'Cash_Balan': 'Cash Balance (USD)', 'MIRR': 'MIRR (%)'})
+            fig_mirr.update_traces(line_color='green')
+            st.plotly_chart(fig_mirr, use_container_width=True)
+        
+        with chart_col2:
+            fig_score = px.line(opt_results, x='Cash_Balan', y='Score_per_USD',
+                               title='Score per USD vs Cash_Balan',
+                               labels={'Cash_Balan': 'Cash Balance (USD)', 'Score_per_USD': 'Score per USD'})
+            fig_score.update_traces(line_color='blue')
+            st.plotly_chart(fig_score, use_container_width=True)
+        
+        # Show top 10 results
+        st.subheader("🏆 Top 10 Optimization Results")
+        top_results = opt_results.nlargest(10, 'MIRR')[['Cash_Balan', 'MIRR', 'Score_per_USD', 'Annual_Profit']]
+        top_results['MIRR'] = top_results['MIRR'].apply(lambda x: f"{x:.2%}")
+        top_results['Score_per_USD'] = top_results['Score_per_USD'].apply(lambda x: f"{x:.4f}")
+        top_results['Annual_Profit'] = top_results['Annual_Profit'].apply(lambda x: f"${x:,.2f}")
+        st.dataframe(top_results, use_container_width=True)
 
     st.divider()
-    st.subheader("Allocation Chart")
-    chart_df = out.reset_index()[["Ticker", "Cash_alloc_$"]]
-    fig = px.bar(chart_df, x="Ticker", y="Cash_alloc_$", title="Cash_Balan Allocation ($)")
-    st.plotly_chart(fig, use_container_width=True)
 
-    st.download_button(
-        "Download allocation CSV",
-        data=out.reset_index().to_csv(index=False).encode("utf-8"),
-        file_name="cash_balan_allocation.csv",
-        mime="text/csv",
-    )
+    # 6. สร้าง Dict Config ของ Ticker ที่เลือก (ใช้ optimal Cash_Balan)
+    if selected_tickers:
+        active_configs = {}
+        for ticker in selected_tickers:
+            config = full_config.get(ticker, st.session_state.custom_tickers.get(ticker)).copy()
+            config['Cash_Balan'] = st.session_state.optimal_cash_balan  # Use optimal value
+            active_configs[ticker] = config
 
-    st.caption(
-        """
-        Notes:
-        • Score per $1: choose fv_gain (Final/Start − 1), mirr (annual), or hybrid.
-        • Risk Parity uses monthly volatility; higher Score reduces weight via γ.
-        • Portfolio MIRR shown is a proxy (weighted MIRR), not an exact portfolio MIRR.
-        • Keep your original outputs/pages intact — use this as an add‑on optimizer page.
-        """
-    )
+        # 7. รันการคำนวณด้วย Optimal Cash_Balan
+        st.subheader(f"📊 Performance Analysis (Cash_Balan: {st.session_state.optimal_cash_balan} USD)")
+        
+        with st.spinner('Calculating with optimal Cash_Balan... Please wait.'):
+            data = un_16(active_configs)
 
+        if data.empty:
+            st.error("Failed to generate data. This might happen if tickers have no historical data for the selected period or another error occurred.")
+        else:
+            # 8. คำนวณค่าสำหรับแสดงผล
+            df_new = data.copy()
+            roll_over = []
+            max_dd_values = df_new.maxcash_dd.values
+            for i in range(len(max_dd_values)):
+                roll = max_dd_values[:i]
+                roll_min = np.min(roll) if len(roll) > 0 else 0
+                roll_over.append(roll_min)
+            
+            cf_values = df_new.cf.values
+            df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
+            
+            # Redefine True Alpha with optimal Cash_Balan
+            num_selected_tickers = len(selected_tickers)
+            initial_capital = num_selected_tickers * 1500.0
+            max_buffer_used = abs(np.min(roll_over))
+            total_capital_at_risk = initial_capital + max_buffer_used
+            
+            if total_capital_at_risk == 0:
+                total_capital_at_risk = 1 
 
-if __name__ == "__main__":
-    main()
+            true_alpha_values = (df_new.cf.values / total_capital_at_risk) * 100
+            df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
+
+            # 9. แสดงผล KPI
+            st.subheader("📈 Key Performance Indicators")
+            final_sum_delta = df_all.Sum_Delta.iloc[-1]
+            final_max_buffer = df_all.Max_Sum_Buffer.iloc[-1]
+            final_true_alpha = df_all_2.True_Alpha.iloc[-1]
+            num_days = len(df_new)
+            avg_cf = final_sum_delta / num_days if num_days > 0 else 0
+            avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
+
+            # MIRR CALCULATION
+            mirr_value = 0.0
+            initial_investment = (num_selected_tickers * 1500) + abs(final_max_buffer)
+            
+            if initial_investment > 0:
+                annual_cash_flow = avg_cf * 252
+                exit_multiple = initial_investment * 0.5
+                
+                cash_flows = [
+                    -initial_investment,
+                    annual_cash_flow,
+                    annual_cash_flow,
+                    annual_cash_flow + exit_multiple
+                ]
+                
+                finance_rate = 0.0
+                reinvest_rate = 0.0
+                mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate)
+            
+            # Score per USD calculation
+            score_per_usd = (avg_cf * 252) / st.session_state.optimal_cash_balan if st.session_state.optimal_cash_balan > 0 else 0
+
+            # KPI Display
+            kpi1, kpi2, kpi3, kpi4, kpi5, kpi6, kpi7 = st.columns(7)
+            kpi1.metric(label="Total Net Profit", value=f"${final_sum_delta:,.2f}")
+            kpi2.metric(label="Max Cash Buffer Used", value=f"${final_max_buffer:,.2f}")
+            kpi3.metric(label="True Alpha (%)", value=f"{final_true_alpha:,.2f}%")
+            kpi4.metric(label="Avg. Daily Profit", value=f"${avg_cf:,.2f}")
+            kpi5.metric(label="Avg. Daily Buffer Used", value=f"${avg_burn_cash:,.2f}")
+            kpi6.metric(label="MIRR (3-Year)", value=f"{mirr_value:.2%}")
+            kpi7.metric(label="Score per USD", value=f"{score_per_usd:.4f}")
+            
+            st.divider()
+
+            # 10. แสดงผลกราฟ
+            st.subheader("📊 Performance Charts")
+            graph_col1, graph_col2 = st.columns(2)
+            
+            graph_col1.plotly_chart(px.line(df_all.reset_index(drop=True), title="Cumulative Profit vs. Max Buffer Used"), use_container_width=True)
+            graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)
+            
+            st.divider()
+            
+            st.subheader("📋 Detailed Simulation Data")
+            for ticker in selected_tickers:
+                col_name = f'{ticker}_re'
+                if col_name in df_new.columns:
+                    df_new[col_name] = df_new[col_name].cumsum()
+            
+            st.plotly_chart(px.line(df_new, title="Portfolio Simulation Details"), use_container_width=True)
+    else:
+        st.warning("Please select at least one ticker to start the analysis.")
+
+else:
+    st.error("Could not load any configuration. Please check that 'un15_fx_config.json' exists and is correctly formatted.")
