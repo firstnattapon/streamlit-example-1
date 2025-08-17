@@ -1,18 +1,28 @@
 # -*- coding: utf-8 -*-
+"""
+Cash_Balan Optimizer — Maximize Portfolio MIRR (3Y)
+- อ่าน un15_fx_config.json
+- ดึงราคาแบบรายเดือนย้อนหลัง ≤36 เดือน (จุดตัดร่วมทุก Ticker)
+- จำลอง DCA รายเดือน: ลงเงิน b_i ต่อเดือน/ต่อ Ticker
+- จัดสรรงบรวม (เท่ากับผลรวม Cash_Balan เดิม เว้นแต่ผู้ใช้ยกเลิก lock)
+- ข้อจำกัด 1 ≤ b_i ≤ 3000
+- ใช้ greedy บน "terminal wealth per $1" ต่อ Ticker
+- คำนวณ MIRR ของพอร์ต (กระแสเงินสดรวม)
+!! รวม hotfix กัน ValueError กรณี Series/DataFrame ambiguity
+"""
 import streamlit as st
 import pandas as pd
 import numpy as np
 import json
 import numpy_financial as npf
 import yfinance as yf
-from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Tuple
 
 st.set_page_config(page_title="Cash_Balan Optimizer (MIRR 3Y)", page_icon="🚀", layout="wide")
 
-# ------------------- Config I/O -------------------
 CONFIG_FILE = "un15_fx_config.json"
 
+# ------------------- Config I/O -------------------
 @st.cache_data(show_spinner=False)
 def load_config(filename: str = CONFIG_FILE) -> Tuple[Dict, Dict]:
     try:
@@ -25,182 +35,206 @@ def load_config(filename: str = CONFIG_FILE) -> Tuple[Dict, Dict]:
         st.error(f"รูปแบบ JSON ของ {filename} ไม่ถูกต้อง")
         return {}, {}
 
-    default_config = data.get("__DEFAULT_CONFIG__", {})
-    # ตีความ "แต่ละ key = ticker" แบบเดิม
+    default_cfg = data.get("__DEFAULT_CONFIG__", {})
     tickers = {k: v for k, v in data.items() if k != "__DEFAULT_CONFIG__"}
-    # เติมค่า default ให้ครบคีย์
+
+    # fill defaults + set Ticker key
     for t, cfg in tickers.items():
-        for k, v in default_config.items():
-            tickers[t].setdefault(k, v)
-        tickers[t].setdefault("Ticker", t)
-    return tickers, default_config
+        for k, v in default_cfg.items():
+            cfg.setdefault(k, v)
+        cfg.setdefault("Ticker", t)
+    return tickers, default_cfg
 
 @st.cache_data(show_spinner=False)
 def dump_json_patch(updated_cash: Dict[str, float]) -> str:
-    """
-    สร้าง JSON patch minimal: { <TICKER>: { "Cash_Balan": <value> }, ... }
-    (ผู้ใช้จะนำไป merge กับไฟล์เดิมเอง หรือใช้ logic app เดิมเขียนทับเฉพาะฟิลด์นี้)
-    """
     patch = {t: {"Cash_Balan": float(v)} for t, v in updated_cash.items()}
     return json.dumps(patch, indent=2, ensure_ascii=False)
 
 # ------------------- Price Data -------------------
 @st.cache_data(show_spinner=False)
 def fetch_monthly_adjclose(ticker: str, start: pd.Timestamp, end: pd.Timestamp) -> pd.DataFrame:
-    df = yf.download(ticker, start=start, end=end + pd.Timedelta(days=3), interval="1mo", auto_adjust=True, progress=False)
+    # add small padding days to ensure last month included
+    df = yf.download(
+        ticker,
+        start=start - pd.DateOffset(days=10),
+        end=end + pd.DateOffset(days=3),
+        interval="1mo",
+        auto_adjust=True,
+        progress=False,
+    )
+    if df.empty:
+        return pd.DataFrame(columns=["Date", "price"])
+    price_col = "Adj Close" if "Adj Close" in df.columns else "Close"
+    out = (
+        df.reset_index()
+          .rename(columns={price_col: "price"})
+          .loc[:, ["Date", "price"]]
+          .dropna()
+          .sort_values("Date")
+    )
+    # normalize to month-end timestamps without tz
+    out["Date"] = pd.to_datetime(out["Date"]).dt.tz_localize(None)
+    return out
+
+def to_month_end_index(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
-    df = df.rename_axis("Date").reset_index()
-    # ใช้ Adj Close หากมี ไม่งั้น Close
-    price_col = "Adj Close" if "Adj Close" in df.columns else "Close"
-    df = df[["Date", price_col]].rename(columns={price_col: "price"})
-    df["Date"] = pd.to_datetime(df["Date"]).dt.tz_localize(None)
-    df = df.dropna().sort_values("Date").reset_index(drop=True)
-    return df
+    tmp = df.copy()
+    tmp["Date"] = tmp["Date"].dt.to_period("M").dt.to_timestamp("M")
+    tmp = tmp.groupby("Date", as_index=False)["price"].last()
+    return tmp.set_index("Date")
 
-def month_end_series(start: pd.Timestamp, end: pd.Timestamp) -> pd.DatetimeIndex:
-    # สร้างช่วง MonthEnd ที่เท่ากันสำหรับทุกตัว
-    start_m = (start.to_period("M").to_timestamp("M"))
-    end_m   = (end.to_period("M").to_timestamp("M"))
-    idx = pd.date_range(start=start_m, end=end_m, freq="M")
-    return idx
-
-def align_all_prices(raw_prices: Dict[str, pd.DataFrame]) -> Tuple[pd.DataFrame, pd.DatetimeIndex]:
-    """
-    รับ dict: ticker -> df(Date, price)
-    คืน: wide DataFrame (index = month-end union), และ index จุดตัดร่วม (intersection 3Y)
-    """
-    if not raw_prices:
-        return pd.DataFrame(), pd.DatetimeIndex([])
+def align_prices(raw: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     frames = []
-    for t, df in raw_prices.items():
-        if df.empty:
+    for t, df in raw.items():
+        if df is None or df.empty:
             continue
-        tmp = df.copy()
-        tmp["Date"] = tmp["Date"].dt.to_period("M").dt.to_timestamp("M")
-        tmp = tmp.groupby("Date", as_index=False)["price"].last()
-        tmp = tmp.set_index("Date").rename(columns={"price": t})
-        frames.append(tmp)
+        me = to_month_end_index(df).rename(columns={"price": t})
+        frames.append(me)
     if not frames:
-        return pd.DataFrame(), pd.DatetimeIndex([])
+        return pd.DataFrame()
     wide = pd.concat(frames, axis=1).sort_index()
-    # ลบท้ายที่มี NaN เป็นแถว ๆ ออกไปเมื่อจำเป็น
-    return wide, wide.index
+    return wide
 
-# ------------------- DCA + MIRR -------------------
-def build_common_timeline(price_wide: pd.DataFrame, months_limit: int = 36) -> pd.DatetimeIndex:
-    # ใช้ "จุดตัดร่วม" ของทุก Ticker เพื่อคงจำนวนงวดเท่ากัน
+def build_common_timeline(price_wide: pd.DataFrame, months_limit: int = 36) -> pd.DataFrame:
+    """
+    คืน DataFrame ที่เหลือเฉพาะ 'แถวที่ทุกคอลัมน์ไม่ใช่ NaN' (จุดตัดร่วม)
+    และจำกัดไม่เกิน 36 เดือนล่าสุด
+    """
     full = price_wide.dropna(how="any")
     if full.empty:
-        return pd.DatetimeIndex([])
-    # ตัดให้เหลือไม่เกิน 36 เดือนล่าสุด
-    if len(full.index) > months_limit:
+        return full
+    if len(full) > months_limit:
         full = full.iloc[-months_limit:]
-    return full.index
+    return full
 
-def dca_terminal_value_per_dollar(prices: pd.Series) -> float:
+# ------------------- DCA + MIRR -------------------
+def dca_terminal_value_per_dollar(prices) -> float:
     """
-    ราคาต่อเดือน (N งวด) → ลง $1 ทุกเดือนที่ราคา p_m
-    หน่วยหุ้นรวม = Σ(1/p_m); มูลค่าปลายงวด = last_price * Σ(1/p_m)
-    คืนค่า terminal wealth ต่อ $1/เดือน
+    Robust ต่อ Series/DataFrame:
+    - ถ้าได้ DataFrame เข้ามา: ใช้คอลัมน์แรก
+    - แปลงเป็นตัวเลข + dropna
+    - terminal wealth ต่อ $1/เดือน = last_price * Σ(1/price_m)
     """
-    if prices.isna().any() or prices.empty:
+    import pandas as pd
+    import numpy as np
+
+    if isinstance(prices, pd.DataFrame):
+        if prices.shape[1] == 0:
+            return np.nan
+        prices = prices.iloc[:, 0]
+
+    prices = pd.to_numeric(pd.Series(prices), errors="coerce").dropna()
+    if prices.empty:
         return np.nan
-    inv_sum = np.sum(1.0 / prices.values)
-    last_p = float(prices.values[-1])
-    return last_p * inv_sum
+
+    inv_sum = (1.0 / prices).sum()
+    last_p = float(prices.iloc[-1])
+    return last_p * float(inv_sum)
+
+def make_portfolio_cashflows(prices_df: pd.DataFrame, cash_per_ticker: Dict[str, float]) -> List[float]:
+    """
+    สมมติ DCA รายเดือน N งวด:
+      เดือน 1..N: outflow = -Σ b_i
+      งวดสุดท้าย: inflow = Σ_i (b_i * terminal_value_per_$1_i)
+    """
+    N = len(prices_df.index)
+    if N == 0:
+        return []
+    total_b = sum(cash_per_ticker.values())
+    outflows = [-total_b] * N
+
+    terminal = 0.0
+    for t, b in cash_per_ticker.items():
+        if t not in prices_df.columns:
+            continue
+        col = prices_df[[t]].squeeze()
+        tv = dca_terminal_value_per_dollar(col)
+        if not np.isnan(tv):
+            terminal += b * tv
+    return outflows + [terminal]
 
 def mirr_of_portfolio(cashflows: List[float], finance_rate: float, reinvest_rate: float) -> float:
+    if not cashflows or len(cashflows) < 2:
+        return np.nan
     try:
         return float(npf.mirr(cashflows, finance_rate, reinvest_rate))
     except Exception:
         return np.nan
 
-def make_portfolio_cashflows(prices_wide: pd.DataFrame, cash_per_ticker: Dict[str, float]) -> List[float]:
-    """
-    สมมติ DCA รายเดือน: เดือน 1..N เป็น outflow = -Σ b_i (ทุกเดือน)
-    งวดสุดท้าย inflow = Σ (b_i * terminal_value_per_1USD_i)
-    """
-    cols = list(cash_per_ticker.keys())
-    sub = prices_wide[cols]
-    # outflow รายเดือนเท่ากันทุกเดือน
-    total_b = sum(cash_per_ticker.values())
-    outflows = [-total_b] * len(sub.index)
-    # มูลค่าปลายงวด
-    terminal = 0.0
-    for t in cols:
-        tv = dca_terminal_value_per_dollar(sub[t].dropna())
-        if np.isnan(tv):
-            continue
-        terminal += cash_per_ticker[t] * tv
-    return outflows + [terminal]
-
 # ------------------- Greedy Optimizer -------------------
 def greedy_optimize(
-    prices_wide: pd.DataFrame,
+    prices_df: pd.DataFrame,
     base_cash: Dict[str, float],
     lower: float = 1.0,
     upper: float = 3000.0,
 ) -> Dict[str, float]:
     """
-    คง "งบรวม" = sum(base_cash). บังคับ 1 ≤ b_i ≤ 3000
-    แบ่งส่วนเกินแบบ greedy ไปยัง Ticker ที่มี terminal wealth/1USD สูงสุด
+    ล็อก 'งบรวม' = sum(base_cash) และบังคับ 1 ≤ b_i ≤ 3000
+    ขั้นตอน:
+      1) ให้ขั้นต่ำทุกตัว
+      2) คำนวณคะแนน per $1: terminal wealth factor จาก DCA
+      3) เติมงบส่วนที่เหลือให้ Ticker คะแนนสูงสุดก่อน (จนชนเพดาน)
     """
-    tickers = list(base_cash.keys())
-    N = len(tickers)
-    # ขั้นต่ำให้ทุกตัว
-    alloc = {t: max(lower, min(upper, float(base_cash[t]))) for t in tickers}
-    total_budget = sum(base_cash.values())
-    min_total = lower * N
-    if total_budget < min_total:
-        # ถ้างบรวมน้อยกว่าขั้นต่ำรวม ปรับลงแบบสัดส่วน (แต่ไม่น้อยกว่า 0)
-        scale = total_budget / (min_total + 1e-12)
-        for t in tickers:
-            alloc[t] = lower * scale
-        return alloc
+    tickers = [t for t in base_cash.keys() if t in prices_df.columns]
+    if not tickers:
+        return {}
 
-    # คำนวณคะแนนต่อ $1 (terminal wealth factor)
-    scores = {}
+    # ขั้นต่ำ
+    alloc = {t: float(max(lower, 0.0)) for t in base_cash.keys()}  # รวม key เดิม แม้บางตัวไม่มีข้อมูล
+    total_budget = float(sum(base_cash.values()))
+    min_total = float(lower) * len(alloc)
+
+    if total_budget <= 0:
+        return {t: 0.0 for t in alloc.keys()}
+
+    if total_budget < min_total:
+        # scale ต่ำกว่าขั้นต่ำรวม: กระจายแบบสัดส่วน
+        scale = total_budget / (min_total + 1e-12)
+        return {t: float(lower) * float(scale) for t in alloc.keys()}
+
+    # คะแนนต่อ $1
+    scores: Dict[str, float] = {}
     for t in tickers:
-        tv = dca_terminal_value_per_dollar(prices_wide[t])
+        col = prices_df[[t]].squeeze()
+        tv = dca_terminal_value_per_dollar(col)
         scores[t] = -np.inf if np.isnan(tv) else float(tv)
 
-    # ตั้งต้น: ให้ขั้นต่ำก่อน
-    for t in tickers:
-        alloc[t] = max(lower, min(upper, lower))
-
+    # ให้ขั้นต่ำก่อน
+    alloc = {t: float(lower) for t in alloc.keys()}
     remaining = total_budget - sum(alloc.values())
-    if remaining <= 0:
+    if remaining <= 1e-12:
         return alloc
 
-    # เรียงจากคะแนนสูง→ต่ำ
+    # เรียงจากคะแนนสูง→ต่ำ (เฉพาะที่มีข้อมูล)
     order = sorted(tickers, key=lambda x: scores.get(x, -np.inf), reverse=True)
 
-    # ใส่ส่วนเพิ่มให้ตัวที่คะแนนสูงก่อนจนชนเพดานหรือหมดงบ
+    # เติมงบตามลำดับคะแนน
     for t in order:
-        if remaining <= 0:
+        if remaining <= 1e-12:
             break
-        can_add = upper - alloc[t]
-        if can_add <= 0:
+        cap = float(upper) - alloc[t]
+        if cap <= 0:
             continue
-        delta = min(can_add, remaining)
-        alloc[t] += delta
-        remaining -= delta
+        add = min(cap, remaining)
+        alloc[t] += add
+        remaining -= add
 
-    # เผื่อมีเศษเล็ก ๆ เพราะปัดเลข
+    # เศษเล็ก ๆ ถ้ายังเหลือ ให้ปัดกระจาย
     if remaining > 1e-9:
-        # กระจายเศษตามลำดับเดิม
         i = 0
         L = len(order)
         while remaining > 1e-9 and L > 0:
             t = order[i % L]
-            can_add = upper - alloc[t]
-            if can_add > 0:
-                add = min(can_add, remaining)
+            cap = float(upper) - alloc[t]
+            if cap > 0:
+                add = min(cap, remaining)
                 alloc[t] += add
                 remaining -= add
             i += 1
 
+    # clamp เผื่อเลขทศนิยม
+    alloc = {t: float(max(lower, min(upper, v))) for t, v in alloc.items()}
     return alloc
 
 # ------------------- UI -------------------
@@ -211,6 +245,9 @@ if not tickers_cfg:
     st.stop()
 
 all_tickers = sorted(list(tickers_cfg.keys()))
+base_cash_orig = {t: float(tickers_cfg[t].get("Cash_Balan", 1.0)) for t in all_tickers}
+total_base_cash = float(sum(base_cash_orig.values()))
+
 left, right = st.columns([1.3, 1.0], gap="large")
 
 with left:
@@ -218,92 +255,102 @@ with left:
     today = pd.Timestamp.today(tz="Asia/Bangkok").tz_localize(None)
     three_years_ago = today - pd.DateOffset(years=3)
 
-    # ใช้ filter_date ล่าสุดใน config แต่จำกัดไม่เกิน 3 ปี
+    # กำหนด start จาก max(filter_date, today-3y)
     cfg_dates = []
     for t, cfg in tickers_cfg.items():
-        d = pd.to_datetime(cfg.get("filter_date", three_years_ago))
-        try:
-            d = d.tz_convert("Asia/Bangkok").tz_localize(None)
-        except Exception:
-            d = d.tz_localize(None) if getattr(d, "tzinfo", None) else d
-        cfg_dates.append(d)
-    max_filter = max(min(d, today), three_years_ago) if cfg_dates else three_years_ago
+        d = pd.to_datetime(cfg.get("filter_date", three_years_ago), errors="coerce")
+        if d is not None and not pd.isna(d):
+            try:
+                d = d.tz_convert("Asia/Bangkok").tz_localize(None)
+            except Exception:
+                d = d.tz_localize(None) if getattr(d, "tzinfo", None) else d
+            cfg_dates.append(d)
+    default_start = max(three_years_ago, max(cfg_dates) if cfg_dates else three_years_ago)
 
-    start_date = st.date_input("Start (<= 3Y back, ใช้จุดตัดร่วม)", max_filter.date())
+    start_date = st.date_input("Start (≤ 3Y back, ใช้จุดตัดร่วม)", default_start.date())
     start_date = pd.Timestamp(start_date)
     end_date = st.date_input("End (วันนี้หรือล่าสุด)", today.date())
     end_date = pd.Timestamp(end_date)
-    end_date = min(end_date, today)
+    if end_date > today:
+        end_date = today
+    if start_date > end_date:
+        st.warning("Start > End → ปรับ Start = End-36 เดือนอัตโนมัติ")
+        start_date = end_date - pd.DateOffset(months=36)
 
-    finance_rate = st.number_input("Finance rate (ต่อคาบเดือน)", min_value=-1.0, max_value=1.0, value=0.0, step=0.001, help="อัตราดอกเบี้ยของเงินทุน (ต่อเดือน) สำหรับ MIRR")
-    reinvest_rate = st.number_input("Reinvest rate (ต่อคาบเดือน)", min_value=-1.0, max_value=1.0, value=0.0, step=0.001, help="อัตราที่นำกระแสเงินสดบวกไปลงทุนซ้ำ (ต่อเดือน) สำหรับ MIRR")
+    finance_rate = st.number_input("Finance rate (ต่อคาบเดือน)", min_value=-1.0, max_value=1.0, value=0.0, step=0.001)
+    reinvest_rate = st.number_input("Reinvest rate (ต่อคาบเดือน)", min_value=-1.0, max_value=1.0, value=0.0, step=0.001)
 
-    # งบรวมต่อเดือน = ผลรวม Cash_Balan เดิม
-    base_cash = {t: float(tickers_cfg[t].get("Cash_Balan", 1.0)) for t in all_tickers}
     lock_total = st.checkbox("Lock: ใช้งบรวมเท่ากับผลรวม Cash_Balan เดิม", value=True)
-    if not lock_total:
-        manual_total = st.number_input("งบรวมต่อเดือน (USD)", min_value=1.0, value=float(sum(base_cash.values())), step=1.0)
-        # scale base_cash ให้ผลรวม = manual_total (ยังคงใช้เป็น baseline)
-        s = sum(base_cash.values())
-        if s > 0:
-            base_cash = {t: v * manual_total / s for t, v in base_cash.items()}
+    if lock_total:
+        base_cash = dict(base_cash_orig)
+    else:
+        manual_total = st.number_input("งบรวมต่อเดือน (USD)", min_value=1.0, value=max(1.0, total_base_cash), step=1.0)
+        s = sum(base_cash_orig.values())
+        base_cash = {t: (v * manual_total / s if s > 0 else manual_total / max(1, len(base_cash_orig))) for t, v in base_cash_orig.items()}
 
-with st.spinner("ดาวน์โหลดราคา..."):
-    raw_prices = {}
-    for t in all_tickers:
-        dfp = fetch_monthly_adjclose(t, start_date - pd.DateOffset(days=10), end_date)
-        raw_prices[t] = dfp
-
-prices_wide, union_idx = align_all_prices(raw_prices)
-if prices_wide.empty:
-    st.error("ไม่มีข้อมูลราคาที่นำมาคิดได้")
+# ดึงราคา
+with st.spinner("ดาวน์โหลดราคา (เดือน)…"):
+    raw_prices = {t: fetch_monthly_adjclose(t, start_date, end_date) for t in all_tickers}
+price_wide = align_prices(raw_prices)
+if price_wide.empty:
+    st.error("ไม่พบราคาที่ใช้งานได้")
     st.stop()
 
-timeline = build_common_timeline(prices_wide, months_limit=36)
-if len(timeline) < 6:
-    st.warning("จุดตัดร่วมของเดือนที่มีข้อมูลครบทุก Ticker น้อย (<6) อาจทำให้ MIRR ไม่นิ่ง")
-prices = prices_wide.reindex(timeline).dropna(how="any")
+prices = build_common_timeline(price_wide, months_limit=36)
+if prices.empty:
+    st.error("ไม่มีช่วงเวลาที่ข้อมูลครบทุก Ticker (จุดตัดร่วมเป็นค่าว่าง)")
+    st.stop()
 
-# คะแนนต่อ 1 USD/เดือน (ใช้ในการจัดสรร)
-scores = {t: dca_terminal_value_per_dollar(prices[t]) for t in prices.columns}
-scores_ser = pd.Series(scores).sort_values(ascending=False)
+if len(prices) < 6:
+    st.warning("จำนวนงวดจุดตัดร่วม < 6 เดือน — MIRR อาจไม่นิ่ง")
+
+# คะแนนต่อ $1 (terminal wealth factor) สำหรับแนะนำการจัดสรร
+scores = {t: dca_terminal_value_per_dollar(prices[[t]].squeeze()) for t in prices.columns}
+scores_ser = pd.Series(scores, dtype=float).replace([np.inf, -np.inf], np.nan).sort_values(ascending=False)
 
 with left:
     st.subheader("2) Optimize")
-    c1, c2, c3 = st.columns([1,1,1])
+    c1, c2, _ = st.columns([1, 1, 1])
     with c1:
         lower = st.number_input("ขั้นต่ำต่อ Ticker", min_value=0.0, value=1.0, step=1.0)
     with c2:
         upper = st.number_input("ขั้นสูงสุดต่อ Ticker", min_value=1.0, value=3000.0, step=50.0)
-    with c3:
-        st.write("")
 
-    if st.button("✅ Run Optimizer", type="primary", use_container_width=True):
+    run = st.button("✅ Run Optimizer", type="primary", use_container_width=True)
+
+    if run:
         alloc_opt = greedy_optimize(prices, base_cash, lower, upper)
-        # คำนวณ MIRR ก่อน/หลัง
+
+        # MIRR ก่อน/หลัง
         cf_before = make_portfolio_cashflows(prices, base_cash)
         cf_after  = make_portfolio_cashflows(prices, alloc_opt)
         mirr_before = mirr_of_portfolio(cf_before, finance_rate, reinvest_rate)
         mirr_after  = mirr_of_portfolio(cf_after, finance_rate, reinvest_rate)
 
         st.success("Optimization เสร็จ")
-        st.metric("Portfolio MIRR (Before)", f"{mirr_before*100:,.3f} % /period")
-        st.metric("Portfolio MIRR (After)",  f"{mirr_after*100:,.3f} % /period")
 
-        # ตาราง Before/After + Score
+        m1, m2 = st.columns(2)
+        with m1:
+            st.metric("Portfolio MIRR (Before)", f"{(mirr_before*100) if not np.isnan(mirr_before) else 0:,.3f} % /period")
+        with m2:
+            st.metric("Portfolio MIRR (After)",  f"{(mirr_after*100) if not np.isnan(mirr_after) else 0:,.3f} % /period")
+
         df_view = pd.DataFrame({
-            "Score per $1 (terminal wealth)": [scores[t] for t in prices.columns],
+            "Score per $1 (terminal wealth)": [scores.get(t, np.nan) for t in prices.columns],
             "Cash_Balan (Before)": [base_cash.get(t, np.nan) for t in prices.columns],
             "Cash_Balan (After)":  [alloc_opt.get(t, np.nan) for t in prices.columns],
         }, index=prices.columns).sort_values("Score per $1 (terminal wealth)", ascending=False)
 
-        st.dataframe(df_view.style.format({
-            "Score per $1 (terminal wealth)": "{:,.4f}",
-            "Cash_Balan (Before)": "{:,.2f}",
-            "Cash_Balan (After)": "{:,.2f}",
-        }), use_container_width=True)
+        st.dataframe(
+            df_view.style.format({
+                "Score per $1 (terminal wealth)": "{:,.4f}",
+                "Cash_Balan (Before)": "{:,.2f}",
+                "Cash_Balan (After)": "{:,.2f}",
+            }),
+            use_container_width=True
+        )
 
-        # JSON Patch download
+        # JSON Patch เฉพาะ Cash_Balan
         patch = dump_json_patch(alloc_opt)
         st.download_button(
             "⬇️ ดาวน์โหลด JSON patch (อัปเดตเฉพาะ Cash_Balan)",
@@ -314,14 +361,14 @@ with left:
         )
 
 with right:
-    st.subheader("Reference / Sanity Check")
-    st.caption("คะแนนยิ่งสูง → ควรได้รับสัดส่วนเงินมากกว่า (ภายใต้กรอบ 1–3000)")
+    st.subheader("Reference / Scores")
+    st.caption("คะแนนยิ่งสูง → ควรได้รับงบมากกว่า (ภายใต้กรอบ 1–3000)")
     st.table(scores_ser.to_frame("Score per $1").style.format("{:,.4f}"))
 
     st.caption("หมายเหตุ")
     st.markdown("""
 - ใช้ DCA รายเดือนบนจุดตัดร่วม ≤ 36 เดือน เพื่อให้ MIRR รวมคำนวณบนจำนวนงวดเท่ากัน  
-- MIRR คำนวณจากกระแสเงินสดรวม: เดือน 1..N เป็นเงินออกเท่ากัน (ผลรวม Cash_Balan ของพอร์ต), งวดสุดท้ายเป็นเงินเข้า (มูลค่าปิดรวม)  
-- งบรวมถูกล็อกไว้เท่ากับผลรวม Cash_Balan ปัจจุบันของไฟล์ (ยกเลิกล็อกได้ใน UI)
-- ไม่มีค่าคอมมิชชั่น/สเปรด/ภาษี (ควรบวกในรุ่นถัดไปถ้าต้องการความสมจริง)
+- MIRR ใช้กระแสเงินสดรวม: เดือน 1..N เป็นเงินออกเท่ากัน (ผลรวม Cash_Balan ของพอร์ต), งวดสุดท้ายเป็นเงินเข้า (มูลค่าปิดรวม)  
+- ค่าธรรมเนียม/สเปรด/ภาษี = 0 (เพิ่มได้ในรุ่นถัดไป)
+- Hotfix: ป้องกัน `ValueError: The truth value of a Series is ambiguous` โดยบังคับ Series 1D และไม่ใช้เช็ค boolean บน Series/DF ตรง ๆ
 """)
