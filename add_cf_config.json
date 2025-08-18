@@ -17,7 +17,7 @@
     },
     "assets": [
         { "type": "option", "name": "FFWM Call @ 6.88", "underlying_ticker": "FFWM", "contracts_or_shares": 200, "premium_paid_per_share": 1.17, "strike": 5.0 },
-        { "type": "option", "name": "AGL Call @ 1.83", "underlying_ticker": "AGL", "contracts_or_shares": 1300, "premium_paid_per_share": 0.33, "strike": 1.5 },
+        { "type": "option", "name": "AGL Call @ 1.83", "underlying_ticker": "AGL", "contracts_or_shares": 1100, "premium_paid_per_share": 0.33, "strike": 1.5 },
         { "type": "option", "name": "RXRX Call @ 5.40", "underlying_ticker": "RXRX", "contracts_or_shares": 200, "premium_paid_per_share": 1.4, "strike": 4.0 },
         { "type": "option", "name": "FLNC Call @ 7.00", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 0.98, "strike": 6.0 },
         { "type": "option", "name": "GERN Call @ 1.85", "underlying_ticker": "GERN", "contracts_or_shares": 800, "premium_paid_per_share": 0.36, "strike": 1.5 },
