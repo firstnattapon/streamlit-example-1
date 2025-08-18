@@ -18,10 +18,10 @@ def load_config(filename="un15_fx_config.json"):
             data = json.load(f)
     except FileNotFoundError:
         st.error(f"Error: Configuration file '{filename}' not found.")
-        return {}, {}  # คืนค่า dict ว่าง
+        return {}, {}
     except json.JSONDecodeError:
         st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
-        return {}, {}  # คืนค่า dict ว่าง
+        return {}, {}
 
     fallback_default = {
         "Fixed_Asset_Value": 1500.0, "Cash_Balan": 650.0, "step": 0.01,
@@ -38,7 +38,6 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
         return pd.DataFrame()
 
     samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
-
     df = pd.DataFrame()
     df['Asset_Price'] = np.around(samples, 2)
     df['Fixed_Asset_Value'] = Fixed_Asset_Value
@@ -48,15 +47,12 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     if not df_top.empty:
         df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
         df_top.fillna(0, inplace=True)
-
         np_Cash_Balan_top = df_top['Cash_Balan_top'].values
         xx = np.zeros(len(np_Cash_Balan_top))
         y_0 = Cash_Balan
         for idx, v_0 in enumerate(np_Cash_Balan_top):
-            z_0 = y_0 + v_0
-            y_0 = z_0
+            y_0 = y_0 + v_0
             xx[idx] = y_0
-
         df_top['Cash_Balan'] = xx
         df_top = df_top.sort_values(by='Amount_Asset')[:-1]
     else:
@@ -67,15 +63,12 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
         df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
         df_down.fillna(0, inplace=True)
         df_down = df_down.sort_values(by='Asset_Price', ascending=False)
-
         np_Cash_Balan_down = df_down['Cash_Balan_down'].values
         xxx = np.zeros(len(np_Cash_Balan_down))
         y_1 = Cash_Balan
         for idx, v_1 in enumerate(np_Cash_Balan_down):
-            z_1 = y_1 + v_1
-            y_1 = z_1
+            y_1 = y_1 + v_1
             xxx[idx] = y_1
-
         df_down['Cash_Balan'] = xxx
     else:
         df_down = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
@@ -102,16 +95,13 @@ def delta6(asset_config):
         if ticker_hist.empty:
             return None
 
-        # หมายเหตุ: คงค่า 'Asia/bangkok' ไว้ตามโค้ดเดิมเพื่อไม่ให้ Output เปลี่ยน
         ticker_hist.index = ticker_hist.index.tz_convert(tz='Asia/bangkok')
         ticker_hist = ticker_hist[ticker_hist.index >= asset_config['filter_date']][['Close']]
-
         if ticker_hist.empty:
             return None
 
         entry = ticker_hist['Close'].iloc[0]
         df_model = calculate_cash_balance_model(entry, asset_config['step'], asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
-
         if df_model.empty:
             return None
 
@@ -153,7 +143,6 @@ def delta6(asset_config):
         ticker_data['pv'] = ticker_data['Cash_Balan'] + (ticker_data['Amount_Asset'] * ticker_data['Close'])
         ticker_data['refer_pv'] = ticker_data['refer_model'] + asset_config['Fixed_Asset_Value']
         ticker_data['net_pv'] = ticker_data['pv'] - ticker_data['refer_pv']
-
         return ticker_data[['net_pv', 're']]
 
     except Exception:
@@ -163,40 +152,31 @@ def un_16(active_configs):
     """Aggregates results from multiple assets specified in active_configs."""
     all_re = []
     all_net_pv = []
-
     for ticker_name, config in active_configs.items():
         result_df = delta6(config)
         if result_df is not None and not result_df.empty:
             all_re.append(result_df[['re']].rename(columns={"re": f"{ticker_name}_re"}))
             all_net_pv.append(result_df[['net_pv']].rename(columns={"net_pv": f"{ticker_name}_net_pv"}))
-
     if not all_re:
         return pd.DataFrame()
-
     df_re = pd.concat(all_re, axis=1)
     df_net_pv = pd.concat(all_net_pv, axis=1)
-
     df_re.fillna(0, inplace=True)
     df_net_pv.fillna(0, inplace=True)
-
     df_re['maxcash_dd'] = df_re.sum(axis=1).cumsum()
     df_net_pv['cf'] = df_net_pv.sum(axis=1)
-
     final_df = pd.concat([df_re, df_net_pv], axis=1)
     return final_df
 
 # ------------------- ส่วนแสดงผล STREAMLIT -------------------
 st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
 
-# 1. โหลด config
 full_config, DEFAULT_CONFIG = load_config()
 
 if full_config or DEFAULT_CONFIG:
-    # 2. ตั้งค่า Session State
     if 'custom_tickers' not in st.session_state:
         st.session_state.custom_tickers = {}
 
-    # 3. ส่วนควบคุมบนหน้าหลัก
     control_col1, control_col2 = st.columns([1, 2])
     with control_col1:
         st.subheader("Add New Ticker")
@@ -224,20 +204,17 @@ if full_config or DEFAULT_CONFIG:
         )
     st.divider()
 
-    # 4. สร้าง Dict Config ของ Ticker ที่เลือก
     active_configs = {ticker: full_config.get(ticker, st.session_state.custom_tickers.get(ticker)) for ticker in selected_tickers}
 
     if not active_configs:
         st.warning("Please select at least one ticker to start the analysis.")
     else:
-        # 5. รันการคำนวณ
         with st.spinner('Calculating... Please wait.'):
             data = un_16(active_configs)
 
         if data.empty:
             st.error("Failed to generate data. This might happen if tickers have no historical data for the selected period or another error occurred.")
         else:
-            # 6. คำนวณค่าสำหรับแสดงผล
             df_new = data.copy()
             roll_over = []
             max_dd_values = df_new.maxcash_dd.values
@@ -249,19 +226,17 @@ if full_config or DEFAULT_CONFIG:
             cf_values = df_new.cf.values
             df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
 
-            # --- True Alpha (คงเดิมตามสเปคเดิม) ---
+            # --- True Alpha (เหมือนเดิม) ---
             num_selected_tickers = len(selected_tickers)
-            initial_capital = num_selected_tickers * 1500.0  # เงินลงทุนเริ่มต้น (ตามเวอร์ชันเดิม)
-            max_buffer_used = abs(np.min(roll_over))         # เงินสดสำรองที่ใช้ไปสูงสุด (Max Drawdown)
-
+            initial_capital = num_selected_tickers * 1500.0
+            max_buffer_used = abs(np.min(roll_over))
             total_capital_at_risk = initial_capital + max_buffer_used
             if total_capital_at_risk == 0:
                 total_capital_at_risk = 1
-
             true_alpha_values = (df_new.cf.values / total_capital_at_risk) * 100
             df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
 
-            # 7. แสดงผล KPI พื้นฐาน
+            # --- KPI base values ---
             st.subheader("Key Performance Indicators")
             final_sum_delta = df_all.Sum_Delta.iloc[-1]
             final_max_buffer = df_all.Max_Sum_Buffer.iloc[-1]
@@ -270,28 +245,22 @@ if full_config or DEFAULT_CONFIG:
             avg_cf = final_sum_delta / num_days if num_days > 0 else 0
             avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
 
-            # ------------------ MIRR CALCULATION (อัปเดตตาม goal_1) ------------------
-            # Sum_Fixed_Asset_Value = ผลรวม Fixed_Asset_Value ของ ticker ที่ "เลือก"
+            # ------------------ MIRR (อัปเดต E ตามสเปคใหม่) ------------------
             sum_fixed_asset_value = float(sum(cfg.get('Fixed_Asset_Value', 0.0) for cfg in active_configs.values()))
-            # initial_investment = Σ(Fixed_Asset_Value) + |Max Cash Buffer Used|
-            initial_investment = sum_fixed_asset_value + abs(final_max_buffer)
-
-            # สร้างตัวแปรประกอบสำหรับ Help + คำนวณ MIRR
-            annual_cash_flow = avg_cf * 252          # A = Avg. Daily Profit × 252
-            exit_multiple = 0.5 * initial_investment # E = 0.5 × I
+            initial_investment = sum_fixed_asset_value + abs(final_max_buffer)   # I = Σ(FAV) + |Max Buffer|
+            annual_cash_flow = avg_cf * 252                                    # A = Avg Daily Profit × 252
+            exit_multiple = 0.5 * sum_fixed_asset_value                         # ★ E = 0.5 × Σ(FAV) ★
             finance_rate = 0.0
             reinvest_rate = 0.0
 
-            mirr_value = 0.0
             cash_flows = [
                 -initial_investment,
                 annual_cash_flow,
                 annual_cash_flow,
                 annual_cash_flow + exit_multiple
             ]
-            if initial_investment > 0:
-                mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate)
-            # ------------------------------------------------------------------------
+            mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate) if initial_investment > 0 else 0.0
+            # -------------------------------------------------------------------
 
             # --- KPI Display ---
             kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
@@ -302,7 +271,8 @@ if full_config or DEFAULT_CONFIG:
             kpi5.metric(label="Avg. Daily Buffer Used", value=f"{avg_burn_cash:,.2f}")
             kpi6.metric(label="MIRR (3-Year)", value=f"{mirr_value:.2%}")
 
-            # --- MIRR Help (สวยงาม/อ่านง่าย) ---
+            # --- MIRR Help (ข้อความ + JSON ดาวน์โหลดได้) ---
+            st.markdown("### ℹ️ MIRR (3-Year) — Help")
             with st.expander("แสดงสูตรและค่าที่ใช้คำนวณ (คลิกเพื่อดูรายละเอียด)"):
                 st.markdown(
                     f"""
@@ -315,7 +285,7 @@ if full_config or DEFAULT_CONFIG:
 
 - **A (Annual Cash Flow)** = Avg. Daily Profit × 252 = **{avg_cf:,.2f} × 252 = {annual_cash_flow:,.2f}**
 
-- **E (Exit Multiple)** = 0.5 × I = **0.5 × {initial_investment:,.2f} = {exit_multiple:,.2f}**
+- **E (Exit Multiple)** = **0.5 × Σ(Fixed_Asset_Value)** = **0.5 × {sum_fixed_asset_value:,.2f} = {exit_multiple:,.2f}**
 
 - **อัตรา**: finance_rate = **{finance_rate:.1f}**, reinvest_rate = **{reinvest_rate:.1f}**
 
@@ -326,12 +296,45 @@ if full_config or DEFAULT_CONFIG:
                     """.strip()
                 )
 
+                # ----- JSON Payload สำหรับบันทึกเป็นไฟล์ .json -----
+                help_payload = {
+                    "definition": "MIRR (3-Year)",
+                    "tickers_selected": int(num_selected_tickers),
+                    "sum_fixed_asset_value": round(sum_fixed_asset_value, 2),
+                    "max_cash_buffer_used_abs": round(abs(final_max_buffer), 2),
+                    "I_initial_investment": round(initial_investment, 2),
+                    "A_annual_cash_flow": round(annual_cash_flow, 2),
+                    "E_exit_multiple": {
+                        "formula": "0.5 × Σ(Fixed_Asset_Value)",
+                        "value": round(exit_multiple, 2)
+                    },
+                    "finance_rate": finance_rate,
+                    "reinvest_rate": reinvest_rate,
+                    "cash_flows_vector": [
+                        round(-initial_investment, 2),
+                        round(annual_cash_flow, 2),
+                        round(annual_cash_flow, 2),
+                        round(annual_cash_flow + exit_multiple, 2)
+                    ],
+                    "mirr_result": round(float(mirr_value), 6) if isinstance(mirr_value, (int, float, np.floating)) else None
+                }
+
+                st.markdown("**JSON (สำหรับบันทึก/แชร์):**")
+                st.json(help_payload, expanded=False)
+
+                st.download_button(
+                    label="⬇️ Download MIRR help JSON",
+                    data=json.dumps(help_payload, ensure_ascii=False, indent=2),
+                    file_name="mirr_help.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+
             st.divider()
 
-            # 8. แสดงผลกราฟ
+            # 8. กราฟ
             st.subheader("Performance Charts")
             graph_col1, graph_col2 = st.columns(2)
-
             graph_col1.plotly_chart(
                 px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"),
                 use_container_width=True
@@ -342,13 +345,11 @@ if full_config or DEFAULT_CONFIG:
             )
 
             st.divider()
-
             st.subheader("Detailed Simulation Data")
             for ticker in selected_tickers:
                 col_name = f'{ticker}_re'
                 if col_name in df_new.columns:
                     df_new[col_name] = df_new[col_name].cumsum()
-
             st.plotly_chart(px.line(df_new, title="Portfolio Simulation Details"), use_container_width=True)
 
 else:
