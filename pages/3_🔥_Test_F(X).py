@@ -303,7 +303,6 @@ if full_config or DEFAULT_CONFIG:
             kpi6.metric(label="MIRR (3-Year)", value=f"{mirr_value:.2%}")
 
             # --- MIRR Help (สวยงาม/อ่านง่าย) ---
-            st.markdown("### ℹ️ MIRR (3-Year) — Help")
             with st.expander("แสดงสูตรและค่าที่ใช้คำนวณ (คลิกเพื่อดูรายละเอียด)"):
                 st.markdown(
                     f"""
