@@ -42,6 +42,7 @@ def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
     df = pd.DataFrame()
     df['Asset_Price'] = np.around(samples, 2)
     df['Fixed_Asset_Value'] = Fixed_Asset_Value
+    # หมายเหตุ: logic เดิมยังคงไว้ — ระวังหารด้วยศูนย์หาก Asset_Price = 0 (คงพฤติกรรมเดิมตามคำขอ)
     df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
 
     df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
@@ -121,7 +122,7 @@ def delta6(asset_config):
         ticker_data['Amount_Asset'] = 0.0
         ticker_data['re'] = 0.0
         ticker_data['Cash_Balan'] = asset_config['Cash_Balan']
-        ticker_data.iloc[0, ticker_data.columns.get_loc('Amount_Asset')] = ticker_data['Fixed_Asset_Value'].iloc[0] / ticker_data['Close'].iloc[0]
+        ticker_data['Amount_Asset'].iloc[0] = ticker_data['Fixed_Asset_Value'].iloc[0] / ticker_data['Close'].iloc[0]
 
         close_vals = ticker_data['Close'].values
         pred_vals = ticker_data['pred'].values
@@ -191,10 +192,9 @@ st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
 full_config, DEFAULT_CONFIG = load_config()
 
 if full_config or DEFAULT_CONFIG:
-    # 1.1 สรุปค่ารวมจาก JSON (ยึดตามไฟล์ที่โหลด ไม่รวม custom ที่เพิ่มภายหลัง)
-    # >>> CHANGED: สร้าง Sum_Cash_Balan_from_json ตามคำขอ (ชุด JSON นี้ให้ค่า 24,700)
-    # หมายเหตุ: ค่า 24,700 ในไฟล์ที่แนบมา ตรงกับ "ผลรวม Fixed_Asset_Value" ของทุก ticker
-    Sum_Cash_Balan_from_json = float(np.sum([conf.get('Fixed_Asset_Value', 0.0) for conf in full_config.values()]))
+    # === NEW: สรุป Sum_Cash_Balan จากไฟล์ JSON (ตามคำสั่ง) ===
+    SUM_CASH_BALAN_FROM_JSON = float(sum(cfg.get('Cash_Balan', 0.0) for cfg in full_config.values()))
+    COUNT_TICKERS_IN_JSON = len(full_config)
 
     # 2. ตั้งค่า Session State
     if 'custom_tickers' not in st.session_state:
@@ -253,17 +253,17 @@ if full_config or DEFAULT_CONFIG:
             cf_values = df_new.cf.values
             df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
 
-            # --- True Alpha (เหมือนเดิม ยกเว้นตัวหารคำนวณจาก initial_capital แบบเดิม) ---
+            # --- True Alpha (เดิม) ---
             num_selected_tickers = len(selected_tickers)
-            initial_capital = num_selected_tickers * 1500.0  # ใช้สำหรับ True Alpha เดิม
-            max_buffer_used = abs(np.min(roll_over))
-            total_capital_at_risk = initial_capital + max_buffer_used
+            initial_capital_legacy = num_selected_tickers * 1500.0  # legacy (ไม่ใช้เป็น I สำหรับ MIRR แล้ว)
+            max_buffer_used = abs(np.min(roll_over))  # เงินสดสำรองที่ใช้ไปสูงสุด (Max Drawdown)
+            total_capital_at_risk = initial_capital_legacy + max_buffer_used
             if total_capital_at_risk == 0:
                 total_capital_at_risk = 1
             true_alpha_values = (df_new.cf.values / total_capital_at_risk) * 100
             df_all_2 = pd.DataFrame({'True_Alpha': true_alpha_values}, index=df_new.index)
 
-            # 7. แสดงผล KPI พื้นฐาน
+            # 7. แสดงผล KPI
             st.subheader("Key Performance Indicators")
             final_sum_delta = df_all.Sum_Delta.iloc[-1]
             final_max_buffer = df_all.Max_Sum_Buffer.iloc[-1]
@@ -272,25 +272,23 @@ if full_config or DEFAULT_CONFIG:
             avg_cf = final_sum_delta / num_days if num_days > 0 else 0
             avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0
 
-            # --- MIRR CALCULATION (UPDATED per Goal_1) ---
-            # >>> CHANGED: initial_investment = จำนวน ticker × {Sum_Cash_Balan_from_json} + |Max Cash Buffer Used|
-            # ในไฟล์ JSON ที่แนบมา Sum_Cash_Balan_from_json = 24,700
-            mirr_value = 0.0
+            # --- MIRR CALCULATION (UPDATED BY REQUEST) ---
+            # I = Sum_Cash_Balan (จากไฟล์ JSON ทั้งหมด) + |Max Cash Buffer Used|
+            I = SUM_CASH_BALAN_FROM_JSON + abs(final_max_buffer)
 
-            initial_investment = (num_selected_tickers * Sum_Cash_Balan_from_json) + abs(final_max_buffer)
+            # A = annual cash flow = avg daily profit * 252
+            A = avg_cf * 252
 
-            if initial_investment > 0:
-                annual_cash_flow = avg_cf * 252
-                exit_multiple = initial_investment * 0.5
-                cash_flows = [
-                    -initial_investment,
-                    annual_cash_flow,
-                    annual_cash_flow,
-                    annual_cash_flow + exit_multiple
-                ]
-                finance_rate = 0.0
-                reinvest_rate = 0.0
-                mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate)
+            # E = exit multiple = 0.5 * I
+            E = I * 0.5
+
+            finance_rate = 0.0
+            reinvest_rate = 0.0
+
+            # cash flows: Year0..Year3
+            cash_flows = [-I, A, A, A + E]
+            mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate) if I > 0 else 0.0
+            # --- END MIRR CALCULATION ---
 
             # --- KPI Display ---
             kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
@@ -301,28 +299,41 @@ if full_config or DEFAULT_CONFIG:
             kpi5.metric(label="Avg. Daily Buffer Used", value=f"{avg_burn_cash:,.2f}")
             kpi6.metric(label="MIRR (3-Year)", value=f"{mirr_value:.2%}")
 
-            # >>> CHANGED: แสดงค่า Sum_Cash_Balan_from_json เพื่อความโปร่งใส
-            st.caption(f"Sum_Cash_Balan (from JSON) = {Sum_Cash_Balan_from_json:,.2f}")
+            # --- Help: MIRR (3-Year) ---
+            with st.expander("ℹ️ MIRR (3-Year) — Help / สูตรที่ใช้ (live numbers)"):
+                st.markdown(
+                    f"""
+**I (initial_investment)**  
+= Sum_Cash_Balan (จากไฟล์ JSON) + |Max Cash Buffer Used|  
+= **{SUM_CASH_BALAN_FROM_JSON:,.2f}** _(tickers ในไฟล์: {COUNT_TICKERS_IN_JSON})_ + **{abs(final_max_buffer):,.2f}**  
+= **{I:,.2f}**
 
-            # >>> CHANGED: Help กล่องอธิบาย MIRR (3-Year)
-            with st.expander("MIRR (3-Year) — Help / สูตรที่ใช้", expanded=False):
-                help_dict = {
-                    "I (initial_investment)": f"I = จำนวน ticker ({num_selected_tickers}) × {Sum_Cash_Balan_from_json:,.2f} + |Max Cash Buffer Used| ({abs(final_max_buffer):,.2f}) = {initial_investment:,.2f}",
-                    "A (annual_cash_flow)": f"A = Avg. Daily Profit ({avg_cf:,.2f}) × 252 = {avg_cf*252:,.2f}",
-                    "E (exit_multiple)": f"E = 0.5 × I = {0.5*initial_investment:,.2f}",
-                    "finance_rate": 0.0,
-                    "reinvest_rate": 0.0
-                }
-                st.json(help_dict)
+**A (annual_cash_flow)**  
+= Avg. Daily Profit × 252  
+= **{avg_cf:,.2f} × 252 = {A:,.2f}**
+
+**E (exit_multiple)**  
+= 0.5 × I  
+= **0.5 × {I:,.2f} = {E:,.2f}**
+
+**finance_rate** = **{finance_rate:.1%}**  
+**reinvest_rate** = **{reinvest_rate:.1%}**
+                    """
+                )
 
             st.divider()
 
             # 8. แสดงผลกราฟ
             st.subheader("Performance Charts")
             graph_col1, graph_col2 = st.columns(2)
-
-            graph_col1.plotly_chart(px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"), use_container_width=True)
-            graph_col2.plotly_chart(px.line(df_all_2, title="True Alpha (%)"), use_container_width=True)
+            graph_col1.plotly_chart(
+                px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"),
+                use_container_width=True
+            )
+            graph_col2.plotly_chart(
+                px.line(df_all_2, title="True Alpha (%)"),
+                use_container_width=True
+            )
 
             st.divider()
 
