@@ -1,97 +1,83 @@
 {
   "projectData": {
-    "duration": 3,
-    "initialInvestment": 36100,
+    "duration": 4,
+    "initialInvestment": 24700,
     "discountRate": 0,
     "reinvestmentRate": 0,
     "currency": "USD",
     "addTerminalValue": true,
-    "exitMultiple": 0.35
+    "exitMultiple": 0.5
   },
-  "baseCashFlows": [13136.38, 13136.38, 13136.38],
+  "baseCashFlows": [
+    -11406,
+    13136.76,
+    13136.76,
+    13136.76
+  ],
   "results": {
-    "npv": 15944.14,
-    "irr": 18.2337538961385,
-    "mirr": 12.9678538569217,
-    "paybackPeriod": 2.38132377854814,
-    "dcfPaybackPeriod": 2.38132377854814
+    "npv": 15654.280000000004,
+    "irr": 13.260613214640355,
+    "mirr": 9.421914665853182,
+    "paybackPeriod": 3.385787758035937,
+    "dcfPaybackPeriod": 3.385787758035937
   },
   "dcfAnalysisWithTerminalValue": [
     {
       "year": 0,
-      "amount": -36100,
-      "presentValue": -36100,
+      "amount": -24700,
+      "presentValue": -24700,
       "discountFactor": 1
     },
     {
       "year": 1,
-      "amount": 13136.38,
-      "presentValue": 13136.38,
+      "amount": -11406,
+      "presentValue": -11406,
       "discountFactor": 1
     },
     {
       "year": 2,
-      "amount": 13136.38,
-      "presentValue": 13136.38,
+      "amount": 13136.76,
+      "presentValue": 13136.76,
       "discountFactor": 1
     },
     {
       "year": 3,
-      "amount": 25771.38,
-      "presentValue": 25771.38,
+      "amount": 13136.76,
+      "presentValue": 13136.76,
+      "discountFactor": 1
+    },
+    {
+      "year": 4,
+      "amount": 25486.760000000002,
+      "presentValue": 25486.760000000002,
       "discountFactor": 1
     }
   ],
   "sensitivityAnalysis": [
     {
       "rate": 1,
-      "npv": 14797.3057756908,
-      "change": -7.19282585519954
+      "npv": 14127.529859316994,
+      "change": -9.75292469971797
     },
     {
       "rate": 2,
-      "npv": 13690.0292421467,
-      "change": -14.1375499578737
+      "npv": 12669.179659259207,
+      "change": -19.06890857159062
     },
     {
       "rate": 3,
-      "npv": 12620.5284961386,
-      "change": -20.845348221111
+      "npv": 11275.522325764829,
+      "change": -27.971632513505405
     },
     {
       "rate": 4,
-      "npv": 11587.1193388712,
-      "change": -27.3267837658777
+      "npv": 9943.086453117892,
+      "change": -36.483271967041034
     },
     {
       "rate": 5,
-      "npv": 10588.209005507,
-      "change": -33.5918462487976
-    },
-    {
-      "rate": 6,
-      "npv": 9622.29035378197,
-      "change": -39.6499883105519
-    },
-    {
-      "rate": 7,
-      "npv": 8687.93647406662,
-      "change": -45.5101593810226
-    },
-    {
-      "rate": 8,
-      "npv": 7783.79568663313,
-      "change": -51.1808370559144
-    },
-    {
-      "rate": 9,
-      "npv": 6908.58689496528,
-      "change": -56.670056240316
-    },
-    {
-      "rate": 10,
-      "npv": 6061.09526671674,
-      "change": -61.9854362372838
+      "npv": 8668.619165882523,
+      "change": -44.6246063959344
     }
   ]
 }
