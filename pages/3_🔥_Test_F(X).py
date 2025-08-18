@@ -231,24 +231,22 @@ if full_config or DEFAULT_CONFIG:
             # True Alpha (คงสูตรฐานเก่า: n×1500 + |buffer|)
             n_tickers = len(selected_tickers)
             initial_capital = n_tickers * 1500.0
-            max_buffer_used = abs(np.min(roll_over))
-            total_capital_at_risk = initial_capital + max_buffer_used if (initial_capital + max_buffer_used) != 0 else 1.0
+            final_max_buffer = float(df_all.Max_Sum_Buffer.iloc[-1])
+            total_capital_at_risk = initial_capital + abs(final_max_buffer) if (initial_capital + abs(final_max_buffer)) != 0 else 1.0
             df_all_2 = pd.DataFrame({'True_Alpha': (df_new.cf.values / total_capital_at_risk) * 100}, index=df_new.index)
 
             # KPIs
             st.subheader("Key Performance Indicators")
             final_sum_delta = float(df_all.Sum_Delta.iloc[-1])
-            final_max_buffer = float(df_all.Max_Sum_Buffer.iloc[-1])
-            final_true_alpha = float(df_all_2.True_Alpha.iloc[-1])
             num_days = len(df_new)
             avg_cf = final_sum_delta / num_days if num_days > 0 else 0.0
             avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0.0
 
             # MIRR inputs
             sum_fixed_asset_value = float(sum(cfg.get('Fixed_Asset_Value', 0.0) for cfg in active_configs.values()))
-            I = sum_fixed_asset_value + abs(final_max_buffer)                 # Initial Investment
-            A = avg_cf * 252                                                 # Annual CF
-            E = 0.5 * sum_fixed_asset_value                                  # Exit Multiple (JSON-only spec)
+            I = sum_fixed_asset_value + abs(final_max_buffer)    # Initial Investment
+            A = avg_cf * 252                                     # Annual CF
+            E = 0.5 * sum_fixed_asset_value                      # Exit Multiple (ตามสเปค)
             finance_rate = 0.0
             reinvest_rate = 0.0
 
@@ -259,17 +257,20 @@ if full_config or DEFAULT_CONFIG:
             k1, k2, k3, k4, k5, k6 = st.columns(6)
             k1.metric("Total Net Profit (cf)", f"{final_sum_delta:,.2f}")
             k2.metric("Max Cash Buffer Used", f"{final_max_buffer:,.2f}")
-            k3.metric("True Alpha (%)", f"{final_true_alpha:,.2f}%")
+            k3.metric("True Alpha (%)", f"{float(df_all_2.True_Alpha.iloc[-1]):,.2f}%")
             k4.metric("Avg. Daily Profit", f"{avg_cf:,.2f}")
             k5.metric("Avg. Daily Buffer Used", f"{avg_burn_cash:,.2f}")
             k6.metric("MIRR (3-Year)", f"{mirr_value:.2%}")
 
             # ---------- JSON-only help block ----------
+            max_annual_cash_buffer_used = (avg_burn_cash * 252) * 3  # ← แทนที่คีย์เดิมตามสเปคใหม่
+
             help_payload = {
                 "definition": "MIRR (3-Year)",
                 "tickers_selected": int(n_tickers),
                 "sum_fixed_asset_value": round(sum_fixed_asset_value, 2),
-                "max_cash_buffer_used_abs": round(abs(final_max_buffer), 2),
+                "max_annual_cash_buffer_used": round(max_annual_cash_buffer_used, 2),  # <- คีย์ใหม่
+
                 "I_initial_investment": round(I, 2),
                 "A_annual_cash_flow": round(A, 2),
                 "E_exit_multiple": {
@@ -289,14 +290,15 @@ if full_config or DEFAULT_CONFIG:
                 "mirr_result": round(float(mirr_value), 6) if isinstance(mirr_value, (int, float, np.floating)) else None
             }
 
+            st.subheader("MIRR (3-Year) — JSON")
             st.json(help_payload, expanded=False)
-            # st.download_button(
-            #     label="⬇️ Download MIRR help JSON",
-            #     data=json.dumps(help_payload, ensure_ascii=False, indent=2),
-            #     file_name="mirr_help.json",
-            #     mime="application/json",
-            #     use_container_width=True
-            # )
+            st.download_button(
+                label="⬇️ Download MIRR help JSON",
+                data=json.dumps(help_payload, ensure_ascii=False, indent=2),
+                file_name="mirr_help.json",
+                mime="application/json",
+                use_container_width=True
+            )
             st.divider()
 
             # Charts
