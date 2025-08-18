@@ -12,7 +12,7 @@ except FileNotFoundError:
     st.error("ไม่พบไฟล์ 'cf_graph_config.json'. กรุณาสร้างไฟล์และใส่ข้อมูล Asset ตามโครงสร้างใหม่")
     st.stop()
 
-tab_names = ["DATA", "BATA" , "All_Ticker , "Option_Sum"]  
+tab_names = ["DATA", "BATA" , "All_Ticker" , "Option_Sum"]  
 tabs = st.tabs(tab_names)
 
 current_prices = {}
