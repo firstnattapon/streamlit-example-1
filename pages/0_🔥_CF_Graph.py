@@ -12,7 +12,7 @@ except FileNotFoundError:
     st.error("ไม่พบไฟล์ 'cf_graph_config.json'. กรุณาสร้างไฟล์และใส่ข้อมูล Asset ตามโครงสร้างใหม่")
     st.stop()
 
-tab_names = ["DATA", "BATA" , "All_Ticker , Option_Sum"]  
+tab_names = ["DATA", "BATA" , "All_Ticker , "Option_Sum"]  
 tabs = st.tabs(tab_names)
 
 current_prices = {}
@@ -28,7 +28,7 @@ with tabs[2]:
     with st.expander("All_Ticker", expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=7sRjgYJTTXSKcRxFLtAKXi", width=1500, height=1000, scrolling=0)
 
-with tabs[2]:
+with tabs[3]:
     with st.expander("Option_Sum", expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=aYyGrPmCRG24qMZiB4872K", width=1500, height=1000, scrolling=0)
 
