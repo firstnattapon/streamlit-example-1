@@ -289,15 +289,14 @@ if full_config or DEFAULT_CONFIG:
                 "mirr_result": round(float(mirr_value), 6) if isinstance(mirr_value, (int, float, np.floating)) else None
             }
 
-            st.subheader("MIRR (3-Year) — JSON")
             st.json(help_payload, expanded=False)
-            st.download_button(
-                label="⬇️ Download MIRR help JSON",
-                data=json.dumps(help_payload, ensure_ascii=False, indent=2),
-                file_name="mirr_help.json",
-                mime="application/json",
-                use_container_width=True
-            )
+            # st.download_button(
+            #     label="⬇️ Download MIRR help JSON",
+            #     data=json.dumps(help_payload, ensure_ascii=False, indent=2),
+            #     file_name="mirr_help.json",
+            #     mime="application/json",
+            #     use_container_width=True
+            # )
             st.divider()
 
             # Charts
