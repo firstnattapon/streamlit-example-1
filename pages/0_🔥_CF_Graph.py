@@ -26,7 +26,7 @@ with tabs[1]:
 
 with tabs[2]:
     with st.expander("All_Ticker", expanded=True):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=7sRjgYJTTXSKcRxFLtAKXi", width=1500, height=1000, scrolling=0)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=z6iWHpc2rQjTTMriGBbthi", width=1500, height=1000, scrolling=0)
 
 with tabs[3]:
     with st.expander("Option_Sum", expanded=True):
