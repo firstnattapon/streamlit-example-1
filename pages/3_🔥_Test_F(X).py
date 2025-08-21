@@ -612,7 +612,6 @@ if pending:
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 with tab2:
-    st.info(f"US Pre-Market Open (BKK time): **{latest_us_premarket_open_bkk.strftime('%Y-%m-%d %H:%M:%S %Z')}**")
     Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
 
     if Nex_day_:
