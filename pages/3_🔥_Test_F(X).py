@@ -132,6 +132,7 @@ THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 # ---------------------------------------------------------------------------------
 # Cache Management
 # ---------------------------------------------------------------------------------
+
 def clear_all_caches() -> None:
     st.cache_data.clear()
     st.cache_resource.clear()
@@ -149,6 +150,7 @@ def clear_all_caches() -> None:
 
     st.success("🗑️ Data caches cleared! UI state preserved.")
 
+
 def rerun_keep_selection(ticker: str) -> None:
     st.session_state["_pending_select_key"] = ticker
     st.rerun()
@@ -164,6 +166,7 @@ def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, in
     adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
     total = round(asset * unit_price + adjust_qty * unit_price, 2)
     return unit_price, adjust_qty, total
+
 
 @lru_cache(maxsize=128)
 def buy(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
@@ -185,12 +188,14 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
+
 @st.cache_data(ttl=60)
 def get_current_ny_date() -> datetime.date:
     ny_tz = pytz.timezone('America/New_York')
     return datetime.datetime.now(ny_tz).date()
 
-# NEW: คำนวณ “เวลาเปิดตลาด US ล่าสุด (09:30 NY)” แล้วแปลงเป็นเวลา Asia/Bangkok
+# NEW (Goal_1): คำนวณ "เวลาเปิดตลาด US Pre-Market ล่าสุด (04:00 NY)" แล้วแปลงเป็นเวลา Asia/Bangkok
+
 def _previous_weekday(d: datetime.date) -> datetime.date:
     # Monday=0 ... Sunday=6
     wd = d.weekday()
@@ -201,10 +206,11 @@ def _previous_weekday(d: datetime.date) -> datetime.date:
     else:                # Tue-Sat -> minus 1 day (Sat treated as Fri-1 => Fri)
         return d - datetime.timedelta(days=1)
 
+
 @st.cache_data(ttl=600)
-def get_latest_us_regular_open_bkk() -> datetime.datetime:
+def get_latest_us_premarket_open_bkk() -> datetime.datetime:
     """
-    คืนค่าเวลาเปิดตลาดล่าสุด 09:30 America/New_York (จ.-ศ.) ที่ไม่เกินเวลาปัจจุบัน
+    คืนค่าเวลาเปิดตลาดล่าสุด 04:00 America/New_York (จ.-ศ.) ที่ไม่เกินเวลาปัจจุบัน
     แล้วแปลงเป็น timezone Asia/Bangkok (ไม่ครอบคลุมวันหยุดนักขัตฤกษ์ของสหรัฐแบบละเอียด)
     """
     tz_ny = pytz.timezone('America/New_York')
@@ -214,7 +220,8 @@ def get_latest_us_regular_open_bkk() -> datetime.datetime:
     date_ny = now_ny.date()
 
     def make_open(dt_date: datetime.date) -> datetime.datetime:
-        dt_naive = datetime.datetime(dt_date.year, dt_date.month, dt_date.day, 9, 30, 0)
+        # Pre-Market เริ่ม 04:00 NY
+        dt_naive = datetime.datetime(dt_date.year, dt_date.month, dt_date.day, 4, 0, 0)
         return tz_ny.localize(dt_naive)
 
     candidate = make_open(date_ny)
@@ -224,7 +231,7 @@ def get_latest_us_regular_open_bkk() -> datetime.datetime:
         date_ny = _previous_weekday(date_ny)
         candidate = make_open(date_ny)
 
-    # ถ้าตอนนี้ยังไม่ถึงเวลา 9:30 ของวันนี้ -> ใช้วันทำการก่อนหน้า
+    # ถ้าตอนนี้ยังไม่ถึงเวลา 04:00 ของวันนี้ -> ใช้วันทำการก่อนหน้า
     if now_ny < candidate:
         date_ny = _previous_weekday(date_ny)
         candidate = make_open(date_ny)
@@ -236,14 +243,16 @@ def get_latest_us_regular_open_bkk() -> datetime.datetime:
     return candidate.astimezone(tz_bkk)
 
 # ---------------------------------------------------------------------------------
-# ThingSpeak helpers (net trades since US open)
+# ThingSpeak helpers (net trades since US **pre-market** open)
 # ---------------------------------------------------------------------------------
+
 def _field_number(field_value) -> Optional[int]:
     """Accepts 1 or 'field1' -> 1"""
     if isinstance(field_value, int):
         return field_value
     m = re.search(r'(\d+)', str(field_value))
     return int(m.group(1)) if m else None
+
 
 def _http_get_json(url: str, params: Dict) -> Dict:
     try:
@@ -254,10 +263,11 @@ def _http_get_json(url: str, params: Dict) -> Dict:
     except Exception:
         return {}
 
+
 @st.cache_data(ttl=180)
 def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> int:
     """
-    นับจำนวน net trades ตั้งแต่เวลาเปิดตลาดสหรัฐ (แปลงเป็น Asia/Bangkok) เป็นต้นมา:
+    นับจำนวน net trades ตั้งแต่เวลาเปิดตลาดสหรัฐ "Pre-Market" (แปลงเป็น Asia/Bangkok) เป็นต้นมา:
       +1 เมื่อค่าขึ้น (buy), -1 เมื่อค่าลง (sell)
     ใช้ baseline = ค่าสุดท้ายก่อน window_start
     """
@@ -433,6 +443,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 # ---------------------------------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------------------------------
+
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
@@ -454,7 +465,7 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                 base_help = raw_label[split_pos:].strip()
             else:
                 base_help = ""
-            help_text_final = base_help if base_help else f"net_since_us_open = {net_since_open_map.get(ticker, 0)}"
+            help_text_final = base_help if base_help else f"net_since_us_premarket_open = {net_since_open_map.get(ticker, 0)}"
 
             if config.get('option_config'):
                 option_val = float(config['option_config']['base_value'])
@@ -470,6 +481,7 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                 )
                 asset_inputs[ticker] = float(val)
     return asset_inputs
+
 
 def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel]) -> None:
     with st.expander("Update Assets on ThingSpeak"):
@@ -488,6 +500,7 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingsp
                         rerun_keep_selection(st.session_state.get("select_key", ""))
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
+
 
 def trading_section(
     config: Dict,
@@ -573,14 +586,14 @@ def trading_section(
 # ---------------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------------
-# NEW: คำนวณ “เวลาเปิดตลาดสหรัฐล่าสุด” ใน Asia/Bangkok (แสดงใน UI ด้วย)
-latest_us_open_bkk = get_latest_us_regular_open_bkk()
-window_start_bkk_iso = latest_us_open_bkk.isoformat()
+# NEW (Goal_1): คำนวณ "เวลาเปิดตลาดสหรัฐ (Pre-Market) ล่าสุด" ใน Asia/Bangkok (แสดงใน UI ด้วย)
+latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
+window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
 
 all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, window_start_bkk_iso)
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
-trade_nets_all = all_data['nets']  # {ticker: net_since_us_open}
+trade_nets_all = all_data['nets']  # {ticker: net_since_us_premarket_open}
 
 # Stable Session State Initialization
 if 'select_key' not in st.session_state:
@@ -595,10 +608,11 @@ pending = st.session_state.pop("_pending_select_key", None)
 if pending:
     st.session_state.select_key = pending
 
+
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 with tab2:
-    st.info(f"US Regular Session Open (BKK time): **{latest_us_open_bkk.strftime('%Y-%m-%d %H:%M:%S %Z')}**")
+    st.info(f"US Pre-Market Open (BKK time): **{latest_us_premarket_open_bkk.strftime('%Y-%m-%d %H:%M:%S %Z')}**")
     Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
 
     if Nex_day_:
