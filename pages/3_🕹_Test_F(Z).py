@@ -235,7 +235,6 @@ def get_latest_us_premarket_open_bkk() -> datetime.datetime:
     if now_ny < candidate:
         date_ny = _previous_weekday(date_ny)
         candidate = make_open(date_ny)
-        # ถ้าเลื่อนไปแล้วเจอเสาร์อาทิตย์ ให้วนจนได้วันทำการ (กรณีข้ามเสาร์-อาทิตย์)
         while candidate.weekday() >= 5:
             date_ny = _previous_weekday(date_ny)
             candidate = make_open(date_ny)
@@ -263,11 +262,11 @@ def _http_get_json(url: str, params: Dict) -> Dict:
     except Exception:
         return {}
 
+# --- (ยังคงไว้เพื่อ compatibility ถ้าต้องใช้ net แบบเดิม) -----------------------
 @st.cache_data(ttl=180)
 def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> int:
     """
-    (ของเดิม) นับจำนวน net trades ตั้งแต่เวลาเปิดตลาดสหรัฐ Pre-Market → ปัจจุบัน:
-      +1 เมื่อค่าขึ้น (buy), -1 เมื่อค่าลง (sell) นับเฉพาะ 'จำนวนครั้ง' ไม่สนขนาด Δ
+    (legacy) นับจำนวน net trades: +1 เมื่อค่าขึ้น, -1 เมื่อค่าลง
     """
     try:
         channel_id = int(asset_field_conf['channel_id'])
@@ -278,7 +277,7 @@ def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) ->
 
         params = {'results': 8000}
         if asset_field_conf.get('api_key'):
-            params['api_key'] = asset_field_conf['api_key']  # read key if private
+            params['api_key'] = asset_field_conf['api_key']
 
         url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
         data = _http_get_json(url, params)
@@ -310,7 +309,6 @@ def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) ->
                 rows.append((dt_local, v))
         rows.sort(key=lambda x: x[0])
 
-        # baseline: last value before window_start
         prev_val: Optional[float] = None
         for dt_local, v in rows:
             if dt_local < window_start_local:
@@ -340,19 +338,26 @@ def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) ->
     except Exception:
         return 0
 
-# NEW: เวอร์ชันสถิติเต็ม (จำนวนครั้ง + ปริมาณ Δหน่วย) สำหรับแปลงเป็น USD ได้จริง
+# NEW: เวอร์ชันละเอียด แยก Buy/Sell ทั้ง "จำนวนออเดอร์" และ "ปริมาณหน่วย"
 @st.cache_data(ttl=180)
-def fetch_net_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> Tuple[int, float]:
+def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> Dict[str, float]:
     """
-    คืนค่า (net_trade_count, delta_units_signed) นับจาก US Pre-Market → ตอนนี้ (Asia/Bangkok)
-      - net_trade_count: +1 เมื่อค่าขึ้น, -1 เมื่อค่าลง (เหมือนฟังก์ชันเดิม)
-      - delta_units_signed: (ค่าสุดท้ายหลัง window_start) - (baseline ก่อน window_start หรือค่าแรกหลัง window ถ้าไม่มี baseline)
+    Return:
+      {
+        'buy_count': int,
+        'sell_count': int,
+        'net_count': int,                 # buy_count - sell_count
+        'buy_units': float,               # ผลรวม increment >0 ของหน่วย
+        'sell_units': float,              # ผลรวม decrement >0 ของหน่วย (ขาออก)
+        'net_units': float                # buy_units - sell_units
+      }
+    หมายเหตุ: ใช้ 'ราคาปัจจุบัน' คูณ เพื่อประมาณ USD flow (ไม่ได้ใช้ราคา ณ เวลาเทรด)
     """
     try:
         channel_id = int(asset_field_conf['channel_id'])
         fnum = _field_number(asset_field_conf['field'])
         if fnum is None:
-            return 0, 0.0
+            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
         field_key = f"field{fnum}"
 
         params = {'results': 8000}
@@ -363,7 +368,7 @@ def fetch_net_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> 
         data = _http_get_json(url, params)
         feeds = data.get('feeds', [])
         if not feeds:
-            return 0, 0.0
+            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
         tz = pytz.timezone('Asia/Bangkok')
         try:
@@ -389,7 +394,7 @@ def fetch_net_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> 
                 rows.append((dt_local, v))
         rows.sort(key=lambda x: x[0])
 
-        # baseline ก่อน window_start
+        # baseline ก่อนหน้าต่าง
         baseline: Optional[float] = None
         for dt_local, v in rows:
             if dt_local < window_start_local:
@@ -400,11 +405,12 @@ def fetch_net_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> 
             else:
                 break
 
+        buy_count = sell_count = 0
+        buy_units = sell_units = 0.0
         first_after: Optional[float] = None
         last_after: Optional[float] = None
 
-        buys, sells = 0, 0
-        prev_val: Optional[float] = baseline
+        prev: Optional[float] = baseline
         for dt_local, v in rows:
             try:
                 curr = float(v)
@@ -412,32 +418,38 @@ def fetch_net_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> 
                 continue
 
             if dt_local < window_start_local:
-                prev_val = curr
+                prev = curr
                 continue
 
             if first_after is None:
                 first_after = curr
+            if prev is not None:
+                step = curr - prev
+                if step > 0:
+                    buy_count += 1
+                    buy_units += step
+                elif step < 0:
+                    sell_count += 1
+                    sell_units += (-step)
+            prev = curr
             last_after = curr
 
-            if prev_val is not None:
-                if curr > prev_val:
-                    buys += 1
-                elif curr < prev_val:
-                    sells += 1
-            prev_val = curr
-
-        net_count = int(buys - sells)
-
         if last_after is None:
-            # ไม่มีข้อมูลหลัง window_start
-            delta_units = 0.0
+            net_units = 0.0
         else:
             ref = baseline if baseline is not None else (first_after if first_after is not None else last_after)
-            delta_units = float(last_after - ref)
+            net_units = float(last_after - ref)
 
-        return net_count, float(delta_units)
+        return dict(
+            buy_count=int(buy_count),
+            sell_count=int(sell_count),
+            net_count=int(buy_count - sell_count),
+            buy_units=float(buy_units),
+            sell_units=float(sell_units),
+            net_units=float(net_units)
+        )
     except Exception:
-        return 0, 0.0
+        return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
 # ---------------------------------------------------------------------------------
 # Fetch all data (monitor / assets / nets)
@@ -447,7 +459,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     monitor_results: Dict[str, Tuple[pd.DataFrame, str, Optional[datetime.date]]] = {}
     asset_results: Dict[str, float] = {}
     nets_results: Dict[str, int] = {}
-    unit_deltas_results: Dict[str, float] = {}  # NEW
+    trade_stats_results: Dict[str, Dict[str, float]] = {}  # NEW
 
     def fetch_monitor(asset_config: Dict) -> Tuple[str, Tuple[pd.DataFrame, str, Optional[datetime.date]]]:
         ticker = asset_config['ticker']
@@ -510,33 +522,30 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
         except Exception:
             return ticker, 0.0
 
-    def fetch_net(asset_config: Dict) -> Tuple[str, Tuple[int, float]]:
+    def fetch_trade_stats(asset_config: Dict) -> Tuple[str, Dict[str, float]]:
         ticker = asset_config['ticker']
         try:
-            net_count, delta_units = fetch_net_stats_since(asset_config['asset_field'], window_start_bkk_iso)  # UPDATED
-            return ticker, (net_count, delta_units)
+            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso)  # NEW
+            return ticker, stats
         except Exception:
-            return ticker, (0, 0.0)
+            return ticker, dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
     workers = max(1, min(len(configs), 8))
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        # monitors
         for future in concurrent.futures.as_completed([executor.submit(fetch_monitor, a) for a in configs]):
             ticker, result = future.result()
             monitor_results[ticker] = result
 
-        # assets
         for future in concurrent.futures.as_completed([executor.submit(fetch_asset, a) for a in configs]):
             ticker, result = future.result()
             asset_results[ticker] = result
 
-        # nets (count + delta_units)
-        for future in concurrent.futures.as_completed([executor.submit(fetch_net, a) for a in configs]):
-            ticker, (count, du) = future.result()
-            nets_results[ticker] = count
-            unit_deltas_results[ticker] = du
+        for future in concurrent.futures.as_completed([executor.submit(fetch_trade_stats, a) for a in configs]):
+            ticker, stats = future.result()
+            trade_stats_results[ticker] = stats
+            nets_results[ticker] = int(stats.get('net_count', 0))  # สำหรับ label/help เดิม
 
-    return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results, 'unit_deltas': unit_deltas_results}  # UPDATED
+    return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results, 'trade_stats': trade_stats_results}  # UPDATED
 
 # ---------------------------------------------------------------------------------
 # UI helpers
@@ -554,7 +563,6 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
             else:
                 raw_label = ticker
 
-            # help text: ถ้ามี (...) จาก label ให้คงไว้, ไม่งั้นแสดง net_since_open
             display_label = raw_label
             base_help = ""
             split_pos = raw_label.find('(')
@@ -684,15 +692,15 @@ def trading_section(
 # ---------------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------------
-# NEW (Goal_1): คำนวณ "เวลาเปิดตลาดสหรัฐ (Pre-Market) ล่าสุด" ใน Asia/Bangkok (แสดงใน UI ด้วย)
+# NEW: คำนวณ "เวลาเปิดตลาดสหรัฐ (Pre-Market) ล่าสุด" เป็น Asia/Bangkok
 latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
 window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
 
 all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, window_start_bkk_iso)
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
-trade_nets_all = all_data['nets']                  # {ticker: net_count (buys - sells)}
-trade_unit_deltas_all = all_data['unit_deltas']    # NEW {ticker: delta_units_signed}
+trade_nets_all = all_data['nets']                 # สำหรับ label/help เดิม
+trade_stats_all = all_data['trade_stats']         # NEW: แยก buy/sell ทั้ง count และ units
 
 # Stable Session State Initialization
 if 'select_key' not in st.session_state:
@@ -737,33 +745,62 @@ with tab2:
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
     st.write("---")
 
-    # NEW (Goal_1): METRICS บนหน้า Controls
+    # NEW (Goal_1): METRICS บนหน้า Controls — แยก Buy/Sell ทั้ง Orders และ USD
     st.subheader("📊 US Pre-Market Window Metrics")
     st.caption(f"Window: {latest_us_premarket_open_bkk.strftime('%Y-%m-%d %H:%M %Z')} → now (Asia/Bangkok)")
 
-    # รวมผลลัพธ์รายตัวเป็นภาพรวมพอร์ต
-    total_order_count = 0
-    total_usd_flow = 0.0
+    total_buy_orders = 0
+    total_sell_orders = 0
+    total_buy_usd = 0.0
+    total_sell_usd = 0.0
+
     rows = []
     for cfg in ASSET_CONFIGS:
         t = cfg['ticker']
-        cnt = int(trade_nets_all.get(t, 0))
-        du = float(trade_unit_deltas_all.get(t, 0.0))
+        stats = trade_stats_all.get(t, {})
+        b_cnt = int(stats.get('buy_count', 0))
+        s_cnt = int(stats.get('sell_count', 0))
+        b_units = float(stats.get('buy_units', 0.0))
+        s_units = float(stats.get('sell_units', 0.0))
+        net_cnt = int(stats.get('net_count', 0))
+        net_units = float(stats.get('net_units', 0.0))
+
         px = float(get_cached_price(t))  # ราคาปัจจุบัน (USD)
-        usd = du * px
-        total_order_count += cnt
-        total_usd_flow += usd
+        buy_usd = b_units * px
+        sell_usd = - s_units * px
+        net_usd = buy_usd + sell_usd
+
+        total_buy_orders += b_cnt
+        total_sell_orders += s_cnt
+        total_buy_usd += buy_usd
+        total_sell_usd += sell_usd
+
         rows.append({
             "Ticker": t,
-            "Orders (Buy-Sell)": cnt,
-            "ΔUnits": du,
+            "Buy_Orders": b_cnt,
+            "Sell_Orders": s_cnt,
+            "Total_Orders(Net)": net_cnt,
+            "Buy_Units": b_units,
+            "Sell_Units": s_units,
+            "Net_Units": net_units,
             "Price": px,
-            "Net USD Flow": usd
+            "Buy_USD": buy_usd,
+            "Sell_USD": sell_usd,
+            "Net_USD": net_usd
         })
 
-    c1, c2 = st.columns(2)
-    c1.metric("Total Orders (Buy - Sell)", f"{total_order_count}")
-    c2.metric("Net USD Flow since US Pre-Market", f"${total_usd_flow:,.2f}")
+    net_orders_total = total_buy_orders - total_sell_orders
+    net_usd_total = total_buy_usd + total_sell_usd
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Orders (Buy - Sell)", f"{net_orders_total}")
+    c2.metric("Buy_Orders", f"{total_buy_orders}")
+    c3.metric("Sell_Orders", f"{total_sell_orders}")
+
+    d1, d2, d3 = st.columns(3)
+    d1.metric("Net USD Flow since US Pre-Market", f"${net_usd_total:,.2f}")
+    d2.metric("Buy_USD", f"${total_buy_usd:,.2f}")
+    d3.metric("Sell_USD", f"${total_sell_usd:,.2f}")
 
     with st.expander("Per-ticker detail"):
         df_metrics = pd.DataFrame(rows).set_index("Ticker")
