@@ -804,6 +804,7 @@ with tab2:
         with st.expander("Per-ticker detail"):
             df_metrics = pd.DataFrame(rows).set_index("Ticker")
             st.dataframe(df_metrics, use_container_width=True)
+    st.write("_____")
 
     # Controls for updating asset (ตามเดิม)
     Start = st.checkbox('start')
