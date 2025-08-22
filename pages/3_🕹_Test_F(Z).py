@@ -746,65 +746,64 @@ with tab2:
     st.write("---")
 
     # NEW (Goal_1): METRICS บนหน้า Controls — แยก Buy/Sell ทั้ง Orders และ USD
-    st.subheader("📊 US Pre-Market Window Metrics")
-    st.caption(f"Window: {latest_us_premarket_open_bkk.strftime('%Y-%m-%d %H:%M %Z')} → now (Asia/Bangkok)")
-
-    total_buy_orders = 0
-    total_sell_orders = 0
-    total_buy_usd = 0.0
-    total_sell_usd = 0.0
-
-    rows = []
-    for cfg in ASSET_CONFIGS:
-        t = cfg['ticker']
-        stats = trade_stats_all.get(t, {})
-        b_cnt = int(stats.get('buy_count', 0))
-        s_cnt = int(stats.get('sell_count', 0))
-        b_units = float(stats.get('buy_units', 0.0))
-        s_units = float(stats.get('sell_units', 0.0))
-        net_cnt = int(stats.get('net_count', 0))
-        net_units = float(stats.get('net_units', 0.0))
-
-        px = float(get_cached_price(t))  # ราคาปัจจุบัน (USD)
-        buy_usd = b_units * px
-        sell_usd = - s_units * px
-        net_usd = buy_usd + sell_usd
-
-        total_buy_orders += b_cnt
-        total_sell_orders += s_cnt
-        total_buy_usd += buy_usd
-        total_sell_usd += sell_usd
-
-        rows.append({
-            "Ticker": t,
-            "Buy_Orders": b_cnt,
-            "Sell_Orders": s_cnt,
-            "Total_Orders(Net)": net_cnt,
-            "Buy_Units": b_units,
-            "Sell_Units": s_units,
-            "Net_Units": net_units,
-            "Price": px,
-            "Buy_USD": buy_usd,
-            "Sell_USD": sell_usd,
-            "Net_USD": net_usd
-        })
-
-    net_orders_total = total_buy_orders - total_sell_orders
-    net_usd_total = total_buy_usd + total_sell_usd
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Orders (Buy - Sell)", f"{net_orders_total}")
-    c2.metric("Buy_Orders", f"{total_buy_orders}")
-    c3.metric("Sell_Orders", f"{total_sell_orders}")
-
-    d1, d2, d3 = st.columns(3)
-    d1.metric("Net USD Flow since US Pre-Market", f"${net_usd_total:,.2f}")
-    d2.metric("Buy_USD", f"${total_buy_usd:,.2f}")
-    d3.metric("Sell_USD", f"${total_sell_usd:,.2f}")
-
-    with st.expander("Per-ticker detail"):
-        df_metrics = pd.DataFrame(rows).set_index("Ticker")
-        st.dataframe(df_metrics, use_container_width=True)
+    with st.expander("METRICS"):
+    
+        total_buy_orders = 0
+        total_sell_orders = 0
+        total_buy_usd = 0.0
+        total_sell_usd = 0.0
+    
+        rows = []
+        for cfg in ASSET_CONFIGS:
+            t = cfg['ticker']
+            stats = trade_stats_all.get(t, {})
+            b_cnt = int(stats.get('buy_count', 0))
+            s_cnt = int(stats.get('sell_count', 0))
+            b_units = float(stats.get('buy_units', 0.0))
+            s_units = float(stats.get('sell_units', 0.0))
+            net_cnt = int(stats.get('net_count', 0))
+            net_units = float(stats.get('net_units', 0.0))
+    
+            px = float(get_cached_price(t))  # ราคาปัจจุบัน (USD)
+            buy_usd = b_units * px
+            sell_usd = - s_units * px
+            net_usd = buy_usd + sell_usd
+    
+            total_buy_orders += b_cnt
+            total_sell_orders += s_cnt
+            total_buy_usd += buy_usd
+            total_sell_usd += sell_usd
+    
+            rows.append({
+                "Ticker": t,
+                "Buy_Orders": b_cnt,
+                "Sell_Orders": s_cnt,
+                "Total_Orders(Net)": net_cnt,
+                "Buy_Units": b_units,
+                "Sell_Units": s_units,
+                "Net_Units": net_units,
+                "Price": px,
+                "Buy_USD": buy_usd,
+                "Sell_USD": sell_usd,
+                "Net_USD": net_usd
+            })
+    
+        net_orders_total = total_buy_orders - total_sell_orders
+        net_usd_total = total_buy_usd + total_sell_usd
+    
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Orders (Buy - Sell)", f"{net_orders_total}")
+        c2.metric("Buy_Orders", f"{total_buy_orders}")
+        c3.metric("Sell_Orders", f"{total_sell_orders}")
+    
+        d1, d2, d3 = st.columns(3)
+        d1.metric("Net USD Flow since US Pre-Market", f"${net_usd_total:,.2f}")
+        d2.metric("Buy_USD", f"${total_buy_usd:,.2f}")
+        d3.metric("Sell_USD", f"${total_sell_usd:,.2f}")
+    
+        with st.expander("Per-ticker detail"):
+            df_metrics = pd.DataFrame(rows).set_index("Ticker")
+            st.dataframe(df_metrics, use_container_width=True)
 
     # Controls for updating asset (ตามเดิม)
     Start = st.checkbox('start')
