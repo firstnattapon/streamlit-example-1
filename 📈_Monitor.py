@@ -180,7 +180,7 @@ def buy(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int
 # ---------------------------------------------------------------------------------
 # Price & Time helpers
 # ---------------------------------------------------------------------------------
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(3))
 def get_cached_price(ticker: str) -> float:
     try:
@@ -188,8 +188,22 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
+# === NEW: cache ประวัติราคาต่อ ticker (period='max') เพื่อให้ผลเหมือนเดิม แต่เร็วขึ้นอย่างมาก ===
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_history_df_max_close_bkk(ticker: str) -> pd.DataFrame:
+    """
+    ดึงประวัติราคา Close แบบ period='max' และแปลง timezone -> Asia/Bangkok
+    Cache 1 ชั่วโมง: ลด network I/O อย่างมหาศาล โดยไม่เปลี่ยน output logic
+    """
+    df = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
+    # ทำให้แน่ใจว่า timezone เหมือนเดิมกับโค้ดก่อนหน้า
+    try:
+        df.index = df.index.tz_convert('Asia/Bangkok')
+    except TypeError:
+        df.index = df.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+    return df
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_current_ny_date() -> datetime.date:
     ny_tz = pytz.timezone('America/New_York')
     return datetime.datetime.now(ny_tz).date()
@@ -207,7 +221,7 @@ def _previous_weekday(d: datetime.date) -> datetime.date:
         return d - datetime.timedelta(days=1)
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=600, show_spinner=False)
 def get_latest_us_premarket_open_bkk() -> datetime.datetime:
     """
     คืนค่าเวลาเปิดตลาดล่าสุด 04:00 America/New_York (จ.-ศ.) ที่ไม่เกินเวลาปัจจุบัน
@@ -220,18 +234,15 @@ def get_latest_us_premarket_open_bkk() -> datetime.datetime:
     date_ny = now_ny.date()
 
     def make_open(dt_date: datetime.date) -> datetime.datetime:
-        # Pre-Market เริ่ม 04:00 NY
         dt_naive = datetime.datetime(dt_date.year, dt_date.month, dt_date.day, 4, 0, 0)
         return tz_ny.localize(dt_naive)
 
     candidate = make_open(date_ny)
 
-    # ถ้าเป็นเสาร์อาทิตย์ให้ถอยไปวันทำการก่อนหน้า
     while candidate.weekday() >= 5:  # 5=Sat, 6=Sun
         date_ny = _previous_weekday(date_ny)
         candidate = make_open(date_ny)
 
-    # ถ้าตอนนี้ยังไม่ถึงเวลา 04:00 ของวันนี้ -> ใช้วันทำการก่อนหน้า
     if now_ny < candidate:
         date_ny = _previous_weekday(date_ny)
         candidate = make_open(date_ny)
@@ -263,7 +274,7 @@ def _http_get_json(url: str, params: Dict) -> Dict:
         return {}
 
 # --- (ยังคงไว้เพื่อ compatibility ถ้าต้องใช้ net แบบเดิม) -----------------------
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> int:
     """
     (legacy) นับจำนวน net trades: +1 เมื่อค่าขึ้น, -1 เมื่อค่าลง
@@ -339,7 +350,7 @@ def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) ->
         return 0
 
 # NEW: เวอร์ชันละเอียด แยก Buy/Sell ทั้ง "จำนวนออเดอร์" และ "ปริมาณหน่วย"
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> Dict[str, float]:
     """
     Return:
@@ -388,10 +399,11 @@ def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso:
             return dt_utc.astimezone(tz), r.get(field_key)
 
         rows: List[Tuple[datetime.datetime, Optional[str]]] = []
+        append = rows.append
         for r in feeds:
             dt_local, v = _parse_row(r)
             if dt_local is not None and v is not None:
-                rows.append((dt_local, v))
+                append((dt_local, v))
         rows.sort(key=lambda x: x[0])
 
         # baseline ก่อนหน้าต่าง
@@ -454,12 +466,15 @@ def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso:
 # ---------------------------------------------------------------------------------
 # Fetch all data (monitor / assets / nets)
 # ---------------------------------------------------------------------------------
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional[str], window_start_bkk_iso: str) -> Dict[str, dict]:
     monitor_results: Dict[str, Tuple[pd.DataFrame, str, Optional[datetime.date]]] = {}
     asset_results: Dict[str, float] = {}
     nets_results: Dict[str, int] = {}
-    trade_stats_results: Dict[str, Dict[str, float]] = {}  # NEW
+    trade_stats_results: Dict[str, Dict[str, float]] = {}
+
+    # === NEW: เตรียม cache ประวัติราคาต่อ ticker ล่วงหน้า (ยังดึงแบบ period='max' เพื่อให้ผลลัพธ์เดิม) ===
+    tickers = [c['ticker'] for c in configs]
 
     def fetch_monitor(asset_config: Dict) -> Tuple[str, Tuple[pd.DataFrame, str, Optional[datetime.date]]]:
         ticker = asset_config['ticker']
@@ -468,11 +483,8 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             client = _clients_ref[int(monitor_field_config['channel_id'])]
             field_num = monitor_field_config['field']
 
-            tickerData = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-            try:
-                tickerData.index = tickerData.index.tz_convert('Asia/Bangkok')
-            except TypeError:
-                tickerData.index = tickerData.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+            # ใช้ cache ใหม่ที่เร็วขึ้นมาก
+            tickerData = get_history_df_max_close_bkk(ticker)
 
             if start_date:
                 tickerData = tickerData[tickerData.index >= start_date]
@@ -488,14 +500,16 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             except Exception:
                 pass
 
+            # เตรียม df action
             tickerData = tickerData.copy()
             tickerData['index'] = list(range(len(tickerData)))
 
-            # เติม 5 บรรทัด dummy ด้านท้าย
+            # เติม 5 บรรทัด dummy ด้านท้าย (เหมือนเดิม)
             dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
             df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
             df['action'] = ""
 
+            # ใส่ SimulationTracer (เหมือนเดิม)
             try:
                 tracer = SimulationTracer(encoded_string=fx_js_str)
                 final_actions = tracer.run()
@@ -525,27 +539,31 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     def fetch_trade_stats(asset_config: Dict) -> Tuple[str, Dict[str, float]]:
         ticker = asset_config['ticker']
         try:
-            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso)  # NEW
+            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso)
             return ticker, stats
         except Exception:
             return ticker, dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
-    workers = max(1, min(len(configs), 8))
+    # เพิ่มจำนวน worker เล็กน้อย (ยังคงปลอดภัย)
+    workers = max(1, min(len(configs) * 3, 12))
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        # monitor (ยังคงคู่ขนานเหมือนเดิม แต่ได้อานิสงส์จาก cache ใหม่)
         for future in concurrent.futures.as_completed([executor.submit(fetch_monitor, a) for a in configs]):
             ticker, result = future.result()
             monitor_results[ticker] = result
 
+        # asset last value
         for future in concurrent.futures.as_completed([executor.submit(fetch_asset, a) for a in configs]):
             ticker, result = future.result()
             asset_results[ticker] = result
 
+        # trade stats (แยก buy/sell)
         for future in concurrent.futures.as_completed([executor.submit(fetch_trade_stats, a) for a in configs]):
             ticker, stats = future.result()
             trade_stats_results[ticker] = stats
             nets_results[ticker] = int(stats.get('net_count', 0))  # สำหรับ label/help เดิม
 
-    return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results, 'trade_stats': trade_stats_results}  # UPDATED
+    return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results, 'trade_stats': trade_stats_results}
 
 # ---------------------------------------------------------------------------------
 # UI helpers
@@ -747,12 +765,11 @@ with tab2:
 
     # NEW (Goal_1): METRICS บนหน้า Controls — แยก Buy/Sell ทั้ง Orders และ USD
     with st.expander("METRICS"):
-    
         total_buy_orders = 0
         total_sell_orders = 0
         total_buy_usd = 0.0
         total_sell_usd = 0.0
-    
+
         rows = []
         for cfg in ASSET_CONFIGS:
             t = cfg['ticker']
@@ -763,17 +780,17 @@ with tab2:
             s_units = float(stats.get('sell_units', 0.0))
             net_cnt = int(stats.get('net_count', 0))
             net_units = float(stats.get('net_units', 0.0))
-    
+
             px = float(get_cached_price(t))  # ราคาปัจจุบัน (USD)
             buy_usd = b_units * px
             sell_usd = - s_units * px
             net_usd = buy_usd + sell_usd
-    
+
             total_buy_orders += b_cnt
             total_sell_orders += s_cnt
             total_buy_usd += buy_usd
             total_sell_usd += sell_usd
-    
+
             rows.append({
                 "Ticker": t,
                 "Buy_Orders": b_cnt,
@@ -787,20 +804,20 @@ with tab2:
                 "Sell_USD": sell_usd,
                 "Net_USD": net_usd
             })
-    
+
         net_orders_total = total_buy_orders - total_sell_orders
         net_usd_total = total_buy_usd + total_sell_usd
-    
+
         c1, c2, c3 = st.columns(3)
         c1.metric("Total Orders (Buy - Sell)", f"{net_orders_total}")
         c2.metric("Buy_Orders", f"{total_buy_orders}")
         c3.metric("Sell_Orders", f"{total_sell_orders}")
-    
+
         d1, d2, d3 = st.columns(3)
         d1.metric("Net USD Flow since US Pre-Market", f"${net_usd_total:,.2f}")
         d2.metric("Buy_USD", f"${total_buy_usd:,.2f}")
         d3.metric("Sell_USD", f"${total_sell_usd:,.2f}")
-    
+
         with st.expander("Per-ticker detail"):
             df_metrics = pd.DataFrame(rows).set_index("Ticker")
             st.dataframe(df_metrics, use_container_width=True)
