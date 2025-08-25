@@ -211,8 +211,6 @@ if full_config or DEFAULT_CONFIG:
     # NEW: Per-Ticker Fixed_Asset_Value sliders (range 1–5000)
     # -------------------------------------------------------------
     if active_configs:
-
-        st.subheader("Per-Ticker Controls")
         with st.expander("Per-Ticker Controls"):
             cols = st.columns(min(3, len(active_configs)))  # กระจายสไลเดอร์ให้ดูง่าย
             i = 0
