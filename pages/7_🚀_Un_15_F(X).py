@@ -204,7 +204,28 @@ if full_config or DEFAULT_CONFIG:
         )
     st.divider()
 
-    active_configs = {t: full_config.get(t, st.session_state.custom_tickers.get(t)) for t in selected_tickers}
+    # Build active config from file + custom
+    active_configs = {t: full_config.get(t, st.session_state.custom_tickers.get(t)).copy() for t in selected_tickers}
+
+    # -------------------------------------------------------------
+    # NEW: Per-Ticker Fixed_Asset_Value sliders (range 1–5000)
+    # -------------------------------------------------------------
+    if active_configs:
+        with st.expander("Per-Ticker Controls"):
+            cols = st.columns(min(3, len(active_configs)))  # กระจายสไลเดอร์ให้ดูง่าย
+            i = 0
+            for tkr, cfg in active_configs.items():
+                with cols[i % len(cols)]:
+                    current_val = float(cfg.get('Fixed_Asset_Value', DEFAULT_CONFIG.get('Fixed_Asset_Value', 1500.0)))
+                    # ใช้ key แยกราย ticker เพื่อให้ state คงอยู่
+                    new_val = st.slider(
+                        f"Fixed_Asset_Value — {tkr}",
+                        min_value=1.0, max_value=5000.0, value=current_val, step=1.0,
+                        key=f"fav_{tkr}"
+                    )
+                    # อัปเดตค่าเข้าคอนฟิกที่ใช้รัน simulation
+                    active_configs[tkr]['Fixed_Asset_Value'] = float(new_val)
+                i += 1
 
     if not active_configs:
         st.warning("Please select at least one ticker to start the analysis.")
@@ -230,7 +251,7 @@ if full_config or DEFAULT_CONFIG:
 
             # True Alpha (คงสูตรฐานเก่า: n×1500 + |buffer|)
             n_tickers = len(selected_tickers)
-            initial_capital = n_tickers * 1500.0
+            initial_capital = n_tickers * 1500.0  # <— ตามข้อกำหนด Goal_2: ไม่เปลี่ยนสูตรฐาน
             max_buffer_used = abs(np.min(roll_over))
             total_capital_at_risk = initial_capital + max_buffer_used if (initial_capital + max_buffer_used) != 0 else 1.0
             df_all_2 = pd.DataFrame({'True_Alpha': (df_new.cf.values / total_capital_at_risk) * 100}, index=df_new.index)
@@ -290,13 +311,6 @@ if full_config or DEFAULT_CONFIG:
             }
 
             st.json(help_payload, expanded=False)
-            # st.download_button(
-            #     label="⬇️ Download MIRR help JSON",
-            #     data=json.dumps(help_payload, ensure_ascii=False, indent=2),
-            #     file_name="mirr_help.json",
-            #     mime="application/json",
-            #     use_container_width=True
-            # )
             st.divider()
 
             # Charts
