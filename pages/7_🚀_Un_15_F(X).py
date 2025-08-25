@@ -202,7 +202,6 @@ if full_config or DEFAULT_CONFIG:
             options=all_tickers,
             default=default_selection
         )
-    st.divider()
 
     # Build active config from file + custom
     active_configs = {t: full_config.get(t, st.session_state.custom_tickers.get(t)).copy() for t in selected_tickers}
