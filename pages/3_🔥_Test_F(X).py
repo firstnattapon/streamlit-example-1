@@ -211,21 +211,23 @@ if full_config or DEFAULT_CONFIG:
     # NEW: Per-Ticker Fixed_Asset_Value sliders (range 1–5000)
     # -------------------------------------------------------------
     if active_configs:
+
         st.subheader("Per-Ticker Controls")
-        cols = st.columns(min(3, len(active_configs)))  # กระจายสไลเดอร์ให้ดูง่าย
-        i = 0
-        for tkr, cfg in active_configs.items():
-            with cols[i % len(cols)]:
-                current_val = float(cfg.get('Fixed_Asset_Value', DEFAULT_CONFIG.get('Fixed_Asset_Value', 1500.0)))
-                # ใช้ key แยกราย ticker เพื่อให้ state คงอยู่
-                new_val = st.slider(
-                    f"Fixed_Asset_Value — {tkr}",
-                    min_value=1.0, max_value=5000.0, value=current_val, step=1.0,
-                    key=f"fav_{tkr}"
-                )
-                # อัปเดตค่าเข้าคอนฟิกที่ใช้รัน simulation
-                active_configs[tkr]['Fixed_Asset_Value'] = float(new_val)
-            i += 1
+        with st.expander("Per-Ticker Controls"):
+            cols = st.columns(min(3, len(active_configs)))  # กระจายสไลเดอร์ให้ดูง่าย
+            i = 0
+            for tkr, cfg in active_configs.items():
+                with cols[i % len(cols)]:
+                    current_val = float(cfg.get('Fixed_Asset_Value', DEFAULT_CONFIG.get('Fixed_Asset_Value', 1500.0)))
+                    # ใช้ key แยกราย ticker เพื่อให้ state คงอยู่
+                    new_val = st.slider(
+                        f"Fixed_Asset_Value — {tkr}",
+                        min_value=1.0, max_value=5000.0, value=current_val, step=1.0,
+                        key=f"fav_{tkr}"
+                    )
+                    # อัปเดตค่าเข้าคอนฟิกที่ใช้รัน simulation
+                    active_configs[tkr]['Fixed_Asset_Value'] = float(new_val)
+                i += 1
 
     if not active_configs:
         st.warning("Please select at least one ticker to start the analysis.")
