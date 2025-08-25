@@ -1,488 +1,338 @@
-# import pandas as pd
-# import numpy as np
-# from numba import njit
-# import yfinance as yf
-# import streamlit as st
-# import thingspeak
-# import json
-# import streamlit.components.v1 as components
+import numpy as np
+import pandas as pd
+import yfinance as yf
+import streamlit as st
+import json
+import plotly.express as px
+import numpy_financial as npf
 
-# # === CONFIG & INITIAL SETUP ===
-# st.set_page_config(page_title="Limit_F(X)", page_icon="✈️", layout="wide")
+# --------------------------------
+# Page setup
+# --------------------------------
+st.set_page_config(page_title="Exist_F(X)", page_icon="☀", layout="wide")
 
-# @st.cache_data
-# def load_config(path='limit_fx_config.json'):
-#     """Loads the asset configuration from a JSON file."""
-#     try:
-#         with open(path, 'r') as f:
-#             config = json.load(f)
-#         return config['assets']
-#     except FileNotFoundError:
-#         st.error(f"Configuration file '{path}' not found. Please ensure it exists.")
-#         return None
-#     except (json.JSONDecodeError, KeyError) as e:
-#         st.error(f"Error reading or parsing '{path}': {e}")
-#         return None
+# --------------------------------
+# Config loader
+# --------------------------------
+def load_config(filename="un15_fx_config.json"):
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        st.error(f"Error: Configuration file '{filename}' not found.")
+        return {}, {}
+    except json.JSONDecodeError:
+        st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
+        return {}, {}
 
-# ASSETS = load_config()
-# if not ASSETS:
-#     st.stop()
+    fallback_default = {
+        "Fixed_Asset_Value": 1500.0, "Cash_Balan": 650.0, "step": 0.01,
+        "filter_date": "2024-01-01 12:00:00+07:00", "pred": 1
+    }
+    default_config = data.pop('__DEFAULT_CONFIG__', fallback_default)
+    ticker_configs = data
+    return ticker_configs, default_config
 
-# TICKERS = [a['symbol'] for a in ASSETS]
-# FILTER_DATE = '2024-01-01 12:00:00+07:00'
-# FIX_VALUE = 1500.0
+# --------------------------------
+# Core model
+# --------------------------------
+def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
+    if entry >= 10000 or entry <= 0:
+        return pd.DataFrame()
 
-# # === DATA FETCHING & CORE CALCULATION FUNCTIONS ===
+    samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
+    df = pd.DataFrame({
+        'Asset_Price': np.around(samples, 2),
+        'Fixed_Asset_Value': Fixed_Asset_Value
+    })
+    df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
 
-# @st.cache_data(ttl=600)
-# def get_prices(tickers, start_date):
-#     """Fetches historical price data for a list of tickers."""
-#     df_list = []
-#     for ticker in tickers:
-#         try:
-#             data = yf.Ticker(ticker).history(period='max')[['Close']]
-#             if not data.empty:
-#                 data.index = data.index.tz_convert(tz='Asia/Bangkok')
-#                 data = data[data.index >= start_date]
-#                 data = data.rename(columns={'Close': f"{ticker}_price"})
-#                 df_list.append(data)
-#         except Exception as e:
-#             st.warning(f"Could not fetch data for {ticker}: {e}")
-#     if not df_list:
-#         return pd.DataFrame()
-#     return pd.concat(df_list, axis=1).ffill()
+    df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
+    if not df_top.empty:
+        df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
+        df_top.fillna(0, inplace=True)
+        np_Cash_Balan_top = df_top['Cash_Balan_top'].values
+        xx = np.zeros(len(np_Cash_Balan_top))
+        y_0 = Cash_Balan
+        for idx, v_0 in enumerate(np_Cash_Balan_top):
+            y_0 = y_0 + v_0
+            xx[idx] = y_0
+        df_top['Cash_Balan'] = xx
+        df_top = df_top.sort_values(by='Amount_Asset')[:-1]
+    else:
+        df_top = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
 
-# @st.cache_data(ttl=300)
-# def get_act_from_thingspeak(channel_id, api_key, field):
-#     """Fetches the last value from a ThingSpeak channel field."""
-#     try:
-#         client = thingspeak.Channel(channel_id, api_key, fmt='json')
-#         act_json = client.get_field_last(field=str(field))
-#         value = json.loads(act_json).get(f"field{field}")
-#         if value is None:
-#             st.warning(f"Field {field} on channel {channel_id} returned null. Using 0.")
-#             return 0
-#         return int(value)
-#     except Exception as e:
-#         st.error(f"ThingSpeak Error (Channel: {channel_id}, Field: {field}): {e}")
-#         return 0
+    df_down = df[df.Asset_Price <= np.around(entry, 2)].copy()
+    if not df_down.empty:
+        df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
+        df_down.fillna(0, inplace=True)
+        df_down = df_down.sort_values(by='Asset_Price', ascending=False)
+        np_Cash_Balan_down = df_down['Cash_Balan_down'].values
+        xxx = np.zeros(len(np_Cash_Balan_down))
+        y_1 = Cash_Balan
+        for idx, v_1 in enumerate(np_Cash_Balan_down):
+            y_1 = y_1 + v_1
+            xxx[idx] = y_1
+        df_down['Cash_Balan'] = xxx
+    else:
+        df_down = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
 
-# @njit(fastmath=True)
-# def calculate_optimized(action_list, price_list, fix=FIX_VALUE):
-#     action_array = np.asarray(action_list, dtype=np.int32)
-#     action_array[0] = 1
-#     price_array = np.asarray(price_list, dtype=np.float64)
-#     n = len(action_array)
-#     amount = np.empty(n, dtype=np.float64)
-#     buffer = np.zeros(n, dtype=np.float64)
-#     cash = np.empty(n, dtype=np.float64)
-#     asset_value = np.empty(n, dtype=np.float64)
-#     sumusd = np.empty(n, dtype=np.float64)
-#     if price_array.shape[0] == 0:
-#         return buffer, sumusd, cash, asset_value, amount, np.empty(0, dtype=np.float64)
-#     initial_price = price_array[0]
-#     amount[0] = fix / initial_price
-#     cash[0] = fix
-#     asset_value[0] = amount[0] * initial_price
-#     sumusd[0] = cash[0] + asset_value[0]
-#     refer = -fix * np.log(initial_price / price_array)
-#     for i in range(1, n):
-#         curr_price = price_array[i]
-#         if action_array[i] == 0:
-#             amount[i] = amount[i-1]
-#             buffer[i] = 0
-#         else:
-#             amount[i] = fix / curr_price
-#             buffer[i] = amount[i-1] * curr_price - fix
-#         cash[i] = cash[i-1] + buffer[i]
-#         asset_value[i] = amount[i] * curr_price
-#         sumusd[i] = cash[i] + asset_value[i]
-#     return buffer, sumusd, cash, asset_value, amount, refer
+    combined_df = pd.concat([df_top, df_down], axis=0, ignore_index=True)
+    return combined_df[['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan']]
 
-# def get_max_action(price_list, fix=FIX_VALUE):
-#     prices = np.asarray(price_list, dtype=np.float64)
-#     n = len(prices)
-#     if n < 2:
-#         return np.ones(n, dtype=int)
-#     dp = np.zeros(n, dtype=np.float64)
-#     path = np.zeros(n, dtype=int)
-#     initial_capital = float(fix * 2)
-#     dp[0] = initial_capital
-#     for i in range(1, n):
-#         max_prev_sumusd = 0.0
-#         best_j = 0
-#         for j in range(i):
-#             profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1.0)
-#             current_sumusd = dp[j] + profit_from_j_to_i
-#             if current_sumusd > max_prev_sumusd:
-#                 max_prev_sumusd = current_sumusd
-#                 best_j = j
-#         dp[i] = max_prev_sumusd
-#         path[i] = best_j
-#     actions = np.zeros(n, dtype=int)
-#     last_action_day = np.argmax(dp)
-#     current_day = last_action_day
-#     while current_day > 0:
-#         actions[current_day] = 1
-#         current_day = path[current_day]
-#     actions[0] = 1
-#     return actions
+# --------------------------------
+# Simulation per ticker
+# --------------------------------
+def delta6(asset_config):
+    try:
+        hist = yf.Ticker(asset_config['Ticker']).history(period='max')
+        if hist.empty:
+            return None
 
-# # Perfect Foresight envelope (max at each t) — wealth series
-# @njit(fastmath=True)
-# def perfect_foresight_wealth_series(prices, fix=FIX_VALUE):
-#     """
-#     Compute W_i via DP:
-#       W_i = max_{j < i} [ W_j + fix*(P_i/P_j - 1) ], with W_0 = 2*fix
-#     Then for each t:
-#       Wealth_pf[t] = max_{i <= t} [ W_i + fix*(P_t/P_i - 1) ]
-#     """
-#     n = len(prices)
-#     wealth_after_reb = np.empty(n, dtype=np.float64)
-#     wealth_after_reb[0] = 2.0 * fix
-#     for i in range(1, n):
-#         best = 0.0
-#         for j in range(i):
-#             val = wealth_after_reb[j] + fix * (prices[i] / prices[j] - 1.0)
-#             if val > best:
-#                 best = val
-#         wealth_after_reb[i] = best
-#     wealth_pf = np.empty(n, dtype=np.float64)
-#     for t in range(n):
-#         best_t = 0.0
-#         for i in range(t + 1):
-#             val = wealth_after_reb[i] + fix * (prices[t] / prices[i] - 1.0)
-#             if val > best_t:
-#                 best_t = val
-#         wealth_pf[t] = best_t
-#     return wealth_pf
+        # Robust timezone convert → Asia/Bangkok
+        if hist.index.tz is None:
+            hist.index = hist.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+        else:
+            hist.index = hist.index.tz_convert('Asia/Bangkok')
 
-# @st.cache_data(ttl=600)
-# def Limit_fx(Ticker, start_date=FILTER_DATE, act=-1):
-#     """Main calculation engine for a single ticker."""
-#     try:
-#         tickerData = yf.Ticker(Ticker).history(period='max')[['Close']]
-#         if tickerData.empty: return pd.DataFrame()
-#         tickerData.index = tickerData.index.tz_convert(tz='Asia/Bangkok')
-#         tickerData = tickerData[tickerData.index >= start_date]
-#         prices = tickerData.Close.values.astype(np.float64)
-#     except Exception as e:
-#         st.warning(f"Could not get yfinance data for {Ticker}: {e}")
-#         return pd.DataFrame()
+        hist = hist[hist.index >= asset_config['filter_date']][['Close']]
+        if hist.empty:
+            return None
 
-#     if len(prices) == 0: return pd.DataFrame()
+        entry = hist['Close'].iloc[0]
+        df_model = calculate_cash_balance_model(entry, asset_config['step'],
+                                                asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
+        if df_model.empty:
+            return None
 
-#     if act == -1:
-#         # always buy
-#         actions = np.ones(len(prices), dtype=np.int64)
-#         buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
-#         initial_capital = sumusd[0]
-#         df = pd.DataFrame({
-#             'price': prices, 'action': actions, 'buffer': buffer, 'sumusd': sumusd,
-#             'cash': cash, 'asset_value': asset_value, 'amount': amount,
-#             'refer': refer + initial_capital,
-#         }, index=tickerData.index)
-#         # FIX: start net at 0
-#         df['net'] = df['sumusd'] - df['refer']
-#         return df
+        df = hist.copy()
+        df['Close'] = np.around(df['Close'].values, 2)
+        df['pred'] = asset_config['pred']
+        df['Fixed_Asset_Value'] = asset_config['Fixed_Asset_Value']
+        df['Amount_Asset'] = 0.0
+        df['re'] = 0.0
+        df['Cash_Balan'] = asset_config['Cash_Balan']
+        df['Amount_Asset'].iloc[0] = df['Fixed_Asset_Value'].iloc[0] / df['Close'].iloc[0]
 
-#     elif act == -2:
-#         # legacy "max actions to end"
-#         actions = get_max_action(prices)
-#         buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
-#         initial_capital = sumusd[0] if len(sumusd) > 0 else 0.0
-#         df = pd.DataFrame({
-#             'price': prices, 'action': actions, 'buffer': buffer, 'sumusd': sumusd,
-#             'cash': cash, 'asset_value': asset_value, 'amount': amount,
-#             'refer': refer + initial_capital,
-#         }, index=tickerData.index)
-#         # FIX: start net at 0
-#         df['net'] = df['sumusd'] - df['refer']
-#         return df
+        close_vals = df['Close'].values
+        pred_vals = df['pred'].values
+        amount_asset_vals = df['Amount_Asset'].values
+        re_vals = df['re'].values
+        cash_balan_sim_vals = df['Cash_Balan'].values
 
-#     elif act == -3:
-#         # Perfect Foresight envelope (true max_net each day)
-#         wealth_pf = perfect_foresight_wealth_series(prices, FIX_VALUE)
-#         initial_price = prices[0]
-#         refer = -FIX_VALUE * np.log(initial_price / prices)
-#         initial_capital = wealth_pf[0]  # 2*fix
-#         n = len(prices)
-#         df = pd.DataFrame({
-#             'price': prices,
-#             'action': np.zeros(n, dtype=np.int64),
-#             'buffer': np.zeros(n, dtype=np.float64),
-#             'sumusd': wealth_pf,
-#             'cash': np.nan,
-#             'asset_value': np.nan,
-#             'amount': np.nan,
-#             'refer': refer + initial_capital
-#         }, index=tickerData.index)
-#         # FIX: start net at 0
-#         df['net'] = df['sumusd'] - df['refer']
-#         return df
+        for idx in range(1, len(amount_asset_vals)):
+            if pred_vals[idx] == 1:
+                amount_asset_vals[idx] = asset_config['Fixed_Asset_Value'] / close_vals[idx]
+                re_vals[idx] = (amount_asset_vals[idx-1] * close_vals[idx]) - asset_config['Fixed_Asset_Value']
+            else:
+                amount_asset_vals[idx] = amount_asset_vals[idx-1]
+                re_vals[idx] = 0
+            cash_balan_sim_vals[idx] = cash_balan_sim_vals[idx-1] + re_vals[idx]
 
-#     else:
-#         # random seed mode
-#         rng = np.random.default_rng(act)
-#         actions = rng.integers(0, 2, len(prices))
-#         buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
-#         initial_capital = sumusd[0] if len(sumusd) > 0 else 0.0
-#         df = pd.DataFrame({
-#             'price': prices, 'action': actions, 'buffer': buffer, 'sumusd': sumusd,
-#             'cash': cash, 'asset_value': asset_value, 'amount': amount,
-#             'refer': refer + initial_capital,
-#         }, index=tickerData.index)
-#         # FIX: start net at 0
-#         df['net'] = df['sumusd'] - df['refer']
-#         return df
+        original_index = df.index
+        df = df.merge(
+            df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}),
+            left_on='Close', right_on='Asset_Price', how='left'
+        ).drop('Asset_Price', axis=1)
+        df.set_index(original_index, inplace=True)
 
-# # === ANALYSIS & DATA PREPARATION FUNCTIONS ===
+        df['refer_model'].interpolate(method='linear', inplace=True)
+        df.fillna(method='bfill', inplace=True)
+        df.fillna(method='ffill', inplace=True)
 
-# @st.cache_data
-# def prepare_base_data(tickers):
-#     """Pre-calculates and caches base dataframes (min, max) for all tickers."""
-#     base_dfs = {}
-#     for ticker in tickers:
-#         df_min = Limit_fx(ticker, act=-1)
-#         if not df_min.empty:
-#             base_dfs[ticker] = {
-#                 'min': df_min,
-#                 'max_legacy': Limit_fx(ticker, act=-2),
-#                 'max_pf': Limit_fx(ticker, act=-3),
-#             }
-#     return base_dfs
+        df['pv'] = df['Cash_Balan'] + (df['Amount_Asset'] * df['Close'])
+        df['refer_pv'] = df['refer_model'] + asset_config['Fixed_Asset_Value']
+        df['net_pv'] = df['pv'] - df['refer_pv']
 
-# def align_ticker_data(base_dfs, column_name):
-#     """Aligns a specific column from all base dataframes for combined analysis."""
-#     dfs_to_align = []
-#     for symbol, data in base_dfs.items():
-#         if not data['min'].empty:
-#             renamed_df = data['min'][[column_name]].rename(columns={column_name: f'{column_name}_{symbol}'})
-#             dfs_to_align.append(renamed_df)
-#     if not dfs_to_align:
-#         return pd.DataFrame()
-#     return pd.concat(dfs_to_align, axis=1).ffill().dropna()
+        return df[['net_pv', 're']]
+    except Exception:
+        return None
 
-# def calculate_max_drawdown(series: pd.Series) -> float:
-#     """Calculates the maximum drawdown (peak-to-trough)."""
-#     if series.empty or series.isnull().all():
-#         return 0.0
-#     running_max = series.cummax()
-#     drawdown = series - running_max  # negative or zero
-#     return abs(drawdown.min())
+# --------------------------------
+# Aggregate portfolio
+# --------------------------------
+def un_16(active_configs):
+    all_re, all_net = [], []
+    for tkr, cfg in active_configs.items():
+        out = delta6(cfg)
+        if out is not None and not out.empty:
+            all_re.append(out[['re']].rename(columns={'re': f'{tkr}_re'}))
+            all_net.append(out[['net_pv']].rename(columns={'net_pv': f'{tkr}_net_pv'}))
+    if not all_re:
+        return pd.DataFrame()
+    df_re = pd.concat(all_re, axis=1)
+    df_net = pd.concat(all_net, axis=1)
+    df_re.fillna(0, inplace=True)
+    df_net.fillna(0, inplace=True)
+    df_re['maxcash_dd'] = df_re.sum(axis=1).cumsum()
+    df_net['cf'] = df_net.sum(axis=1)
+    return pd.concat([df_re, df_net], axis=1)
 
-# @st.cache_data
-# def generate_ref_log_data(base_dfs, prices_df):
-#     """Generates the combined dataframe for the Ref_index_Log tab."""
-#     if prices_df.empty: return pd.DataFrame()
+# --------------------------------
+# UI
+# --------------------------------
+full_config, DEFAULT_CONFIG = load_config()
 
-#     sumusd_aligned_df = align_ticker_data(base_dfs, 'sumusd')
-#     if sumusd_aligned_df.empty: return pd.DataFrame()
-    
-#     combined_df = pd.concat([prices_df, sumusd_aligned_df], axis=1).ffill().dropna()
+if full_config or DEFAULT_CONFIG:
+    if 'custom_tickers' not in st.session_state:
+        st.session_state.custom_tickers = {}
 
-#     price_cols = [col for col in combined_df.columns if '_price' in col]
-#     sumusd_cols = [col for col in combined_df.columns if 'sumusd_' in col]
-    
-#     if not price_cols or not sumusd_cols: return pd.DataFrame()
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        st.subheader("Add New Ticker")
+        new_ticker = st.text_input("Ticker (e.g., AAPL):", key="new_ticker_input").upper()
+        if st.button("Add Ticker", key="add_ticker_button", use_container_width=True):
+            if new_ticker and new_ticker not in full_config and new_ticker not in st.session_state.custom_tickers:
+                st.session_state.custom_tickers[new_ticker] = {"Ticker": new_ticker, **DEFAULT_CONFIG}
+                st.success(f"Added {new_ticker}!")
+                st.rerun()
+            elif new_ticker in full_config:
+                st.warning(f"{new_ticker} already exists in config file.")
+            elif new_ticker in st.session_state.custom_tickers:
+                st.warning(f"{new_ticker} has already been added.")
+            else:
+                st.warning("Please enter a ticker symbol.")
 
-#     initial_capital_per_asset = FIX_VALUE * 2
-#     initial_capital_ref_index = initial_capital_per_asset * len(price_cols)
+    with c2:
+        st.subheader("Select Tickers to Analyze")
+        all_tickers = list(full_config.keys()) + list(st.session_state.custom_tickers.keys())
+        default_selection = [t for t in list(full_config.keys()) if t in all_tickers]
+        selected_tickers = st.multiselect(
+            "Select from available tickers:",
+            options=all_tickers,
+            default=default_selection
+        )
+    st.divider()
 
-#     # Vectorized calculation for 'ref_log'
-#     price_prod = combined_df[price_cols].prod(axis=1)
-#     int_st = price_prod.iloc[0]
-#     safe_ratio = int_st / price_prod.replace(0, np.nan)
-#     combined_df['ref_log'] = initial_capital_ref_index + (-FIX_VALUE * np.log(safe_ratio))
-#     combined_df['ref_log'] = combined_df['ref_log'].fillna(initial_capital_ref_index)
-    
-#     combined_df['daily_sumusd'] = combined_df[sumusd_cols].sum(axis=1)
-    
-#     total_initial_capital = sum(
-#         base_dfs[s]['min'].sumusd.iloc[0] for s in base_dfs if not base_dfs[s]['min'].empty
-#     )
+    # Build active config from file + custom
+    active_configs = {t: full_config.get(t, st.session_state.custom_tickers.get(t)).copy() for t in selected_tickers}
 
-#     net_raw = combined_df['daily_sumusd'] - combined_df['ref_log'] - total_initial_capital
-#     net_at_index_0 = net_raw.iloc[0] if not net_raw.empty else 0
-#     combined_df['net'] = net_raw - net_at_index_0
-    
-#     return combined_df
+    # -------------------------------------------------------------
+    # NEW: Per-Ticker Fixed_Asset_Value sliders (range 1–5000)
+    # -------------------------------------------------------------
+    if active_configs:
+        st.subheader("Per-Ticker Controls")
+        cols = st.columns(min(3, len(active_configs)))  # กระจายสไลเดอร์ให้ดูง่าย
+        i = 0
+        for tkr, cfg in active_configs.items():
+            with cols[i % len(cols)]:
+                current_val = float(cfg.get('Fixed_Asset_Value', DEFAULT_CONFIG.get('Fixed_Asset_Value', 1500.0)))
+                # ใช้ key แยกราย ticker เพื่อให้ state คงอยู่
+                new_val = st.slider(
+                    f"Fixed_Asset_Value — {tkr}",
+                    min_value=1.0, max_value=5000.0, value=current_val, step=1.0,
+                    key=f"fav_{tkr}"
+                )
+                # อัปเดตค่าเข้าคอนฟิกที่ใช้รัน simulation
+                active_configs[tkr]['Fixed_Asset_Value'] = float(new_val)
+            i += 1
 
-# @st.cache_data
-# def generate_burn_cash_data(base_dfs):
-#     """Generates the combined dataframe for the Burn_Cash tab."""
-#     buffer_aligned_df = align_ticker_data(base_dfs, 'buffer')
-#     if buffer_aligned_df.empty:
-#         return pd.DataFrame()
-    
-#     buffer_aligned_df['daily_burn'] = buffer_aligned_df.sum(axis=1)
-#     buffer_aligned_df['cumulative_burn'] = buffer_aligned_df['daily_burn'].cumsum()
-#     return buffer_aligned_df
+    if not active_configs:
+        st.warning("Please select at least one ticker to start the analysis.")
+    else:
+        with st.spinner('Calculating... Please wait.'):
+            data = un_16(active_configs)
 
-# # === UI FUNCTIONS ===
-# def plot_individual_asset(symbol, act, base_dfs):
-#     """Displays charts and data for a single asset."""
-#     df_min = base_dfs[symbol]['min']
-#     df_max_pf = base_dfs[symbol]['max_pf']   # true PF envelope
-#     df_fx = Limit_fx(symbol, act=act)
+        if data.empty:
+            st.error("Failed to generate data. This might happen if tickers have no historical data for the selected period or another error occurred.")
+        else:
+            df_new = data.copy()
 
-#     if df_min.empty or df_fx.empty or df_max_pf.empty:
-#         st.error(f"Could not generate plot for {symbol} due to missing data.")
-#         return
+            # Drawdown path (buffer used)
+            roll_over = []
+            mvals = df_new.maxcash_dd.values
+            for i in range(len(mvals)):
+                roll = mvals[:i]
+                roll_min = np.min(roll) if len(roll) > 0 else 0
+                roll_over.append(roll_min)
 
-#     chart_data = pd.DataFrame({
-#         'min_net': df_min.net,
-#         f'fx_{act}_net': df_fx.net,
-#         'max_net': df_max_pf.net
-#     })
-#     st.write('Refer_Log Net Performance')
-#     st.line_chart(chart_data)
+            cf_values = df_new.cf.values
+            df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
 
-#     df_plot_burn = df_min[['buffer']].cumsum()
-#     st.write('Burn_Cash (Cumulative)')
-#     st.line_chart(df_plot_burn)
+            # True Alpha (คงสูตรฐานเก่า: n×1500 + |buffer|)
+            n_tickers = len(selected_tickers)
+            initial_capital = n_tickers * 1500.0  # <— ตามข้อกำหนด Goal_2: ไม่เปลี่ยนสูตรฐาน
+            max_buffer_used = abs(np.min(roll_over))
+            total_capital_at_risk = initial_capital + max_buffer_used if (initial_capital + max_buffer_used) != 0 else 1.0
+            df_all_2 = pd.DataFrame({'True_Alpha': (df_new.cf.values / total_capital_at_risk) * 100}, index=df_new.index)
 
-#     with st.expander("Detailed Data (Min Action)"):
-#         st.dataframe(df_min)
+            # KPIs
+            st.subheader("Key Performance Indicators")
+            final_sum_delta = float(df_all.Sum_Delta.iloc[-1])
+            final_max_buffer = float(df_all.Max_Sum_Buffer.iloc[-1])
+            final_true_alpha = float(df_all_2.True_Alpha.iloc[-1])
+            num_days = len(df_new)
+            avg_cf = final_sum_delta / num_days if num_days > 0 else 0.0
+            avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0.0
 
-# def iframe(frame='', width=1500, height=800):
-#     """Embeds an iframe component."""
-#     components.iframe(frame, width=width, height=height, scrolling=True)
+            # MIRR inputs
+            sum_fixed_asset_value = float(sum(cfg.get('Fixed_Asset_Value', 0.0) for cfg in active_configs.values()))
+            I = sum_fixed_asset_value + abs(final_max_buffer)                 # Initial Investment
+            A = avg_cf * 252                                                 # Annual CF
+            E = 0.5 * sum_fixed_asset_value                                  # Exit Multiple (JSON-only spec)
+            finance_rate = 0.0
+            reinvest_rate = 0.0
 
-# # === MAIN APP LAYOUT ===
+            cash_flows = [-I, A, A, A + E]
+            mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate) if I > 0 else 0.0
 
-# # --- Pre-calculate all base data ---
-# base_dataframes = prepare_base_data(TICKERS)
-# if not base_dataframes:
-#     st.error("Failed to fetch or calculate data for all assets. Stopping.")
-#     st.stop()
-    
-# # --- Create Tabs ---
-# tab_names = TICKERS + ['Burn_Cash', 'Ref_index_Log', 'cf_log']
-# tabs = st.tabs(tab_names)
-# tab_dict = dict(zip(tab_names, tabs))
+            # KPI widgets
+            k1, k2, k3, k4, k5, k6 = st.columns(6)
+            k1.metric("Total Net Profit (cf)", f"{final_sum_delta:,.2f}")
+            k2.metric("Max Cash Buffer Used", f"{final_max_buffer:,.2f}")
+            k3.metric("True Alpha (%)", f"{final_true_alpha:,.2f}%")
+            k4.metric("Avg. Daily Profit", f"{avg_cf:,.2f}")
+            k5.metric("Avg. Daily Buffer Used", f"{avg_burn_cash:,.2f}")
+            k6.metric("MIRR (3-Year)", f"{mirr_value:.2%}")
 
-# # --- Individual Asset Tabs ---
-# for asset in ASSETS:
-#     symbol = asset['symbol']
-#     if symbol in tab_dict and symbol in base_dataframes:
-#         with tab_dict[symbol]:
-#             act = get_act_from_thingspeak(
-#                 channel_id=asset['channel_id'],
-#                 api_key=asset['write_api_key'],
-#                 field=asset['field']
-#             )
-#             plot_individual_asset(symbol, act, base_dataframes)
+            # ---------- JSON-only help block ----------
+            help_payload = {
+                "definition": "MIRR (3-Year)",
+                "tickers_selected": int(n_tickers),
+                "sum_fixed_asset_value": round(sum_fixed_asset_value, 2),
+                "max_cash_buffer_used_abs": round(abs(final_max_buffer), 2),
+                "I_initial_investment": round(I, 2),
+                "A_annual_cash_flow": round(A, 2),
+                "E_exit_multiple": {
+                    "formula": "0.5 × Σ(Fixed_Asset_Value)",
+                    "value": round(E, 2)
+                },
+                "rates": {
+                    "finance_rate": finance_rate,
+                    "reinvest_rate": reinvest_rate
+                },
+                "cash_flows_vector": [
+                    round(-I, 2),
+                    round(A, 2),
+                    round(A, 2),
+                    round(A + E, 2)
+                ],
+                "mirr_result": round(float(mirr_value), 6) if isinstance(mirr_value, (int, float, np.floating)) else None
+            }
 
-# # --- Ref_index_Log Tab ---
-# with tab_dict['Ref_index_Log']:
-#     prices_df = get_prices(list(base_dataframes.keys()), FILTER_DATE)
-#     ref_log_df = generate_ref_log_data(base_dataframes, prices_df)
+            st.json(help_payload, expanded=False)
+            st.divider()
 
-#     if not ref_log_df.empty:
-#         st.header("Net Performance Analysis (vs. Reference)")
-#         st.info("Performance analysis of the portfolio's net value against the logarithmic reference index.")
+            # Charts
+            st.subheader("Performance Charts")
+            g1, g2 = st.columns(2)
+            g1.plotly_chart(
+                px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"),
+                use_container_width=True
+            )
+            g2.plotly_chart(
+                px.line(df_all_2, title="True Alpha (%)"),
+                use_container_width=True
+            )
 
-#         net_series = ref_log_df['net']
-#         daily_changes = net_series.diff()
-        
-#         analysis_type = st.radio(
-#             "Select Cash Flow (CF) Analysis Type:",
-#             ('Worst Case', 'Average Case'),
-#             horizontal=True,
-#             key='cf_analysis_type'
-#         )
+            st.divider()
+            st.subheader("Detailed Simulation Data")
+            df_plot = df_new.copy()
+            for t in selected_tickers:
+                col = f"{t}_re"
+                if col in df_plot.columns:
+                    df_plot[col] = df_plot[col].cumsum()
+            st.plotly_chart(px.line(df_plot, title="Portfolio Simulation Details"), use_container_width=True)
 
-#         if analysis_type == 'Worst Case':
-#             metric_1d_val = daily_changes.min()
-#             label_1d = "📉 1-Day CF (Worst Day)"
-#         else:
-#             metric_1d_val = daily_changes.mean()
-#             label_1d = "📊 1-Day CF (Average Day)"
-        
-#         trough_to_peak_gain = 0
-#         if not net_series.empty:
-#             trough_index = net_series.idxmin()
-#             peak_after_trough = net_series.loc[trough_index:].max()
-#             trough_value = net_series.loc[trough_index]
-#             trough_to_peak_gain = peak_after_trough - trough_value
-
-#         col1, col2 = st.columns(2)
-#         with col1:
-#             st.metric(label=label_1d, value=f"{metric_1d_val:,.2f} USD")
-#         with col2:
-#             st.metric(label="📈 Trough-to-Peak Gain (Max Run-up)", value=f"{trough_to_peak_gain:,.2f} USD")
-
-#         st.markdown("---")
-#         st.subheader("Net Performance Over Time")
-#         st.line_chart(ref_log_df['net'])
-#         with st.expander("View Data"):
-#             st.dataframe(ref_log_df)
-#     else:
-#         st.warning("Could not generate Ref_index_Log data.")
-
-# # --- Burn_Cash Tab ---
-# with tab_dict['Burn_Cash']:
-#     burn_cash_df = generate_burn_cash_data(base_dataframes)
-    
-#     if not burn_cash_df.empty:
-#         st.header("Cash Burn Risk Analysis")
-#         st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
-        
-#         cumulative_burn_series = burn_cash_df['cumulative_burn']
-#         max_daily_burn = burn_cash_df['daily_burn'].min()
-#         max_drawdown_burn = calculate_max_drawdown(cumulative_burn_series)
-        
-#         max_30_day_burn = 0
-#         if len(cumulative_burn_series) >= 30:
-#             rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-#             max_30_day_burn = rolling_30_day_change.min()
-        
-#         max_90_day_burn = 0
-#         if len(cumulative_burn_series) >= 90:
-#             rolling_90_day_change = cumulative_burn_series.rolling(window=90).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
-#             max_90_day_burn = rolling_90_day_change.min()
-
-#         col1, col2 = st.columns(2)
-#         with col1:
-#             st.subheader("Short-Term Risk")
-#             st.metric(label="🔥 1-Day Burn (Worst Day)", value=f"{max_daily_burn:,.2f} USD")
-#             st.metric(label="🔥 30-Day Burn (Worst Month)", value=f"{max_30_day_burn:,.2f} USD")
-        
-#         with col2:
-#             st.subheader("Medium to Long-Term Risk")
-#             st.metric(label="🔥 90-Day Burn (Worst Quarter)", value=f"{max_90_day_burn:,.2f} USD")
-#             st.metric(
-#                 label="🏔️ Max Drawdown (Peak to Trough)", 
-#                 value=f"{-max_drawdown_burn:,.2f} USD",
-#                 help="The largest drop in cumulative cash from any peak to a subsequent trough."
-#             )
-
-#         st.markdown("---")
-#         st.subheader("Cumulative Cash Burn Over Time")
-#         st.line_chart(cumulative_burn_series)
-        
-#         with st.expander("View Detailed Burn Data"):
-#             st.dataframe(burn_cash_df)
-#     else:
-#         st.error("Cannot calculate burn cash due to missing data.")
-
-# # --- cf_log Tab ---
-# with tab_dict['cf_log']:
-#     st.markdown("""
-#     - **Rebalance**: `-fix * ln(t0 / tn)`
-#     - **Net Profit**: `sumusd - refer`  ← baseline ทำให้เริ่มที่ 0
-#     - **Ref_index_Log**: `initial_capital_Ref_index_Log + (-1500 * ln(int_st / int_end))`
-#     - **Net in Ref_index_Log**: `(daily_sumusd - ref_log - total_initial_capital) - net_at_index_0`
-#     - **Option P/L**: `(max(0, ราคาหุ้นปัจจุบัน - Strike) * contracts_or_shares) - (contracts_or_shares * premium_paid_per_share)`
-#     ---
-#     """)
-#     iframe("https://monica.im/share/artifact?id=Su47FeHfaWtyXmqDqmqp9W")
-#     st.markdown("---")
-#     iframe("https://monica.im/share/artifact?id=qpAkuKjBpuVz2cp9nNFRs3")
-#     st.markdown("---")
-#     iframe("https://monica.im/share/artifact?id=wEjeaMxVW6MgDDm3xAZatX")
-#     st.markdown("---")
-#     iframe("https://monica.im/share/artifact?id=ZfHT5iDP2Ypz82PCRw9nEK")
-#     st.markdown("---")
-#     iframe("https://monica.im/share/chat?shareId=SUsEYhzSMwqIq3Cx")
+else:
+    st.error("Could not load any configuration. Please check that 'un15_fx_config.json' exists and is correctly formatted.")
