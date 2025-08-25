@@ -1,7 +1,7 @@
 {
   "__DEFAULT_CONFIG__": {
     "Fixed_Asset_Value": 1500.0,
-    "Cash_Balan": 650.0,
+    "Cash_Balan": 0.0,
     "step": 0.01,
     "filter_date": "2024-01-01 12:00:00+07:00",
     "pred": 1
