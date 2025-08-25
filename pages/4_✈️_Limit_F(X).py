@@ -109,10 +109,10 @@ def get_max_action(price_list, fix=FIX_VALUE):
     initial_capital = float(fix * 2)
     dp[0] = initial_capital
     for i in range(1, n):
-        max_prev_sumusd = 0
+        max_prev_sumusd = 0.0
         best_j = 0
         for j in range(i):
-            profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1)
+            profit_from_j_to_i = fix * ((prices[i] / prices[j]) - 1.0)
             current_sumusd = dp[j] + profit_from_j_to_i
             if current_sumusd > max_prev_sumusd:
                 max_prev_sumusd = current_sumusd
@@ -127,6 +127,35 @@ def get_max_action(price_list, fix=FIX_VALUE):
         current_day = path[current_day]
     actions[0] = 1
     return actions
+
+# Perfect Foresight envelope (max at each t) — wealth series
+@njit(fastmath=True)
+def perfect_foresight_wealth_series(prices, fix=FIX_VALUE):
+    """
+    Compute W_i via DP:
+      W_i = max_{j < i} [ W_j + fix*(P_i/P_j - 1) ], with W_0 = 2*fix
+    Then for each t:
+      Wealth_pf[t] = max_{i <= t} [ W_i + fix*(P_t/P_i - 1) ]
+    """
+    n = len(prices)
+    wealth_after_reb = np.empty(n, dtype=np.float64)
+    wealth_after_reb[0] = 2.0 * fix
+    for i in range(1, n):
+        best = 0.0
+        for j in range(i):
+            val = wealth_after_reb[j] + fix * (prices[i] / prices[j] - 1.0)
+            if val > best:
+                best = val
+        wealth_after_reb[i] = best
+    wealth_pf = np.empty(n, dtype=np.float64)
+    for t in range(n):
+        best_t = 0.0
+        for i in range(t + 1):
+            val = wealth_after_reb[i] + fix * (prices[t] / prices[i] - 1.0)
+            if val > best_t:
+                best_t = val
+        wealth_pf[t] = best_t
+    return wealth_pf
 
 @st.cache_data(ttl=600)
 def Limit_fx(Ticker, start_date=FILTER_DATE, act=-1):
@@ -143,18 +172,69 @@ def Limit_fx(Ticker, start_date=FILTER_DATE, act=-1):
 
     if len(prices) == 0: return pd.DataFrame()
 
-    if act == -1: actions = np.ones(len(prices), dtype=np.int64)
-    elif act == -2: actions = get_max_action(prices)
-    else: actions = np.random.default_rng(act).integers(0, 2, len(prices))
+    if act == -1:
+        # always buy
+        actions = np.ones(len(prices), dtype=np.int64)
+        buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
+        initial_capital = sumusd[0]
+        df = pd.DataFrame({
+            'price': prices, 'action': actions, 'buffer': buffer, 'sumusd': sumusd,
+            'cash': cash, 'asset_value': asset_value, 'amount': amount,
+            'refer': refer + initial_capital,
+        }, index=tickerData.index)
+        # FIX: start net at 0
+        df['net'] = df['sumusd'] - df['refer']
+        return df
 
-    buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
-    initial_capital = sumusd[0] if len(sumusd) > 0 else 0
-    return pd.DataFrame({
-        'price': prices, 'action': actions, 'buffer': buffer, 'sumusd': sumusd,
-        'cash': cash, 'asset_value': asset_value, 'amount': amount,
-        'refer': refer + initial_capital,
-        'net': sumusd - refer - initial_capital
-    }, index=tickerData.index)
+    elif act == -2:
+        # legacy "max actions to end"
+        actions = get_max_action(prices)
+        buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
+        initial_capital = sumusd[0] if len(sumusd) > 0 else 0.0
+        df = pd.DataFrame({
+            'price': prices, 'action': actions, 'buffer': buffer, 'sumusd': sumusd,
+            'cash': cash, 'asset_value': asset_value, 'amount': amount,
+            'refer': refer + initial_capital,
+        }, index=tickerData.index)
+        # FIX: start net at 0
+        df['net'] = df['sumusd'] - df['refer']
+        return df
+
+    elif act == -3:
+        # Perfect Foresight envelope (true max_net each day)
+        wealth_pf = perfect_foresight_wealth_series(prices, FIX_VALUE)
+        initial_price = prices[0]
+        refer = -FIX_VALUE * np.log(initial_price / prices)
+        initial_capital = wealth_pf[0]  # 2*fix
+        n = len(prices)
+        df = pd.DataFrame({
+            'price': prices,
+            'action': np.zeros(n, dtype=np.int64),
+            'buffer': np.zeros(n, dtype=np.float64),
+            'sumusd': wealth_pf,
+            'cash': np.nan,
+            'asset_value': np.nan,
+            'amount': np.nan,
+            'refer': refer + initial_capital
+        }, index=tickerData.index)
+        # FIX: start net at 0
+        df['net'] = df['sumusd'] - df['refer']
+        return df
+
+    else:
+        # random seed mode
+        rng = np.random.default_rng(act)
+        actions = rng.integers(0, 2, len(prices))
+        buffer, sumusd, cash, asset_value, amount, refer = calculate_optimized(actions, prices)
+        initial_capital = sumusd[0] if len(sumusd) > 0 else 0.0
+        df = pd.DataFrame({
+            'price': prices, 'action': actions, 'buffer': buffer, 'sumusd': sumusd,
+            'cash': cash, 'asset_value': asset_value, 'amount': amount,
+            'refer': refer + initial_capital,
+        }, index=tickerData.index)
+        # FIX: start net at 0
+        df['net'] = df['sumusd'] - df['refer']
+        return df
 
 # === ANALYSIS & DATA PREPARATION FUNCTIONS ===
 
@@ -165,7 +245,11 @@ def prepare_base_data(tickers):
     for ticker in tickers:
         df_min = Limit_fx(ticker, act=-1)
         if not df_min.empty:
-            base_dfs[ticker] = {'min': df_min, 'max': Limit_fx(ticker, act=-2)}
+            base_dfs[ticker] = {
+                'min': df_min,
+                'max_legacy': Limit_fx(ticker, act=-2),
+                'max_pf': Limit_fx(ticker, act=-3),
+            }
     return base_dfs
 
 def align_ticker_data(base_dfs, column_name):
@@ -184,7 +268,7 @@ def calculate_max_drawdown(series: pd.Series) -> float:
     if series.empty or series.isnull().all():
         return 0.0
     running_max = series.cummax()
-    drawdown = series - running_max  # This will be negative or zero
+    drawdown = series - running_max  # negative or zero
     return abs(drawdown.min())
 
 @st.cache_data
@@ -239,17 +323,17 @@ def generate_burn_cash_data(base_dfs):
 def plot_individual_asset(symbol, act, base_dfs):
     """Displays charts and data for a single asset."""
     df_min = base_dfs[symbol]['min']
-    df_max = base_dfs[symbol]['max']
+    df_max_pf = base_dfs[symbol]['max_pf']   # true PF envelope
     df_fx = Limit_fx(symbol, act=act)
 
-    if df_min.empty or df_fx.empty or df_max.empty:
+    if df_min.empty or df_fx.empty or df_max_pf.empty:
         st.error(f"Could not generate plot for {symbol} due to missing data.")
         return
 
     chart_data = pd.DataFrame({
         'min_net': df_min.net,
         f'fx_{act}_net': df_fx.net,
-        'max_net': df_max.net
+        'max_net': df_max_pf.net
     })
     st.write('Refer_Log Net Performance')
     st.line_chart(chart_data)
@@ -264,7 +348,6 @@ def plot_individual_asset(symbol, act, base_dfs):
 def iframe(frame='', width=1500, height=800):
     """Embeds an iframe component."""
     components.iframe(frame, width=width, height=height, scrolling=True)
-
 
 # === MAIN APP LAYOUT ===
 
@@ -303,7 +386,6 @@ with tab_dict['Ref_index_Log']:
         net_series = ref_log_df['net']
         daily_changes = net_series.diff()
         
-        # --- CF Analysis Radio Button ---
         analysis_type = st.radio(
             "Select Cash Flow (CF) Analysis Type:",
             ('Worst Case', 'Average Case'),
@@ -311,17 +393,13 @@ with tab_dict['Ref_index_Log']:
             key='cf_analysis_type'
         )
 
-        # --- Metric Calculation based on selection ---
         if analysis_type == 'Worst Case':
             metric_1d_val = daily_changes.min()
             label_1d = "📉 1-Day CF (Worst Day)"
-        else: # Average Case
+        else:
             metric_1d_val = daily_changes.mean()
             label_1d = "📊 1-Day CF (Average Day)"
         
-        # Rolling metrics (can be added here if needed, kept simple for clarity)
-
-        # Max Run-up (Trough-to-Peak Gain)
         trough_to_peak_gain = 0
         if not net_series.empty:
             trough_index = net_series.idxmin()
@@ -329,7 +407,6 @@ with tab_dict['Ref_index_Log']:
             trough_value = net_series.loc[trough_index]
             trough_to_peak_gain = peak_after_trough - trough_value
 
-        # --- Display Metrics ---
         col1, col2 = st.columns(2)
         with col1:
             st.metric(label=label_1d, value=f"{metric_1d_val:,.2f} USD")
@@ -353,14 +430,9 @@ with tab_dict['Burn_Cash']:
         st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
         
         cumulative_burn_series = burn_cash_df['cumulative_burn']
-        
-        # --- Risk Calculation ---
         max_daily_burn = burn_cash_df['daily_burn'].min()
-        
-        # **FIXED**: Correct Max Drawdown calculation
         max_drawdown_burn = calculate_max_drawdown(cumulative_burn_series)
         
-        # Rolling burn calculations
         max_30_day_burn = 0
         if len(cumulative_burn_series) >= 30:
             rolling_30_day_change = cumulative_burn_series.rolling(window=30).apply(lambda x: x.iloc[-1] - x.iloc[0], raw=False)
