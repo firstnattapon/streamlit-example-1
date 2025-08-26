@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*- 
 import streamlit as st
 import numpy as np
 import datetime
@@ -349,7 +349,7 @@ def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) ->
     except Exception:
         return 0
 
-# NEW: เวอร์ชันละเอียด แยก Buy/Sell ทั้ง "จำนวนออเดอร์" และ "ปริมาณหน่วย"
+# NEW: เวอร์ชันละเอียด แยก Buy/Sell ทั้ง "จำนวนออเดอร์" และ "ปริมาณหน่วย" (เริ่มต้นแบบเดิม: ตั้งแต่ start)
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> Dict[str, float]:
     """
@@ -451,6 +451,121 @@ def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso:
         else:
             ref = baseline if baseline is not None else (first_after if first_after is not None else last_after)
             net_units = float(last_after - ref)
+
+        return dict(
+            buy_count=int(buy_count),
+            sell_count=int(sell_count),
+            net_count=int(buy_count - sell_count),
+            buy_units=float(buy_units),
+            sell_units=float(sell_units),
+            net_units=float(net_units)
+        )
+    except Exception:
+        return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
+
+# NEW (Goal_1): เวอร์ชัน "ระบุช่วงเวลาเริ่ม-สิ้นสุด" สำหรับ METRICS โดยเฉพาะ
+@st.cache_data(ttl=180, show_spinner=False)
+def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str) -> Dict[str, float]:
+    """เหมือนกับฟังก์ชันด้านบน แต่จำกัดช่วงเวลา [start, end] (รวมขอบ)"""
+    try:
+        channel_id = int(asset_field_conf['channel_id'])
+        fnum = _field_number(asset_field_conf['field'])
+        if fnum is None:
+            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
+        field_key = f"field{fnum}"
+
+        params = {'results': 8000}
+        if asset_field_conf.get('api_key'):
+            params['api_key'] = asset_field_conf['api_key']
+
+        url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
+        data = _http_get_json(url, params)
+        feeds = data.get('feeds', [])
+        if not feeds:
+            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
+
+        tz = pytz.timezone('Asia/Bangkok')
+        # parse start
+        try:
+            window_start_local = datetime.datetime.fromisoformat(window_start_bkk_iso)
+            if window_start_local.tzinfo is None:
+                window_start_local = tz.localize(window_start_local)
+            else:
+                window_start_local = window_start_local.astimezone(tz)
+        except Exception:
+            window_start_local = datetime.datetime.now(tz)
+        # parse end
+        try:
+            window_end_local = datetime.datetime.fromisoformat(window_end_bkk_iso)
+            if window_end_local.tzinfo is None:
+                window_end_local = tz.localize(window_end_local)
+            else:
+                window_end_local = window_end_local.astimezone(tz)
+        except Exception:
+            window_end_local = datetime.datetime.now(tz)
+
+        def _parse_row(r):
+            try:
+                dt_utc = datetime.datetime.fromisoformat(str(r.get('created_at', '')).replace('Z', '+00:00'))
+            except Exception:
+                return None, None
+            return dt_utc.astimezone(tz), r.get(field_key)
+
+        rows: List[Tuple[datetime.datetime, Optional[str]]] = []
+        append = rows.append
+        for r in feeds:
+            dt_local, v = _parse_row(r)
+            if dt_local is not None and v is not None:
+                append((dt_local, v))
+        rows.sort(key=lambda x: x[0])
+
+        # baseline = ค่าล่าสุดก่อน start
+        baseline: Optional[float] = None
+        for dt_local, v in rows:
+            if dt_local < window_start_local:
+                try:
+                    baseline = float(v)
+                except Exception:
+                    continue
+            else:
+                break
+
+        buy_count = sell_count = 0
+        buy_units = sell_units = 0.0
+        first_after: Optional[float] = None
+        last_within: Optional[float] = None
+
+        prev: Optional[float] = baseline
+        for dt_local, v in rows:
+            try:
+                curr = float(v)
+            except Exception:
+                continue
+
+            if dt_local < window_start_local:
+                prev = curr
+                continue
+            if dt_local > window_end_local:
+                break
+
+            if first_after is None:
+                first_after = curr
+            if prev is not None:
+                step = curr - prev
+                if step > 0:
+                    buy_count += 1
+                    buy_units += step
+                elif step < 0:
+                    sell_count += 1
+                    sell_units += (-step)
+            prev = curr
+            last_within = curr
+
+        if last_within is None:
+            net_units = 0.0
+        else:
+            ref = baseline if baseline is not None else (first_after if first_after is not None else last_within)
+            net_units = float(last_within - ref)
 
         return dict(
             buy_count=int(buy_count),
@@ -718,7 +833,7 @@ all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, 
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
 trade_nets_all = all_data['nets']                 # สำหรับ label/help เดิม
-trade_stats_all = all_data['trade_stats']         # NEW: แยก buy/sell ทั้ง count และ units
+trade_stats_all = all_data['trade_stats']         # NEW: แยก buy/sell ทั้ง count และ units (ตั้งแต่ premarket)
 
 # Stable Session State Initialization
 if 'select_key' not in st.session_state:
@@ -763,8 +878,51 @@ with tab2:
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
     st.write("---")
 
-    # NEW (Goal_1): METRICS บนหน้า Controls — แยก Buy/Sell ทั้ง Orders และ USD
+    # ==============================
+    # NEW (Goal_1): METRICS + Date Slider
+    # ==============================
     with st.expander("METRICS"):
+        tz_bkk = pytz.timezone('Asia/Bangkok')
+        now_bkk = datetime.datetime.now(tz_bkk)
+
+        # หา min_date สำหรับสไลเดอร์ (พยายามใช้ GLOBAL_START_DATE ถ้าพาร์สได้)
+        def _parse_global_start_date_to_date(s: Optional[str]) -> Optional[datetime.date]:
+            if not s:
+                return None
+            # ลอง fromisoformat ตรง ๆ ก่อน
+            try:
+                return datetime.datetime.fromisoformat(s).date()
+            except Exception:
+                pass
+            # เผื่อรูปแบบอื่น ๆ: จับ YYYY-MM-DD
+            m = re.search(r"(\d{4})-(\d{2})-(\d{2})", s)
+            if m:
+                y, mo, d = map(int, m.groups())
+                try:
+                    return datetime.date(y, mo, d)
+                except Exception:
+                    return None
+            return None
+
+        min_candidate = _parse_global_start_date_to_date(GLOBAL_START_DATE)
+        min_date = min_candidate or (now_bkk.date() - datetime.timedelta(days=30))
+        max_date = now_bkk.date()
+        default_start = max(min_date, latest_us_premarket_open_bkk.date())
+        default_end = max_date
+
+        date_start, date_end = st.slider(
+            "ช่วงวันที่ (Asia/Bangkok)",
+            min_value=min_date,
+            max_value=max_date,
+            value=(default_start, default_end),
+            format="YYYY-MM-DD"
+        )
+
+        # Map เป็นช่วงเวลาจริง (รวมทั้งวัน)
+        start_dt = tz_bkk.localize(datetime.datetime.combine(date_start, datetime.time.min))
+        end_dt = tz_bkk.localize(datetime.datetime.combine(date_end, datetime.time.max))
+
+        # Summary totals
         total_buy_orders = 0
         total_sell_orders = 0
         total_buy_usd = 0.0
@@ -773,7 +931,11 @@ with tab2:
         rows = []
         for cfg in ASSET_CONFIGS:
             t = cfg['ticker']
-            stats = trade_stats_all.get(t, {})
+            stats = fetch_net_detailed_stats_between(
+                cfg['asset_field'],
+                start_dt.isoformat(),
+                end_dt.isoformat()
+            )
             b_cnt = int(stats.get('buy_count', 0))
             s_cnt = int(stats.get('sell_count', 0))
             b_units = float(stats.get('buy_units', 0.0))
@@ -814,13 +976,14 @@ with tab2:
         c3.metric("Sell_Orders", f"{total_sell_orders}")
 
         d1, d2, d3 = st.columns(3)
-        d1.metric("Net USD Flow since US Pre-Market", f"${net_usd_total:,.2f}")
+        d1.metric("Net USD Flow (ช่วงที่เลือก)", f"${net_usd_total:,.2f}")
         d2.metric("Buy_USD", f"${total_buy_usd:,.2f}")
         d3.metric("Sell_USD", f"${total_sell_usd:,.2f}")
 
         with st.expander("Per-ticker detail"):
             df_metrics = pd.DataFrame(rows).set_index("Ticker")
             st.dataframe(df_metrics, use_container_width=True)
+
     st.write("_____")
 
     # Controls for updating asset (ตามเดิม)
