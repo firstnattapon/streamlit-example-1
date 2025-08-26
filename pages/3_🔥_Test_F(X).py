@@ -349,7 +349,7 @@ def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) ->
     except Exception:
         return 0
 
-# NEW: เวอร์ชันละเอียด แยก Buy/Sell ทั้ง "จำนวนออเดอร์" และ "ปริมาณหน่วย"
+# NEW: เวอร์ชันละเอียด แยก Buy/Sell ทั้ง "จำนวนออเดอร์" และ "ปริมาณหน่วย" (เริ่มต้นแบบเดิม: ตั้งแต่ start)
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> Dict[str, float]:
     """
@@ -463,21 +463,18 @@ def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso:
     except Exception:
         return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
-# ========================= NEW (Goal_1): All-time history & averages =========================
-@st.cache_data(ttl=600, show_spinner=False)
-def fetch_alltime_series_bkk(asset_field_conf: Dict) -> List[Tuple[datetime.datetime, float]]:
-    """
-    ดึง series ทั้งหมด (ล่าสุดสูงสุด 8000 จุด ตาม ThingSpeak 'results' limit)
-    คืนค่า List[(dt_bkk, value_float)] เรียงเวลาจากเก่า -> ใหม่
-    """
+# NEW (Goal_1): เวอร์ชัน "ระบุช่วงเวลาเริ่ม-สิ้นสุด" สำหรับ METRICS โดยเฉพาะ
+@st.cache_data(ttl=180, show_spinner=False)
+def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str) -> Dict[str, float]:
+    """เหมือนกับฟังก์ชันด้านบน แต่จำกัดช่วงเวลา [start, end] (รวมขอบ)"""
     try:
         channel_id = int(asset_field_conf['channel_id'])
         fnum = _field_number(asset_field_conf['field'])
         if fnum is None:
-            return []
+            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
         field_key = f"field{fnum}"
 
-        params = {'results': 8000}  # NOTE: ถ้าเกิน 8000 จุด จะได้เฉพาะล่าสุด 8000
+        params = {'results': 8000}
         if asset_field_conf.get('api_key'):
             params['api_key'] = asset_field_conf['api_key']
 
@@ -485,115 +482,101 @@ def fetch_alltime_series_bkk(asset_field_conf: Dict) -> List[Tuple[datetime.date
         data = _http_get_json(url, params)
         feeds = data.get('feeds', [])
         if not feeds:
-            return []
+            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
         tz = pytz.timezone('Asia/Bangkok')
+        # parse start
+        try:
+            window_start_local = datetime.datetime.fromisoformat(window_start_bkk_iso)
+            if window_start_local.tzinfo is None:
+                window_start_local = tz.localize(window_start_local)
+            else:
+                window_start_local = window_start_local.astimezone(tz)
+        except Exception:
+            window_start_local = datetime.datetime.now(tz)
+        # parse end
+        try:
+            window_end_local = datetime.datetime.fromisoformat(window_end_bkk_iso)
+            if window_end_local.tzinfo is None:
+                window_end_local = tz.localize(window_end_local)
+            else:
+                window_end_local = window_end_local.astimezone(tz)
+        except Exception:
+            window_end_local = datetime.datetime.now(tz)
 
         def _parse_row(r):
             try:
                 dt_utc = datetime.datetime.fromisoformat(str(r.get('created_at', '')).replace('Z', '+00:00'))
-                val = r.get(field_key)
-                if val is None:
-                    return None
-                v = float(val)
-                return (dt_utc.astimezone(tz), v)
             except Exception:
-                return None
+                return None, None
+            return dt_utc.astimezone(tz), r.get(field_key)
 
-        rows: List[Tuple[datetime.datetime, float]] = []
+        rows: List[Tuple[datetime.datetime, Optional[str]]] = []
+        append = rows.append
         for r in feeds:
-            pr = _parse_row(r)
-            if pr is not None:
-                rows.append(pr)
+            dt_local, v = _parse_row(r)
+            if dt_local is not None and v is not None:
+                append((dt_local, v))
         rows.sort(key=lambda x: x[0])
-        return rows
+
+        # baseline = ค่าล่าสุดก่อน start
+        baseline: Optional[float] = None
+        for dt_local, v in rows:
+            if dt_local < window_start_local:
+                try:
+                    baseline = float(v)
+                except Exception:
+                    continue
+            else:
+                break
+
+        buy_count = sell_count = 0
+        buy_units = sell_units = 0.0
+        first_after: Optional[float] = None
+        last_within: Optional[float] = None
+
+        prev: Optional[float] = baseline
+        for dt_local, v in rows:
+            try:
+                curr = float(v)
+            except Exception:
+                continue
+
+            if dt_local < window_start_local:
+                prev = curr
+                continue
+            if dt_local > window_end_local:
+                break
+
+            if first_after is None:
+                first_after = curr
+            if prev is not None:
+                step = curr - prev
+                if step > 0:
+                    buy_count += 1
+                    buy_units += step
+                elif step < 0:
+                    sell_count += 1
+                    sell_units += (-step)
+            prev = curr
+            last_within = curr
+
+        if last_within is None:
+            net_units = 0.0
+        else:
+            ref = baseline if baseline is not None else (first_after if first_after is not None else last_within)
+            net_units = float(last_within - ref)
+
+        return dict(
+            buy_count=int(buy_count),
+            sell_count=int(sell_count),
+            net_count=int(buy_count - sell_count),
+            buy_units=float(buy_units),
+            sell_units=float(sell_units),
+            net_units=float(net_units)
+        )
     except Exception:
-        return []
-
-@st.cache_data(ttl=600, show_spinner=False)
-def compute_alltime_daily_stats(asset_field_conf: Dict) -> Tuple[pd.DataFrame, Dict[str, float]]:
-    """
-    นับออเดอร์แบบรายวัน (Asia/Bangkok) ตลอด series ทั้งหมด:
-    - buy_count / sell_count : นับจำนวน 'ก้าว' ที่ค่าเพิ่มขึ้น/ลดลง
-    - buy_units / sell_units : ผลรวมขนาดก้าว
-    คืน:
-      (df_daily, summary_dict)
-      df_daily columns = ['date','buy_count','sell_count','net_count','buy_units','sell_units','net_units']
-      summary_dict = {
-        'days': int,
-        'total_buy_orders': int,
-        'total_sell_orders': int,
-        'total_net_orders': int,
-        'avg_buy_orders_per_day': float,
-        'avg_sell_orders_per_day': float,
-        'avg_net_orders_per_day': float
-      }
-    """
-    rows = fetch_alltime_series_bkk(asset_field_conf)
-    if len(rows) < 2:
-        df = pd.DataFrame(columns=['date','buy_count','sell_count','net_count','buy_units','sell_units','net_units'])
-        return df, dict(days=0, total_buy_orders=0, total_sell_orders=0, total_net_orders=0,
-                        avg_buy_orders_per_day=0.0, avg_sell_orders_per_day=0.0, avg_net_orders_per_day=0.0)
-
-    # คำนวณ diff แบบ step-by-step
-    dates = [dt.date() for dt, _ in rows]
-    vals = np.array([v for _, v in rows], dtype=float)
-    diffs = np.diff(vals)
-    step_dates = dates[1:]  # อ้างวันที่ของจุดที่ 2 ของคู่ (ตามที่ trade เกิดขึ้น)
-
-    # สะสมรายวัน
-    agg: Dict[datetime.date, Dict[str, float]] = {}
-    for d, step in zip(step_dates, diffs):
-        if d not in agg:
-            agg[d] = dict(buy_count=0, sell_count=0, buy_units=0.0, sell_units=0.0)
-        if step > 0:
-            agg[d]['buy_count'] += 1
-            agg[d]['buy_units'] += float(step)
-        elif step < 0:
-            agg[d]['sell_count'] += 1
-            agg[d]['sell_units'] += float(-step)
-
-    # สร้าง DataFrame
-    rows_daily = []
-    for d in sorted(agg.keys()):
-        b_cnt = int(agg[d]['buy_count'])
-        s_cnt = int(agg[d]['sell_count'])
-        b_u = float(agg[d]['buy_units'])
-        s_u = float(agg[d]['sell_units'])
-        rows_daily.append({
-            'date': d,
-            'buy_count': b_cnt,
-            'sell_count': s_cnt,
-            'net_count': b_cnt - s_cnt,
-            'buy_units': b_u,
-            'sell_units': s_u,
-            'net_units': b_u - s_u
-        })
-    df_daily = pd.DataFrame(rows_daily)
-    if df_daily.empty:
-        return df_daily, dict(days=0, total_buy_orders=0, total_sell_orders=0, total_net_orders=0,
-                              avg_buy_orders_per_day=0.0, avg_sell_orders_per_day=0.0, avg_net_orders_per_day=0.0)
-
-    # Summary / Averages
-    days = int(len(df_daily))
-    total_buy_orders = int(df_daily['buy_count'].sum())
-    total_sell_orders = int(df_daily['sell_count'].sum())
-    total_net_orders = int(df_daily['net_count'].sum())
-    avg_buy = float(total_buy_orders / days) if days > 0 else 0.0
-    avg_sell = float(total_sell_orders / days) if days > 0 else 0.0
-    avg_net = float(total_net_orders / days) if days > 0 else 0.0
-
-    summary = dict(
-        days=days,
-        total_buy_orders=total_buy_orders,
-        total_sell_orders=total_sell_orders,
-        total_net_orders=total_net_orders,
-        avg_buy_orders_per_day=avg_buy,
-        avg_sell_orders_per_day=avg_sell,
-        avg_net_orders_per_day=avg_net
-    )
-    return df_daily, summary
-# ========================= END NEW =========================
+        return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
 # ---------------------------------------------------------------------------------
 # Fetch all data (monitor / assets / nets)
@@ -679,7 +662,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     # เพิ่มจำนวน worker เล็กน้อย (ยังคงปลอดภัย)
     workers = max(1, min(len(configs) * 3, 12))
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        # monitor
+        # monitor (ยังคงคู่ขนานเหมือนเดิม แต่ได้อานิสงส์จาก cache ใหม่)
         for future in concurrent.futures.as_completed([executor.submit(fetch_monitor, a) for a in configs]):
             ticker, result = future.result()
             monitor_results[ticker] = result
@@ -850,7 +833,7 @@ all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, 
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
 trade_nets_all = all_data['nets']                 # สำหรับ label/help เดิม
-trade_stats_all = all_data['trade_stats']         # NEW: แยก buy/sell ทั้ง count และ units
+trade_stats_all = all_data['trade_stats']         # NEW: แยก buy/sell ทั้ง count และ units (ตั้งแต่ premarket)
 
 # Stable Session State Initialization
 if 'select_key' not in st.session_state:
@@ -895,8 +878,51 @@ with tab2:
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
     st.write("---")
 
-    # NEW (Goal_1): METRICS บนหน้า Controls — แยก Buy/Sell ทั้ง Orders และ USD
+    # ==============================
+    # NEW (Goal_1): METRICS + Date Slider
+    # ==============================
     with st.expander("METRICS"):
+        tz_bkk = pytz.timezone('Asia/Bangkok')
+        now_bkk = datetime.datetime.now(tz_bkk)
+
+        # หา min_date สำหรับสไลเดอร์ (พยายามใช้ GLOBAL_START_DATE ถ้าพาร์สได้)
+        def _parse_global_start_date_to_date(s: Optional[str]) -> Optional[datetime.date]:
+            if not s:
+                return None
+            # ลอง fromisoformat ตรง ๆ ก่อน
+            try:
+                return datetime.datetime.fromisoformat(s).date()
+            except Exception:
+                pass
+            # เผื่อรูปแบบอื่น ๆ: จับ YYYY-MM-DD
+            m = re.search(r"(\d{4})-(\d{2})-(\d{2})", s)
+            if m:
+                y, mo, d = map(int, m.groups())
+                try:
+                    return datetime.date(y, mo, d)
+                except Exception:
+                    return None
+            return None
+
+        min_candidate = _parse_global_start_date_to_date(GLOBAL_START_DATE)
+        min_date = min_candidate or (now_bkk.date() - datetime.timedelta(days=30))
+        max_date = now_bkk.date()
+        default_start = max(min_date, latest_us_premarket_open_bkk.date())
+        default_end = max_date
+
+        date_start, date_end = st.slider(
+            "ช่วงวันที่ (Asia/Bangkok)",
+            min_value=min_date,
+            max_value=max_date,
+            value=(default_start, default_end),
+            format="YYYY-MM-DD"
+        )
+
+        # Map เป็นช่วงเวลาจริง (รวมทั้งวัน)
+        start_dt = tz_bkk.localize(datetime.datetime.combine(date_start, datetime.time.min))
+        end_dt = tz_bkk.localize(datetime.datetime.combine(date_end, datetime.time.max))
+
+        # Summary totals
         total_buy_orders = 0
         total_sell_orders = 0
         total_buy_usd = 0.0
@@ -905,7 +931,11 @@ with tab2:
         rows = []
         for cfg in ASSET_CONFIGS:
             t = cfg['ticker']
-            stats = trade_stats_all.get(t, {})
+            stats = fetch_net_detailed_stats_between(
+                cfg['asset_field'],
+                start_dt.isoformat(),
+                end_dt.isoformat()
+            )
             b_cnt = int(stats.get('buy_count', 0))
             s_cnt = int(stats.get('sell_count', 0))
             b_units = float(stats.get('buy_units', 0.0))
@@ -946,70 +976,13 @@ with tab2:
         c3.metric("Sell_Orders", f"{total_sell_orders}")
 
         d1, d2, d3 = st.columns(3)
-        d1.metric("Net USD Flow since US Pre-Market", f"${net_usd_total:,.2f}")
+        d1.metric("Net USD Flow (ช่วงที่เลือก)", f"${net_usd_total:,.2f}")
         d2.metric("Buy_USD", f"${total_buy_usd:,.2f}")
         d3.metric("Sell_USD", f"${total_sell_usd:,.2f}")
 
         with st.expander("Per-ticker detail"):
             df_metrics = pd.DataFrame(rows).set_index("Ticker")
             st.dataframe(df_metrics, use_container_width=True)
-
-        st.write("_____")
-
-        # ========================= NEW (Goal_1): All-time metrics & history =========================
-        with st.expander("All-time metrics & history"):
-            # คำนวณสรุป All-time ต่อ Ticker
-            per_ticker_summary = {}
-            per_ticker_days = {}
-            for cfg in ASSET_CONFIGS:
-                t = cfg['ticker']
-                df_daily, summary = compute_alltime_daily_stats(cfg['asset_field'])
-                per_ticker_summary[t] = summary
-                per_ticker_days[t] = summary['days']
-
-            # รวมค่าเฉลี่ยแบบ 'รวมทุก ticker-day'
-            total_days_all = sum(s['days'] for s in per_ticker_summary.values())
-            total_buy_all = sum(s['total_buy_orders'] for s in per_ticker_summary.values())
-            total_sell_all = sum(s['total_sell_orders'] for s in per_ticker_summary.values())
-            total_net_all = sum(s['total_net_orders'] for s in per_ticker_summary.values())
-
-            avg_buy_all = (total_buy_all / total_days_all) if total_days_all > 0 else 0.0
-            avg_sell_all = (total_sell_all / total_days_all) if total_days_all > 0 else 0.0
-            avg_net_all = (total_net_all / total_days_all) if total_days_all > 0 else 0.0
-
-            e1, e2, e3 = st.columns(3)
-            e1.metric("Avg All Time Total Orders (Buy - Sell)", f"{avg_net_all:,.2f}")
-            e2.metric("Avg All Time Buy_Orders", f"{avg_buy_all:,.2f}")
-            e3.metric("Avg All Time Sell_Orders", f"{avg_sell_all:,.2f}")
-            st.caption(f"Computed over {total_days_all} ticker-days (Asia/Bangkok).")
-
-            # ตารางเฉลี่ยรายติ๊กเกอร์
-            rows_avg = []
-            for t, s in per_ticker_summary.items():
-                rows_avg.append({
-                    "Ticker": t,
-                    "Days": s['days'],
-                    "Avg_Buy_Orders": s['avg_buy_orders_per_day'],
-                    "Avg_Sell_Orders": s['avg_sell_orders_per_day'],
-                    "Avg_Net_Orders": s['avg_net_orders_per_day'],
-                    "Total_Buy_Orders": s['total_buy_orders'],
-                    "Total_Sell_Orders": s['total_sell_orders'],
-                    "Total_Net_Orders": s['total_net_orders'],
-                })
-            df_avg = pd.DataFrame(rows_avg).set_index("Ticker").sort_values("Avg_Net_Orders", ascending=False)
-            st.dataframe(df_avg, use_container_width=True)
-
-            # เลือกดู All-time daily history ต่อ Ticker (รายวัน)
-            ticker_choices = [c['ticker'] for c in ASSET_CONFIGS]
-            hist_sel = st.selectbox("All-time daily history (select ticker):", ticker_choices, key="alltime_hist_sel")
-            if hist_sel:
-                cfg_sel = next(c for c in ASSET_CONFIGS if c['ticker'] == hist_sel)
-                df_daily_sel, _ = compute_alltime_daily_stats(cfg_sel['asset_field'])
-                if not df_daily_sel.empty:
-                    st.dataframe(df_daily_sel.set_index('date'), use_container_width=True)
-                else:
-                    st.info("No all-time history available for this ticker.")
-        # ========================= END NEW =========================
 
     st.write("_____")
 
