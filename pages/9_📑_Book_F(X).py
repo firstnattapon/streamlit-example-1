@@ -310,4 +310,9 @@ with st.expander("Book : Capital in the Twenty-First Century : ทุนนิ�
 with st.expander("Book : การลงทุน 50 ปีของ Howard Marks" , expanded = 0 ):
   st.write('https://notebooklm.google.com/notebook/7e3b54f2-add3-40bb-9441-19c70a53654b')
   st.write('____')  
+
+st.write('Personal Podcast')
+with st.expander("Podcast_notebook_lm " , expanded = 0 ):
+  st.write('https://monica.im/share/artifact?id=dv2sDj9jYbJAntEPCfUjDb')
+  st.write('____')  
  
