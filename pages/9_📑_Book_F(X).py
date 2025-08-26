@@ -311,8 +311,8 @@ with st.expander("Book : การลงทุน 50 ปีของ Howard Mark
   st.write('https://notebooklm.google.com/notebook/7e3b54f2-add3-40bb-9441-19c70a53654b')
   st.write('____')  
 
-st.write('Personal Podcast')
+st.write('Podcast')
 with st.expander("Podcast_notebook_lm " , expanded = 0 ):
   st.write('https://monica.im/share/artifact?id=dv2sDj9jYbJAntEPCfUjDb')
+  st.write('https://github.com/firstnattapon/streamlit-example-1/releases/edit/notebook_lm')
   st.write('____')  
- 
