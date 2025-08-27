@@ -381,7 +381,7 @@ with tab_dict['Ref_index_Log']:
 
     if not ref_log_df.empty:
         st.header("Net Performance Analysis (vs. Reference)")
-        st.info("Performance analysis of the portfolio's net value against the logarithmic reference index.")
+        # st.info("Performance analysis of the portfolio's net value against the logarithmic reference index.")
 
         net_series = ref_log_df['net']
         daily_changes = net_series.diff()
@@ -427,7 +427,7 @@ with tab_dict['Burn_Cash']:
     
     if not burn_cash_df.empty:
         st.header("Cash Burn Risk Analysis")
-        st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
+        # st.info("Based on a backtest using an 'always buy' strategy (act=-1) to assess maximum potential risk.")
         
         cumulative_burn_series = burn_cash_df['cumulative_burn']
         max_daily_burn = burn_cash_df['daily_burn'].min()
