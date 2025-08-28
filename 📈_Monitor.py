@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*- 
+# -*- coding: utf-8 -*-
 import streamlit as st
 import numpy as np
 import datetime
@@ -22,7 +22,7 @@ from urllib.request import urlopen
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------------------------------
-# SimulationTracer (คงพฤติกรรมเดิม, เพิ่ม type hints & ปรับ robustness)
+# SimulationTracer (พฤติกรรมเดิม)
 # ---------------------------------------------------------------------------------
 class SimulationTracer:
     def __init__(self, encoded_string: str):
@@ -130,33 +130,29 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
 # ---------------------------------------------------------------------------------
-# Cache Management
+# Cache Management (Hard Reload ใช้เฉพาะปุ่ม Sidebar)
 # ---------------------------------------------------------------------------------
-
 def clear_all_caches() -> None:
     st.cache_data.clear()
     st.cache_resource.clear()
-
     sell.cache_clear()
     buy.cache_clear()
 
-    ui_state_keys_to_preserve = {'select_key', 'nex', 'Nex_day_sell'}
+    ui_state_keys_to_preserve = {'select_key', 'nex', 'Nex_day_sell', '_cache_bump'}
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
             try:
                 del st.session_state[key]
             except Exception:
                 pass
-
     st.success("🗑️ Data caches cleared! UI state preserved.")
-
 
 def rerun_keep_selection(ticker: str) -> None:
     st.session_state["_pending_select_key"] = ticker
     st.rerun()
 
 # ---------------------------------------------------------------------------------
-# Calculation Utils
+# Calculation Utils (เดิม)
 # ---------------------------------------------------------------------------------
 @lru_cache(maxsize=128)
 def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
@@ -166,7 +162,6 @@ def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, in
     adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
     total = round(asset * unit_price + adjust_qty * unit_price, 2)
     return unit_price, adjust_qty, total
-
 
 @lru_cache(maxsize=128)
 def buy(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
@@ -188,15 +183,9 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
-# === NEW: cache ประวัติราคาต่อ ticker (period='max') เพื่อให้ผลเหมือนเดิม แต่เร็วขึ้นอย่างมาก ===
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_history_df_max_close_bkk(ticker: str) -> pd.DataFrame:
-    """
-    ดึงประวัติราคา Close แบบ period='max' และแปลง timezone -> Asia/Bangkok
-    Cache 1 ชั่วโมง: ลด network I/O อย่างมหาศาล โดยไม่เปลี่ยน output logic
-    """
     df = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-    # ทำให้แน่ใจว่า timezone เหมือนเดิมกับโค้ดก่อนหน้า
     try:
         df.index = df.index.tz_convert('Asia/Bangkok')
     except TypeError:
@@ -208,28 +197,19 @@ def get_current_ny_date() -> datetime.date:
     ny_tz = pytz.timezone('America/New_York')
     return datetime.datetime.now(ny_tz).date()
 
-# NEW (Goal_1): คำนวณ "เวลาเปิดตลาด US Pre-Market ล่าสุด (04:00 NY)" แล้วแปลงเป็นเวลา Asia/Bangkok
-
 def _previous_weekday(d: datetime.date) -> datetime.date:
-    # Monday=0 ... Sunday=6
     wd = d.weekday()
-    if wd == 0:          # Mon -> prev Fri
+    if wd == 0:
         return d - datetime.timedelta(days=3)
-    elif wd == 6:        # Sun -> prev Fri
+    elif wd == 6:
         return d - datetime.timedelta(days=2)
-    else:                # Tue-Sat -> minus 1 day (Sat treated as Fri-1 => Fri)
+    else:
         return d - datetime.timedelta(days=1)
-
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_latest_us_premarket_open_bkk() -> datetime.datetime:
-    """
-    คืนค่าเวลาเปิดตลาดล่าสุด 04:00 America/New_York (จ.-ศ.) ที่ไม่เกินเวลาปัจจุบัน
-    แล้วแปลงเป็น timezone Asia/Bangkok (ไม่ครอบคลุมวันหยุดนักขัตฤกษ์ของสหรัฐแบบละเอียด)
-    """
     tz_ny = pytz.timezone('America/New_York')
     tz_bkk = pytz.timezone('Asia/Bangkok')
-
     now_ny = datetime.datetime.now(tz_ny)
     date_ny = now_ny.date()
 
@@ -238,8 +218,7 @@ def get_latest_us_premarket_open_bkk() -> datetime.datetime:
         return tz_ny.localize(dt_naive)
 
     candidate = make_open(date_ny)
-
-    while candidate.weekday() >= 5:  # 5=Sat, 6=Sun
+    while candidate.weekday() >= 5:
         date_ny = _previous_weekday(date_ny)
         candidate = make_open(date_ny)
 
@@ -255,14 +234,11 @@ def get_latest_us_premarket_open_bkk() -> datetime.datetime:
 # ---------------------------------------------------------------------------------
 # ThingSpeak helpers
 # ---------------------------------------------------------------------------------
-
 def _field_number(field_value) -> Optional[int]:
-    """Accepts 1 or 'field1' -> 1"""
     if isinstance(field_value, int):
         return field_value
     m = re.search(r'(\d+)', str(field_value))
     return int(m.group(1)) if m else None
-
 
 def _http_get_json(url: str, params: Dict) -> Dict:
     try:
@@ -273,12 +249,11 @@ def _http_get_json(url: str, params: Dict) -> Dict:
     except Exception:
         return {}
 
-# --- (ยังคงไว้เพื่อ compatibility ถ้าต้องใช้ net แบบเดิม) -----------------------
+# ---------------------------------------------------------------------------------
+# Incremental cache-busting: เพิ่มพารามิเตอร์ cache_bump ให้ฟังก์ชันที่ต้องรีเฟรช
+# ---------------------------------------------------------------------------------
 @st.cache_data(ttl=180, show_spinner=False)
-def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> int:
-    """
-    (legacy) นับจำนวน net trades: +1 เมื่อค่าขึ้น, -1 เมื่อค่าลง
-    """
+def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> int:
     try:
         channel_id = int(asset_field_conf['channel_id'])
         fnum = _field_number(asset_field_conf['field'])
@@ -349,21 +324,8 @@ def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) ->
     except Exception:
         return 0
 
-# NEW: เวอร์ชันละเอียด แยก Buy/Sell ทั้ง "จำนวนออเดอร์" และ "ปริมาณหน่วย" (เริ่มต้นแบบเดิม: ตั้งแต่ start)
 @st.cache_data(ttl=180, show_spinner=False)
-def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> Dict[str, float]:
-    """
-    Return:
-      {
-        'buy_count': int,
-        'sell_count': int,
-        'net_count': int,                 # buy_count - sell_count
-        'buy_units': float,               # ผลรวม increment >0 ของหน่วย
-        'sell_units': float,              # ผลรวม decrement >0 ของหน่วย (ขาออก)
-        'net_units': float                # buy_units - sell_units
-      }
-    หมายเหตุ: ใช้ 'ราคาปัจจุบัน' คูณ เพื่อประมาณ USD flow (ไม่ได้ใช้ราคา ณ เวลาเทรด)
-    """
+def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
     try:
         channel_id = int(asset_field_conf['channel_id'])
         fnum = _field_number(asset_field_conf['field'])
@@ -406,7 +368,6 @@ def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso:
                 append((dt_local, v))
         rows.sort(key=lambda x: x[0])
 
-        # baseline ก่อนหน้าต่าง
         baseline: Optional[float] = None
         for dt_local, v in rows:
             if dt_local < window_start_local:
@@ -463,10 +424,8 @@ def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso:
     except Exception:
         return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
-# NEW (Goal_1): เวอร์ชัน "ระบุช่วงเวลาเริ่ม-สิ้นสุด" สำหรับ METRICS โดยเฉพาะ
 @st.cache_data(ttl=180, show_spinner=False)
-def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str) -> Dict[str, float]:
-    """เหมือนกับฟังก์ชันด้านบน แต่จำกัดช่วงเวลา [start, end] (รวมขอบ)"""
+def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
     try:
         channel_id = int(asset_field_conf['channel_id'])
         fnum = _field_number(asset_field_conf['field'])
@@ -485,7 +444,6 @@ def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_is
             return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
         tz = pytz.timezone('Asia/Bangkok')
-        # parse start
         try:
             window_start_local = datetime.datetime.fromisoformat(window_start_bkk_iso)
             if window_start_local.tzinfo is None:
@@ -494,7 +452,7 @@ def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_is
                 window_start_local = window_start_local.astimezone(tz)
         except Exception:
             window_start_local = datetime.datetime.now(tz)
-        # parse end
+
         try:
             window_end_local = datetime.datetime.fromisoformat(window_end_bkk_iso)
             if window_end_local.tzinfo is None:
@@ -519,7 +477,6 @@ def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_is
                 append((dt_local, v))
         rows.sort(key=lambda x: x[0])
 
-        # baseline = ค่าล่าสุดก่อน start
         baseline: Optional[float] = None
         for dt_local, v in rows:
             if dt_local < window_start_local:
@@ -579,17 +536,14 @@ def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_is
         return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
 # ---------------------------------------------------------------------------------
-# Fetch all data (monitor / assets / nets)
+# Fetch all data — ลด max_workers (rate-limit friendly) + รองรับ cache_bump
 # ---------------------------------------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional[str], window_start_bkk_iso: str) -> Dict[str, dict]:
+def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional[str], window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, dict]:
     monitor_results: Dict[str, Tuple[pd.DataFrame, str, Optional[datetime.date]]] = {}
     asset_results: Dict[str, float] = {}
     nets_results: Dict[str, int] = {}
     trade_stats_results: Dict[str, Dict[str, float]] = {}
-
-    # === NEW: เตรียม cache ประวัติราคาต่อ ticker ล่วงหน้า (ยังดึงแบบ period='max' เพื่อให้ผลลัพธ์เดิม) ===
-    tickers = [c['ticker'] for c in configs]
 
     def fetch_monitor(asset_config: Dict) -> Tuple[str, Tuple[pd.DataFrame, str, Optional[datetime.date]]]:
         ticker = asset_config['ticker']
@@ -598,9 +552,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             client = _clients_ref[int(monitor_field_config['channel_id'])]
             field_num = monitor_field_config['field']
 
-            # ใช้ cache ใหม่ที่เร็วขึ้นมาก
             tickerData = get_history_df_max_close_bkk(ticker)
-
             if start_date:
                 tickerData = tickerData[tickerData.index >= start_date]
 
@@ -615,16 +567,13 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             except Exception:
                 pass
 
-            # เตรียม df action
             tickerData = tickerData.copy()
             tickerData['index'] = list(range(len(tickerData)))
 
-            # เติม 5 บรรทัด dummy ด้านท้าย (เหมือนเดิม)
             dummy_df = pd.DataFrame(index=[f'+{i}' for i in range(5)])
             df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
             df['action'] = ""
 
-            # ใส่ SimulationTracer (เหมือนเดิม)
             try:
                 tracer = SimulationTracer(encoded_string=fx_js_str)
                 final_actions = tracer.run()
@@ -654,36 +603,31 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     def fetch_trade_stats(asset_config: Dict) -> Tuple[str, Dict[str, float]]:
         ticker = asset_config['ticker']
         try:
-            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso)
+            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso, cache_bump=cache_bump)
             return ticker, stats
         except Exception:
             return ticker, dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
-    # เพิ่มจำนวน worker เล็กน้อย (ยังคงปลอดภัย)
-    workers = max(1, min(len(configs) * 3, 12))
+    workers = max(1, min(len(configs), 8))  # ลดกำลังยิงภายนอก
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        # monitor (ยังคงคู่ขนานเหมือนเดิม แต่ได้อานิสงส์จาก cache ใหม่)
         for future in concurrent.futures.as_completed([executor.submit(fetch_monitor, a) for a in configs]):
             ticker, result = future.result()
             monitor_results[ticker] = result
 
-        # asset last value
         for future in concurrent.futures.as_completed([executor.submit(fetch_asset, a) for a in configs]):
             ticker, result = future.result()
             asset_results[ticker] = result
 
-        # trade stats (แยก buy/sell)
         for future in concurrent.futures.as_completed([executor.submit(fetch_trade_stats, a) for a in configs]):
             ticker, stats = future.result()
             trade_stats_results[ticker] = stats
-            nets_results[ticker] = int(stats.get('net_count', 0))  # สำหรับ label/help เดิม
+            nets_results[ticker] = int(stats.get('net_count', 0))
 
     return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results, 'trade_stats': trade_stats_results}
 
 # ---------------------------------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------------------------------
-
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
@@ -691,10 +635,7 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
         with cols[i]:
             ticker = config['ticker']
             last_val = float(last_assets.get(ticker, 0.0))
-            if config.get('option_config'):
-                raw_label = config['option_config']['label']
-            else:
-                raw_label = ticker
+            raw_label = config['option_config']['label'] if config.get('option_config') else ticker
 
             display_label = raw_label
             base_help = ""
@@ -702,8 +643,6 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
             if split_pos != -1:
                 display_label = raw_label[:split_pos].strip()
                 base_help = raw_label[split_pos:].strip()
-            else:
-                base_help = ""
             help_text_final = base_help if base_help else f"net_since_us_premarket_open = {net_since_open_map.get(ticker, 0)}"
 
             if config.get('option_config'):
@@ -721,6 +660,15 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                 asset_inputs[ticker] = float(val)
     return asset_inputs
 
+# --- ตัวช่วย update แบบมี timeout โดยไม่เปลี่ยนไลบรารี (ปลอดภัยกว่า) -------------
+def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float = 10.0):
+    """
+    เรียก client.update(payload) แต่คุมเวลาได้ด้วย Future timeout
+    ถ้าเกินกำหนดจะยกเลิกและโยน TimeoutError (ป้องกันค้าง)
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(client.update, payload)
+        return fut.result(timeout=timeout_sec)
 
 def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel]) -> None:
     with st.expander("Update Assets on ThingSpeak"):
@@ -733,13 +681,15 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingsp
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
                     try:
                         client = clients[int(asset_conf['channel_id'])]
-                        client.update({field_name: add_val})
+                        safe_ts_update(client, {field_name: add_val}, timeout_sec=10.0)
                         st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
-                        clear_all_caches()
+                        # incremental bust → เร็วขึ้น
+                        st.session_state['_cache_bump'] = st.session_state.get('_cache_bump', 0) + 1
                         rerun_keep_selection(st.session_state.get("select_key", ""))
+                    except concurrent.futures.TimeoutError:
+                        st.error(f"Update {ticker} timed out (>10s).")
                     except Exception as e:
                         st.error(f"Failed to update {ticker}: {e}")
-
 
 def trading_section(
     config: Dict,
@@ -774,7 +724,7 @@ def trading_section(
     sell_calc = calc['sell']
     buy_calc = calc['buy']
 
-    # SELL line (ข้อความคงเดิม)
+    # SELL line (เหมือนเดิม)
     st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
     col1, col2, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}'):
@@ -782,14 +732,17 @@ def trading_section(
             try:
                 client = clients[int(asset_conf['channel_id'])]
                 new_asset_val = asset_last - buy_calc[1]
-                client.update({field_name: new_asset_val})
+                safe_ts_update(client, {field_name: new_asset_val}, timeout_sec=10.0)
                 col3.write(f"Updated: {new_asset_val}")
-                clear_all_caches()
+                # incremental cache-busting เฉพาะส่วนที่จำเป็น
+                st.session_state['_cache_bump'] = st.session_state.get('_cache_bump', 0) + 1
                 rerun_keep_selection(ticker)
+            except concurrent.futures.TimeoutError:
+                st.error(f"SELL {ticker} timed out (>10s).")
             except Exception as e:
                 st.error(f"Failed to SELL {ticker}: {e}")
 
-    # ราคาปัจจุบัน & P/L
+    # ราคาปัจจุบัน & P/L (เดิม)
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -807,7 +760,7 @@ def trading_section(
     except Exception:
         st.warning(f"Could not retrieve price data for {ticker}.")
 
-    # BUY line (ข้อความคงเดิม)
+    # BUY line (เหมือนเดิม)
     col4, col5, col6 = st.columns(3)
     st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     if col6.checkbox(f'buy_match_{ticker}'):
@@ -815,45 +768,49 @@ def trading_section(
             try:
                 client = clients[int(asset_conf['channel_id'])]
                 new_asset_val = asset_last + sell_calc[1]
-                client.update({field_name: new_asset_val})
+                safe_ts_update(client, {field_name: new_asset_val}, timeout_sec=10.0)
                 col6.write(f"Updated: {new_asset_val}")
-                clear_all_caches()
+                st.session_state['_cache_bump'] = st.session_state.get('_cache_bump', 0) + 1
                 rerun_keep_selection(ticker)
+            except concurrent.futures.TimeoutError:
+                st.error(f"BUY {ticker} timed out (>10s).")
             except Exception as e:
                 st.error(f"Failed to BUY {ticker}: {e}")
 
 # ---------------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------------
-# NEW: คำนวณ "เวลาเปิดตลาดสหรัฐ (Pre-Market) ล่าสุด" เป็น Asia/Bangkok
-latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
-window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
-
-all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, window_start_bkk_iso)
-monitor_data_all = all_data['monitors']
-last_assets_all = all_data['assets']
-trade_nets_all = all_data['nets']                 # สำหรับ label/help เดิม
-trade_stats_all = all_data['trade_stats']         # NEW: แยก buy/sell ทั้ง count และ units (ตั้งแต่ premarket)
-
-# Stable Session State Initialization
+# Session State init (เดิม + cache_bump)
 if 'select_key' not in st.session_state:
     st.session_state.select_key = ""
 if 'nex' not in st.session_state:
     st.session_state.nex = 0
 if 'Nex_day_sell' not in st.session_state:
     st.session_state.Nex_day_sell = 0
+if '_cache_bump' not in st.session_state:
+    st.session_state['_cache_bump'] = 0
 
 # Bootstrap selection BEFORE widgets
 pending = st.session_state.pop("_pending_select_key", None)
 if pending:
     st.session_state.select_key = pending
 
+# เวลาเปิดตลาดสหรัฐ (Pre-Market) ล่าสุด → จุดอ้างอิง window_start
+latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
+window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
+
+# ดึงข้อมูลหลัก โดยส่ง cache_bump เพื่อรีเฟรชเฉพาะสิ่งจำเป็น
+CACHE_BUMP = st.session_state.get('_cache_bump', 0)
+all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, window_start_bkk_iso, cache_bump=CACHE_BUMP)
+monitor_data_all = all_data['monitors']
+last_assets_all = all_data['assets']
+trade_nets_all = all_data['nets']          # สำหรับ label/help เดิม
+trade_stats_all = all_data['trade_stats']  # แยก buy/sell ตั้งแต่ premarket
 
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 with tab2:
     Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
-
     if Nex_day_:
         nex_col, Nex_day_sell_col, *_ = st.columns([1, 1, 3])
         if nex_col.button("Nex_day"):
@@ -878,23 +835,18 @@ with tab2:
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
     st.write("---")
 
-    # ==============================
-    # NEW (Goal_1): METRICS + Date Slider
-    # ==============================
+    # METRICS (พฤติกรรมเดิม — คำนวณเสมอภายใน expander)
     with st.expander("METRICS"):
         tz_bkk = pytz.timezone('Asia/Bangkok')
         now_bkk = datetime.datetime.now(tz_bkk)
 
-        # หา min_date สำหรับสไลเดอร์ (พยายามใช้ GLOBAL_START_DATE ถ้าพาร์สได้)
         def _parse_global_start_date_to_date(s: Optional[str]) -> Optional[datetime.date]:
             if not s:
                 return None
-            # ลอง fromisoformat ตรง ๆ ก่อน
             try:
                 return datetime.datetime.fromisoformat(s).date()
             except Exception:
                 pass
-            # เผื่อรูปแบบอื่น ๆ: จับ YYYY-MM-DD
             m = re.search(r"(\d{4})-(\d{2})-(\d{2})", s)
             if m:
                 y, mo, d = map(int, m.groups())
@@ -918,11 +870,9 @@ with tab2:
             format="YYYY-MM-DD"
         )
 
-        # Map เป็นช่วงเวลาจริง (รวมทั้งวัน)
         start_dt = tz_bkk.localize(datetime.datetime.combine(date_start, datetime.time.min))
         end_dt = tz_bkk.localize(datetime.datetime.combine(date_end, datetime.time.max))
 
-        # Summary totals
         total_buy_orders = 0
         total_sell_orders = 0
         total_buy_usd = 0.0
@@ -934,7 +884,8 @@ with tab2:
             stats = fetch_net_detailed_stats_between(
                 cfg['asset_field'],
                 start_dt.isoformat(),
-                end_dt.isoformat()
+                end_dt.isoformat(),
+                cache_bump=CACHE_BUMP
             )
             b_cnt = int(stats.get('buy_count', 0))
             s_cnt = int(stats.get('sell_count', 0))
@@ -943,7 +894,7 @@ with tab2:
             net_cnt = int(stats.get('net_count', 0))
             net_units = float(stats.get('net_units', 0.0))
 
-            px = float(get_cached_price(t))  # ราคาปัจจุบัน (USD)
+            px = float(get_cached_price(t))
             buy_usd = b_units * px
             sell_usd = - s_units * px
             net_usd = buy_usd + sell_usd
@@ -986,7 +937,6 @@ with tab2:
 
     st.write("_____")
 
-    # Controls for updating asset (ตามเดิม)
     Start = st.checkbox('start')
     if Start:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
@@ -1054,7 +1004,6 @@ with tab1:
     else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
-    # เตรียมคำนวณ buy/sell
     calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
@@ -1065,7 +1014,6 @@ with tab1:
             'buy': buy(asset_value, fix_c=fix_c, Diff=float(x_2)),
         }
 
-    # วาดส่วน trading + ตาราง raw
     for config in configs_to_display:
         ticker = config['ticker']
         df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
@@ -1091,7 +1039,7 @@ with tab1:
             st.dataframe(df_data, use_container_width=True)
         st.write("_____")
 
-# Sidebar Rerun
+# Sidebar Rerun (Hard Reload)
 if st.sidebar.button("RERUN"):
     current_selection = st.session_state.get("select_key", "")
     clear_all_caches()
