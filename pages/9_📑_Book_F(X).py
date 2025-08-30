@@ -317,6 +317,6 @@ with st.expander("Book : Principles : หลักการ (ทุกอย่�
 
 st.write('Podcast')
 with st.expander("Podcast_notebook_lm " , expanded = 0 ):
-  st.write('https://monica.im/share/artifact?id=3vibZExEztirQ7KXRgqauG')
+  st.write('https://monica.im/share/artifact?id=sHEz9c47zBtKYgLUxyuM9Z')
   st.write('https://github.com/firstnattapon/streamlit-example-1/releases/edit/notebook_lm')
   st.write('____')  
