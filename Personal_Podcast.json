@@ -1,9 +1,5 @@
-{ 
-"Playlist"  : "Watch_Later " ,
-"URL/ID"  : "https://www.youtube.com/playlist?list=PLs6ZoT6N-psS7ai0k_hBKy8PjyEGGcQXm" , 
-"Playlist"  : "TFEX_Professional_Trader" ,
-"URL/ID"  : "https://www.youtube.com/playlist?list=PLs6ZoT6N-psSjOUFuCaqdJVnIDJ3NfjtT" , 
-"Playlist"  : "The_Most_Important_Thing_in_Investing" ,
-"URL/ID"  : "https://www.youtube.com/playlist?list=PLs6ZoT6N-psS-wSBgQtwSuVFNu-whEyPV" , 
-}
-
+[
+  { "name": "Watch_Later", "url": "https://www.youtube.com/playlist?list=PLs6ZoT6N-psS7ai0k_hBKy8PjyEGGcQXm" },
+  { "name": "TFEX_Professional_Trader", "url": "https://www.youtube.com/playlist?list=PLs6ZoT6N-psSjOUFuCaqdJVnIDJ3NfjtT" },
+  { "name": "The_Most_Important_Thing_in_Investing", "url": "https://www.youtube.com/playlist?list=PLs6ZoT6N-psS-wSBgQtwSuVFNu-whEyPV" }
+]
