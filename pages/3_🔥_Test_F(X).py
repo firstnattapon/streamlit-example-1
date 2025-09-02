@@ -749,9 +749,7 @@ def trading_section(
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
             try:
-                # คำนวณค่าใหม่เหมือนเดิม
-                new_asset_val = asset_last - buy_calc[1]
-                # ใช้ Write API Key ถ้ามี, ไม่งั้น fallback ไป api_key เดิม
+                new_asset_val = asset_last - buy_calc[1]  # คำนวณเหมือนเดิม
                 write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
                 resp = ts_update_via_http(write_key, field_name, new_asset_val, timeout_sec=10.0)
 
@@ -789,7 +787,7 @@ def trading_section(
     if col6.checkbox(f'buy_match_{ticker}'):
         if col6.button(f"GO_BUY_{ticker}"):
             try:
-                new_asset_val = asset_last + sell_calc[1]
+                new_asset_val = asset_last + sell_calc[1]  # คำนวณเหมือนเดิม
                 write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
                 resp = ts_update_via_http(write_key, field_name, new_asset_val, timeout_sec=10.0)
 
