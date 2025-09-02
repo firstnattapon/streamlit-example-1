@@ -863,14 +863,6 @@ trade_stats_all = all_data['trade_stats']  # แยก buy/sell ตั้งแ�
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 with tab2:
-    # โหมดผสม: สวิตช์ Fast focus
-    st.checkbox(
-        "Fast focus after update",
-        value=st.session_state['_fast_focus_enabled'],
-        key='_fast_focus_enabled',
-        help="เปิดไว้ถ้าต้องการให้ selectbox โฟกัส ticker หลังอัปเดต โดยทำ rerun แบบเบา (ข้ามการดึงข้อมูลหนัก ๆ)"
-    )
-
     Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
     if Nex_day_:
         nex_col, Nex_day_sell_col, *_ = st.columns([1, 1, 3])
@@ -1001,6 +993,14 @@ with tab2:
     Start = st.checkbox('start')
     if Start:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
+
+    # โหมดผสม: สวิตช์ Fast focus
+    st.checkbox(
+        "Fast focus after update",
+        value=st.session_state['_fast_focus_enabled'],
+        key='_fast_focus_enabled',
+        help="เปิดไว้ถ้าต้องการให้ selectbox โฟกัส ticker หลังอัปเดต โดยทำ rerun แบบเบา (ข้ามการดึงข้อมูลหนัก ๆ)"
+    )
 
 with tab1:
     current_ny_date = get_current_ny_date()
