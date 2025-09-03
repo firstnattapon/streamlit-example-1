@@ -741,7 +741,7 @@ def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float
         fut = ex.submit(client.update, payload)
         return fut.result(timeout=timeout_sec)
 
-def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel]) -> None:
+def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel], last_assets: Dict[str, float]) -> None:
     """
     ทำให้ปุ่มใน expander ใช้เส้นทางเดียวกับ GO_SELL/GO_BUY:
     - ใช้ ts_update_via_http + write_api_key
@@ -755,16 +755,27 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingsp
             asset_conf = config['asset_field']
             field_name = asset_conf['field']
             channel_id = int(asset_conf['channel_id'])
+
             if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
-                add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
+                # Prefill ด้วยค่าปัจจุบัน เพื่อลดความผิดพลาด (เดิมเป็น 0.0)
+                current_val = float(last_assets.get(ticker, 0.0))
+                add_val = st.number_input(
+                    f"New Value for {ticker}",
+                    step=0.001,
+                    value=current_val,
+                    key=f'input_{ticker}'
+                )
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
                     try:
                         write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')  # คงพฤติกรรมเดิม
                         if not write_key:
                             st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
                             return
-                        # ==== RATE-LIMIT: ใช้ wrapper
-                        resp = ts_update_with_rate_limit(write_key, field_name, add_val, channel_id=channel_id, min_interval=16.0, max_wait=8.0)
+                        # ==== RATE-LIMIT: ใช้ wrapper (เหมือน GO_SELL/GO_BUY)
+                        resp = ts_update_with_rate_limit(
+                            write_key, field_name, add_val,
+                            channel_id=channel_id, min_interval=16.0, max_wait=8.0
+                        )
                         if resp.strip() == "0":
                             st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field หรือเว้น ~15s/ช่อง")
                         else:
@@ -1057,7 +1068,8 @@ with tab2:
     st.write("_____")
     Start = st.checkbox('start')
     if Start:
-        render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
+        # <<< เปลี่ยนจุดเรียก: ส่ง last_assets_all เข้าไปเพื่อ prefill ค่า >>>
+        render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS, last_assets_all)
 
 with tab1:
     current_ny_date = get_current_ny_date()
@@ -1089,7 +1101,7 @@ with tab1:
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
 
     all_tickers = [c['ticker'] for c in ASSET_CONFIGS]
-    selectbox_options: List[str] = [""]
+    selectbox_options: List[str] = [""]  # Show All
     if st.session_state.nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
