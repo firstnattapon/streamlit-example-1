@@ -13,3 +13,4 @@ alpha_vantage
 requests
 numpy-financial
 matplotlib
+requests_cache
