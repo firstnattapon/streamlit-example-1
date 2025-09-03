@@ -14,6 +14,7 @@ import pytz
 import re
 from urllib.parse import urlencode
 from urllib.request import urlopen
+import time  # ==== RATE-LIMIT: added
 
 # ---------------------------------------------------------------------------------
 # App Setup
@@ -138,7 +139,8 @@ def clear_all_caches() -> None:
     ui_state_keys_to_preserve = {
         'select_key', 'nex', 'Nex_day_sell',
         '_cache_bump', '_last_assets_overrides',
-        '_all_data_cache', '_skip_refresh_on_rerun'
+        '_all_data_cache', '_skip_refresh_on_rerun',
+        '_ts_last_update_at'  # ==== RATE-LIMIT: preserve last-update map
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -262,6 +264,61 @@ def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: 
             return resp.read().decode("utf-8", errors="ignore").strip()
     except Exception:
         return "0"
+
+# ==== RATE-LIMIT: helpers
+def _now_ts() -> float:
+    return time.time()
+
+def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.0, max_wait: float = 8.0) -> Tuple[bool, float]:
+    """
+    ตรวจคูลดาวน์ต่อช่อง:
+    - ถ้าเหลือเวลาน้อยกว่าหรือเท่ากับ max_wait → รอให้ครบและอนุญาตอัปเดต
+    - ถ้าเหลือเวลามากกว่า max_wait → ไม่อนุญาต (ให้ผู้ใช้กดใหม่เมื่อถึงเวลา)
+    คืนค่า (allowed, remaining_seconds)
+    """
+    try:
+        last_map: Dict[int, float] = st.session_state.get('_ts_last_update_at', {})
+        last = float(last_map.get(int(channel_id), 0.0))
+    except Exception:
+        last = 0.0
+
+    now = _now_ts()
+    elapsed = now - last
+    if elapsed >= min_interval:
+        return True, 0.0
+
+    remaining = max(0.0, min_interval - elapsed)
+    if remaining <= max_wait:
+        # wait inline (minimal UI change: spinner only)
+        with st.spinner(f"Waiting {remaining:.1f}s for ThingSpeak cooldown..."):
+            time.sleep(remaining + 0.3)
+        return True, remaining
+    else:
+        return False, remaining
+
+def ts_update_with_rate_limit(write_api_key: str, field_name: str, value, channel_id: int,
+                              min_interval: float = 16.0, max_wait: float = 8.0) -> str:
+    """
+    ครอบ ts_update_via_http ด้วย rate-limit guard ต่อ channel_id
+    - จะรออัตโนมัติถ้าเหลือเวลาไม่เกิน max_wait
+    - ถ้าเหลือเวลามากกว่า max_wait จะแจ้งเตือนและยกเลิกเพื่อคง UX เร็ว
+    - retry 1 ครั้งสั้น ๆ ถ้าได้ resp == "0"
+    """
+    allowed, remaining = _ensure_rate_limit_and_maybe_wait(channel_id, min_interval=min_interval, max_wait=max_wait)
+    if not allowed:
+        st.warning(f"ต้องรออีก ~{remaining:.1f}s ก่อนอัปเดตช่อง #{channel_id} (ThingSpeak ~15s/ช่อง)")
+        return "0"
+
+    resp = ts_update_via_http(write_api_key, field_name, value, timeout_sec=5.0)
+    if resp.strip() == "0":
+        # เผื่อชนขอบหน้าต่างเวลา/เครือข่าย ลองหน่วงสั้น ๆ แล้ว retry 1 ครั้ง
+        time.sleep(2.0)
+        resp = ts_update_via_http(write_api_key, field_name, value, timeout_sec=5.0)
+
+    if resp.strip() != "0":
+        st.session_state.setdefault('_ts_last_update_at', {})[int(channel_id)] = _now_ts()
+
+    return resp.strip()
 
 # ---------------------------------------------------------------------------------
 # Net stats (คงเดิม)
@@ -684,25 +741,52 @@ def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float
         fut = ex.submit(client.update, payload)
         return fut.result(timeout=timeout_sec)
 
-def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel]) -> None:
+def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel], last_assets: Dict[str, float]) -> None:
+    """
+    ทำให้ปุ่มใน expander ใช้เส้นทางเดียวกับ GO_SELL/GO_BUY:
+    - ใช้ ts_update_via_http + write_api_key
+    - ตรวจ entry_id (resp != "0")
+    - ทำ Optimistic UI และ st.rerun()
+    - เพิ่ม *rate-limit guard ต่อ channel_id*
+    """
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
             ticker = config['ticker']
             asset_conf = config['asset_field']
             field_name = asset_conf['field']
+            channel_id = int(asset_conf['channel_id'])
+
             if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
-                add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
+                # Prefill ด้วยค่าปัจจุบัน เพื่อลดความผิดพลาด (เดิมเป็น 0.0)
+                current_val = float(last_assets.get(ticker, 0.0))
+                add_val = st.number_input(
+                    f"New Value for {ticker}",
+                    step=0.001,
+                    value=current_val,
+                    key=f'input_{ticker}'
+                )
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
                     try:
-                        client = clients[int(asset_conf['channel_id'])]
-                        safe_ts_update(client, {field_name: add_val}, timeout_sec=10.0)
-                        st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
-                        st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(add_val)
-                        st.session_state['_cache_bump'] = st.session_state.get('_cache_bump', 0) + 1
-                    except concurrent.futures.TimeoutError:
-                        st.error(f"Update {ticker} timed out (>10s).")
+                        write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')  # คงพฤติกรรมเดิม
+                        if not write_key:
+                            st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
+                            return
+                        # ==== RATE-LIMIT: ใช้ wrapper (เหมือน GO_SELL/GO_BUY)
+                        resp = ts_update_with_rate_limit(
+                            write_key, field_name, add_val,
+                            channel_id=channel_id, min_interval=16.0, max_wait=8.0
+                        )
+                        if resp.strip() == "0":
+                            st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field หรือเว้น ~15s/ช่อง")
+                        else:
+                            st.write(f"Updated {ticker} to: {add_val} (entry #{resp})")
+                            st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(add_val)
+                            st.session_state['_cache_bump'] = st.session_state.get('_cache_bump', 0) + 1
+                            st.session_state["_pending_select_key"] = ticker
+                            st.session_state["_skip_refresh_on_rerun"] = True
+                            st.rerun()
                     except Exception as e:
-                        st.error(f"Failed to update {ticker}: {e}")
+                        st.error(f"Update {ticker} error: {e}")
 
 def trading_section(
     config: Dict,
@@ -717,6 +801,7 @@ def trading_section(
     ticker = config['ticker']
     asset_conf = config['asset_field']
     field_name = asset_conf['field']
+    channel_id = int(asset_conf['channel_id'])
 
     def get_action_val() -> Optional[int]:
         try:
@@ -738,14 +823,18 @@ def trading_section(
     buy_calc = calc['buy']
 
     # SELL — HTTP GET + Optimistic UI + Fast focus (always on)
-    st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
+    st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])  # (คงไว้ตามเดิม)
     col1, col2, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
             try:
                 new_asset_val = asset_last - buy_calc[1]
-                write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
-                resp = ts_update_via_http(write_key, field_name, new_asset_val, timeout_sec=5.0)
+                write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')  # คงเดิม
+                if not write_key:
+                    st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
+                    return
+                # ==== RATE-LIMIT: ใช้ wrapper
+                resp = ts_update_with_rate_limit(write_key, field_name, new_asset_val, channel_id=channel_id, min_interval=16.0, max_wait=8.0)
                 if resp.strip() == "0":
                     st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field และเว้น ~15s/ช่อง")
                 else:
@@ -778,13 +867,17 @@ def trading_section(
 
     # BUY — HTTP GET + Optimistic UI + Fast focus (always on)
     col4, col5, col6 = st.columns(3)
-    st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
+    st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])  # (คงไว้ตามเดิม)
     if col6.checkbox(f'buy_match_{ticker}'):
         if col6.button(f"GO_BUY_{ticker}"):
             try:
                 new_asset_val = asset_last + sell_calc[1]
-                write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
-                resp = ts_update_via_http(write_key, field_name, new_asset_val, timeout_sec=5.0)
+                write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')  # คงเดิม
+                if not write_key:
+                    st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
+                    return
+                # ==== RATE-LIMIT: ใช้ wrapper
+                resp = ts_update_with_rate_limit(write_key, field_name, new_asset_val, channel_id=channel_id, min_interval=16.0, max_wait=8.0)
                 if resp.strip() == "0":
                     st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field และเว้น ~15s/ช่อง")
                 else:
@@ -815,6 +908,8 @@ if '_skip_refresh_on_rerun' not in st.session_state:
     st.session_state['_skip_refresh_on_rerun'] = False
 if '_all_data_cache' not in st.session_state:
     st.session_state['_all_data_cache'] = None
+if '_ts_last_update_at' not in st.session_state:                # ==== RATE-LIMIT: init per-channel timestamps
+    st.session_state['_ts_last_update_at'] = {}
 
 # Bootstrap selection BEFORE widgets (สำหรับ fast focus)
 pending = st.session_state.pop("_pending_select_key", None)
@@ -973,7 +1068,8 @@ with tab2:
     st.write("_____")
     Start = st.checkbox('start')
     if Start:
-        render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS)
+        # <<< เปลี่ยนจุดเรียก: ส่ง last_assets_all เข้าไปเพื่อ prefill ค่า >>>
+        render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS, last_assets_all)
 
 with tab1:
     current_ny_date = get_current_ny_date()
@@ -1005,7 +1101,7 @@ with tab1:
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
 
     all_tickers = [c['ticker'] for c in ASSET_CONFIGS]
-    selectbox_options: List[str] = [""]
+    selectbox_options: List[str] = [""]  # Show All
     if st.session_state.nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
@@ -1034,7 +1130,7 @@ with tab1:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_tickers]
     elif selected_option == "Filter Sell Tickers":
         sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]
     else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
