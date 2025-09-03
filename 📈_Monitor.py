@@ -618,7 +618,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     def fetch_trade_stats(asset_config: Dict) -> Tuple[str, Dict[str, float]]:
         ticker = asset_config['ticker']
         try:
-            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso, cache_bump=cache_bump)
+            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso, cache_bump=cache_bUMP)
             return ticker, stats
         except Exception:
             return ticker, dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
@@ -1033,8 +1033,9 @@ with tab1:
         buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_tickers]
     elif selected_option == "Filter Sell Tickers":
+        # FIX(goal_1): กรองทิกเกอร์ที่ action == 0 (ฝั่งขาย) ให้ถูกต้อง
         sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]
     else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
