@@ -43,28 +43,24 @@ def http():
     s.headers.update({"User-Agent": "Mozilla/5.0"})
     return s
 
-def _http_get_json(url: str, params: Dict) -> Dict:
-    """
-    GET → JSON. ถ้ามี requests_cache ให้ session จัดการแคชเอง
-    ถ้าไม่มี เราแคชระดับฟังก์ชันด้วย st.cache_data ผ่าน wrapper ข้างล่าง
-    """
-    try:
-        if requests_cache is not None:
-            r = http().get(url, params=params or {}, timeout=5)
-            r.raise_for_status()
-            return r.json()
-        # fallback: แคชด้วย st.cache_data (ต้องทำ params ให้ hashable)
-        params_items = tuple(sorted((str(k), str(v)) for k, v in (params or {}).items()))
-        return _cached_get_json(url, params_items)
-    except Exception:
-        return {}
-
 @st.cache_data(ttl=300, show_spinner=False)
 def _cached_get_json(url: str, params_items: tuple) -> dict:
     try:
         r = http().get(url, params=dict(params_items), timeout=5)
         r.raise_for_status()
         return r.json()
+    except Exception:
+        return {}
+
+def _http_get_json(url: str, params: Dict) -> Dict:
+    """GET → JSON. ถ้ามี requests_cache ให้ session จัดการแคชเอง; ถ้าไม่มี ใช้ st.cache_data"""
+    try:
+        if requests_cache is not None:
+            r = http().get(url, params=params or {}, timeout=5)
+            r.raise_for_status()
+            return r.json()
+        params_items = tuple(sorted((str(k), str(v)) for k, v in (params or {}).items()))
+        return _cached_get_json(url, params_items)
     except Exception:
         return {}
 
@@ -695,7 +691,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             stats = fetch_net_detailed_stats_since(
                 asset_config['asset_field'],
                 window_start_bkk_iso,
-                cache_bump=cache_bump  # FIX: เดิมพิมพ์ผิดเป็น cache_bUMP
+                cache_bump=cache_bump  # FIX typo เดิม
             )
             return ticker, stats
         except Exception:
@@ -952,6 +948,7 @@ with tab2:
         st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
 
     st.write("---")
+    # IMPORTANT: คงพฤติกรรมเดิม — ใช้ตัวแปร x_2 จาก number_input (ไม่ใช้ session_state)
     x_2 = st.number_input('Diff', step=1, value=60)
     st.write("---")
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
@@ -1123,25 +1120,16 @@ with tab1:
     else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
-    # เตรียมคำนวณก่อนเรนเดอร์
+    # IMPORTANT: คืนจังหวะเดิม — คำนวณโดยใช้ asset_inputs + x_2 (ไม่ใช่ session_state)
     calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
-        asset_value = float(st.session_state.get(f"input_{ticker}_asset", 0.0) if not config.get('option_config')
-                            else st.session_state.get(f"input_{ticker}_real", 0.0) + float(config.get('option_config', {}).get('base_value', 0.0)))
+        asset_value = float(asset_inputs.get(ticker, 0.0))
         fix_c = float(config['fix_c'])
         calculations[ticker] = {
-            'sell': sell(asset_value, fix_c=fix_c, Diff=float(st.session_state.get('Diff', 60)) if 'Diff' in st.session_state else 60),
-            'buy': buy(asset_value, fix_c=fix_c, Diff=float(st.session_state.get('Diff', 60)) if 'Diff' in st.session_state else 60),
+            'sell': sell(asset_value, fix_c=fix_c, Diff=float(x_2)),
+            'buy': buy(asset_value, fix_c=fix_c, Diff=float(x_2)),
         }
-
-    # ใช้ asset_inputs ที่คำนวณใน tab2 เพื่อความถูกต้องของ UI เดิม
-    # (โค้ดเดิมเรียกภายใต้ tab2 ก่อน tab1 อยู่แล้ว)
-    # หากอยากอ้างอิงตรง ๆ:
-    try:
-        asset_inputs  # noqa
-    except NameError:
-        asset_inputs = {c['ticker']: last_assets_all.get(c['ticker'], 0.0) for c in ASSET_CONFIGS}
 
     for config in configs_to_display:
         ticker = config['ticker']
