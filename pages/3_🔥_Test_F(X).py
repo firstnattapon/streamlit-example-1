@@ -13,8 +13,12 @@ import tenacity
 import pytz
 import re
 
-# NEW: HTTP client + cache
-import requests, requests_cache
+# HTTP: รองรับทั้งมี/ไม่มี requests_cache
+import requests
+try:
+    import requests_cache  # อาจไม่มี
+except Exception:
+    requests_cache = None
 
 # ---------------------------------------------------------------------------------
 # App Setup
@@ -22,41 +26,50 @@ import requests, requests_cache
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------------------------------
-# HTTP Session (Cached)
+# HTTP Session (Cached) + Fallback
 # ---------------------------------------------------------------------------------
 @st.cache_resource
 def http():
-    # แคช response 5 นาที + reuse connection (keep-alive)
-    return requests_cache.CachedSession(
-        cache_name='http_cache',
-        backend='sqlite',
-        expire_after=300,            # 5 นาที
-        allowable_methods=('GET',),
-        allowable_codes=(200,),
-        stale_if_error=True
-    )
-
-# ---------------------------------------------------------------------------------
-# Helpers: Time / HTTP
-# ---------------------------------------------------------------------------------
-def _to_utc_z(dt_local: datetime.datetime) -> str:
-    """แปลงเวลาท้องถิ่นเป็นรูปแบบ UTC 'YYYY-MM-DDTHH:MM:SSZ'"""
-    if dt_local.tzinfo is None:
-        # ถ้าไม่มี timezone ให้ถือว่าเป็น Asia/Bangkok
-        dt_local = pytz.timezone('Asia/Bangkok').localize(dt_local)
-    dt_utc = dt_local.astimezone(pytz.UTC)
-    return dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if requests_cache is not None:
+        return requests_cache.CachedSession(
+            cache_name='http_cache',
+            backend='sqlite',
+            expire_after=300,            # 5 นาที
+            allowable_methods=('GET',),
+            allowable_codes=(200,),
+            stale_if_error=True
+        )
+    s = requests.Session()              # fallback ไม่มีดิสก์แคช แต่ reuse connection
+    s.headers.update({"User-Agent": "Mozilla/5.0"})
+    return s
 
 def _http_get_json(url: str, params: Dict) -> Dict:
+    """
+    GET → JSON. ถ้ามี requests_cache ให้ session จัดการแคชเอง
+    ถ้าไม่มี เราแคชระดับฟังก์ชันด้วย st.cache_data ผ่าน wrapper ข้างล่าง
+    """
     try:
-        r = http().get(url, params=params, timeout=5)
+        if requests_cache is not None:
+            r = http().get(url, params=params or {}, timeout=5)
+            r.raise_for_status()
+            return r.json()
+        # fallback: แคชด้วย st.cache_data (ต้องทำ params ให้ hashable)
+        params_items = tuple(sorted((str(k), str(v)) for k, v in (params or {}).items()))
+        return _cached_get_json(url, params_items)
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_get_json(url: str, params_items: tuple) -> dict:
+    try:
+        r = http().get(url, params=dict(params_items), timeout=5)
         r.raise_for_status()
         return r.json()
     except Exception:
         return {}
 
 def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: float = 5.0) -> str:
-    """อัปเดต ThingSpeak ผ่าน HTTP GET (ไม่แคช)"""
+    """อัปเดต ThingSpeak ผ่าน HTTP GET (ห้ามแคช)"""
     fnum = _field_number(field_name)
     if fnum is None:
         return "0"
@@ -69,6 +82,13 @@ def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: 
         return r.text.strip()
     except Exception:
         return "0"
+
+def _to_utc_z(dt_local: datetime.datetime) -> str:
+    """แปลงเวลาท้องถิ่นเป็น UTC 'YYYY-MM-DDTHH:MM:SSZ' สำหรับ ThingSpeak"""
+    if dt_local.tzinfo is None:
+        dt_local = pytz.timezone('Asia/Bangkok').localize(dt_local)
+    dt_utc = dt_local.astimezone(pytz.UTC)
+    return dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 # ---------------------------------------------------------------------------------
 # SimulationTracer (เดิม)
@@ -314,7 +334,7 @@ def _field_number(field_value) -> Optional[int]:
     return int(m.group(1)) if m else None
 
 # ---------------------------------------------------------------------------------
-# Net stats (ปรับลด payload ด้วย start/end)
+# Net stats (ลด payload ด้วย start/end UTC)
 # ---------------------------------------------------------------------------------
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> int:
@@ -883,7 +903,7 @@ if pending:
 latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
 window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
 
-# ดึงข้อมูลหลัก — มี fast rerun: ถ้าเพิ่งโฟกัส ให้ใช้แคช (ไม่ fetch หนัก)
+# ดึงข้อมูลหลัก — มี fast rerun
 CACHE_BUMP = st.session_state.get('_cache_bump', 0)
 if st.session_state.get('_skip_refresh_on_rerun', False) and st.session_state.get('_all_data_cache'):
     all_data = st.session_state['_all_data_cache']
@@ -1103,15 +1123,25 @@ with tab1:
     else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
+    # เตรียมคำนวณก่อนเรนเดอร์
     calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
-        asset_value = float(asset_inputs.get(ticker, 0.0))
+        asset_value = float(st.session_state.get(f"input_{ticker}_asset", 0.0) if not config.get('option_config')
+                            else st.session_state.get(f"input_{ticker}_real", 0.0) + float(config.get('option_config', {}).get('base_value', 0.0)))
         fix_c = float(config['fix_c'])
         calculations[ticker] = {
-            'sell': sell(asset_value, fix_c=fix_c, Diff=float(x_2)),
-            'buy': buy(asset_value, fix_c=fix_c, Diff=float(x_2)),
+            'sell': sell(asset_value, fix_c=fix_c, Diff=float(st.session_state.get('Diff', 60)) if 'Diff' in st.session_state else 60),
+            'buy': buy(asset_value, fix_c=fix_c, Diff=float(st.session_state.get('Diff', 60)) if 'Diff' in st.session_state else 60),
         }
+
+    # ใช้ asset_inputs ที่คำนวณใน tab2 เพื่อความถูกต้องของ UI เดิม
+    # (โค้ดเดิมเรียกภายใต้ tab2 ก่อน tab1 อยู่แล้ว)
+    # หากอยากอ้างอิงตรง ๆ:
+    try:
+        asset_inputs  # noqa
+    except NameError:
+        asset_inputs = {c['ticker']: last_assets_all.get(c['ticker'], 0.0) for c in ASSET_CONFIGS}
 
     for config in configs_to_display:
         ticker = config['ticker']
