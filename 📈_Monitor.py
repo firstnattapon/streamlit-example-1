@@ -618,7 +618,8 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     def fetch_trade_stats(asset_config: Dict) -> Tuple[str, Dict[str, float]]:
         ticker = asset_config['ticker']
         try:
-            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso, cache_bump=cache_bUMP)
+            # FIX: พิมพ์ผิด cache_bUMP -> cache_bump
+            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso, cache_bump=cache_bump)  # CHANGED
             return ticker, stats
         except Exception:
             return ticker, dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
@@ -685,6 +686,12 @@ def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float
         return fut.result(timeout=timeout_sec)
 
 def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel]) -> None:
+    """
+    ทำให้ปุ่มใน expander ใช้เส้นทางเดียวกับ GO_SELL/GO_BUY:
+    - ใช้ ts_update_via_http + write_api_key
+    - ตรวจ entry_id (resp != "0")
+    - ทำ Optimistic UI และ st.rerun()
+    """
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
             ticker = config['ticker']
@@ -694,15 +701,21 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingsp
                 add_val = st.number_input(f"New Value for {ticker}", step=0.001, value=0.0, key=f'input_{ticker}')
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
                     try:
-                        client = clients[int(asset_conf['channel_id'])]
-                        safe_ts_update(client, {field_name: add_val}, timeout_sec=10.0)
-                        st.write(f"Updated {ticker} to: {add_val} on Channel {asset_conf['channel_id']}")
-                        st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(add_val)
-                        st.session_state['_cache_bump'] = st.session_state.get('_cache_bump', 0) + 1
-                    except concurrent.futures.TimeoutError:
-                        st.error(f"Update {ticker} timed out (>10s).")
+                        # CHANGED: ใช้ write_api_key แบบเดียวกับ GO_SELL/GO_BUY
+                        write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
+                        resp = ts_update_via_http(write_key, field_name, add_val, timeout_sec=5.0)
+                        if resp.strip() == "0":
+                            st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field และเว้น ~15s/ช่อง")
+                        else:
+                            st.write(f"Updated {ticker} to: {add_val} (entry #{resp})")
+                            # Optimistic UI เหมือน GO_SELL/GO_BUY
+                            st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(add_val)
+                            st.session_state['_cache_bump'] = st.session_state.get('_cache_bump', 0) + 1
+                            st.session_state["_pending_select_key"] = ticker
+                            st.session_state["_skip_refresh_on_rerun"] = True
+                            st.rerun()
                     except Exception as e:
-                        st.error(f"Failed to update {ticker}: {e}")
+                        st.error(f"Update {ticker} error: {e}")
 
 def trading_section(
     config: Dict,
@@ -738,7 +751,7 @@ def trading_section(
     buy_calc = calc['buy']
 
     # SELL — HTTP GET + Optimistic UI + Fast focus (always on)
-    st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
+    st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])  # (คงไว้ตามเดิม)
     col1, col2, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
@@ -778,7 +791,7 @@ def trading_section(
 
     # BUY — HTTP GET + Optimistic UI + Fast focus (always on)
     col4, col5, col6 = st.columns(3)
-    st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
+    st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])  # (คงไว้ตามเดิม)
     if col6.checkbox(f'buy_match_{ticker}'):
         if col6.button(f"GO_BUY_{ticker}"):
             try:
@@ -1033,7 +1046,7 @@ with tab1:
         buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_tickers]
     elif selected_option == "Filter Sell Tickers":
-        # FIX(goal_1): กรองทิกเกอร์ที่ action == 0 (ฝั่งขาย) ให้ถูกต้อง
+        # FIX(goal_1): กรองทิกเกอร์ที่ action == 0 (ฝั่งขาย) ให้ถูกต้อง (คงไว้ตามเดิม)
         sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]
     else:
