@@ -34,7 +34,7 @@ with tabs[3]:
 
 with tabs[4]:
     with st.expander("Historical_Backtest_CF", expanded=True):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=aYyGrPmCRG24qMZiB4872K", width=1500, height=1000, scrolling=0)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=fLyda7yGeP4GNz66yaY3JK", width=1500, height=1000, scrolling=0)
 
 
 def parse_final_two_numbers(s):
