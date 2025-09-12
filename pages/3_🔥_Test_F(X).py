@@ -29,13 +29,7 @@ def load_config(filepath: str = "hybrid_seed_config.json") -> Dict[str, Any]:
         "default_settings": {
             "selected_ticker": "FFWM", "start_date": "2024-01-01",
             "window_size": 30, "num_seeds": 1000, "max_workers": 1,
-            "mutation_rate": 10.0, "num_mutations": 5,
-            # ★ NEW: defaults for spectrum
-            "enable_dynamic_spectrum": True,
-            "p_short": 0.80,     # frequent re-balance
-            "p_long": 0.10,      # sparse re-balance
-            "include_medium": False,
-            "p_medium": 0.50
+            "mutation_rate": 10.0, "num_mutations": 5
         }
     }
 
@@ -51,18 +45,6 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
     if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 10.0)
     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
-
-    # ★ NEW: spectrum params
-    if 'enable_dynamic_spectrum' not in st.session_state:
-        st.session_state.enable_dynamic_spectrum = defaults.get("enable_dynamic_spectrum", True)
-    if 'p_short' not in st.session_state:
-        st.session_state.p_short = defaults.get("p_short", 0.80)
-    if 'p_long' not in st.session_state:
-        st.session_state.p_long = defaults.get("p_long", 0.10)
-    if 'include_medium' not in st.session_state:
-        st.session_state.include_medium = defaults.get("include_medium", False)
-    if 'p_medium' not in st.session_state:
-        st.session_state.p_medium = defaults.get("p_medium", 0.50)
 
 # ==============================================================================
 # 2. Core Calculation & Data Functions
@@ -125,6 +107,49 @@ def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> 
         'net': np.round(sumusd - refer - initial_capital, 2)
     })
 
+# ------------------------------------------------------------------------------
+# 2.1 Frequency Spectrum Utilities (NEW)
+# ------------------------------------------------------------------------------
+def _run_lengths(actions: np.ndarray) -> np.ndarray:
+    """คำนวณความยาวของช่วงที่ค่าคงเดิมต่อเนื่อง (run lengths)"""
+    n = actions.size
+    if n == 0: return np.array([], dtype=int)
+    # จุดที่ค่าเปลี่ยน (True ที่ตำแหน่ง begin ของ run ถัดไป)
+    change_points = np.flatnonzero(actions[1:] != actions[:-1]) + 1
+    # ตำแหน่งเริ่มต้นของแต่ละ run = 0, change_points..., n
+    idx = np.r_[0, change_points, n]
+    return np.diff(idx)
+
+def frequency_metrics(actions: np.ndarray) -> Dict[str, Any]:
+    """
+    ประเมิน 'สเปกตรัมความถี่' ของ action sequence
+    - toggle_rate : สัดส่วนการเปลี่ยนค่า (0↔1) ต่อจำนวนช่วงเวลา
+    - toggles     : จำนวนครั้งที่เปลี่ยนจริง
+    - avg_run     : ความยาว run เฉลี่ย (ยิ่งยาว = แนวโน้มยาว)
+    - label       : สั้น/กลาง/ยาว (ตามเกณฑ์เริ่มต้น)
+    """
+    n = int(actions.size)
+    if n <= 1:
+        return {"label": "ยาว (Trend)", "toggle_rate": 0.0, "toggles": 0, "avg_run": float(n if n > 0 else 0.0)}
+    toggles = int(np.sum(actions[1:] != actions[:-1]))
+    toggle_rate = toggles / (n - 1)
+    runs = _run_lengths(actions)
+    avg_run = float(np.mean(runs)) if runs.size else float(n)
+
+    if toggle_rate >= 0.40:
+        label = "สั้น (High-Freq/Sideway)"
+    elif toggle_rate >= 0.15:
+        label = "กลาง"
+    else:
+        label = "ยาว (Trend)"
+
+    return {
+        "label": label,
+        "toggle_rate": round(float(toggle_rate), 3),
+        "toggles": toggles,
+        "avg_run": round(float(avg_run), 2),
+    }
+
 # ==============================================================================
 # 3. Strategy Action Generation
 # ==============================================================================
@@ -152,12 +177,13 @@ def generate_actions_perfect_foresight(prices: List[float], fix: int = 1500) -> 
 
     for i in range(1, n):
         j_indices = np.arange(i)
-        profits = fix * ((price_arr[i] / price_arr[j_indices]) - 1.0)
-        cand = dp[j_indices] + profits
+        profits = fix * ((price_arr[i] / price_arr[j_indices]) - 1.0)  # กำไรจาก j → i ถ้ากดรีบาลานซ์ที่ i
+        cand = dp[j_indices] + profits                                  # มูลค่าหลังรีบาลานซ์ ณ i
         best_idx = int(np.argmax(cand))
         dp[i] = cand[best_idx]
         path[i] = j_indices[best_idx]
 
+    # เลือกวัน i ที่ทำให้ "มูลค่าท้ายงวด (วันสุดท้าย)" สูงสุดจริง
     final_scores = dp + fix * ((price_arr[-1] / price_arr) - 1.0)
     end_idx = int(np.argmax(final_scores))
 
@@ -168,13 +194,7 @@ def generate_actions_perfect_foresight(prices: List[float], fix: int = 1500) -> 
     actions[0] = 1
     return actions
 
-# ★ NEW: biased seed generator (สั้น/ยาว ด้วย p_one ต่างกัน)
-def find_best_seed_for_window_biased(
-    prices_window: np.ndarray,
-    num_seeds_to_try: int,
-    max_workers: int,
-    p_one: float
-) -> Tuple[int, float, np.ndarray]:
+def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int, max_workers: int) -> Tuple[int, float, np.ndarray]:
     window_len = len(prices_window)
     if window_len < 2: return 1, 0.0, np.ones(window_len, dtype=np.int32)
 
@@ -182,7 +202,7 @@ def find_best_seed_for_window_biased(
         results = []
         for seed in seed_batch:
             rng = np.random.default_rng(seed)
-            actions = (rng.random(window_len) < p_one).astype(np.int32)
+            actions = rng.integers(0, 2, size=window_len).astype(np.int32)
             actions[0] = 1
             net = _calculate_net_profit_numba(actions, prices_window)
             results.append((seed, net))
@@ -201,16 +221,12 @@ def find_best_seed_for_window_biased(
 
     if best_seed >= 0:
         rng_best = np.random.default_rng(best_seed)
-        best_actions = (rng_best.random(window_len) < p_one).astype(np.int32)
+        best_actions = rng_best.integers(0, 2, size=window_len).astype(np.int32)
     else:
         best_seed, best_actions, max_net = 1, np.ones(window_len, dtype=np.int32), 0.0
 
     best_actions[0] = 1
     return best_seed, max_net, best_actions
-
-def find_best_seed_for_window(prices_window: np.ndarray, num_seeds_to_try: int, max_workers: int) -> Tuple[int, float, np.ndarray]:
-    # คงเวอร์ชันเดิมไว้เพื่อ backward compatibility (p=0.5)
-    return find_best_seed_for_window_biased(prices_window, num_seeds_to_try, max_workers, p_one=0.5)
 
 def find_best_mutation_for_sequence(
     original_actions: np.ndarray,
@@ -261,32 +277,13 @@ def find_best_mutation_for_sequence(
 
     return best_mutation_seed, max_mutated_net, final_mutated_actions
 
-# ★ NEW: trendiness score (0..1)
-def compute_trendiness(prices_window: np.ndarray) -> float:
-    if len(prices_window) < 2: return 0.0
-    logp = np.log(prices_window.astype(np.float64))
-    total_path = float(np.sum(np.abs(np.diff(logp))))
-    straight = float(abs(logp[-1] - logp[0]))
-    if total_path <= 1e-12: return 0.0
-    score = straight / (total_path + 1e-12)
-    if score < 0: score = 0.0
-    if score > 1: score = 1.0
-    return score
-
-# ★ CHANGED: เพิ่ม dynamic spectrum short/long (/medium)
 def generate_actions_hybrid_multi_mutation(
     ticker_data: pd.DataFrame,
     window_size: int,
     num_seeds: int,
     max_workers: int,
     mutation_rate_pct: float,
-    num_mutations: int,
-    # spectrum controls
-    enable_dynamic_spectrum: bool = True,   # ★ NEW
-    p_short: float = 0.80,                  # ★ NEW
-    p_long: float = 0.10,                   # ★ NEW
-    include_medium: bool = False,           # ★ NEW
-    p_medium: float = 0.50                  # ★ NEW
+    num_mutations: int
 ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame]:
 
     prices = ticker_data['Close'].to_numpy()
@@ -300,109 +297,61 @@ def generate_actions_hybrid_multi_mutation(
     mutation_rate = mutation_rate_pct / 100.0
 
     for i, start_index in enumerate(range(0, n, window_size)):
-        progress_total_steps = (num_mutations + 1) * (2 + (1 if include_medium else 0)) + 1
+        progress_total_steps = num_mutations + 1
 
         end_index = min(start_index + window_size, n)
         prices_window = prices[start_index:end_index]
         if len(prices_window) < 2: continue
 
-        # ---------- สร้าง Short / Long (/Medium) แยกกัน ----------
-        group_defs = [("SHORT", p_short), ("LONG", p_long)]
-        if include_medium:
-            group_defs.insert(1, ("MEDIUM", p_medium))
+        progress_text = f"Window {i+1}/{num_windows} - Phase 1: Searching for Best DNA..."
+        progress_bar.progress((i * progress_total_steps + 1) / (num_windows * progress_total_steps), text=progress_text)
 
-        group_records = []  # เก็บผลลัพธ์ต่อกลุ่ม
-        for g_idx, (gname, p_one) in enumerate(group_defs):
-            progress_text = f"Window {i+1}/{num_windows} - {gname}: Searching DNA..."
-            progress_bar.progress((i * progress_total_steps + 1 + g_idx) / (num_windows * progress_total_steps), text=progress_text)
+        dna_seed, current_best_net, current_best_actions = find_best_seed_for_window(prices_window, num_seeds, max_workers)
 
-            dna_seed, current_best_net, current_best_actions = find_best_seed_for_window_biased(
-                prices_window, num_seeds, max_workers, p_one=p_one
+        original_actions_window = current_best_actions.copy()
+        original_net_for_display = current_best_net
+        successful_mutation_seeds = []
+
+        for mutation_round in range(num_mutations):
+            progress_text = f"Window {i+1}/{num_windows} - Mutation Round {mutation_round+1}/{num_mutations}..."
+            progress_bar.progress((i * progress_total_steps + 1 + mutation_round + 1) / (num_windows * progress_total_steps), text=progress_text)
+
+            mutation_seed, mutated_net, mutated_actions = find_best_mutation_for_sequence(
+                current_best_actions, prices_window, num_seeds, mutation_rate, max_workers
             )
 
-            original_actions_window = current_best_actions.copy()
-            original_net_for_display = current_best_net
-            successful_mutation_seeds = []
+            if mutated_net > current_best_net:
+                current_best_net = mutated_net
+                current_best_actions = mutated_actions
+                successful_mutation_seeds.append(int(mutation_seed))
 
-            for mutation_round in range(num_mutations):
-                progress_text = f"Window {i+1}/{num_windows} - {gname}: Mutation {mutation_round+1}/{num_mutations}..."
-                step = (i * progress_total_steps + 1 + g_idx + (mutation_round + 1)) / (num_windows * progress_total_steps)
-                progress_bar.progress(step, text=progress_text)
+        # --- Frequency metrics (NEW)
+        orig_metrics = frequency_metrics(original_actions_window.astype(np.int32))
+        final_metrics = frequency_metrics(current_best_actions.astype(np.int32))
 
-                mutation_seed, mutated_net, mutated_actions = find_best_mutation_for_sequence(
-                    current_best_actions, prices_window, num_seeds, mutation_rate, max_workers
-                )
-                if mutated_net > current_best_net:
-                    current_best_net = mutated_net
-                    current_best_actions = mutated_actions
-                    successful_mutation_seeds.append(int(mutation_seed))
-
-            group_records.append({
-                "group": gname,
-                "p_one": p_one,
-                "dna_seed": int(dna_seed),
-                "actions": current_best_actions.astype(np.int32),
-                "original_actions": original_actions_window.astype(np.int32),
-                "original_net": float(original_net_for_display),
-                "final_net": float(current_best_net),
-                "mutation_seeds": successful_mutation_seeds
-            })
-
-        # ---------- Dynamic Function: เลือกเส้นที่ "เข้มสุด" ----------
-        trend_score = compute_trendiness(prices_window)
-        intensity_map = {}
-        for rec in group_records:
-            if rec["group"] == "SHORT":
-                intensity_map["SHORT"] = 1.0 - trend_score
-            elif rec["group"] == "LONG":
-                intensity_map["LONG"] = trend_score
-            else:  # MEDIUM
-                intensity_map["MEDIUM"] = max(0.0, 1.0 - 2.0 * abs(trend_score - 0.5))
-
-        # เลือกกลุ่มตาม intensity สูงสุด (tie-break ด้วย final_net)
-        selected = None
-        if enable_dynamic_spectrum:
-            best_key = None
-            best_intensity = -1.0
-            for k in intensity_map:
-                if intensity_map[k] > best_intensity:
-                    best_intensity = intensity_map[k]; best_key = k
-            # tie-break by net ในกลุ่มที่ intensity เท่ากัน
-            candidates = [gr for gr in group_records if abs(intensity_map[gr["group"]] - best_intensity) < 1e-12]
-            if len(candidates) == 1:
-                selected = candidates[0]
-            else:
-                selected = max(candidates, key=lambda r: r["final_net"])
-        else:
-            # ถ้าไม่ใช้ dynamic spectrum ⇒ เลือกแชมป์ที่ net สูงสุดโดยรวม (คง behavior ใกล้ของเดิมสุด)
-            selected = max(group_records, key=lambda r: r["final_net"])
-
-        # สำหรับบันทึก original (ของหน้าต่างนี้) —คงตรรกะเดิม: DNA ก่อน mutation ของ “ผู้ชนะกลุ่มที่ถูกเลือก”
-        original_actions_window_for_full = selected["original_actions"]
-
-        final_actions = np.concatenate((final_actions, selected["actions"]))
-        original_actions_full = np.concatenate((original_actions_full, original_actions_window_for_full))
+        final_actions = np.concatenate((final_actions, current_best_actions.astype(np.int32)))
+        original_actions_full = np.concatenate((original_actions_full, original_actions_window.astype(np.int32)))
 
         start_date = ticker_data.index[start_index]; end_date = ticker_data.index[end_index-1]
         detail = {
             'window': i + 1,
             'timeline': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
-            'trend_score': round(trend_score, 4),
-            'intensity_short': round(intensity_map.get("SHORT", 0.0), 4),
-            'intensity_long': round(intensity_map.get("LONG", 0.0), 4),
-            'selected_group': selected["group"],
-            'dna_seed': selected["dna_seed"],
-            'mutation_seeds': str(selected["mutation_seeds"]) if selected["mutation_seeds"] else "None",
-            'improvements': len(selected["mutation_seeds"]),
-            'original_net': round(selected["original_net"], 2),
-            'final_net': round(selected["final_net"], 2),
+            'dna_seed': dna_seed,
+            'mutation_seeds': str(successful_mutation_seeds) if successful_mutation_seeds else "None",
+            'improvements': len(successful_mutation_seeds),
+            'original_net': round(original_net_for_display, 2),
+            'final_net': round(current_best_net, 2),
+            # frequency spectrum (original)
+            'freq_label_original': orig_metrics['label'],
+            'freq_score_original': orig_metrics['toggle_rate'],
+            'toggles_original': orig_metrics['toggles'],
+            'avg_run_original': orig_metrics['avg_run'],
+            # frequency spectrum (final)
+            'freq_label_final': final_metrics['label'],
+            'freq_score_final': final_metrics['toggle_rate'],
+            'toggles_final': final_metrics['toggles'],
+            'avg_run_final': final_metrics['avg_run'],
         }
-        if include_medium:
-            detail['intensity_medium'] = round(intensity_map.get("MEDIUM", 0.0), 4)
-        # เก็บ net ของทุกกลุ่มเพื่อ insight
-        for rec in group_records:
-            detail[f'net_{rec["group"].lower()}'] = round(rec["final_net"], 2)
-
         window_details_list.append(detail)
 
     progress_bar.empty()
@@ -513,37 +462,35 @@ def render_settings_tab():
     st.session_state.mutation_rate = c1.slider("อัตราการกลายพันธุ์ (Mutation Rate) %", min_value=0.0, max_value=50.0, value=st.session_state.mutation_rate, step=0.5)
     st.session_state.num_mutations = c2.number_input("จำนวนรอบการกลายพันธุ์ (Multi-Mutation)", min_value=0, max_value=10, value=st.session_state.num_mutations, help="จำนวนครั้งที่จะพยายามพัฒนายีนส์ต่อจากตัวที่ดีที่สุดในแต่ละ Window")
 
-    # ★ NEW: Dynamic Spectrum Controls (เก็บใน expander เพื่อไม่รบกวน UI เดิม)
-    with st.expander("🧠 Dynamic Spectrum (Short ↔ Long)"):
-        st.session_state.enable_dynamic_spectrum = st.checkbox("Enable Dynamic Spectrum Switching", value=st.session_state.enable_dynamic_spectrum)
-        cc1, cc2, cc3 = st.columns(3)
-        st.session_state.p_short = cc1.slider("p_short (ถี่/สั้น)", 0.05, 0.95, value=float(st.session_state.p_short))
-        st.session_state.p_long  = cc2.slider("p_long (ยาว/เบาบาง)", 0.05, 0.95, value=float(st.session_state.p_long))
-        st.session_state.include_medium = cc3.checkbox("Include Medium", value=st.session_state.include_medium)
-        if st.session_state.include_medium:
-            st.session_state.p_medium = st.slider("p_medium", 0.05, 0.95, value=float(st.session_state.p_medium))
-
 def render_hybrid_multi_mutation_tab():
     st.write("---")
     st.markdown(f"### 🧬 {Strategy.HYBRID_MULTI_MUTATION}")
-    st.info("กลยุทธ์นี้ทำงานโดย: 1) ค้นหา DNA ที่เหมาะกับสไตล์ความถี่ (สั้น/ยาว[/กลาง]) 2) กลายพันธุ์ซ้ำหลายรอบ 3) ใช้ Dynamic Spectrum ดูเส้นไหนเข้มสุดแล้วสวิตช์")
+    st.info("กลยุทธ์นี้ทำงานโดย: 1. ค้นหา 'DNA' ที่ดีที่สุดในแต่ละ Window 2. นำ DNA นั้นมาพยายาม 'กลายพันธุ์' (Mutate) ซ้ำๆ เพื่อหาผลลัพธ์ที่ดีกว่าเดิม")
 
-    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (Multi-Mutation + Spectrum)"):
+    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (Multi-Mutation)"):
         st.markdown(
             """
-            **Spectrum**: 
-            - สั้น/Sideway ⇒ `p_short` สูง (เช่น 0.8) ทำให้มีการรีบาลานซ์ถี่ คล้าย `1111111`
-            - ยาว/Trend   ⇒ `p_long` ต่ำ (เช่น 0.1) ทำให้ถือยาว คล้าย `1000001`
-            - (ตัวเลือก) Medium ⇒ `p_medium` ประมาณ 0.5
+            แนวคิด **Hybrid (Multi-Mutation)** ได้รับแรงบันดาลใจจากกระบวนการ **วิวัฒนาการและการคัดเลือกสายพันธุ์ (Evolution & Selective Breeding)** โดยมีเป้าหมายเพื่อ "พัฒนา" รูปแบบการซื้อขาย (Actions) ที่ดีที่สุดให้ดียิ่งขึ้นไปอีกแบบซ้ำๆ ภายในแต่ละ Window
 
-            **Dynamic Function**:
-            - คำนวณ `trend_score ∈ [0,1]` จากราคาใน window  
-              `trend_score ≈ |log P_end - log P_start| / (Σ|Δ log P|)`
-            - สร้าง intensity: `short=1-trend_score`, `long=trend_score`, `medium=1-2*|trend_score-0.5|`
-            - เลือกกลุ่มที่ intensity สูงสุด (ถ้าเท่ากัน ใช้ net เป็นตัวตัดสิน)
+            แทนที่จะเปรียบเทียบระหว่าง "DNA ดั้งเดิม" กับ "การกลายพันธุ์แค่ครั้งเดียว" กลยุทธ์นี้จะนำผู้ชนะ (Champion) มาผ่านกระบวนการกลายพันธุ์ซ้ำๆ หลายรอบ เพื่อค้นหาการปรับปรุงที่ดีขึ้นเรื่อยๆ
+
+            ---
+            #### 🧬 กระบวนการทำงานในแต่ละ Window:
+
+            1) ค้นหา **Initial Champion (DNA)** จากการสุ่มตามจำนวน `num_seeds`  
+            2) ทำ **Iterative Mutation** ตามจำนวนรอบ `num_mutations` และคัดเลือกผู้ชนะในแต่ละรอบ  
+            3) ได้ **Final Actions** สำหรับ window นั้น
+
+            ---
+            ### 🔬 นิยามสเปกตรัมความถี่ (NEW)
+            เราวัด “ความถี่ของลำดับคำสั่ง” ด้วย **Toggle Rate = (#ครั้งที่เปลี่ยนค่า)/(N-1)**  
+            - สูง ⇒ **สั้น (High-Freq/Sideway)**  
+            - กลาง ⇒ **กลาง**  
+            - ต่ำ ⇒ **ยาว (Trend)**  
+            เกณฑ์ตั้งต้น: `สั้น ≥ 0.40`, `กลาง 0.15–0.39`, `ยาว < 0.15` (ปรับได้ภายหลัง)
             """
         )
-
+     
         code = """ ตัวอย่าง code
         import numpy as np
         dna_rng = np.random.default_rng(seed=239)
@@ -551,30 +498,24 @@ def render_hybrid_multi_mutation_tab():
         default_actions = current_actions.copy() 
         
         mutation_seeds = [30]
+        #รอบที่ for loop
         m_seed = 30
         mutation_rng = np.random.default_rng(seed=30)
         mutation_mask = mutation_rng.random(30) < 0.10 # Mutation Rate 10(%)
+        [0.72..., 0.39..., 0.03..., 0.58..., 0.41..., ...]
+        [False False  True False False False False False False False False False
+        False False False False False False False False False False  True False
+        False False False False False False]
+        
         current_actions[mutation_mask] = 1 - current_actions[mutation_mask] # Flipping the Genes
         current_actions[0] = 1
         default_actions[0] = 1
+        
+        print( "mutation_mask" , mutation_mask)
+        print( "default_actions" , default_actions)
+        print( "current_actions" , current_actions)
         """
         st.code(code, language="python")
-
-    # ★ NEW: quick sanity checks
-    with st.expander("🧪 Sanity Checks (optional)"):
-        if st.button("Run Sanity Checks"):
-            try:
-                # synthetic trend window (monotonic up)
-                up = np.linspace(100, 150, 30)
-                score_up = compute_trendiness(up)
-                # synthetic sideway window
-                side = 125 + 5*np.sin(np.linspace(0, 6*np.pi, 30))
-                score_side = compute_trendiness(side)
-                st.write(f"Trendiness (Up): {score_up:.3f} → ควรเลือก LONG")
-                st.write(f"Trendiness (Sideway): {score_side:.3f} → ควรเลือก SHORT")
-                st.success("✓ Checks created. (รันจากฝั่งคุณเพื่อยืนยันพฤติกรรม)")
-            except Exception as e:
-                st.error(f"Sanity check error: {e}")
 
     if st.button(f"🚀 Start Hybrid Multi-Mutation", type="primary"):
         if st.session_state.start_date >= st.session_state.end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
@@ -586,12 +527,7 @@ def render_hybrid_multi_mutation_tab():
             original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
                 ticker_data, st.session_state.window_size, st.session_state.num_seeds,
                 st.session_state.max_workers, st.session_state.mutation_rate,
-                st.session_state.num_mutations,
-                enable_dynamic_spectrum=st.session_state.enable_dynamic_spectrum,
-                p_short=st.session_state.p_short,
-                p_long=st.session_state.p_long,
-                include_medium=st.session_state.include_medium,
-                p_medium=st.session_state.p_medium
+                st.session_state.num_mutations
             )
 
             prices = ticker_data['Close'].to_numpy()
@@ -608,6 +544,8 @@ def render_hybrid_multi_mutation_tab():
             st.session_state.simulation_results = results
             st.session_state.df_windows_details = df_windows
             st.session_state.ticker_data_cache = ticker_data
+            st.session_state._freq_original_actions = original_actions
+            st.session_state._freq_final_actions = final_actions
 
     if 'simulation_results' in st.session_state:
         st.success("การทดสอบเสร็จสมบูรณ์!")
@@ -639,6 +577,29 @@ def render_hybrid_multi_mutation_tab():
             col2.metric("Hybrid Strategy", f"${total_hybrid_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของกลยุทธ์ Hybrid ที่ผ่านการกลายพันธุ์แล้ว (ทบต้น)")
             col3.metric("Original Profits", f"${total_original_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของ 'DNA ดั้งเดิม' ก่อนการกลายพันธุ์ (ทบต้น)")
             col4.metric("Rebalance Daily", f"${total_rebalance_net:,.2f}", help="กำไรสุทธิสุดท้ายจากการจำลองต่อเนื่องของกลยุทธ์ Rebalance Daily (ทบต้น)")
+
+            # ---- NEW: Frequency Spectrum Summary (compact, non-intrusive)
+            st.write("---")
+            with st.expander("🔎 Frequency Spectrum (Seeds/Actions) – สรุปโดยรวม (NEW)"):
+                try:
+                    orig_actions = st.session_state.get('_freq_original_actions', np.array([], dtype=np.int32))
+                    final_actions = st.session_state.get('_freq_final_actions', np.array([], dtype=np.int32))
+                    orig_m = frequency_metrics(orig_actions)
+                    final_m = frequency_metrics(final_actions)
+
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.subheader("Original DNA (รวมทุก window)")
+                        st.metric("Label", orig_m['label'])
+                        st.write(f"**Toggle Rate**: {orig_m['toggle_rate']} | **Toggles**: {orig_m['toggles']} | **Avg Run**: {orig_m['avg_run']}")
+                    with c2:
+                        st.subheader("Final Actions (รวมทุก window)")
+                        st.metric("Label", final_m['label'])
+                        st.write(f"**Toggle Rate**: {final_m['toggle_rate']} | **Toggles**: {final_m['toggles']} | **Avg Run**: {final_m['avg_run']}")
+
+                    st.caption("เกณฑ์ตั้งต้น: สั้น ≥ 0.40, กลาง 0.15–0.39, ยาว < 0.15 (ปรับได้ภายหลัง)")
+                except Exception as _:
+                    st.info("ยังไม่มีข้อมูลสรุปความถี่")
 
             st.write("---")
             st.write("#### 📝 รายละเอียดผลลัพธ์ราย Window")
@@ -686,7 +647,7 @@ def render_hybrid_multi_mutation_tab():
                         if mutation_seeds_str not in ["None", "[]"]:
                             cleaned_str = mutation_seeds_str.strip('[]')
                             if cleaned_str:
-                                mutation_seeds = [int(s.strip()) for s in cleaned_str.split(',') if s.strip()]
+                                mutation_seeds = [int(s.strip()) for s in cleaned_str.split(',')]
 
                         action_length_to_use = int(action_length_for_encoder)
                         encoded_string = SimulationTracer.encode(
@@ -778,7 +739,7 @@ def render_tracer_tab():
 # ==============================================================================
 def main():
     st.markdown("### 🧬 Hybrid Strategy Lab (Multi-Mutation)")
-    st.caption("เครื่องมือทดลองและพัฒนากลยุทธ์ด้วย Numba-Accelerated Parallel Random Search + Dynamic Frequency Spectrum")
+    st.caption("เครื่องมือทดลองและพัฒนากลยุทธ์ด้วย Numba-Accelerated Parallel Random Search")
 
     config = load_config()
     initialize_session_state(config)
