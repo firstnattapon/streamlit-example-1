@@ -321,17 +321,38 @@ def ts_update_with_rate_limit(write_api_key: str, field_name: str, value, channe
     return resp.strip()
 
 # ---------------------------------------------------------------------------------
-# Net stats (คงเดิม)
+# Net stats
 # ---------------------------------------------------------------------------------
+
+def _empty_net_stats() -> Dict[str, float]:
+    return dict(
+        buy_count=0,
+        sell_count=0,
+        net_count=0,
+        buy_units=0.0,
+        sell_units=0.0,
+        net_units=0.0,
+    )
+
+
 @st.cache_data(ttl=180, show_spinner=False)
-def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> int:
+def fetch_net_stats(
+    asset_field_conf: Dict,
+    start_iso: str,
+    end_iso: Optional[str] = None,
+    cache_bump: int = 0,
+) -> Dict[str, float]:
+    """ดึงและสรุปสถิติคำสั่งซื้อ/ขายจาก ThingSpeak ในช่วงเวลาที่กำหนด"""
+
+    default_stats = _empty_net_stats()
+
     try:
         channel_id = int(asset_field_conf['channel_id'])
         fnum = _field_number(asset_field_conf['field'])
         if fnum is None:
-            return 0
-        field_key = f"field{fnum}"
+            return default_stats
 
+        field_key = f"field{fnum}"
         params = {'results': 8000}
         if asset_field_conf.get('api_key'):
             params['api_key'] = asset_field_conf.get('api_key')
@@ -340,271 +361,124 @@ def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str, ca
         data = _http_get_json(url, params)
         feeds = data.get('feeds', [])
         if not feeds:
-            return 0
+            return default_stats
 
         tz = pytz.timezone('Asia/Bangkok')
-        try:
-            window_start_local = datetime.datetime.fromisoformat(window_start_bkk_iso)
-            if window_start_local.tzinfo is None:
-                window_start_local = tz.localize(window_start_local)
-            else:
-                window_start_local = window_start_local.astimezone(tz)
-        except Exception:
-            window_start_local = datetime.datetime.now(tz)
 
-        def _parse_row(r):
+        def _to_bkk(dt_iso: str, fallback: datetime.datetime) -> datetime.datetime:
             try:
-                dt_utc = datetime.datetime.fromisoformat(str(r.get('created_at', '')).replace('Z', '+00:00'))
+                dt_parsed = datetime.datetime.fromisoformat(dt_iso)
+                if dt_parsed.tzinfo is None:
+                    return tz.localize(dt_parsed)
+                return dt_parsed.astimezone(tz)
             except Exception:
-                return None, None
-            return dt_utc.astimezone(tz), r.get(field_key)
+                return fallback
 
-        rows: List[Tuple[datetime.datetime, Optional[str]]] = []
-        for r in feeds:
-            dt_local, v = _parse_row(r)
-            if dt_local is not None and v is not None:
-                rows.append((dt_local, v))
-        rows.sort(key=lambda x: x[0])
+        start_local = _to_bkk(start_iso, datetime.datetime.now(tz))
+        end_local = None
+        if end_iso:
+            end_local = _to_bkk(end_iso, datetime.datetime.now(tz))
 
-        prev_val: Optional[float] = None
-        for dt_local, v in rows:
-            if dt_local < window_start_local:
-                try:
-                    prev_val = float(v)
-                except Exception:
-                    continue
+        parsed_rows: List[Tuple[datetime.datetime, float]] = []
+        append_row = parsed_rows.append
+        for feed in feeds:
+            raw_created = str(feed.get('created_at', ''))
+            try:
+                dt_utc = datetime.datetime.fromisoformat(raw_created.replace('Z', '+00:00'))
+            except Exception:
+                continue
+            dt_local = dt_utc.astimezone(tz)
+
+            value = feed.get(field_key)
+            try:
+                val_float = float(value)
+            except (TypeError, ValueError):
+                continue
+
+            append_row((dt_local, val_float))
+
+        if not parsed_rows:
+            return default_stats
+
+        parsed_rows.sort(key=lambda x: x[0])
+
+        baseline: Optional[float] = None
+        for dt_local, val in parsed_rows:
+            if dt_local < start_local:
+                baseline = val
             else:
                 break
 
-        buys, sells = 0, 0
-        for dt_local, v in rows:
-            if dt_local < window_start_local:
-                continue
-            try:
-                curr = float(v)
-            except Exception:
-                continue
-            if prev_val is not None:
-                if curr > prev_val:
-                    buys += 1
-                elif curr < prev_val:
-                    sells += 1
-            prev_val = curr
+        buy_count = sell_count = 0
+        buy_units = sell_units = 0.0
+        first_in_window: Optional[float] = None
+        last_in_window: Optional[float] = None
 
-        return int(buys - sells)
+        prev: Optional[float] = baseline
+        for dt_local, val in parsed_rows:
+            if dt_local < start_local:
+                prev = val
+                continue
+
+            if end_local is not None and dt_local > end_local:
+                break
+
+            if first_in_window is None:
+                first_in_window = val
+
+            if prev is not None:
+                step = val - prev
+                if step > 0:
+                    buy_count += 1
+                    buy_units += step
+                elif step < 0:
+                    sell_count += 1
+                    sell_units += (-step)
+
+            prev = val
+            last_in_window = val
+
+        if last_in_window is None:
+            net_units = 0.0
+        else:
+            reference = (
+                baseline
+                if baseline is not None
+                else first_in_window
+                if first_in_window is not None
+                else last_in_window
+            )
+            net_units = float(last_in_window - reference)
+
+        return dict(
+            buy_count=int(buy_count),
+            sell_count=int(sell_count),
+            net_count=int(buy_count - sell_count),
+            buy_units=float(buy_units),
+            sell_units=float(sell_units),
+            net_units=float(net_units),
+        )
+    except Exception:
+        return default_stats
+
+
+@st.cache_data(ttl=180, show_spinner=False)
+def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> int:
+    stats = fetch_net_stats(asset_field_conf, window_start_bkk_iso, cache_bump=cache_bump)
+    try:
+        return int(stats.get('net_count', 0))
     except Exception:
         return 0
 
+
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
-    try:
-        channel_id = int(asset_field_conf['channel_id'])
-        fnum = _field_number(asset_field_conf['field'])
-        if fnum is None:
-            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
-        field_key = f"field{fnum}"
+    return fetch_net_stats(asset_field_conf, window_start_bkk_iso, cache_bump=cache_bump)
 
-        params = {'results': 8000}
-        if asset_field_conf.get('api_key'):
-            params['api_key'] = asset_field_conf.get('api_key')
-
-        url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
-        data = _http_get_json(url, params)
-        feeds = data.get('feeds', [])
-        if not feeds:
-            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
-
-        tz = pytz.timezone('Asia/Bangkok')
-        try:
-            window_start_local = datetime.datetime.fromisoformat(window_start_bkk_iso)
-            if window_start_local.tzinfo is None:
-                window_start_local = tz.localize(window_start_local)
-            else:
-                window_start_local = window_start_local.astimezone(tz)
-        except Exception:
-            window_start_local = datetime.datetime.now(tz)
-
-        def _parse_row(r):
-            try:
-                dt_utc = datetime.datetime.fromisoformat(str(r.get('created_at', '')).replace('Z', '+00:00'))
-            except Exception:
-                return None, None
-            return dt_utc.astimezone(tz), r.get(field_key)
-
-        rows: List[Tuple[datetime.datetime, Optional[str]]] = []
-        append = rows.append
-        for r in feeds:
-            dt_local, v = _parse_row(r)
-            if dt_local is not None and v is not None:
-                append((dt_local, v))
-        rows.sort(key=lambda x: x[0])
-
-        baseline: Optional[float] = None
-        for dt_local, v in rows:
-            if dt_local < window_start_local:
-                try:
-                    baseline = float(v)
-                except Exception:
-                    continue
-            else:
-                break
-
-        buy_count = sell_count = 0
-        buy_units = sell_units = 0.0
-        first_after: Optional[float] = None
-        last_after: Optional[float] = None
-
-        prev: Optional[float] = baseline
-        for dt_local, v in rows:
-            try:
-                curr = float(v)
-            except Exception:
-                continue
-
-            if dt_local < window_start_local:
-                prev = curr
-                continue
-
-            if first_after is None:
-                first_after = curr
-            if prev is not None:
-                step = curr - prev
-                if step > 0:
-                    buy_count += 1
-                    buy_units += step
-                elif step < 0:
-                    sell_count += 1
-                    sell_units += (-step)
-            prev = curr
-            last_after = curr
-
-        if last_after is None:
-            net_units = 0.0
-        else:
-            ref = baseline if baseline is not None else (first_after if first_after is not None else last_after)
-            net_units = float(last_after - ref)
-
-        return dict(
-            buy_count=int(buy_count),
-            sell_count=int(sell_count),
-            net_count=int(buy_count - sell_count),
-            buy_units=float(buy_units),
-            sell_units=float(sell_units),
-            net_units=float(net_units)
-        )
-    except Exception:
-        return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
-    try:
-        channel_id = int(asset_field_conf['channel_id'])
-        fnum = _field_number(asset_field_conf['field'])
-        if fnum is None:
-            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
-        field_key = f"field{fnum}"
-
-        params = {'results': 8000}
-        if asset_field_conf.get('api_key'):
-            params['api_key'] = asset_field_conf.get('api_key')
-
-        url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
-        data = _http_get_json(url, params)
-        feeds = data.get('feeds', [])
-        if not feeds:
-            return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
-
-        tz = pytz.timezone('Asia/Bangkok')
-        try:
-            window_start_local = datetime.datetime.fromisoformat(window_start_bkk_iso)
-            if window_start_local.tzinfo is None:
-                window_start_local = tz.localize(window_start_local)
-            else:
-                window_start_local = window_start_local.astimezone(tz)
-        except Exception:
-            window_start_local = datetime.datetime.now(tz)
-
-        try:
-            window_end_local = datetime.datetime.fromisoformat(window_end_bkk_iso)
-            if window_end_local.tzinfo is None:
-                window_end_local = tz.localize(window_end_local)
-            else:
-                window_end_local = window_end_local.astimezone(tz)
-        except Exception:
-            window_end_local = datetime.datetime.now(tz)
-
-        def _parse_row(r):
-            try:
-                dt_utc = datetime.datetime.fromisoformat(str(r.get('created_at', '')).replace('Z', '+00:00'))
-            except Exception:
-                return None, None
-            return dt_utc.astimezone(tz), r.get(field_key)
-
-        rows: List[Tuple[datetime.datetime, Optional[str]]] = []
-        append = rows.append
-        for r in feeds:
-            dt_local, v = _parse_row(r)
-            if dt_local is not None and v is not None:
-                append((dt_local, v))
-        rows.sort(key=lambda x: x[0])
-
-        baseline: Optional[float] = None
-        for dt_local, v in rows:
-            if dt_local < window_start_local:
-                try:
-                    baseline = float(v)
-                except Exception:
-                    continue
-            else:
-                break
-
-        buy_count = sell_count = 0
-        buy_units = sell_units = 0.0
-        first_after: Optional[float] = None
-        last_within: Optional[float] = None
-
-        prev: Optional[float] = baseline
-        for dt_local, v in rows:
-            try:
-                curr = float(v)
-            except Exception:
-                continue
-
-            if dt_local < window_start_local:
-                prev = curr
-                continue
-            if dt_local > window_end_local:
-                break
-
-            if first_after is None:
-                first_after = curr
-            if prev is not None:
-                step = curr - prev
-                if step > 0:
-                    buy_count += 1
-                    buy_units += step
-                elif step < 0:
-                    sell_count += 1
-                    sell_units += (-step)
-            prev = curr
-            last_within = curr
-
-        if last_within is None:
-            net_units = 0.0
-        else:
-            ref = baseline if baseline is not None else (first_after if first_after is not None else last_within)
-            net_units = float(last_within - ref)
-
-        return dict(
-            buy_count=int(buy_count),
-            sell_count=int(sell_count),
-            net_count=int(buy_count - sell_count),
-            buy_units=float(buy_units),
-            sell_units=float(sell_units),
-            net_units=float(net_units)
-        )
-    except Exception:
-        return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
+    return fetch_net_stats(asset_field_conf, window_start_bkk_iso, end_iso=window_end_bkk_iso, cache_bump=cache_bump)
 
 # ---------------------------------------------------------------------------------
 # Fetch all data — รองรับ fast rerun
@@ -675,7 +549,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     def fetch_trade_stats(asset_config: Dict) -> Tuple[str, Dict[str, float]]:
         ticker = asset_config['ticker']
         try:
-            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso, cache_bump=cache_bump)
+            stats = fetch_net_stats(asset_config['asset_field'], window_start_bkk_iso, cache_bump=cache_bump)
             return ticker, stats
         except Exception:
             return ticker, dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
@@ -1011,10 +885,10 @@ with tab2:
         rows = []
         for cfg in ASSET_CONFIGS:
             t = cfg['ticker']
-            stats = fetch_net_detailed_stats_between(
+            stats = fetch_net_stats(
                 cfg['asset_field'],
                 start_dt.isoformat(),
-                end_dt.isoformat(),
+                end_iso=end_dt.isoformat(),
                 cache_bump=CACHE_BUMP
             )
             b_cnt = int(stats.get('buy_count', 0))
