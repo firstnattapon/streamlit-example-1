@@ -10,7 +10,7 @@
      "fix_c": 2500, "option_config": {"base_value": 80.0, "label": "APLS(LV:100@30.2) | Discount_option:-20"}},
 
     {"ticker": "CLSK", "monitor_field": {"field": 7, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V"}, "asset_field": {"field": "field7", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP"},
-     "fix_c": 2200, "option_config": {"base_value": 200.0, "label": "CLSK(LV:200@12.5)"}},
+     "fix_c": 2200, "option_config": {"base_value": 190.0, "label": "CLSK(LV:200@12.5 | Discount_option:-10)"}},
 
     {"ticker": "DJT", "monitor_field": {"field": 4, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V"}, "asset_field": {"field": "field4", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP"},
      "fix_c": 2000, "option_config": {"base_value": 100.0, "label": "DJT(LV:100@20.40)"}},
