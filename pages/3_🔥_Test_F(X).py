@@ -112,85 +112,6 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
 
-# --- MODIFIED START: Helper to compute N & K summaries ---
-def compute_n_k_summaries(
-    stock_assets: List[Dict[str, Any]],
-    option_assets: List[Dict[str, Any]],
-    current_prices: Dict[str, float],
-    current_holdings: Dict[str, float],
-) -> Dict[str, Any]:
-    """
-    Compute:
-      - N_total and per-ticker rows with weights
-      - K_intrinsic_total and K_premium_total with per-option rows
-      - NK shares (N/(N+K), K/(N+K))
-    """
-    # N (stocks)
-    n_rows = []
-    n_total = 0.0
-    for asset in stock_assets:
-        t = asset['ticker'].strip()
-        price = float(current_prices.get(t, 0.0) or 0.0)
-        qty = float(current_holdings.get(t, 0.0) or 0.0)
-        val = qty * price
-        n_total += val
-        n_rows.append({
-            'ticker': t,
-            'holding': qty,
-            'price': price,
-            'value': val,
-        })
-
-    # compute weights for N
-    for r in n_rows:
-        r['weight_%'] = (r['value'] / n_total * 100.0) if n_total > 0 else 0.0
-
-    # K (options)
-    k_rows = []
-    k_intrinsic_total = 0.0
-    k_premium_total = 0.0
-    for opt in option_assets:
-        ul = opt.get('underlying_ticker', '').strip()
-        if not ul:
-            continue
-        s = float(current_prices.get(ul, 0.0) or 0.0)
-        strike = float(opt.get('strike', 0.0) or 0.0)
-        contracts = float(opt.get('contracts_or_shares', 0.0) or 0.0)
-        prem = float(opt.get('premium_paid_per_share', 0.0) or 0.0)
-        cost_basis = contracts * prem
-        intrinsic = max(0.0, s - strike) * contracts
-
-        k_premium_total += cost_basis
-        k_intrinsic_total += intrinsic
-
-        k_rows.append({
-            'name': opt.get('name', ul),
-            'underlying': ul,
-            'last_price': s,
-            'strike': strike,
-            'contracts_or_shares': contracts,
-            'premium_per_share': prem,
-            'premium_cost_basis': cost_basis,
-            'intrinsic_value': intrinsic
-        })
-
-    nk_sum = n_total + k_intrinsic_total
-    nk_share = {
-        'N_share': (n_total / nk_sum) if nk_sum > 0 else 0.0,
-        'K_share': (k_intrinsic_total / nk_sum) if nk_sum > 0 else 0.0
-    }
-
-    return {
-        'n_total': n_total,
-        'n_rows': n_rows,
-        'k_intrinsic_total': k_intrinsic_total,
-        'k_premium_total': k_premium_total,
-        'k_rows': k_rows,
-        'nk_share': nk_share
-    }
-# --- MODIFIED END ---
-
-
 # --- 2. UI & DISPLAY FUNCTIONS ---
 
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
@@ -229,34 +150,6 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
 
     user_inputs['current_holdings'] = current_holdings
     user_inputs['total_stock_value'] = total_stock_value
-
-    # --- MODIFIED START: N & K Summary (in-stock section as requested) ---
-    with st.expander("🧮 N & K Summary (ตามนิยาม)", expanded=False):
-        nk = compute_n_k_summaries(stock_assets, option_assets, current_prices, current_holdings)
-
-        c1, c2, c3 = st.columns(3)
-        c1.metric("N (หุ้นรวม)", f"{nk['n_total']:,.2f}")
-        c2.metric("K (Intrinsic ของออปชัน)", f"{nk['k_intrinsic_total']:,.2f}")
-        c3.metric("Premium ของ K (รวม)", f"{nk['k_premium_total']:,.2f}")
-
-        n_share = nk['nk_share']['N_share']
-        k_share = nk['nk_share']['K_share']
-        st.write(f"สัดส่วน N/(N+K) = **{n_share*100:,.2f}%** | K/(N+K) = **{k_share*100:,.2f}%**")
-
-        # Tables
-        st.write("**N: รายหุ้น (มีสัดส่วน weight_% ต่อ N)**")
-        n_df = pd.DataFrame(nk['n_rows']).sort_values('value', ascending=False)
-        st.dataframe(n_df, use_container_width=True)
-
-        st.write("**K: รายออปชัน (พรีเมียม & intrinsic)**")
-        k_df = pd.DataFrame(nk['k_rows']).sort_values('intrinsic_value', ascending=False)
-        st.dataframe(k_df, use_container_width=True)
-
-        # Keep quick access in user_inputs (non-breaking)
-        user_inputs['N_total'] = nk['n_total']
-        user_inputs['K_intrinsic_total'] = nk['k_intrinsic_total']
-        user_inputs['K_premium_total'] = nk['k_premium_total']
-    # --- MODIFIED END ---
 
     st.divider()
     st.write("⚙️ Calculation Parameters")
@@ -322,20 +215,6 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         st.code("-------------------------------------------------------------------------")
         st.code(f"Total Sum (ln_weighted) = {total_dynamic_contribution:+51.4f}")
 
-    # --- MODIFIED START: Optional recap of N & K in Results (read-only from metrics) ---
-    with st.expander("🧮 Recap: N & K (จาก metrics)"):
-        n_total = metrics.get('N_total', 0.0)
-        k_intr = metrics.get('K_intrinsic_total', 0.0)
-        k_prem = metrics.get('K_premium_total', 0.0)
-        nk_share = metrics.get('NK_share', {'N_share': 0.0, 'K_share': 0.0})
-
-        c1, c2, c3 = st.columns(3)
-        c1.metric("N (หุ้นรวม)", f"{n_total:,.2f}")
-        c2.metric("K (Intrinsic ของออปชัน)", f"{k_intr:,.2f}")
-        c3.metric("Premium ของ K (รวม)", f"{k_prem:,.2f}")
-        st.write(f"N/(N+K) = **{nk_share['N_share']*100:,.2f}%** | K/(N+K) = **{nk_share['K_share']*100:,.2f}%**")
-    # --- MODIFIED END ---
-
 
 def render_charts(config: Dict[str, Any]):
     """Renders ThingSpeak charts using iframe components in a specific order."""
@@ -360,27 +239,150 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
 
+# --- 3.5 NEW: N-K BREAKDOWN FUNCTIONS (ADDED) ---
+def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Dict[str, Any]:
+    """Compute N (stocks) and K (options) breakdown, proportions, and totals."""
+    current_prices = user_inputs['current_prices']
+    current_holdings = user_inputs['current_holdings']
+    n_total = user_inputs.get('total_stock_value', 0.0)
+
+    # N breakdown per stock
+    stock_rows = []
+    for asset in stock_assets:
+        ticker = asset['ticker'].strip()
+        holding = float(current_holdings.get(ticker, 0.0))
+        price = float(current_prices.get(ticker, 0.0))
+        n_value = holding * price
+        pct_n = (n_value / n_total * 100.0) if n_total > 0 else None
+        stock_rows.append({
+            "ticker": ticker,
+            "holding": holding,
+            "live_price": price,
+            "N_value": n_value,
+            "pct_of_N": pct_n
+        })
+
+    # K breakdown per option
+    k_rows = []
+    k_value_total = 0.0
+    k_premium_total = 0.0
+    for opt in option_assets:
+        name = opt.get("name", "").strip()
+        underlying = opt.get("underlying_ticker", "").strip()
+        contracts = float(opt.get("contracts_or_shares", 0.0))
+        strike = float(opt.get("strike", 0.0))
+        premium = float(opt.get("premium_paid_per_share", 0.0))
+        opt_type = str(opt.get("option_type", "call")).lower()
+
+        # break-even point
+        if opt_type == "put":
+            break_even = strike - premium
+        else:
+            break_even = strike + premium
+
+        k_value = contracts * break_even
+        k_premium = - contracts * premium  # show as negative cost
+
+        k_value_total += k_value
+        k_premium_total += k_premium
+
+        pct_kv_over_n = (k_value / n_total * 100.0) if n_total > 0 else None
+
+        k_rows.append({
+            "name": name,
+            "underlying": underlying,
+            "contracts": contracts,
+            "strike": strike,
+            "premium_per_share": premium,
+            "break_even": break_even,
+            "K_Value": k_value,
+            "K_premium": k_premium,
+            "pct_KValue_over_N": pct_kv_over_n
+        })
+
+    ratios = {
+        "KValue_over_N": (k_value_total / n_total) if n_total > 0 else None,
+        "absKpremium_over_N": (abs(k_premium_total) / n_total) if n_total > 0 else None
+    }
+
+    return {
+        "stocks": stock_rows,
+        "options": k_rows,
+        "N_total": n_total,
+        "KValue_total": k_value_total,
+        "Kpremium_total": k_premium_total,
+        "ratios": ratios
+    }
+
+
+def display_nk_breakdown(nk: Dict[str, Any]):
+    """Show N & K breakdown without touching original outputs."""
+    st.divider()
+    with st.expander("🅝 vs 🅚 Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=True):
+        n_total = nk.get("N_total", 0.0)
+        kv_total = nk.get("KValue_total", 0.0)
+        kp_total = nk.get("Kpremium_total", 0.0)
+        ratios = nk.get("ratios", {})
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Σ N (Stocks)", f"{n_total:,.2f}")
+        col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.2f}")
+        col3.metric("Σ K (Premium, cost)", f"{kp_total:,.2f}")  # likely negative
+        # Ratios
+        r1 = ratios.get("KValue_over_N", None)
+        r2 = ratios.get("absKpremium_over_N", None)
+        r1_txt = f"{r1*100:,.2f}%" if r1 is not None else "N/A"
+        r2_txt = f"{r2*100:,.2f}%" if r2 is not None else "N/A"
+        col4.metric("สัดส่วน: K_Value/N | |K|/N", f"{r1_txt} | {r2_txt}")
+
+        st.write("### รายละเอียดหุ้น (N)")
+        n_df = pd.DataFrame([
+            {
+                "Ticker": r["ticker"],
+                "Holding": r["holding"],
+                "Live Price": r["live_price"],
+                "N_value": r["N_value"],
+                "% of N": (None if r["pct_of_N"] is None else round(r["pct_of_N"], 2))
+            } for r in nk.get("stocks", [])
+        ])
+        st.dataframe(n_df, use_container_width=True)
+
+        st.write("### รายละเอียดออปชัน (K)")
+        k_df = pd.DataFrame([
+            {
+                "Name": r["name"],
+                "Underlying": r["underlying"],
+                "Contracts/Shares": r["contracts"],
+                "Strike": r["strike"],
+                "Premium/Share": r["premium_per_share"],
+                "Break-even": r["break_even"],
+                "K_Value (Contracts * BE)": r["K_Value"],
+                "K (Premium cost = -contracts*premium)": r["K_premium"],
+                "% K_Value / N": (None if r["pct_KValue_over_N"] is None else round(r["pct_KValue_over_N"], 2))
+            } for r in nk.get("options", [])
+        ])
+        st.dataframe(k_df, use_container_width=True)
+
+        st.caption("หมายเหตุ: Break-even (Call) = strike + premium, (Put) = strike - premium; K_Value ใช้ break-even เพื่อสะท้อนมูลค่าเลเวอเรจเชิงนิยาม และ K เป็นต้นทุนพรีเมียมให้เห็น ‘ค่าใช้จ่ายของ K’ ชัด ๆ")
+
+
 # --- 4. CALCULATION FUNCTION ---
 # ### MODIFIED PART 2: Update Core Calculation Logic ###
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
     """
     Calculates all core metrics using the F = b + fix*ln(live/t0) model.
     'ln_weighted' now represents the total adjustment from the baseline (sum of b + sum of ln parts).
-
-    MODIFIED: also populate read-only N/K summaries inside `metrics` for recap (doesn't change return signature).
     """
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
     total_stock_value = user_inputs['total_stock_value']
 
-    # P/L calculation for options (unchanged) + accumulate intrinsic for K
+    # P/L calculation for options (unchanged)
     total_options_pl, total_option_cost = 0.0, 0.0
-    total_intrinsic = 0.0  # MODIFIED: track intrinsic (K)
     for option in option_assets:
         underlying_ticker = option.get("underlying_ticker", "").strip()
-        if not underlying_ticker: 
-            continue
+        if not underlying_ticker: continue
         last_price = current_prices.get(underlying_ticker, 0.0)
         strike = option.get("strike", 0.0)
         contracts = option.get("contracts_or_shares", 0.0)
@@ -388,7 +390,6 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         total_cost_basis = contracts * premium
         total_option_cost += total_cost_basis
         intrinsic_value = max(0, last_price - strike) * contracts
-        total_intrinsic += intrinsic_value
         total_options_pl += intrinsic_value - total_cost_basis
 
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
@@ -439,32 +440,6 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
-    # --- MODIFIED START: add N/K summaries into metrics (non-breaking, for recap only) ---
-    metrics['N_total'] = total_stock_value
-    metrics['K_intrinsic_total'] = total_intrinsic
-    metrics['K_premium_total'] = total_option_cost
-
-    # N breakdown with weights
-    n_rows = []
-    for asset in stock_assets:
-        t = asset['ticker'].strip()
-        qty = float(user_inputs['current_holdings'].get(t, 0.0) or 0.0)
-        price = float(current_prices.get(t, 0.0) or 0.0)
-        val = qty * price
-        n_rows.append({'ticker': t, 'value': val})
-    n_sum = sum(x['value'] for x in n_rows)
-    metrics['N_breakdown'] = [
-        {'ticker': r['ticker'], 'value': r['value'], 'weight_%': (r['value']/n_sum*100.0) if n_sum > 0 else 0.0}
-        for r in n_rows
-    ]
-
-    nk_sum = (metrics['N_total'] + metrics['K_intrinsic_total'])
-    metrics['NK_share'] = {
-        'N_share': (metrics['N_total']/nk_sum) if nk_sum > 0 else 0.0,
-        'K_share': (metrics['K_intrinsic_total']/nk_sum) if nk_sum > 0 else 0.0,
-    }
-    # --- MODIFIED END ---
-
     return metrics, total_options_pl, total_option_cost
 
 
@@ -501,7 +476,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
 
-# --- main() FUNCTION (Unchanged behavior; only displays more info) ---
+# --- main() FUNCTION (Unchanged behavior; just call NK display) ---
 def main():
     """Main function to run the Streamlit application."""
     config = load_config()
@@ -537,6 +512,11 @@ def main():
 
     # 3. Display and Update using the new dynamic offset
     display_results(metrics, options_pl, total_option_cost, config)
+
+    # --- NEW: Show N vs K with proportions & premium ---
+    nk = compute_nk_breakdown(stock_assets, option_assets, user_inputs)
+    display_nk_breakdown(nk)
+
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
 
