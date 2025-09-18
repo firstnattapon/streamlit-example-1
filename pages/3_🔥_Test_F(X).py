@@ -218,7 +218,7 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         col3.metric("Σ K (Premium, cost)", f"{kp_total:,.0f}")  # likely negative
 
         # รายละเอียดออปชัน (K) พร้อมคอลัมน์ใหม่ %K = %N - 100 (แทนคอลัมน์เดิม)
-        st.write("#### รายละเอียดออปชัน (K)")
+        st.write("##### รายละเอียดออปชัน (K)")
         k_df = pd.DataFrame([
             {
                 "Name": r["name"],
@@ -230,7 +230,7 @@ def display_nk_breakdown(nk: Dict[str, Any]):
                 "K_Value (Contracts * BE)": r["K_Value"],
                 "K (Premium cost = -contracts*premium)": r["K_premium"],
                 "%N (n/fix_c*100)": r.get("pct_N", None),
-                "%K (%N-100)": r.get("pct_K", None)  
+                "%K (100-%N)": r.get("pct_K", None)  
             } for r in nk.get("options", [])
         ])
         st.dataframe(k_df, use_container_width=True)
@@ -278,11 +278,13 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
         'current_holdings': pre_holdings,
         'total_stock_value': total_stock_value_pre
     }
-    nk_top = compute_nk_breakdown(stock_assets, option_assets, _temp_inputs_for_nk_pre)
-    display_nk_breakdown(nk_top)
+
 
     st.divider()
     st.write("📦 Stock Holdings")
+    nk_top = compute_nk_breakdown(stock_assets, option_assets, _temp_inputs_for_nk_pre)
+    display_nk_breakdown(nk_top)
+
     current_holdings = {}
     total_stock_value = 0.0
     for asset in stock_assets:
