@@ -112,7 +112,7 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
 
-# --- 3.5 NEW: N-K BREAKDOWN FUNCTIONS (ADDED / MODIFIED) ---
+# --- 3.5 NEW: N-K BREAKDOWN FUNCTIONS (ADDED / UPDATED) ---
 def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Dict[str, Any]:
     """Compute N (stocks) and K (options) breakdown, proportions, and totals."""
     current_prices = user_inputs['current_prices']
@@ -161,14 +161,20 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         k_value_total += k_value
         k_premium_total += k_premium
 
+        # Old: pct_KValue_over_N (kept for backward-compat, not displayed)
         pct_kv_over_n = (k_value / n_total * 100.0) if n_total > 0 else None
 
-        # NEW: %N = ( n / fix_c ) * 100 where n = N_value of the underlying now = holding*price
+        # %N (n/fix_c*100) with n = N_value of the underlying now
         underlying_fix_c = fix_c_map.get(underlying, 0.0)
         underlying_n_value = n_value_map.get(underlying, None)
         pct_N = None
         if underlying_n_value is not None and underlying_fix_c and underlying_fix_c != 0:
             pct_N = (underlying_n_value / underlying_fix_c) * 100.0
+
+        # NEW: %K = %N - 100  (ตามโจทย์)
+        pct_K = None
+        if pct_N is not None:
+            pct_K = pct_N - 100.0
 
         k_rows.append({
             "name": name,
@@ -179,8 +185,9 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
             "break_even": break_even,
             "K_Value": k_value,
             "K_premium": k_premium,
-            "pct_KValue_over_N": pct_kv_over_n,
-            "pct_N": None if pct_N is None else round(pct_N, 2)
+            "pct_KValue_over_N": pct_kv_over_n,  # kept internally
+            "pct_N": None if pct_N is None else round(pct_N, 2),
+            "pct_K": None if pct_K is None else round(pct_K, 2)
         })
 
     ratios = {
@@ -199,7 +206,7 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
 
 # --- 2. UI & DISPLAY FUNCTIONS ---
 def display_nk_breakdown(nk: Dict[str, Any]):
-    """Show K-only breakdown (อยู่บนสุด) + totals + %N column."""
+    """Show K-only breakdown (อยู่บนสุด) + totals + %N/%K columns."""
     with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=False):
         n_total = nk.get("N_total", 0.0)
         kv_total = nk.get("KValue_total", 0.0)
@@ -210,7 +217,7 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.0f}")
         col3.metric("Σ K (Premium, cost)", f"{kp_total:,.0f}")  # likely negative
 
-        # รายละเอียดออปชัน (K) พร้อมคอลัมน์ใหม่ %N
+        # รายละเอียดออปชัน (K) พร้อมคอลัมน์ใหม่ %K = %N - 100 (แทนคอลัมน์เดิม)
         st.write("#### รายละเอียดออปชัน (K)")
         k_df = pd.DataFrame([
             {
@@ -222,8 +229,8 @@ def display_nk_breakdown(nk: Dict[str, Any]):
                 "Break-even": r["break_even"],
                 "K_Value (Contracts * BE)": r["K_Value"],
                 "K (Premium cost = -contracts*premium)": r["K_premium"],
-                "% K_Value / N_total": (None if r["pct_KValue_over_N"] is None else round(r["pct_KValue_over_N"], 2)),
-                "%N (n/fix_c*100)": r.get("pct_N", None)  # <<< NEW COLUMN
+                "%N (n/fix_c*100)": r.get("pct_N", None),
+                "%K (%N-100)": r.get("pct_K", None)  # <<< REPLACED COLUMN
             } for r in nk.get("options", [])
         ])
         st.dataframe(k_df, use_container_width=True)
@@ -231,7 +238,8 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         st.caption(
             "หมายเหตุ: Break-even (Call) = strike + premium, (Put) = strike - premium; "
             "K_Value ใช้ break-even เพื่อสะท้อนมูลค่าเลเวอเรจเชิงนิยาม; "
-            "`%N (n/fix_c*100)` คำนวณจาก n = (holding * live_price) ของหุ้นที่เป็น underlying เทียบกับ fix_c ของหุ้นเดียวกัน"
+            "`%N (n/fix_c*100)` คำนวณจาก n = (holding * live_price) ของหุ้น underlying เทียบกับ fix_c; "
+            "`%K` = `%N - 100`"
         )
 
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
@@ -257,8 +265,7 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
         price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
         current_prices[ticker] = st.number_input(label, value=price_value, key=ss_key_price, format="%.2f")
 
-    # --- MODIFIED: Show NK breakdown ABOVE Stock Holdings using pre_* values ---
-    # Build pre_total_stock_value using pre_holdings (from state or initial) and pre_prices
+    # --- NK breakdown ABOVE Stock Holdings using pre_* values ---
     total_stock_value_pre = 0.0
     for asset in stock_assets:
         t = asset["ticker"].strip()
@@ -272,7 +279,6 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
         'total_stock_value': total_stock_value_pre
     }
     nk_top = compute_nk_breakdown(stock_assets, option_assets, _temp_inputs_for_nk_pre)
-    # >>> This appears BEFORE Stock Holdings <<<
     display_nk_breakdown(nk_top)
 
     st.divider()
@@ -344,7 +350,6 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         total_dynamic_contribution = 0
         for item in ln_breakdown_data:
             total_dynamic_contribution += item['total_contribution']
-            # The formula now includes the b_offset term explicitly
             if item['ref_price'] > 0:
                 formula_string = (
                     f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [{item['b_offset']:>7.2f} (b) + "
@@ -409,11 +414,11 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
 
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
-    # New log_pv calculation logic incorporating b_offset
-    log_pv_baseline = 0.0  # This will remain sum(fix_c) for display consistency
-    ln_weighted = 0.0      # This will be the total dynamic adjustment
-    total_b_offset = 0.0   # Accumulator for all b_offsets
-    ln_breakdown = []      # List to store calculation details for display
+    # log_pv incorporating b_offset
+    log_pv_baseline = 0.0
+    ln_weighted = 0.0
+    total_b_offset = 0.0
+    ln_breakdown = []
 
     for asset in stock_assets:
         ticker = asset['ticker'].strip()
