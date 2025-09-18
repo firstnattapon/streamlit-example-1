@@ -128,11 +128,6 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         col1.metric("Σ N (Stocks)", f"{n_total:,.0f}")
         col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.0f}")
         col3.metric("Σ K (Premium, cost)", f"{kp_total:,.0f}")  # likely negative
-        r1 = ratios.get("KValue_over_N", None)
-        r2 = ratios.get("absKpremium_over_N", None)
-        r1_txt = f"{r1*100:,.0f}%" if r1 is not None else "N/A"
-        r2_txt = f"{r2*100:,.0f}%" if r2 is not None else "N/A"
-        col4.metric("สัดส่วน: K_Value/N | |K|/N", f"{r1_txt} | {r2_txt}")
 
         # ลบ "รายละเอียดหุ้น (N)" ออกตามคำสั่ง
 
