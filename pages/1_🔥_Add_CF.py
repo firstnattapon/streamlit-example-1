@@ -112,24 +112,186 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
 
+# --- 3.5 NEW: N-K BREAKDOWN FUNCTIONS (ADDED / UPDATED) ---
+def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Dict[str, Any]:
+    """Compute N (stocks) and K (options) breakdown, proportions, and totals."""
+    current_prices = user_inputs['current_prices']
+    current_holdings = user_inputs['current_holdings']
+    n_total = user_inputs.get('total_stock_value', 0.0)
+
+    # Build maps for underlying lookups
+    fix_c_map: Dict[str, float] = {a['ticker'].strip(): float(a.get('fix_c', 0.0)) for a in stock_assets}
+    control_total: float = sum(fix_c_map.values())  # <<< ADDED: Σ fix_c (Control)
+    n_value_map: Dict[str, float] = {}
+
+    # N breakdown per stock
+    stock_rows = []
+    for asset in stock_assets:
+        ticker = asset['ticker'].strip()
+        holding = float(current_holdings.get(ticker, 0.0))
+        price = float(current_prices.get(ticker, 0.0))
+        n_value = holding * price
+        n_value_map[ticker] = n_value
+        pct_n = (n_value / n_total * 100.0) if n_total > 0 else None
+        stock_rows.append({
+            "ticker": ticker,
+            "holding": holding,
+            "live_price": price,
+            "N_value": n_value,
+            "pct_of_N": pct_n
+        })
+
+    # K breakdown per option
+    k_rows = []
+    k_value_total = 0.0
+    k_premium_total = 0.0
+    for opt in option_assets:
+        name = opt.get("name", "").strip()
+        underlying = opt.get("underlying_ticker", "").strip()
+        contracts = float(opt.get("contracts_or_shares", 0.0))
+        strike = float(opt.get("strike", 0.0))
+        premium = float(opt.get("premium_paid_per_share", 0.0))
+        opt_type = str(opt.get("option_type", "call")).lower()
+
+        # break-even point
+        break_even = (strike - premium) if (opt_type == "put") else (strike + premium)
+
+        k_value = contracts * break_even
+        k_premium = - contracts * premium  # show as negative cost
+
+        k_value_total += k_value
+        k_premium_total += k_premium
+
+        # Old: pct_KValue_over_N (kept for backward-compat, not displayed)
+        pct_kv_over_n = (k_value / n_total * 100.0) if n_total > 0 else None
+
+        # %N (n/fix_c*100) with n = N_value of the underlying now
+        underlying_fix_c = fix_c_map.get(underlying, 0.0)
+        underlying_n_value = n_value_map.get(underlying, None)
+        pct_N = None
+        if underlying_n_value is not None and underlying_fix_c and underlying_fix_c != 0:
+            pct_N = (underlying_n_value / underlying_fix_c) * 100.0
+
+        # NEW: %K = %N - 100  (ตามโจทย์)  [คงตรรกะเดิมไว้ตามระบบปัจจุบัน]
+        pct_K = None
+        if pct_N is not None:
+            pct_K = 100.0 - pct_N  # intentionally unchanged logic to preserve existing behavior
+
+        k_rows.append({
+            "name": name,
+            "underlying": underlying,
+            "contracts": contracts,
+            "strike": strike,
+            "premium_per_share": premium,
+            "break_even": break_even,
+            "K_Value": k_value,
+            "K_premium": k_premium,
+            "pct_KValue_over_N": pct_kv_over_n,  # kept internally
+            "pct_N": None if pct_N is None else round(pct_N, 2),
+            "pct_K": None if pct_K is None else round(pct_K, 2)
+        })
+
+    ratios = {
+        "KValue_over_N": (k_value_total / n_total) if n_total > 0 else None,
+        "absKpremium_over_N": (abs(k_premium_total) / n_total) if n_total > 0 else None
+    }
+
+    return {
+        "stocks": stock_rows,
+        "options": k_rows,
+        "N_total": n_total,
+        "KValue_total": k_value_total,
+        "Kpremium_total": k_premium_total,
+        "ratios": ratios,
+        "control_total": control_total  # <<< ADDED: expose Σ fix_c
+    }
+
 # --- 2. UI & DISPLAY FUNCTIONS ---
+def display_nk_breakdown(nk: Dict[str, Any]):
+    """Show K-only breakdown (อยู่บนสุด) + totals + %N/%K columns."""
+    with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=False):
+        n_total = nk.get("N_total", 0.0)
+        kv_total = nk.get("KValue_total", 0.0)
+        kp_total = nk.get("Kpremium_total", 0.0)
+        control_total = nk.get("control_total", 0.0)  # <<< ADDED
+
+        # Σ %N (Stocks) = (Σ N / Σ fix_c) * 100
+        pct_n_stocks = (n_total / control_total * 100.0) if (control_total and control_total > 0) else None
+
+        # เปลี่ยนจาก 3 → 4 คอลัมน์ เพื่อวาง metric ใหม่
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Σ N (Stocks)", f"{n_total:,.0f}")
+        col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.0f}")
+        col3.metric("Σ K (Premium, cost)", f"{kp_total:,.0f}")  # likely negative
+        col4.metric("Σ %N (Stocks)", f"{pct_n_stocks:,.2f}%" if pct_n_stocks is not None else "-")  # <<< ADDED
+
+        # รายละเอียดออปชัน (K) พร้อมคอลัมน์ใหม่ %K = %N - 100 (แทนคอลัมน์เดิม)
+        st.write("##### รายละเอียดออปชัน (K)")
+        k_df = pd.DataFrame([
+            {
+                "Name": r["name"],
+                "Underlying": r["underlying"],
+                "Contracts/Shares": r["contracts"],
+                "Strike": r["strike"],
+                "Premium/Share": r["premium_per_share"],
+                "Break-even": r["break_even"],
+                "K_Value (Contracts * BE)": r["K_Value"],
+                "K (Premium cost = -contracts*premium)": r["K_premium"],
+                "%N (n/fix_c*100)": r.get("pct_N", None),
+                "%K (100-%N)": r.get("pct_K", None)  
+            } for r in nk.get("options", [])
+        ])
+        st.dataframe(k_df, use_container_width=True)
+
+        st.caption(
+            "หมายเหตุ: Break-even (Call) = strike + premium, (Put) = strike - premium; "
+            "K_Value ใช้ break-even เพื่อสะท้อนมูลค่าเลเวอเรจเชิงนิยาม; "
+            "`%N (n/fix_c*100)` คำนวณจาก n = (holding * live_price) ของหุ้น underlying เทียบกับ fix_c; "
+            "`%K` = `%N - 100`"
+        )
 
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
     """Renders all UI components and collects user inputs into a dictionary."""
     user_inputs = {}
+
+    # --- CURRENT PRICES (Inputs) ---
     st.write("📊 Current Asset Prices")
     current_prices = {}
     all_tickers = {asset['ticker'].strip() for asset in stock_assets}
     all_tickers.update({opt['underlying_ticker'].strip() for opt in option_assets if opt.get('underlying_ticker')})
 
+    # Prepare "pre" values from session_state or initial_data for NK shown ABOVE Stock Holdings
+    pre_prices = {}
+    pre_holdings = {}
+
     for ticker in sorted(list(all_tickers)):
+        # Read current widget state if exists; else fallback to initial
+        ss_key_price = f"price_{ticker}"
+        pre_prices[ticker] = st.session_state.get(ss_key_price, initial_data.get(ticker, {}).get('last_price', 0.0))
+        # Also render the actual widget
         label = f"ราคา_{ticker}"
         price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
-        current_prices[ticker] = st.number_input(label, value=price_value, key=f"price_{ticker}", format="%.2f")
-    user_inputs['current_prices'] = current_prices
+        current_prices[ticker] = st.number_input(label, value=price_value, key=ss_key_price, format="%.2f")
+
+    # --- NK breakdown ABOVE Stock Holdings using pre_* values ---
+    total_stock_value_pre = 0.0
+    for asset in stock_assets:
+        t = asset["ticker"].strip()
+        ss_key_hold = f"holding_{t}"
+        pre_holdings[t] = st.session_state.get(ss_key_hold, initial_data.get(t, {}).get('last_holding', 0.0))
+        total_stock_value_pre += float(pre_holdings[t]) * float(pre_prices.get(t, 0.0))
+
+    _temp_inputs_for_nk_pre = {
+        'current_prices': pre_prices,
+        'current_holdings': pre_holdings,
+        'total_stock_value': total_stock_value_pre
+    }
 
     st.divider()
     st.write("📦 Stock Holdings")
+    nk_top = compute_nk_breakdown(stock_assets, option_assets, _temp_inputs_for_nk_pre)
+    display_nk_breakdown(nk_top)
+
     current_holdings = {}
     total_stock_value = 0.0
     for asset in stock_assets:
@@ -148,15 +310,13 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
         st.write(f"มูลค่า {ticker}: **{individual_asset_value:,.2f}**")
         total_stock_value += individual_asset_value
 
+    user_inputs['current_prices'] = current_prices
     user_inputs['current_holdings'] = current_holdings
     user_inputs['total_stock_value'] = total_stock_value
 
     st.divider()
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
-    
-    # This line remains unchanged. It correctly uses the session_state key,
-    # which we've now initialized with the API value.
     st.number_input('Portfolio_cash', key='portfolio_cash', format="%.2f")
     user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
 
@@ -199,7 +359,6 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
         total_dynamic_contribution = 0
         for item in ln_breakdown_data:
             total_dynamic_contribution += item['total_contribution']
-            # The formula now includes the b_offset term explicitly
             if item['ref_price'] > 0:
                 formula_string = (
                     f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [{item['b_offset']:>7.2f} (b) + "
@@ -214,7 +373,6 @@ def display_results(metrics: Dict[str, float], options_pl: float, total_option_c
 
         st.code("-------------------------------------------------------------------------")
         st.code(f"Total Sum (ln_weighted) = {total_dynamic_contribution:+51.4f}")
-
 
 def render_charts(config: Dict[str, Any]):
     """Renders ThingSpeak charts using iframe components in a specific order."""
@@ -238,9 +396,7 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-
-# --- 4. CALCULATION FUNCTION ---
-# ### MODIFIED PART 2: Update Core Calculation Logic ###
+# --- 4. CALCULATION FUNCTION (Unchanged logic) ---
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
     """
     Calculates all core metrics using the F = b + fix*ln(live/t0) model.
@@ -267,54 +423,44 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
 
     metrics['now_pv'] = total_stock_value + portfolio_cash + total_options_pl
 
-    # New log_pv calculation logic incorporating b_offset
-    log_pv_baseline = 0.0  # This will remain sum(fix_c) for display consistency
-    ln_weighted = 0.0      # This will be the total dynamic adjustment
-    total_b_offset = 0.0   # Accumulator for all b_offsets
-    ln_breakdown = []      # List to store calculation details for display
+    # log_pv incorporating b_offset
+    log_pv_baseline = 0.0
+    ln_weighted = 0.0
+    total_b_offset = 0.0
+    ln_breakdown = []
 
     for asset in stock_assets:
         ticker = asset['ticker'].strip()
         fix_c = asset.get('fix_c', 1500)
-        # Use .get() for b_offset for backward compatibility if a stock is missing it
         b_offset = asset.get('b_offset', 0.0)
         ref_price = asset.get('reference_price', 0.0)
         live_price = current_prices.get(ticker, 0.0)
 
-        # Accumulate the baseline (sum of all fix_c values)
         log_pv_baseline += fix_c
-        # Accumulate the total b_offset from past rollovers
         total_b_offset += b_offset
 
-        # Calculate the dynamic part for the current period (since last roll)
         ln_part_contribution = 0.0
         if ref_price > 0 and live_price > 0:
             ln_part_contribution = fix_c * np.log(live_price / ref_price)
         
-        # Accumulate the ln() part
         ln_weighted += ln_part_contribution
 
-        # Store detailed breakdown for each asset for display
         ln_breakdown.append({
             "ticker": ticker,
             "b_offset": b_offset,
             "fix_c": fix_c,
             "live_price": live_price,
             "ref_price": ref_price,
-            "total_contribution": b_offset + ln_part_contribution # The total F value for this asset's adjustment
+            "total_contribution": b_offset + ln_part_contribution
         })
     
-    # Final assembly of metrics
     metrics['log_pv_baseline'] = log_pv_baseline
-    # 'ln_weighted' is the sum of all adjustments: accumulated (b_offset) and current (ln part)
     metrics['ln_weighted'] = total_b_offset + ln_weighted
-    # Total log_pv is the baseline control value + the total adjustment
     metrics['log_pv'] = metrics['log_pv_baseline'] + metrics['ln_weighted']
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
     return metrics, total_options_pl, total_option_cost
-
 
 # --- 5. THINGSPEAK UPDATE FUNCTION (Unchanged) ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
@@ -349,7 +495,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
 
-# --- main() FUNCTION (Unchanged) ---
+# --- main() FUNCTION ---
 def main():
     """Main function to run the Streamlit application."""
     config = load_config()
@@ -385,6 +531,7 @@ def main():
 
     # 3. Display and Update using the new dynamic offset
     display_results(metrics, options_pl, total_option_cost, config)
+
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
 
