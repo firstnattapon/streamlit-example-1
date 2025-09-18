@@ -124,7 +124,7 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         ratios = nk.get("ratios", {})
 
         # 4 compact metrics in a row
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4 = st.columns(3)
         col1.metric("Σ N (Stocks)", f"{n_total:,.0f}")
         col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.0f}")
         col3.metric("Σ K (Premium, cost)", f"{kp_total:,.0f}")  # likely negative
