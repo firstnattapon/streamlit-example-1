@@ -140,7 +140,7 @@ def clear_all_caches() -> None:
         'select_key', 'nex', 'Nex_day_sell',
         '_cache_bump', '_last_assets_overrides',
         '_all_data_cache', '_skip_refresh_on_rerun',
-        '_ts_last_update_at'  # ==== RATE-LIMIT: preserve last-update map
+        '_ts_last_update_at'
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -311,7 +311,6 @@ def ts_update_with_rate_limit(write_api_key: str, field_name: str, value, channe
 
     resp = ts_update_via_http(write_api_key, field_name, value, timeout_sec=5.0)
     if resp.strip() == "0":
-        # เผื่อชนขอบหน้าต่างเวลา/เครือข่าย ลองหน่วงสั้น ๆ แล้ว retry 1 ครั้ง
         time.sleep(2.0)
         resp = ts_update_via_http(write_api_key, field_name, value, timeout_sec=5.0)
 
@@ -757,7 +756,6 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingsp
             channel_id = int(asset_conf['channel_id'])
 
             if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
-                # Prefill ด้วยค่าปัจจุบัน เพื่อลดความผิดพลาด (เดิมเป็น 0.0)
                 current_val = float(last_assets.get(ticker, 0.0))
                 add_val = st.number_input(
                     f"New Value for {ticker}",
@@ -767,11 +765,10 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingsp
                 )
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
                     try:
-                        write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')  # คงพฤติกรรมเดิม
+                        write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
                         if not write_key:
                             st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
                             return
-                        # ==== RATE-LIMIT: ใช้ wrapper (เหมือน GO_SELL/GO_BUY)
                         resp = ts_update_with_rate_limit(
                             write_key, field_name, add_val,
                             channel_id=channel_id, min_interval=16.0, max_wait=8.0
@@ -823,17 +820,16 @@ def trading_section(
     buy_calc = calc['buy']
 
     # SELL — HTTP GET + Optimistic UI + Fast focus (always on)
-    st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])  # (คงไว้ตามเดิม)
+    st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
     col1, col2, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
             try:
                 new_asset_val = asset_last - buy_calc[1]
-                write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')  # คงเดิม
+                write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
                 if not write_key:
                     st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
                     return
-                # ==== RATE-LIMIT: ใช้ wrapper
                 resp = ts_update_with_rate_limit(write_key, field_name, new_asset_val, channel_id=channel_id, min_interval=16.0, max_wait=8.0)
                 if resp.strip() == "0":
                     st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field และเว้น ~15s/ช่อง")
@@ -867,16 +863,15 @@ def trading_section(
 
     # BUY — HTTP GET + Optimistic UI + Fast focus (always on)
     col4, col5, col6 = st.columns(3)
-    st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])  # (คงไว้ตามเดิม)
+    st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     if col6.checkbox(f'buy_match_{ticker}'):
         if col6.button(f"GO_BUY_{ticker}"):
             try:
                 new_asset_val = asset_last + sell_calc[1]
-                write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')  # คงเดิม
+                write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
                 if not write_key:
                     st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
                     return
-                # ==== RATE-LIMIT: ใช้ wrapper
                 resp = ts_update_with_rate_limit(write_key, field_name, new_asset_val, channel_id=channel_id, min_interval=16.0, max_wait=8.0)
                 if resp.strip() == "0":
                     st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field และเว้น ~15s/ช่อง")
@@ -908,7 +903,7 @@ if '_skip_refresh_on_rerun' not in st.session_state:
     st.session_state['_skip_refresh_on_rerun'] = False
 if '_all_data_cache' not in st.session_state:
     st.session_state['_all_data_cache'] = None
-if '_ts_last_update_at' not in st.session_state:                # ==== RATE-LIMIT: init per-channel timestamps
+if '_ts_last_update_at' not in st.session_state:
     st.session_state['_ts_last_update_at'] = {}
 
 # Bootstrap selection BEFORE widgets (สำหรับ fast focus)
@@ -920,7 +915,7 @@ if pending:
 latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
 window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
 
-# ดึงข้อมูลหลัก — มี fast rerun: ถ้าเพิ่งโฟกัส ให้ใช้แคช (ไม่ fetch หนัก)
+# ดึงข้อมูลหลัก — มี fast rerun
 CACHE_BUMP = st.session_state.get('_cache_bump', 0)
 if st.session_state.get('_skip_refresh_on_rerun', False) and st.session_state.get('_all_data_cache'):
     all_data = st.session_state['_all_data_cache']
@@ -932,7 +927,7 @@ else:
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
 
-# optimistic overrides (ค่าที่เพิ่งอัปเดต)
+# optimistic overrides
 if st.session_state.get('_last_assets_overrides'):
     last_assets_all = {**last_assets_all, **st.session_state['_last_assets_overrides']}
 
@@ -965,110 +960,10 @@ with tab2:
     x_2 = st.number_input('Diff', step=1, value=60)
     st.write("---")
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
-    st.write("---")
-
-    with st.expander("METRICS"):
-        tz_bkk = pytz.timezone('Asia/Bangkok')
-        now_bkk = datetime.datetime.now(tz_bkk)
-
-        def _parse_global_start_date_to_date(s: Optional[str]) -> Optional[datetime.date]:
-            if not s:
-                return None
-            try:
-                return datetime.datetime.fromisoformat(s).date()
-            except Exception:
-                pass
-            m = re.search(r"(\d{4})-(\d{2})-(\d{2})", s)
-            if m:
-                y, mo, d = map(int, m.groups())
-                try:
-                    return datetime.date(y, mo, d)
-                except Exception:
-                    return None
-            return None
-
-        min_candidate = _parse_global_start_date_to_date(GLOBAL_START_DATE)
-        min_date = min_candidate or (now_bkk.date() - datetime.timedelta(days=30))
-        max_date = now_bkk.date()
-        default_start = max(min_date, latest_us_premarket_open_bkk.date())
-        default_end = max_date
-
-        date_start, date_end = st.slider(
-            "ช่วงวันที่ (Asia/Bangkok)",
-            min_value=min_date,
-            max_value=max_date,
-            value=(default_start, default_end),
-            format="YYYY-MM-DD"
-        )
-
-        start_dt = tz_bkk.localize(datetime.datetime.combine(date_start, datetime.time.min))
-        end_dt = tz_bkk.localize(datetime.datetime.combine(date_end, datetime.time.max))
-
-        total_buy_orders = 0
-        total_sell_orders = 0
-        total_buy_usd = 0.0
-        total_sell_usd = 0.0
-        rows = []
-        for cfg in ASSET_CONFIGS:
-            t = cfg['ticker']
-            stats = fetch_net_detailed_stats_between(
-                cfg['asset_field'],
-                start_dt.isoformat(),
-                end_dt.isoformat(),
-                cache_bump=CACHE_BUMP
-            )
-            b_cnt = int(stats.get('buy_count', 0))
-            s_cnt = int(stats.get('sell_count', 0))
-            b_units = float(stats.get('buy_units', 0.0))
-            s_units = float(stats.get('sell_units', 0.0))
-            net_cnt = int(stats.get('net_count', 0))
-            net_units = float(stats.get('net_units', 0.0))
-
-            px = float(get_cached_price(t))
-            buy_usd = b_units * px
-            sell_usd = - s_units * px
-            net_usd = buy_usd + sell_usd
-
-            total_buy_orders += b_cnt
-            total_sell_orders += s_cnt
-            total_buy_usd += buy_usd
-            total_sell_usd += sell_usd
-
-            rows.append({
-                "Ticker": t,
-                "Buy_Orders": b_cnt,
-                "Sell_Orders": s_cnt,
-                "Total_Orders(Net)": net_cnt,
-                "Buy_Units": b_units,
-                "Sell_Units": s_units,
-                "Net_Units": net_units,
-                "Price": px,
-                "Buy_USD": buy_usd,
-                "Sell_USD": sell_usd,
-                "Net_USD": net_usd
-            })
-
-        net_orders_total = total_buy_orders - total_sell_orders
-        net_usd_total = total_buy_usd + total_sell_usd
-
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Orders (Buy - Sell)", f"{net_orders_total}")
-        c2.metric("Buy_Orders", f"{total_buy_orders}")
-        c3.metric("Sell_Orders", f"{total_sell_orders}")
-
-        d1, d2, d3 = st.columns(3)
-        d1.metric("Net USD Flow (ช่วงที่เลือก)", f"${net_usd_total:,.2f}")
-        d2.metric("Buy_USD", f"${total_buy_usd:,.2f}")
-        d3.metric("Sell_USD", f"${total_sell_usd:,.2f}")
-
-        with st.expander("Per-ticker detail"):
-            df_metrics = pd.DataFrame(rows).set_index("Ticker")
-            st.dataframe(df_metrics, use_container_width=True)
 
     st.write("_____")
     Start = st.checkbox('start')
     if Start:
-        # <<< เปลี่ยนจุดเรียก: ส่ง last_assets_all เข้าไปเพื่อ prefill ค่า >>>
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS, last_assets_all)
 
 with tab1:
@@ -1101,7 +996,7 @@ with tab1:
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
 
     all_tickers = [c['ticker'] for c in ASSET_CONFIGS]
-    selectbox_options: List[str] = [""]  # Show All
+    selectbox_options: List[str] = [""]
     if st.session_state.nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
