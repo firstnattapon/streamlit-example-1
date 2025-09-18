@@ -174,7 +174,7 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         # NEW: %K = %N - 100  (ตามโจทย์)
         pct_K = None
         if pct_N is not None:
-            pct_K = pct_N - 100.0
+            pct_K = 100.0 - pct_N
 
         k_rows.append({
             "name": name,
@@ -230,7 +230,7 @@ def display_nk_breakdown(nk: Dict[str, Any]):
                 "K_Value (Contracts * BE)": r["K_Value"],
                 "K (Premium cost = -contracts*premium)": r["K_premium"],
                 "%N (n/fix_c*100)": r.get("pct_N", None),
-                "%K (%N-100)": r.get("pct_K", None)  # <<< REPLACED COLUMN
+                "%K (%N-100)": r.get("pct_K", None)  
             } for r in nk.get("options", [])
         ])
         st.dataframe(k_df, use_container_width=True)
