@@ -132,7 +132,7 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         # ลบ "รายละเอียดหุ้น (N)" ออกตามคำสั่ง
 
         # คงรายละเอียดออปชัน (K) ไว้
-        st.write("## รายละเอียดออปชัน (K)")
+        st.write("#### รายละเอียดออปชัน (K)")
         k_df = pd.DataFrame([
             {
                 "Name": r["name"],
