@@ -960,9 +960,6 @@ with tab2:
     x_2 = st.number_input('Diff', step=1, value=60)
     st.write("---")
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
-    st.write("---")
-
-    # ====== METRICS block ถูกลบอย่างปลอดภัย ======
 
     st.write("_____")
     Start = st.checkbox('start')
