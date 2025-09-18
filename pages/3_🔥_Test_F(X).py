@@ -117,7 +117,7 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
 def display_nk_breakdown(nk: Dict[str, Any]):
     """Show K-only breakdown right under Stock Holdings. (ลบตาราง N ตามคำขอ)"""
     # st.divider()
-    with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=0):
+    with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=False):
         n_total = nk.get("N_total", 0.0)
         kv_total = nk.get("KValue_total", 0.0)
         kp_total = nk.get("Kpremium_total", 0.0)
@@ -125,9 +125,9 @@ def display_nk_breakdown(nk: Dict[str, Any]):
 
         # 4 compact metrics in a row
         col1, col2, col3, col4 = st.columns(4)
-        col1.write("Σ N (Stocks)", f"{n_total:,.2f}")
-        col2.write("Σ K_Value (Options @Break-even)", f"{kv_total:,.2f}")
-        col3.write("Σ K (Premium, cost)", f"{kp_total:,.2f}")  # likely negative
+        col1.metric("Σ N (Stocks)", f"{n_total:,.2f}")
+        col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.2f}")
+        col3.metric("Σ K (Premium, cost)", f"{kp_total:,.2f}")  # likely negative
         r1 = ratios.get("KValue_over_N", None)
         r2 = ratios.get("absKpremium_over_N", None)
         r1_txt = f"{r1*100:,.2f}%" if r1 is not None else "N/A"
