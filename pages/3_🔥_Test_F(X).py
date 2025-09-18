@@ -121,6 +121,7 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
 
     # Build maps for underlying lookups
     fix_c_map: Dict[str, float] = {a['ticker'].strip(): float(a.get('fix_c', 0.0)) for a in stock_assets}
+    control_total: float = sum(fix_c_map.values())  # <<< ADDED: Σ fix_c (Control)
     n_value_map: Dict[str, float] = {}
 
     # N breakdown per stock
@@ -171,10 +172,10 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         if underlying_n_value is not None and underlying_fix_c and underlying_fix_c != 0:
             pct_N = (underlying_n_value / underlying_fix_c) * 100.0
 
-        # NEW: %K = %N - 100  (ตามโจทย์)
+        # NEW: %K = %N - 100  (ตามโจทย์)  [คงตรรกะเดิมไว้ตามระบบปัจจุบัน]
         pct_K = None
         if pct_N is not None:
-            pct_K = 100.0 - pct_N
+            pct_K = 100.0 - pct_N  # intentionally unchanged logic to preserve existing behavior
 
         k_rows.append({
             "name": name,
@@ -201,7 +202,8 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         "N_total": n_total,
         "KValue_total": k_value_total,
         "Kpremium_total": k_premium_total,
-        "ratios": ratios
+        "ratios": ratios,
+        "control_total": control_total  # <<< ADDED: expose Σ fix_c
     }
 
 # --- 2. UI & DISPLAY FUNCTIONS ---
@@ -211,11 +213,17 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         n_total = nk.get("N_total", 0.0)
         kv_total = nk.get("KValue_total", 0.0)
         kp_total = nk.get("Kpremium_total", 0.0)
+        control_total = nk.get("control_total", 0.0)  # <<< ADDED
 
-        col1, col2, col3 = st.columns(3)
+        # Σ %N (Stocks) = (Σ N / Σ fix_c) * 100
+        pct_n_stocks = (n_total / control_total * 100.0) if (control_total and control_total > 0) else None
+
+        # เปลี่ยนจาก 3 → 4 คอลัมน์ เพื่อวาง metric ใหม่
+        col1, col2, col3, col4 = st.columns(4)
         col1.metric("Σ N (Stocks)", f"{n_total:,.0f}")
         col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.0f}")
         col3.metric("Σ K (Premium, cost)", f"{kp_total:,.0f}")  # likely negative
+        col4.metric("Σ %N (Stocks)", f"{pct_n_stocks:,.2f}%" if pct_n_stocks is not None else "-")  # <<< ADDED
 
         # รายละเอียดออปชัน (K) พร้อมคอลัมน์ใหม่ %K = %N - 100 (แทนคอลัมน์เดิม)
         st.write("##### รายละเอียดออปชัน (K)")
@@ -278,7 +286,6 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
         'current_holdings': pre_holdings,
         'total_stock_value': total_stock_value_pre
     }
-
 
     st.divider()
     st.write("📦 Stock Holdings")
