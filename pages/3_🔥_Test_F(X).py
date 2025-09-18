@@ -114,6 +114,48 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
 
 # --- 2. UI & DISPLAY FUNCTIONS ---
 
+def display_nk_breakdown(nk: Dict[str, Any]):
+    """Show K-only breakdown right under Stock Holdings. (ลบตาราง N ตามคำขอ)"""
+    st.divider()
+    with st.expander("🅝 vs 🅚 Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=True):
+        n_total = nk.get("N_total", 0.0)
+        kv_total = nk.get("KValue_total", 0.0)
+        kp_total = nk.get("Kpremium_total", 0.0)
+        ratios = nk.get("ratios", {})
+
+        # 4 compact metrics in a row
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Σ N (Stocks)", f"{n_total:,.2f}")
+        col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.2f}")
+        col3.metric("Σ K (Premium, cost)", f"{kp_total:,.2f}")  # likely negative
+        r1 = ratios.get("KValue_over_N", None)
+        r2 = ratios.get("absKpremium_over_N", None)
+        r1_txt = f"{r1*100:,.2f}%" if r1 is not None else "N/A"
+        r2_txt = f"{r2*100:,.2f}%" if r2 is not None else "N/A"
+        col4.metric("สัดส่วน: K_Value/N | |K|/N", f"{r1_txt} | {r2_txt}")
+
+        # ลบ "รายละเอียดหุ้น (N)" ออกตามคำสั่ง
+
+        # คงรายละเอียดออปชัน (K) ไว้
+        st.write("### รายละเอียดออปชัน (K)")
+        k_df = pd.DataFrame([
+            {
+                "Name": r["name"],
+                "Underlying": r["underlying"],
+                "Contracts/Shares": r["contracts"],
+                "Strike": r["strike"],
+                "Premium/Share": r["premium_per_share"],
+                "Break-even": r["break_even"],
+                "K_Value (Contracts * BE)": r["K_Value"],
+                "K (Premium cost = -contracts*premium)": r["K_premium"],
+                "% K_Value / N": (None if r["pct_KValue_over_N"] is None else round(r["pct_KValue_over_N"], 2))
+            } for r in nk.get("options", [])
+        ])
+        st.dataframe(k_df, use_container_width=True)
+
+        st.caption("หมายเหตุ: Break-even (Call) = strike + premium, (Put) = strike - premium; "
+                   "K_Value ใช้ break-even เพื่อสะท้อนมูลค่าเลเวอเรจเชิงนิยาม และ K เป็นต้นทุนพรีเมียมให้เห็น ‘ค่าใช้จ่ายของ K’ ชัด ๆ")
+
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
     """Renders all UI components and collects user inputs into a dictionary."""
     user_inputs = {}
@@ -150,6 +192,17 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
 
     user_inputs['current_holdings'] = current_holdings
     user_inputs['total_stock_value'] = total_stock_value
+
+    # --- MODIFIED: Render NK breakdown RIGHT HERE (under Stock Holdings) ---
+    # Prepare a minimal input dict for NK computation (doesn't need product_cost or cash)
+    _temp_inputs_for_nk = {
+        'current_prices': current_prices,
+        'current_holdings': current_holdings,
+        'total_stock_value': total_stock_value
+    }
+    nk = compute_nk_breakdown(stock_assets, option_assets, _temp_inputs_for_nk)
+    display_nk_breakdown(nk)
+    # --- END MODIFIED ---
 
     st.divider()
     st.write("⚙️ Calculation Parameters")
@@ -315,57 +368,6 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
     }
 
 
-def display_nk_breakdown(nk: Dict[str, Any]):
-    """Show N & K breakdown without touching original outputs."""
-    st.divider()
-    with st.expander("🅝 vs 🅚 Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=True):
-        n_total = nk.get("N_total", 0.0)
-        kv_total = nk.get("KValue_total", 0.0)
-        kp_total = nk.get("Kpremium_total", 0.0)
-        ratios = nk.get("ratios", {})
-
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Σ N (Stocks)", f"{n_total:,.2f}")
-        col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.2f}")
-        col3.metric("Σ K (Premium, cost)", f"{kp_total:,.2f}")  # likely negative
-        # Ratios
-        r1 = ratios.get("KValue_over_N", None)
-        r2 = ratios.get("absKpremium_over_N", None)
-        r1_txt = f"{r1*100:,.2f}%" if r1 is not None else "N/A"
-        r2_txt = f"{r2*100:,.2f}%" if r2 is not None else "N/A"
-        col4.metric("สัดส่วน: K_Value/N | |K|/N", f"{r1_txt} | {r2_txt}")
-
-        st.write("### รายละเอียดหุ้น (N)")
-        n_df = pd.DataFrame([
-            {
-                "Ticker": r["ticker"],
-                "Holding": r["holding"],
-                "Live Price": r["live_price"],
-                "N_value": r["N_value"],
-                "% of N": (None if r["pct_of_N"] is None else round(r["pct_of_N"], 2))
-            } for r in nk.get("stocks", [])
-        ])
-        st.dataframe(n_df, use_container_width=True)
-
-        st.write("### รายละเอียดออปชัน (K)")
-        k_df = pd.DataFrame([
-            {
-                "Name": r["name"],
-                "Underlying": r["underlying"],
-                "Contracts/Shares": r["contracts"],
-                "Strike": r["strike"],
-                "Premium/Share": r["premium_per_share"],
-                "Break-even": r["break_even"],
-                "K_Value (Contracts * BE)": r["K_Value"],
-                "K (Premium cost = -contracts*premium)": r["K_premium"],
-                "% K_Value / N": (None if r["pct_KValue_over_N"] is None else round(r["pct_KValue_over_N"], 2))
-            } for r in nk.get("options", [])
-        ])
-        st.dataframe(k_df, use_container_width=True)
-
-        st.caption("หมายเหตุ: Break-even (Call) = strike + premium, (Put) = strike - premium; K_Value ใช้ break-even เพื่อสะท้อนมูลค่าเลเวอเรจเชิงนิยาม และ K เป็นต้นทุนพรีเมียมให้เห็น ‘ค่าใช้จ่ายของ K’ ชัด ๆ")
-
-
 # --- 4. CALCULATION FUNCTION ---
 # ### MODIFIED PART 2: Update Core Calculation Logic ###
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
@@ -476,7 +478,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
 
-# --- main() FUNCTION (Unchanged behavior; just call NK display) ---
+# --- main() FUNCTION ---
 def main():
     """Main function to run the Streamlit application."""
     config = load_config()
@@ -513,9 +515,9 @@ def main():
     # 3. Display and Update using the new dynamic offset
     display_results(metrics, options_pl, total_option_cost, config)
 
-    # --- NEW: Show N vs K with proportions & premium ---
-    nk = compute_nk_breakdown(stock_assets, option_assets, user_inputs)
-    display_nk_breakdown(nk)
+    # --- REMOVED: NK breakdown rendering here to avoid duplication ---
+    # nk = compute_nk_breakdown(stock_assets, option_assets, user_inputs)
+    # display_nk_breakdown(nk)
 
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
