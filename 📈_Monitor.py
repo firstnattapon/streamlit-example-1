@@ -1,3 +1,5 @@
+# 📈_Monitor.py  
+
 import streamlit as st
 import numpy as np
 import datetime
@@ -700,6 +702,12 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 # UI helpers
 # ---------------------------------------------------------------------------------
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
+    """
+    เป้าหมาย: รักษา UI เดิม แต่ 'ค่าที่ส่งเข้าโมเดล' จะถูกปรับเป็น Delta-equivalent
+    asset_inputs[ticker] = (base_value * delta_factor) + real_val
+    - real_val = ค่าหุ้นจริง (ค่าที่อ่าน/เขียน ThingSpeak)
+    - base_value * delta_factor = exposure เสมือนของออปชัน
+    """
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
     for i, config in enumerate(configs):
@@ -718,15 +726,25 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
             if split_pos != -1:
                 display_label = raw_label[:split_pos].strip()
                 base_help = raw_label[split_pos:].strip()
+
+            # Δ-scaling: อ่าน delta_factor (ถ้าไม่ระบุก็ = 1.0)
+            try:
+                delta_factor = float(opt.get('delta_factor', 1.0)) if opt else 1.0
+            except Exception:
+                delta_factor = 1.0
+
+            # ข้อความช่วยเหลือคงเดิม + แทรก net_since_open (เหมือนเดิม)
             help_text_final = base_help if base_help else f"net_since_us_premarket_open = {net_since_open_map.get(ticker, 0)}"
 
             if opt:
-                option_val = float(opt.get('base_value', 0.0))
+                option_base = float(opt.get('base_value', 0.0))
+                effective_option = option_base * delta_factor  # Δ-scaling
                 real_val = st.number_input(
                     label=display_label, help=help_text_final,
                     step=0.001, value=last_val, key=f"input_{ticker}_real"
                 )
-                asset_inputs[ticker] = option_val + float(real_val)
+                # โมเดลเห็น exposure รวมแบบ delta-equivalent
+                asset_inputs[ticker] = effective_option + float(real_val)
             else:
                 val = st.number_input(
                     label=display_label, help=help_text_final,
@@ -825,7 +843,7 @@ def trading_section(
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
             try:
-                new_asset_val = asset_last - buy_calc[1]
+                new_asset_val = asset_last - buy_calc[1]  # หุ้นจริงที่ต้องลด
                 write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
                 if not write_key:
                     st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
@@ -843,7 +861,7 @@ def trading_section(
             except Exception as e:
                 st.error(f"SELL {ticker} error: {e}")
 
-    # Price & P/L (เดิม)
+    # Price & P/L (คง UI เดิม แต่ asset_val เป็น delta-equivalent แล้ว)
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -867,7 +885,7 @@ def trading_section(
     if col6.checkbox(f'buy_match_{ticker}'):
         if col6.button(f"GO_BUY_{ticker}"):
             try:
-                new_asset_val = asset_last + sell_calc[1]
+                new_asset_val = asset_last + sell_calc[1]  # หุ้นจริงที่ต้องเพิ่ม
                 write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
                 if not write_key:
                     st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
@@ -1043,7 +1061,7 @@ with tab1:
         ticker = config['ticker']
         df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
         asset_last = float(last_assets_all.get(ticker, 0.0))
-        asset_val = float(asset_inputs.get(ticker, 0.0))
+        asset_val = float(asset_inputs.get(ticker, 0.0))  # delta-equivalent
         calc = calculations.get(ticker, {})
 
         title_label = selectbox_labels.get(ticker, ticker)
