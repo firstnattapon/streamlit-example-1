@@ -1,7 +1,6 @@
 # 📈_Monitor.py (Delta-equivalent scaling)
 
 import streamlit as st
-import np as np  # <<< NOTE: typo fix below (this line will be fixed) 
 import numpy as np
 import datetime
 import thingspeak
