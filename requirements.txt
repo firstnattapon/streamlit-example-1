@@ -14,3 +14,6 @@ requests
 numpy-financial
 matplotlib
 requests_cache
+
+reportlab 
+openpyxl 
