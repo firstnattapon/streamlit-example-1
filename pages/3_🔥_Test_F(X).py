@@ -1,4 +1,4 @@
-# 📈_Monitor.py  (yfinance-cached Edition, REST-only ThingSpeak)
+# 📈_Monitor.py  (yfinance-cached Edition, REST-only ThingSpeak, Controls state-sync fix)
 
 import streamlit as st
 import numpy as np
@@ -215,7 +215,8 @@ def ts_update_with_rate_limit(write_api_key: str, field_name: str, value, channe
 def clear_all_caches() -> None:
     ui_state_keys_to_preserve = {
         'select_key', 'nex', 'Nex_day_sell',
-        '_last_assets_overrides', '_ts_last_update_at'
+        '_last_assets_overrides', '_ts_last_update_at',
+        '_controls_defaults',  # ← preserve defaults map
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -675,8 +676,19 @@ def fetch_all_data(configs: List[Dict], start_date: Optional[str], window_start_
     return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results, 'trade_stats': trade_stats_results}
 
 # ---------------------------------------------------------------------------------
-# UI helpers
+# UI helpers (เพิ่ม state-sync สำหรับ Controls)
 # ---------------------------------------------------------------------------------
+def _sync_number_default(key: str, default_value: float) -> float:
+    """
+    ถ้า default เปลี่ยน หรือ key ยังไม่เคยมีค่า → อัปเดต st.session_state[key] = default
+    คืนค่าที่ควรใช้เป็น value ของ number_input
+    """
+    defaults = st.session_state.setdefault('_controls_defaults', {})
+    if key not in st.session_state or defaults.get(key) != default_value:
+        st.session_state[key] = float(default_value)
+        defaults[key] = float(default_value)
+    return float(st.session_state[key])
+
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
@@ -707,15 +719,19 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
             if opt:
                 option_base = float(opt.get('base_value', 0.0))
                 effective_option = option_base * delta_factor
+                key = f"input_{ticker}_real"
+                init_val = _sync_number_default(key, last_val)
                 real_val = st.number_input(
                     label=display_label, help=help_text_final,
-                    step=0.001, value=last_val, key=f"input_{ticker}_real"
+                    step=0.001, value=init_val, key=key
                 )
                 asset_inputs[ticker] = effective_option + float(real_val)
             else:
+                key = f"input_{ticker}_asset"
+                init_val = _sync_number_default(key, last_val)
                 val = st.number_input(
                     label=display_label, help=help_text_final,
-                    step=0.001, value=last_val, key=f"input_{ticker}_asset"
+                    step=0.001, value=init_val, key=key
                 )
                 asset_inputs[ticker] = float(val)
     return asset_inputs
@@ -864,6 +880,8 @@ if '_last_assets_overrides' not in st.session_state:
     st.session_state['_last_assets_overrides'] = {}
 if '_ts_last_update_at' not in st.session_state:
     st.session_state['_ts_last_update_at'] = {}
+if '_controls_defaults' not in st.session_state:
+    st.session_state['_controls_defaults'] = {}
 
 pending = st.session_state.pop("_pending_select_key", None)
 if pending:
