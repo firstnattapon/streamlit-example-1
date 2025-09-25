@@ -156,8 +156,8 @@ def clear_all_caches() -> None:
         '_cache_bump', '_last_assets_overrides',
         '_all_data_cache', '_skip_refresh_on_rerun',
         '_ts_last_update_at',
-        # ✔️ คงคิว/ผลลัพธ์ไว้เพื่อไม่ทำรายการหายกลางทาง
-        '_pending_ts_update', '_ts_entry_ids'
+        '_pending_ts_update', '_ts_entry_ids',
+        '_widget_shadow',  # ✅ preserve widget shadow for optimistic sync
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -787,9 +787,17 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
     asset_inputs[ticker] = (base_value * delta_factor) + real_val
     - real_val = ค่าหุ้นจริง (ค่าที่อ่าน/เขียน ThingSpeak)
     - base_value * delta_factor = exposure เสมือนของออปชัน
+
+    ✅ แก้ให้ Value/P&L เป็น "optimistic" จริง: sync widget state กับ overrides
+       โดยอัปเดตค่าของ st.session_state เฉพาะเมื่อ last_val (รวม override) เปลี่ยน
+       และจำเงาไว้ใน _widget_shadow เพื่อไม่ทับค่าที่ผู้ใช้กำลังพิมพ์อยู่
     """
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
+
+    overrides = st.session_state.get('_last_assets_overrides', {})
+    shadow: Dict[str, float] = st.session_state.setdefault('_widget_shadow', {})
+
     for i, config in enumerate(configs):
         with cols[i]:
             ticker = config['ticker']
@@ -807,7 +815,7 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                 display_label = raw_label[:split_pos].strip()
                 base_help = raw_label[split_pos:].strip()
 
-            # Δ-scaling: อ่าน delta_factor (ถ้าไม่ระบุก็ = 1.0)
+            # Δ-scaling
             try:
                 delta_factor = float(opt.get('delta_factor', 1.0)) if opt else 1.0
             except Exception:
@@ -817,18 +825,48 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
 
             if opt:
                 option_base = float(opt.get('base_value', 0.0))
-                effective_option = option_base * delta_factor  # Δ-scaling
+                effective_option = option_base * delta_factor
+                key_name = f"input_{ticker}_real"
+
+                # --- Optimistic sync: ดันค่า override เข้า widget state เมื่อมีการเปลี่ยนแปลงจริง ---
+                if ticker in overrides:
+                    if (shadow.get(key_name) is None) or (abs(shadow.get(key_name, float('nan')) - last_val) > 1e-12):
+                        st.session_state[key_name] = float(last_val)
+                        shadow[key_name] = float(last_val)
+                else:
+                    if key_name not in st.session_state:
+                        st.session_state[key_name] = float(last_val)
+                        shadow[key_name] = float(last_val)
+
                 real_val = st.number_input(
-                    label=display_label, help=help_text_final,
-                    step=0.001, value=last_val, key=f"input_{ticker}_real"
+                    label=display_label,
+                    help=help_text_final,
+                    step=0.001,
+                    value=float(st.session_state[key_name]),
+                    key=key_name,
                 )
                 asset_inputs[ticker] = effective_option + float(real_val)
             else:
+                key_name = f"input_{ticker}_asset"
+
+                if ticker in overrides:
+                    if (shadow.get(key_name) is None) or (abs(shadow.get(key_name, float('nan')) - last_val) > 1e-12):
+                        st.session_state[key_name] = float(last_val)
+                        shadow[key_name] = float(last_val)
+                else:
+                    if key_name not in st.session_state:
+                        st.session_state[key_name] = float(last_val)
+                        shadow[key_name] = float(last_val)
+
                 val = st.number_input(
-                    label=display_label, help=help_text_final,
-                    step=0.001, value=last_val, key=f"input_{ticker}_asset"
+                    label=display_label,
+                    help=help_text_final,
+                    step=0.001,
+                    value=float(st.session_state[key_name]),
+                    key=key_name,
                 )
                 asset_inputs[ticker] = float(val)
+
     return asset_inputs
 
 
@@ -978,6 +1016,13 @@ if '_all_data_cache' not in st.session_state:
 if '_ts_last_update_at' not in st.session_state:
     st.session_state['_ts_last_update_at'] = {}
 # ใหม่: คิว/entry ids
+if '_pending_ts_update' not in st.session_state:
+    st.session_state['_pending_ts_update'] = []
+if '_ts_entry_ids' not in st.session_state:
+    st.session_state['_ts_entry_ids'] = {}
+# ใหม่: widget shadow map (ใช้ sync optimistic เฉพาะเมื่อค่าจริงเปลี่ยน)
+if '_widget_shadow' not in st.session_state:
+    st.session_state['_widget_shadow'] = {}
 if '_pending_ts_update' not in st.session_state:
     st.session_state['_pending_ts_update'] = []
 if '_ts_entry_ids' not in st.session_state:
