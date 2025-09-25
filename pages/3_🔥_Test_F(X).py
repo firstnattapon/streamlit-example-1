@@ -1,4 +1,4 @@
-# 📈_Monitor.py  (No-Cache Edition)
+# 📈_Monitor.py  (yfinance-cached Edition)
 
 import streamlit as st
 import numpy as np
@@ -23,7 +23,7 @@ import time  # ==== RATE-LIMIT: keep for cooldown
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------------------------------
-# SimulationTracer (เดิม) — ลบ lru_cache ออก
+# SimulationTracer (เดิม) — ไม่มี lru_cache
 # ---------------------------------------------------------------------------------
 class SimulationTracer:
     def __init__(self, encoded_string: str):
@@ -82,7 +82,7 @@ class SimulationTracer:
         return current_actions
 
 # ---------------------------------------------------------------------------------
-# Config Loading — ลบ @st.cache_data
+# Config Loading — ไม่มี @st.cache_data
 # ---------------------------------------------------------------------------------
 def load_config(file_path: str = 'monitor_config.json') -> Dict:
     if not os.path.exists(file_path):
@@ -107,7 +107,7 @@ if not ASSET_CONFIGS:
     st.stop()
 
 # ---------------------------------------------------------------------------------
-# ThingSpeak Clients (อ่านอย่างเดียว) — ลบ @st.cache_resource
+# ThingSpeak Clients (อ่านอย่างเดียว) — ไม่มี @st.cache_resource
 # ---------------------------------------------------------------------------------
 def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
     clients: Dict[int, thingspeak.Channel] = {}
@@ -127,10 +127,9 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
 
 # ---------------------------------------------------------------------------------
-# Session / Rerun Management — ตัดทุกอย่างที่เกี่ยวกับ cache
+# Session / Rerun Management — ไม่มี cache state
 # ---------------------------------------------------------------------------------
 def clear_all_caches() -> None:
-    # ไม่มี st.cache_* ให้เคลียร์แล้ว
     ui_state_keys_to_preserve = {
         'select_key', 'nex', 'Nex_day_sell',
         '_last_assets_overrides', '_ts_last_update_at'
@@ -148,7 +147,7 @@ def rerun_keep_selection(ticker: str) -> None:
     st.rerun()
 
 # ---------------------------------------------------------------------------------
-# Calc Utils — ลบ @lru_cache
+# Calc Utils — ไม่มี lru_cache
 # ---------------------------------------------------------------------------------
 def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
     if asset == 0:
@@ -167,8 +166,9 @@ def buy(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int
     return unit_price, adjust_qty, total
 
 # ---------------------------------------------------------------------------------
-# Price & Time — ลบ @st.cache_data (คง tenacity.retry)
+# Price & Time — ใส่ cache กลับเฉพาะ yfinance
 # ---------------------------------------------------------------------------------
+@st.cache_data(ttl=30, show_spinner=False)   # ราคาเปลี่ยนถี่ → แคช 30s พอ
 @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(3))
 def get_cached_price(ticker: str) -> float:
     try:
@@ -176,6 +176,7 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
+@st.cache_data(ttl=3600, show_spinner=False)  # ประวัติราคาเปลี่ยนช้า → แคช 1 ชม.
 def get_history_df_max_close_bkk(ticker: str) -> pd.DataFrame:
     df = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
     try:
@@ -257,12 +258,6 @@ def _now_ts() -> float:
     return time.time()
 
 def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.0, max_wait: float = 8.0) -> Tuple[bool, float]:
-    """
-    ตรวจคูลดาวน์ต่อช่อง:
-    - ถ้าเหลือเวลาน้อยกว่าหรือเท่ากับ max_wait → รอให้ครบและอนุญาตอัปเดต
-    - ถ้าเหลือเวลามากกว่า max_wait → ไม่อนุญาต (ให้ผู้ใช้กดใหม่เมื่อถึงเวลา)
-    คืนค่า (allowed, remaining_seconds)
-    """
     try:
         last_map: Dict[int, float] = st.session_state.get('_ts_last_update_at', {})
         last = float(last_map.get(int(channel_id), 0.0))
@@ -284,9 +279,6 @@ def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.
 
 def ts_update_with_rate_limit(write_api_key: str, field_name: str, value, channel_id: int,
                               min_interval: float = 16.0, max_wait: float = 8.0) -> str:
-    """
-    ครอบ ts_update_via_http ด้วย rate-limit guard ต่อ channel_id
-    """
     allowed, remaining = _ensure_rate_limit_and_maybe_wait(channel_id, min_interval=min_interval, max_wait=max_wait)
     if not allowed:
         st.warning(f"ต้องรออีก ~{remaining:.1f}s ก่อนอัปเดตช่อง #{channel_id} (ThingSpeak ~15s/ช่อง)")
@@ -303,7 +295,7 @@ def ts_update_with_rate_limit(write_api_key: str, field_name: str, value, channe
     return resp.strip()
 
 # ---------------------------------------------------------------------------------
-# Net stats — ลบ @st.cache_data และ cache_bump
+# Net stats — ไม่มี @st.cache_data
 # ---------------------------------------------------------------------------------
 def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str) -> int:
     try:
@@ -679,9 +671,6 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 # UI helpers
 # ---------------------------------------------------------------------------------
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
-    """
-    คง UI เดิม; asset_inputs[ticker] = option_exposure(Δ) + real_val
-    """
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
     for i, config in enumerate(configs):
@@ -725,9 +714,6 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
     return asset_inputs
 
 def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel], last_assets: Dict[str, float]) -> None:
-    """
-    ปุ่มอัปเดตใช้ ts_update_via_http + guard rate-limit; คง optimistic UI
-    """
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
             ticker = config['ticker']
@@ -797,13 +783,13 @@ def trading_section(
     sell_calc = calc['sell']
     buy_calc = calc['buy']
 
-    # SELL
+    # SELL — HTTP + RL
     st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
     col1, col2, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
             try:
-                new_asset_val = asset_last - buy_calc[1]  # หุ้นจริงที่ต้องลด
+                new_asset_val = asset_last - buy_calc[1]
                 write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
                 if not write_key:
                     st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
@@ -819,7 +805,7 @@ def trading_section(
             except Exception as e:
                 st.error(f"SELL {ticker} error: {e}")
 
-    # Price & P/L (asset_val เป็น delta-equivalent)
+    # Price & P/L
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -837,13 +823,13 @@ def trading_section(
     except Exception:
         st.warning(f"Could not retrieve price data for {ticker}.")
 
-    # BUY
+    # BUY — HTTP + RL
     col4, col5, col6 = st.columns(3)
     st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     if col6.checkbox(f'buy_match_{ticker}'):
         if col6.button(f"GO_BUY_{ticker}"):
             try:
-                new_asset_val = asset_last + sell_calc[1]  # หุ้นจริงที่ต้องเพิ่ม
+                new_asset_val = asset_last + sell_calc[1]
                 write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
                 if not write_key:
                     st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
@@ -862,7 +848,6 @@ def trading_section(
 # ---------------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------------
-# Session State init (เอาเฉพาะ state ที่เป็น UI/rate-limit)
 if 'select_key' not in st.session_state:
     st.session_state.select_key = ""
 if 'nex' not in st.session_state:
@@ -874,22 +859,19 @@ if '_last_assets_overrides' not in st.session_state:
 if '_ts_last_update_at' not in st.session_state:
     st.session_state['_ts_last_update_at'] = {}
 
-# Bootstrap selection BEFORE widgets
 pending = st.session_state.pop("_pending_select_key", None)
 if pending:
     st.session_state.select_key = pending
 
-# เวลาตลาด US premarket ล่าสุด (BKK) = window_start
 latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
 window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
 
-# ดึงข้อมูลหลัก — ไม่มี cache ใด ๆ
 all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, window_start_bkk_iso)
 
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
 
-# optimistic overrides (คงไว้เพื่อ UX สดหลังเขียน)
+# optimistic overrides
 if st.session_state.get('_last_assets_overrides'):
     last_assets_all = {**last_assets_all, **st.session_state['_last_assets_overrides']}
 
@@ -1027,7 +1009,7 @@ with tab1:
             st.dataframe(df_data, use_container_width=True)
         st.write("_____")
 
-# Sidebar Rerun (Hard Reload) — ไม่มีแคชแล้ว แต่ให้เคลียร์ state อื่น ๆ
+# Sidebar Rerun
 if st.sidebar.button("RERUN"):
     current_selection = st.session_state.get("select_key", "")
     clear_all_caches()
