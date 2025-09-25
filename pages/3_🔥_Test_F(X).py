@@ -788,9 +788,10 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
     - real_val = ค่าหุ้นจริง (ค่าที่อ่าน/เขียน ThingSpeak)
     - base_value * delta_factor = exposure เสมือนของออปชัน
 
-    ✅ แก้ให้ Value/P&L เป็น "optimistic" จริง: sync widget state กับ overrides
-       โดยอัปเดตค่าของ st.session_state เฉพาะเมื่อ last_val (รวม override) เปลี่ยน
-       และจำเงาไว้ใน _widget_shadow เพื่อไม่ทับค่าที่ผู้ใช้กำลังพิมพ์อยู่
+    ✅ ทำให้ Value/P&L optimistic และกัน KeyError:
+       - อ่านค่า widget แบบปลอดภัย: st.session_state.get(key, last_val)
+       - ถ้ามี override: บังคับ init key เมื่อ key ยังไม่ถูกสร้าง หรือเมื่อค่าจริงเปลี่ยน
+       - ใช้ _widget_shadow เพื่อไม่ทับค่าที่ผู้ใช้กำลังพิมพ์
     """
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
@@ -828,9 +829,9 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                 effective_option = option_base * delta_factor
                 key_name = f"input_{ticker}_real"
 
-                # --- Optimistic sync: ดันค่า override เข้า widget state เมื่อมีการเปลี่ยนแปลงจริง ---
+                # --- Optimistic sync ---
                 if ticker in overrides:
-                    if (shadow.get(key_name) is None) or (abs(shadow.get(key_name, float('nan')) - last_val) > 1e-12):
+                    if (key_name not in st.session_state) or (abs(shadow.get(key_name, float('nan')) - last_val) > 1e-12):
                         st.session_state[key_name] = float(last_val)
                         shadow[key_name] = float(last_val)
                 else:
@@ -838,11 +839,12 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                         st.session_state[key_name] = float(last_val)
                         shadow[key_name] = float(last_val)
 
+                safe_val = float(st.session_state.get(key_name, last_val))
                 real_val = st.number_input(
                     label=display_label,
                     help=help_text_final,
                     step=0.001,
-                    value=float(st.session_state[key_name]),
+                    value=safe_val,
                     key=key_name,
                 )
                 asset_inputs[ticker] = effective_option + float(real_val)
@@ -850,7 +852,7 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                 key_name = f"input_{ticker}_asset"
 
                 if ticker in overrides:
-                    if (shadow.get(key_name) is None) or (abs(shadow.get(key_name, float('nan')) - last_val) > 1e-12):
+                    if (key_name not in st.session_state) or (abs(shadow.get(key_name, float('nan')) - last_val) > 1e-12):
                         st.session_state[key_name] = float(last_val)
                         shadow[key_name] = float(last_val)
                 else:
@@ -858,16 +860,18 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                         st.session_state[key_name] = float(last_val)
                         shadow[key_name] = float(last_val)
 
+                safe_val = float(st.session_state.get(key_name, last_val))
                 val = st.number_input(
                     label=display_label,
                     help=help_text_final,
                     step=0.001,
-                    value=float(st.session_state[key_name]),
+                    value=safe_val,
                     key=key_name,
                 )
                 asset_inputs[ticker] = float(val)
 
     return asset_inputs
+
 
 
 def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float = 10.0):
@@ -1015,18 +1019,13 @@ if '_all_data_cache' not in st.session_state:
     st.session_state['_all_data_cache'] = None
 if '_ts_last_update_at' not in st.session_state:
     st.session_state['_ts_last_update_at'] = {}
-# ใหม่: คิว/entry ids
+# ใหม่: คิว/entry ids & widget shadow
 if '_pending_ts_update' not in st.session_state:
     st.session_state['_pending_ts_update'] = []
 if '_ts_entry_ids' not in st.session_state:
     st.session_state['_ts_entry_ids'] = {}
-# ใหม่: widget shadow map (ใช้ sync optimistic เฉพาะเมื่อค่าจริงเปลี่ยน)
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
-if '_pending_ts_update' not in st.session_state:
-    st.session_state['_pending_ts_update'] = []
-if '_ts_entry_ids' not in st.session_state:
-    st.session_state['_ts_entry_ids'] = {}
 
 # Bootstrap selection BEFORE widgets (สำหรับ fast focus)
 pending = st.session_state.pop("_pending_select_key", None)
