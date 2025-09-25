@@ -1,4 +1,4 @@
-# 📈_Monitor.py  (yfinance-cached Edition, REST-only ThingSpeak, Controls instant refresh)
+# 📈_Monitor.py  (yfinance-cached Edition, REST-only ThingSpeak, Controls state-sync fix)
 
 import streamlit as st
 import numpy as np
@@ -22,7 +22,7 @@ import time  # ==== RATE-LIMIT: keep for cooldown
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------------------------------
-# SimulationTracer
+# SimulationTracer (เดิม)
 # ---------------------------------------------------------------------------------
 class SimulationTracer:
     def __init__(self, encoded_string: str):
@@ -168,7 +168,7 @@ def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: 
     except Exception:
         return "0"
 
-# ==== RATE-LIMIT: helpers
+# ==== RATE-LIMIT: helpers (คงไว้)
 def _now_ts() -> float:
     return time.time()
 
@@ -216,7 +216,7 @@ def clear_all_caches() -> None:
     ui_state_keys_to_preserve = {
         'select_key', 'nex', 'Nex_day_sell',
         '_last_assets_overrides', '_ts_last_update_at',
-        '_controls_defaults',  # preserve defaults map
+        '_controls_defaults',  # ← preserve defaults map
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -590,7 +590,7 @@ def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_is
         return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
 # ---------------------------------------------------------------------------------
-# Fetch all data — REST only
+# Fetch all data — REST only (ลบ clients ออก)
 # ---------------------------------------------------------------------------------
 def fetch_all_data(configs: List[Dict], start_date: Optional[str], window_start_bkk_iso: str) -> Dict[str, dict]:
     monitor_results: Dict[str, Tuple[pd.DataFrame, str, Optional[datetime.date]]] = {}
@@ -676,7 +676,7 @@ def fetch_all_data(configs: List[Dict], start_date: Optional[str], window_start_
     return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results, 'trade_stats': trade_stats_results}
 
 # ---------------------------------------------------------------------------------
-# UI helpers — state-sync + instant refresh
+# UI helpers (เพิ่ม state-sync สำหรับ Controls)
 # ---------------------------------------------------------------------------------
 def _sync_number_default(key: str, default_value: float) -> float:
     """
@@ -688,22 +688,6 @@ def _sync_number_default(key: str, default_value: float) -> float:
         st.session_state[key] = float(default_value)
         defaults[key] = float(default_value)
     return float(st.session_state[key])
-
-def _control_key_for_ticker(config: Dict) -> str:
-    t = config['ticker']
-    opt = config.get('option_config')
-    return f"input_{t}_real" if isinstance(opt, dict) and opt else f"input_{t}_asset"
-
-def _reflect_controls_after_update(config: Dict, updated_field_value: float) -> None:
-    """
-    ดันค่าที่เพิ่งเขียนขึ้น channel ให้ไปโผล่ใน Controls ทันที
-    - อัปเดตทั้ง st.session_state[key] และ _controls_defaults[key]
-    - อัปเดต _last_assets_overrides[ticker] เพื่อให้ส่วนอื่นอ้างอิงค่าใหม่ได้ทันที
-    """
-    key = _control_key_for_ticker(config)
-    st.session_state.setdefault('_controls_defaults', {})[key] = float(updated_field_value)
-    st.session_state[key] = float(updated_field_value)
-    st.session_state.setdefault('_last_assets_overrides', {})[config['ticker']] = float(updated_field_value)
 
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
     asset_inputs: Dict[str, float] = {}
@@ -782,8 +766,7 @@ def render_asset_update_controls(configs: List[Dict], last_assets: Dict[str, flo
                             st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field หรือเว้น ~15s/ช่อง")
                         else:
                             st.write(f"Updated {ticker} to: {add_val} (entry #{resp})")
-                            # reflect to UI instantly
-                            _reflect_controls_after_update(config, float(add_val))
+                            st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(add_val)
                             st.session_state["_pending_select_key"] = ticker
                             st.rerun()
                     except Exception as e:
@@ -838,8 +821,7 @@ def trading_section(
                     st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field และเว้น ~15s/ช่อง")
                 else:
                     col3.write(f"Updated: {new_asset_val} (entry #{resp})")
-                    # reflect to UI instantly
-                    _reflect_controls_after_update(config, float(new_asset_val))
+                    st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(new_asset_val)
                     st.session_state["_pending_select_key"] = ticker
                     st.rerun()
             except Exception as e:
@@ -879,8 +861,7 @@ def trading_section(
                     st.error("ThingSpeak ไม่บันทึกค่า (resp=0): ตรวจ Write API Key/field และเว้น ~15s/ช่อง")
                 else:
                     col6.write(f"Updated: {new_asset_val} (entry #{resp})")
-                    # reflect to UI instantly
-                    _reflect_controls_after_update(config, float(new_asset_val))
+                    st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(new_asset_val)
                     st.session_state["_pending_select_key"] = ticker
                     st.rerun()
             except Exception as e:
