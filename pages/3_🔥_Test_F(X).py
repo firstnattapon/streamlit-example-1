@@ -390,7 +390,7 @@ def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -
             st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(prev_val)
         else:
             # สำเร็จ
-            st.success(f"[{ticker}] {op} สำเร็จ (entry #{resp})")
+            st.sidebar.success(f"[{ticker}] {op} สำเร็จ (entry #{resp})")
             st.session_state.setdefault('_ts_entry_ids', {}).setdefault(ticker, []).append(resp)
             st.session_state.setdefault('_ts_last_update_at', {})[channel_id] = _now_ts()
             # คง override ตาม new_val ไว้ ไม่ต้องทำอะไรเพิ่ม
