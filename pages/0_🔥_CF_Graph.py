@@ -12,7 +12,7 @@ except FileNotFoundError:
     st.error("ไม่พบไฟล์ 'cf_graph_config.json'. กรุณาสร้างไฟล์และใส่ข้อมูล Asset ตามโครงสร้างใหม่")
     st.stop()
 
-tab_names = ["DATA", "BATA" , "All_Ticker" , "Option_Sum" , "Historical_Backtest_CF"]  
+tab_names = ["DATA", "BATA" , "All_Ticker" , "Option_Sum" , "Historical_Backtest_CF" , "call_ratio_spread"]  
 tabs = st.tabs(tab_names)
 
 current_prices = {}
@@ -35,7 +35,10 @@ with tabs[3]:
 with tabs[4]:
     with st.expander("Historical_Backtest_CF", expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=fLyda7yGeP4GNz66yaY3JK", width=1500, height=1000, scrolling=0)
-
+        
+with tabs[5]:
+    with st.expander("3_piecewise_line", expanded=True):
+        st.components.v1.iframe("https://monica.im/share/artifact?id=KxukCeMQVMTv4qq7Bsb2gL", width=1500, height=1000, scrolling=0)
 
 def parse_final_two_numbers(s):
     nums = re.findall(r"[-+]?\d*\.?\d+", str(s))
