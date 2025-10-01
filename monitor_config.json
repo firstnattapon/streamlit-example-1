@@ -25,7 +25,7 @@
 { "ticker": "QXO", "monitor_field": { "field": 7, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" }, 
   "asset_field": { "field": "field6", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" }, "fix_c": 2200, "option_config": { "base_value": 100, "delta_factor": 0.9, "label": "QXO(LV:100@22.6, Δ=0.90)" } },
 { "ticker": "RIVN", "monitor_field": { "field": 4, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" }, 
-  "asset_field": { "field": "field3", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" }, "fix_c": 1500, "option_config": { "base_value": 100, "delta_factor": 0.80, "label": "RIVN(LV:100@14.2, Δ=0.80)" } },
+  "asset_field": { "field": "field3", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" }, "fix_c": 1500, "option_config": { "base_value": 100, "delta_factor": 0.85, "label": "RIVN(LV:100@14.2, Δ=0.85)" } },
 { "ticker": "RXRX", "monitor_field": { "field": 8, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" }, 
   "asset_field": { "field": "field7", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" }, "fix_c": 1500, "option_config": { "base_value": 200, "delta_factor": 1, "label": "RXRX(LV:200@5.4, Δ=1.00)" } },
 { "ticker": "SG", "monitor_field": { "field": 6, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V" }, 
