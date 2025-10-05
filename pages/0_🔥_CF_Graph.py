@@ -39,7 +39,7 @@ with tabs[4]:
 with tabs[5]:
     with st.expander("3_piecewise_line", expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=LyE8aUzDvnNGDoAf96YvFA", width=1500, height=1000, scrolling=0)
-        with st.expander("3_piecewise_line_v1", expanded=True):
+        with st.expander("3_piecewise_line_v1", expanded=False):
             st.components.v1.iframe("https://monica.im/share/artifact?id=t8qKXjs8Aywi3PcTf4pDZM", width=1500, height=1000, scrolling=0)
 
 def parse_final_two_numbers(s):
