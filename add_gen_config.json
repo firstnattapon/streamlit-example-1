@@ -103,5 +103,12 @@
         "thingspeak_field": 7,
         "channel_id": 2988808,
         "write_api_key": "QBIPN1AIZ88QQW5V"
+    },
+    {
+        "ticker": "LUNR",
+        "tab_name": "LUNR",
+        "thingspeak_field": 8,
+        "channel_id": 2988808,
+        "write_api_key": "QBIPN1AIZ88QQW5V"
     }
 ]
