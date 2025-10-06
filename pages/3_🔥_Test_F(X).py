@@ -24,8 +24,7 @@ def normalize_option_type(opt: Dict[str, Any]) -> str:
     if t in ("call", "put"):
         return t
     name = str(opt.get("name", "")).strip().lower()
-    # safer token search
-    name_pad = f" {name} "
+    name_pad = f" {name} "  # padding to avoid substring traps
     if " put " in name_pad or name.endswith(" put") or " put@" in name:
         return "put"
     if " call " in name_pad or name.endswith(" call") or " call@" in name:
@@ -56,7 +55,7 @@ def fetch_initial_portfolio_cash() -> float:
 if 'portfolio_cash' not in st.session_state:
     st.session_state.portfolio_cash = fetch_initial_portfolio_cash()
 
-# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS (Unchanged) ---
+# --- 1. CONFIGURATION & INITIALIZATION FUNCTIONS ---
 @st.cache_data
 def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
     try:
@@ -117,7 +116,7 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
 
-# --- 3.5 NEW: N-K BREAKDOWN FUNCTIONS (ADDED / UPDATED) ---
+# --- 3.5 N-K BREAKDOWN (PUT-ready) ---
 def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Dict[str, Any]:
     current_prices = user_inputs['current_prices']
     current_holdings = user_inputs['current_holdings']
@@ -152,28 +151,21 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         contracts = float(opt.get("contracts_or_shares", 0.0))
         strike = float(opt.get("strike", 0.0))
         premium = float(opt.get("premium_paid_per_share", 0.0))
-        opt_type = normalize_option_type(opt)   # --- PUT SUPPORT ---
+        opt_type = normalize_option_type(opt)
 
-        # break-even
         break_even = (strike - premium) if (opt_type == "put") else (strike + premium)
-
         k_value = contracts * break_even
-        k_premium = - contracts * premium  # negative = cost for long, positive = credit for short
+        k_premium = - contracts * premium  # negative = cost (long), positive = credit (short)
 
         k_value_total += k_value
         k_premium_total += k_premium
-
-        pct_kv_over_n = (k_value / n_total * 100.0) if n_total > 0 else None
 
         underlying_fix_c = fix_c_map.get(underlying, 0.0)
         underlying_n_value = n_value_map.get(underlying, None)
         pct_N = None
         if underlying_n_value is not None and underlying_fix_c and underlying_fix_c != 0:
             pct_N = (underlying_n_value / underlying_fix_c) * 100.0
-
-        pct_K = None
-        if pct_N is not None:
-            pct_K = 100.0 - pct_N
+        pct_K = None if pct_N is None else (100.0 - pct_N)
 
         k_rows.append({
             "name": name,
@@ -184,7 +176,7 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
             "break_even": break_even,
             "K_Value": k_value,
             "K_premium": k_premium,
-            "pct_KValue_over_N": pct_kv_over_n,
+            "pct_KValue_over_N": (k_value / n_total * 100.0) if n_total > 0 else None,
             "pct_N": None if pct_N is None else round(pct_N, 2),
             "pct_K": None if pct_K is None else round(pct_K, 2)
         })
@@ -374,7 +366,7 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-# --- 4. CALCULATION FUNCTION (UPDATED for PUT SUPPORT) -----------------------
+# --- 4. CALCULATION FUNCTION (PUT-ready) -------------------------------------
 def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any], config: Dict[str, Any]) -> Tuple[Dict[str, float], float, float]:
     """
     Calculates all core metrics. Options P/L now supports both CALL and PUT.
@@ -397,14 +389,14 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
         strike = float(option.get("strike", 0.0))
         contracts = float(option.get("contracts_or_shares", 0.0))
         premium = float(option.get("premium_paid_per_share", 0.0))
-        opt_type = normalize_option_type(option)  # --- PUT SUPPORT ---
+        opt_type = normalize_option_type(option)
 
         total_cost_basis = contracts * premium
         total_option_cost += total_cost_basis
 
         if opt_type == "put":
             intrinsic_per_share = max(0.0, strike - last_price)
-        else:  # call
+        else:
             intrinsic_per_share = max(0.0, last_price - strike)
 
         intrinsic_value = intrinsic_per_share * contracts  # sign follows position
@@ -449,7 +441,7 @@ def calculate_metrics(stock_assets: List[Dict[str, Any]], option_assets: List[Di
 
     return metrics, total_options_pl, total_option_cost
 
-# --- 5. THINGSPEAK UPDATE FUNCTION (Unchanged) ---
+# --- 5. THINGSPEAK UPDATE FUNCTION ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
