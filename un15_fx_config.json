@@ -120,7 +120,7 @@
   },
   "CLSK": {
     "Ticker": "CLSK",
-    "Fixed_Asset_Value": 2200.0,
+    "Fixed_Asset_Value": 3000.0,
     "Cash_Balan": 650.0,
     "step": 0.01,
     "filter_date": "2024-01-01 12:00:00+07:00", 
