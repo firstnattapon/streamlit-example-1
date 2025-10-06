@@ -28,9 +28,12 @@
     { "type": "option", "option_type": "call", "name": "QXO Call @ 22.60", "underlying_ticker": "QXO",  "contracts_or_shares": 100,  "premium_paid_per_share": 2.60,  "strike": 20.0 },
     { "type": "option", "option_type": "call", "name": "IBRX Call @ 3.25", "underlying_ticker": "IBRX", "contracts_or_shares": 600,  "premium_paid_per_share": 0.75,  "strike": 2.5 },
     { "type": "option", "option_type": "call", "name": "SG Call @ 12.00",  "underlying_ticker": "SG",   "contracts_or_shares": 100,  "premium_paid_per_share": 1.95,  "strike": 10.0 },
-    { "type": "option", "option_type": "call", "name": "APLS Call @ 30.20 ","underlying_ticker": "APLS","contracts_or_shares": 100,  "premium_paid_per_share": 4.2,   "strike": 26.0 },
-    { "type": "option", "option_type": "call", "name": "CLSK Call @ 12.50 ", "underlying_ticker": "CLSK", "contracts_or_shares": 200, "premium_paid_per_share": 1.49, "strike": 11.0 },
-    { "type": "option", "option_type": "call", "name": "LUNR Call @ 14.00 ", "underlying_ticker": "LUNR", "contracts_or_shares": 100, "premium_paid_per_share": 2.92, "strike": 11.0 },
+    { "type": "option", "option_type": "call", "name": "APLS Call @ 30.20","underlying_ticker": "APLS","contracts_or_shares": 100,  "premium_paid_per_share": 4.2,   "strike": 26.0 },
+    { "type": "option", "option_type": "call", "name": "CLSK Call @ 12.50", "underlying_ticker": "CLSK", "contracts_or_shares": 200, "premium_paid_per_share": 1.49, "strike": 11.0 },
+    { "type": "option", "option_type": "call", "name": "LUNR Call @ 14.00", "underlying_ticker": "LUNR", "contracts_or_shares": 100, "premium_paid_per_share": 2.92, "strike": 11.0 },
+    
+    { "type": "option", "option_type": "put", "name": "FLNC Put @ 10.89", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 3.10, "strike": 14.0 },
+    { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.21", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.78, "strike": 16.0 },
 
     { "type": "stock", "ticker": "FFWM", "reference_price": 6.88, "fix_c": 1500, "b_offset": 0.0, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field1" } },
     { "type": "stock", "ticker": "NEGG", "reference_price": 25.20, "fix_c": 500, "b_offset": 718.28, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field2" } },
