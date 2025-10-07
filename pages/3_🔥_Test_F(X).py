@@ -231,17 +231,13 @@ def display_results(
 ):
     """
     Show results; Current_Options P/L = CALL+PUT (รวม),
-    Max_Roll_Over แยก (CALL) และ (PUT) แสดงเป็นจำนวนเต็มบวก: (CALL: X) , (PUT: Y)
+    Max_Roll_Over แยกแสดงเป็น (CALL) และ (PUT) โดยแปลงเป็นค่าติดลบในวงเล็บเพื่อสื่อว่าเป็น outflow.
     """
     st.divider()
     with st.expander("📈 Results", expanded=True):
-        # แปลงเป็นจำนวนเต็มบวก (ไม่มีเครื่องหมายลบ ไม่มีทศนิยม)
-        call_roll_int = int(round(total_option_cost_calls_only))
-        put_roll_int  = int(round(total_option_cost_puts_only))
-
         metric_label = (
             f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl_all:,.2f}) "
-            f"| Max_Roll_Over: (CALL: {call_roll_int:,}) , (PUT: {put_roll_int:,})"
+            f"| Max_Roll_Over: (CALL: {-total_option_cost_calls_only:,.2f}) , (PUT: {-total_option_cost_puts_only:,.2f})"
         )
         st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
 
@@ -266,27 +262,6 @@ def display_results(
         adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
-
-    with st.expander("Show 'ln_weighted' Calculation Breakdown"):
-        st.write("ค่า `ln_weighted` คือผลรวมของการเปลี่ยนแปลงทั้งหมด (`sum of b_offset` + `sum of ln part`)")
-        ln_breakdown_data = metrics.get('ln_breakdown', [])
-        total_dynamic_contribution = 0
-        for item in ln_breakdown_data:
-            total_dynamic_contribution += item['total_contribution']
-            if item['ref_price'] > 0:
-                formula_string = (
-                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [{item['b_offset']:>7.2f} (b) + "
-                    f"{item['fix_c']} * ln( {item['live_price']:.2f} / {item['ref_price']:.2f} ) ]"
-                )
-            else:
-                formula_string = (
-                    f"{item['ticker']:<6}: {item['total_contribution']:+9.4f} = [{item['b_offset']:>7.2f} (b) + 0.00 ] "
-                    f"(Calculation skipped: ref_price is zero)"
-                )
-            st.code(formula_string, language='text')
-        st.code("-------------------------------------------------------------------------")
-        st.code(f"Total Sum (ln_weighted) = {total_dynamic_contribution:+51.4f}")
-
 
     with st.expander("Show 'ln_weighted' Calculation Breakdown"):
         st.write("ค่า `ln_weighted` คือผลรวมของการเปลี่ยนแปลงทั้งหมด (`sum of b_offset` + `sum of ln part`)")
