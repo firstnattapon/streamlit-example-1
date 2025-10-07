@@ -237,7 +237,7 @@ def display_results(
     with st.expander("📈 Results", expanded=True):
         metric_label = (
             f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl_all:,.2f}) "
-            f"| Max_Roll_Over: (CALL: {-total_option_cost_calls_only:,.2f}) , (PUT: {-total_option_cost_puts_only:,.2f})"
+            f"| Max_Roll_Over: (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f})"
         )
         st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
 
