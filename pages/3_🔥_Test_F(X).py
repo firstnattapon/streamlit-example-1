@@ -121,7 +121,7 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
 
     # Build maps for underlying lookups
     fix_c_map: Dict[str, float] = {a['ticker'].strip(): float(a.get('fix_c', 0.0)) for a in stock_assets}
-    control_total: float = sum(fix_c_map.values())  # <<< ADDED: Σ fix_c (Control)
+    control_total: float = sum(fix_c_map.values())  # Σ fix_c (Control)
     n_value_map: Dict[str, float] = {}
 
     # N breakdown per stock
@@ -143,8 +143,8 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
 
     # K breakdown per option
     k_rows = []
-    k_value_total = 0.0
-    k_premium_total = 0.0
+    k_value_total_calls_only = 0.0   # <<< NEW: sum only CALLs
+    k_premium_total = 0.0            # keep full (all types)
     for opt in option_assets:
         name = opt.get("name", "").strip()
         underlying = opt.get("underlying_ticker", "").strip()
@@ -160,10 +160,14 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         k_value = contracts * break_even
         k_premium = - contracts * premium  # show as negative cost
 
-        k_value_total += k_value
+        # Σ K_Value (Options @Break-even): CALLs only
+        if opt_type != "put":
+            k_value_total_calls_only += k_value
+
+        # keep premium total as-is (all types)
         k_premium_total += k_premium
 
-        # %N based on underlying n/fix_c*100 (skip for puts by requirement)
+        # %N / %K: skip for put
         underlying_fix_c = fix_c_map.get(underlying, 0.0)
         underlying_n_value = n_value_map.get(underlying, None)
         pct_N = None
@@ -171,9 +175,9 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         if opt_type != "put":
             if underlying_n_value is not None and underlying_fix_c and underlying_fix_c != 0:
                 pct_N = (underlying_n_value / underlying_fix_c) * 100.0
-                pct_K = 100.0 - pct_N  # keep existing behavior
+                pct_K = 100.0 - pct_N
 
-        # NEW: Current_Options P/L per row (consistent with calculate_metrics logic)
+        # Current_Options P/L per row
         s = float(current_prices.get(underlying, 0.0))
         intrinsic_per_share = max(0.0, s - strike) if opt_type == "call" else max(0.0, strike - s)
         intrinsic_total = intrinsic_per_share * contracts
@@ -196,7 +200,7 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         })
 
     ratios = {
-        "KValue_over_N": (k_value_total / n_total) if n_total > 0 else None,
+        # ใช้ N_total เทียบกับ K premium ทั้งหมดตามเดิม
         "absKpremium_over_N": (abs(k_premium_total) / n_total) if n_total > 0 else None
     }
 
@@ -204,10 +208,10 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         "stocks": stock_rows,
         "options": k_rows,
         "N_total": n_total,
-        "KValue_total": k_value_total,
+        "KValue_total": k_value_total_calls_only,  # <<< RETURN CALLs only per goal
         "Kpremium_total": k_premium_total,
         "ratios": ratios,
-        "control_total": control_total  # <<< ADDED: expose Σ fix_c
+        "control_total": control_total
     }
 
 # --- 2. UI & DISPLAY FUNCTIONS ---
@@ -215,21 +219,19 @@ def display_nk_breakdown(nk: Dict[str, Any]):
     """Show K-only breakdown (อยู่บนสุด) + totals + %N/%K columns + Current_Options P/L."""
     with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=False):
         n_total = nk.get("N_total", 0.0)
-        kv_total = nk.get("KValue_total", 0.0)
-        kp_total = nk.get("Kpremium_total", 0.0)
-        control_total = nk.get("control_total", 0.0)  # <<< ADDED
+        kv_total = nk.get("KValue_total", 0.0)   # already CALL-only
+        kp_total = nk.get("Kpremium_total", 0.0) # all types
+        control_total = nk.get("control_total", 0.0)
 
-        # Σ %N (Stocks) = (Σ N / Σ fix_c) * 100
+        # Σ %N (Stocks) = (Σ N / Σ fix_c) * 100  — ไม่เกี่ยว put อยู่แล้ว
         pct_n_stocks = (n_total / control_total * 100.0) if (control_total and control_total > 0) else None
 
-        # เปลี่ยนจาก 3 → 4 คอลัมน์ เพื่อวาง metric ใหม่
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Σ N (Stocks)", f"{n_total:,.0f}")
-        col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.0f}")
-        col3.metric("Σ K (Premium, cost)", f"{kp_total:,.0f}")  # likely negative
-        col4.metric("Σ %N (Stocks)", f"{pct_n_stocks:,.2f}%" if pct_n_stocks is not None else "-")  # <<< ADDED
+        col2.metric("Σ K_Value (Options @Break-even)", f"{kv_total:,.0f}")   # CALL-only
+        col3.metric("Σ K (Premium, cost)", f"{kp_total:,.0f}")               # all types = ภาระต้นทุนจริง
+        col4.metric("Σ %N (Stocks)", f"{pct_n_stocks:,.2f}%" if pct_n_stocks is not None else "-")
 
-        # รายละเอียดออปชัน (K) พร้อมคอลัมน์ใหม่ Current_Options P/L
         st.write("##### รายละเอียดออปชัน (K)")
         k_df = pd.DataFrame([
             {
@@ -244,15 +246,15 @@ def display_nk_breakdown(nk: Dict[str, Any]):
                 "Current_Options P/L": r.get("current_pl", None),
                 "%N (n/fix_c*100)": r.get("pct_N", None),
                 "%K (100-%N)": r.get("pct_K", None),
+                "Type": r.get("option_type", None),
             } for r in nk.get("options", [])
         ])
         st.dataframe(k_df, use_container_width=True)
 
         st.caption(
-            "หมายเหตุ: Break-even (Call) = strike + premium, (Put) = strike - premium; "
-            "K_Value ใช้ break-even เพื่อสะท้อนมูลค่าเชิงนิยาม; "
-            "`Current_Options P/L` คำนวณจาก intrinsic − cost ตามชนิดออปชัน; "
-            "`%N / %K` จะ **ไม่คำนวณ** สำหรับออปชันประเภท **put** ตามข้อกำหนด."
+            "หมายเหตุ: Metric 'Σ K_Value' ในหัวตาราง **นับเฉพาะ CALL** ตามข้อกำหนด; "
+            "ส่วน '%N/%K' จะไม่คำนวณให้ PUT; "
+            "K premium รวมทุกชนิดเพื่อสะท้อนต้นทุนจริงของพอร์ต."
         )
 
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
@@ -270,10 +272,8 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     pre_holdings = {}
 
     for ticker in sorted(list(all_tickers)):
-        # Read current widget state if exists; else fallback to initial
         ss_key_price = f"price_{ticker}"
         pre_prices[ticker] = st.session_state.get(ss_key_price, initial_data.get(ticker, {}).get('last_price', 0.0))
-        # Also render the actual widget
         label = f"ราคา_{ticker}"
         price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
         current_prices[ticker] = st.number_input(label, value=price_value, key=ss_key_price, format="%.2f")
