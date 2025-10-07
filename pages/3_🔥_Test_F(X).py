@@ -226,16 +226,23 @@ def display_results(
     options_pl_all: float,
     total_option_cost_all: float,
     total_option_cost_calls_only: float,
+    total_option_cost_puts_only: float,   # <<< NEW
     config: Dict[str, Any]
 ):
-    """Show results; Max_Roll_Over ใช้เฉพาะ CALL; Current_Options P/L ยังคงรวม CALL+PUT"""
+    """Show results; Max_Roll_Over แยก CALL/PUT; Current_Options P/L รวม CALL+PUT"""
     st.divider()
     with st.expander("📈 Results", expanded=True):
+        # คง label เดิม (อิง CALL) เพื่อไม่พัง UX ที่คุ้นชิน
         metric_label = (
             f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl_all:,.2f}) "
             f"| Max_Roll_Over: ({-total_option_cost_calls_only:,.2f})"
         )
         st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
+
+        # เพิ่มบรรทัดโชว์ CALL/PUT แยกชัด ๆ
+        c1, c2 = st.columns(2)
+        c1.metric("Max_Roll_Over (CALL)", f"({-total_option_cost_calls_only:,.2f})")
+        c2.metric("Max_Roll_Over (PUT)",  f"({-total_option_cost_puts_only:,.2f})")
 
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
@@ -297,16 +304,20 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-# --- Core calculation (UNCHANGED for P/L semantics; add calls-only cost tracker) ---
+# --- Core calculation (now tracks CALL and PUT costs separately) ---
 def calculate_metrics(
     stock_assets: List[Dict[str, Any]],
     option_assets: List[Dict[str, Any]],
     user_inputs: Dict[str, Any],
     config: Dict[str, Any]
-) -> Tuple[Dict[str, float], float, float, float]:
+) -> Tuple[Dict[str, float], float, float, float, float]:
     """
     Returns:
-      metrics, options_pl_all, total_option_cost_all, total_option_cost_calls_only
+      metrics,
+      options_pl_all,
+      total_option_cost_all,
+      total_option_cost_calls_only,
+      total_option_cost_puts_only   # NEW
     """
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
@@ -316,6 +327,7 @@ def calculate_metrics(
     options_pl_all = 0.0
     total_option_cost_all = 0.0
     total_option_cost_calls_only = 0.0
+    total_option_cost_puts_only = 0.0   # NEW
 
     for option in option_assets:
         underlying_ticker = option.get("underlying_ticker", "").strip()
@@ -329,7 +341,9 @@ def calculate_metrics(
 
         total_cost_basis = contracts * premium
         total_option_cost_all += total_cost_basis
-        if opt_type != "put":
+        if opt_type == "put":
+            total_option_cost_puts_only += total_cost_basis
+        else:
             total_option_cost_calls_only += total_cost_basis
 
         if opt_type == "put":
@@ -376,7 +390,13 @@ def calculate_metrics(
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
-    return metrics, options_pl_all, total_option_cost_all, total_option_cost_calls_only
+    return (
+        metrics,
+        options_pl_all,
+        total_option_cost_all,
+        total_option_cost_calls_only,
+        total_option_cost_puts_only   # NEW
+    )
 
 # --- ThingSpeak update ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
@@ -431,9 +451,13 @@ def main():
         pass
 
     # 1) calc
-    metrics, options_pl_all, total_option_cost_all, total_option_cost_calls_only = calculate_metrics(
-        stock_assets, option_assets, user_inputs, config
-    )
+    (
+        metrics,
+        options_pl_all,
+        total_option_cost_all,
+        total_option_cost_calls_only,
+        total_option_cost_puts_only
+    ) = calculate_metrics(stock_assets, option_assets, user_inputs, config)
 
     # 2) dynamic offset (unchanged)
     log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
@@ -441,8 +465,15 @@ def main():
     dynamic_offset = product_cost - log_pv_baseline
     config['cashflow_offset'] = dynamic_offset
 
-    # 3) display: Max_Roll_Over uses calls-only; P/L shows all
-    display_results(metrics, options_pl_all, total_option_cost_all, total_option_cost_calls_only, config)
+    # 3) display: Max_Roll_Over shows CALL & PUT separately; P/L shows all
+    display_results(
+        metrics,
+        options_pl_all,
+        total_option_cost_all,
+        total_option_cost_calls_only,
+        total_option_cost_puts_only,
+        config
+    )
 
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
