@@ -226,23 +226,20 @@ def display_results(
     options_pl_all: float,
     total_option_cost_all: float,
     total_option_cost_calls_only: float,
-    total_option_cost_puts_only: float,   # <<< NEW
+    total_option_cost_puts_only: float,
     config: Dict[str, Any]
 ):
-    """Show results; Max_Roll_Over แยก CALL/PUT; Current_Options P/L รวม CALL+PUT"""
+    """
+    Show results; Current_Options P/L = CALL+PUT (รวม),
+    Max_Roll_Over แยกแสดงเป็น (CALL) และ (PUT) โดยแปลงเป็นค่าติดลบในวงเล็บเพื่อสื่อว่าเป็น outflow.
+    """
     st.divider()
     with st.expander("📈 Results", expanded=True):
-        # คง label เดิม (อิง CALL) เพื่อไม่พัง UX ที่คุ้นชิน
         metric_label = (
             f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl_all:,.2f}) "
-            f"| Max_Roll_Over: ({-total_option_cost_calls_only:,.2f})"
+            f"| Max_Roll_Over: (CALL: {-total_option_cost_calls_only:,.2f}) , (PUT: {-total_option_cost_puts_only:,.2f})"
         )
         st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
-
-        # เพิ่มบรรทัดโชว์ CALL/PUT แยกชัด ๆ
-        c1, c2 = st.columns(2)
-        c1.metric("Max_Roll_Over (CALL)", f"({-total_option_cost_calls_only:,.2f})")
-        c2.metric("Max_Roll_Over (PUT)",  f"({-total_option_cost_puts_only:,.2f})")
 
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
@@ -304,7 +301,7 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-# --- Core calculation (now tracks CALL and PUT costs separately) ---
+# --- Core calculation (UNCHANGED semantics for P/L; now track CALL vs PUT roll-over costs) ---
 def calculate_metrics(
     stock_assets: List[Dict[str, Any]],
     option_assets: List[Dict[str, Any]],
@@ -314,10 +311,10 @@ def calculate_metrics(
     """
     Returns:
       metrics,
-      options_pl_all,
-      total_option_cost_all,
-      total_option_cost_calls_only,
-      total_option_cost_puts_only   # NEW
+      options_pl_all,                # P/L รวม CALL+PUT
+      total_option_cost_all,         # ต้นทุนรวมออปชันทั้งหมด
+      total_option_cost_calls_only,  # ต้นทุนฝั่ง CALL
+      total_option_cost_puts_only    # ต้นทุนฝั่ง PUT
     """
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
@@ -327,7 +324,7 @@ def calculate_metrics(
     options_pl_all = 0.0
     total_option_cost_all = 0.0
     total_option_cost_calls_only = 0.0
-    total_option_cost_puts_only = 0.0   # NEW
+    total_option_cost_puts_only = 0.0
 
     for option in option_assets:
         underlying_ticker = option.get("underlying_ticker", "").strip()
@@ -343,12 +340,9 @@ def calculate_metrics(
         total_option_cost_all += total_cost_basis
         if opt_type == "put":
             total_option_cost_puts_only += total_cost_basis
-        else:
-            total_option_cost_calls_only += total_cost_basis
-
-        if opt_type == "put":
             intrinsic_value = max(0.0, strike - last_price) * contracts
         else:
+            total_option_cost_calls_only += total_cost_basis
             intrinsic_value = max(0.0, last_price - strike) * contracts
 
         options_pl_all += intrinsic_value - total_cost_basis
@@ -390,13 +384,7 @@ def calculate_metrics(
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
-    return (
-        metrics,
-        options_pl_all,
-        total_option_cost_all,
-        total_option_cost_calls_only,
-        total_option_cost_puts_only   # NEW
-    )
+    return metrics, options_pl_all, total_option_cost_all, total_option_cost_calls_only, total_option_cost_puts_only
 
 # --- ThingSpeak update ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
@@ -465,7 +453,7 @@ def main():
     dynamic_offset = product_cost - log_pv_baseline
     config['cashflow_offset'] = dynamic_offset
 
-    # 3) display: Max_Roll_Over shows CALL & PUT separately; P/L shows all
+    # 3) display: Max_Roll_Over now shows CALL + PUT separately; P/L shows all
     display_results(
         metrics,
         options_pl_all,
