@@ -6,7 +6,7 @@
     "write_api_key": "OVZNYQBL57GJW5JF",
     "offset": 1237.23,
     "max_roll_over": 3678.95,
-    "filter_date_cf": "2025-10-19 12:00:00+07:00"
+    "filter_date_cf": "2025-10-01 12:00:00+07:00"
   },
   "monitor_config": {
     "filter_date": "2025-09-04 12:00:00+07:00"
