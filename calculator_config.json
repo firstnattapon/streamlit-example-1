@@ -160,6 +160,7 @@
       "production_params": {
         "t0": 12.50,
         "fix": 3700.0
+      }  
     },
     {
       "ticker": "LUNR",
