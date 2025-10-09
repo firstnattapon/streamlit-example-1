@@ -969,10 +969,17 @@ def trading_section(
     sell_calc = calc['sell']
     buy_calc = calc['buy']
 
-    # SELL — แสดง summary (UI เดิม) + สีแดงตามข้อกำหนด
-    # [CHANGE] เปลี่ยนจาก st.write(...) → st.markdown(...) พร้อมสีแดงและคง spacing 4 ช่อง
-    sell_line_html = f"<span style='color:#e53935; font-weight:600'>sell&nbsp;&nbsp;&nbsp;&nbsp;A {buy_calc[1]} P {buy_calc[0]} C {buy_calc[2]}</span>"
-    st.markdown(sell_line_html, unsafe_allow_html=True)
+    # SELL — แสดง summary (UI เดิม) ➜ เปลี่ยนเฉพาะ "สีของตัวเลข" เป็นแดง, label คงสีขาว [CHANGED]
+    sell_html = (
+        f"<span style='color:#ffffff;'>sell</span>&nbsp;&nbsp;&nbsp;&nbsp;"
+        f"<span style='color:#ffffff;'>A</span> "
+        f"<span style='color:#ff2d55;'>{buy_calc[1]}</span> "
+        f"<span style='color:#ffffff;'>P</span> "
+        f"<span style='color:#ff2d55;'>{buy_calc[0]}</span> "
+        f"<span style='color:#ffffff;'>C</span> "
+        f"<span style='color:#ff2d55;'>{buy_calc[2]}</span>"
+    )
+    st.markdown(sell_html, unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}'):
@@ -1014,7 +1021,7 @@ def trading_section(
     except Exception:
         st.warning(f"Could not retrieve price data for {ticker}.")
 
-    # BUY — แสดง summary (UI เดิม) (คงเดิม ไม่แตะต้อง)
+    # BUY — แสดง summary (UI เดิม)  ✅ ไม่แตะต้องตามสเปค
     col4, col5, col6 = st.columns(3)
     st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     if col6.checkbox(f'buy_match_{ticker}'):
