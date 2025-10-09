@@ -969,13 +969,14 @@ def trading_section(
     sell_calc = calc['sell']
     buy_calc = calc['buy']
 
+    # SELL — สีแดง + เว้น 2 ช่องหลัง 'sell' + ใส่ &nbsp; หลัง A/P/C + ย่อตัวเลข
     sell_html = (
         f"<span style='color:#ffffff;'>sell</span>&nbsp;&nbsp;"
-        f"<span style='color:#ffffff;'>A</span>&nbsp;"
+        f"<span style='color:#ffffff;'>A</span>&nbsp;&nbsp;"
         f"<span style='color:#ff2d55; font-size:0.9em'>{buy_calc[1]}</span> "
-        f"<span style='color:#ffffff;'>P</span>&nbsp;"
+        f"<span style='color:#ffffff;'>P</span>&nbsp;&nbsp;"
         f"<span style='color:#ff2d55; font-size:0.9em'>{buy_calc[0]}</span> "
-        f"<span style='color:#ffffff;'>C</span>&nbsp;"
+        f"<span style='color:#ffffff;'>C</span>&nbsp;&nbsp;"
         f"<span style='color:#ff2d55; font-size:0.9em'>{buy_calc[2]}</span>"
     )
     st.markdown(sell_html, unsafe_allow_html=True)
