@@ -1,10 +1,9 @@
 # 📈_Monitor.py  — Pro Optimistic UI (2-phase queue) + Min_Rebalance (clean UI)
 # ------------------------------------------------------------
-# รอบนี้เพิ่ม:
-# - แสดง diff ต่อท้ายบรรทัดสรุปในหน้า Monitor แบบ " | diff"
-#   (ใช้ tooltip แสดงค่าจริง Diff เพื่อคงความเรียบ: <span title="Diff=...">diff</span>)
-# - แก้ฟิลเตอร์ "Filter Sell Tickers" ให้ถูกต้อง
-# - ไม่แตะตรรกะคำนวณ/Optimistic UI/ThingSpeak เดิม
+# เปลี่ยนแปลงรอบนี้:
+# - คง input Min_Rebalance และบรรทัดสรุป: Price | Value | P/L (vs fix_c) | Min ({fix_c*Min_Rebalance} vs {Diff}) | P/L
+# - ลบข้อความคอมเมนต์ยาว/โซนไม่เทรด (st.caption) ออกให้ “เรียบ ๆ”
+# - ไม่แตะพฤติกรรม Optimistic UI/ThingSpeak/ตรรกะคำนวณเดิม
 # ------------------------------------------------------------
 
 import streamlit as st
@@ -153,7 +152,7 @@ def clear_all_caches() -> None:
         '_ts_last_update_at',
         '_pending_ts_update', '_ts_entry_ids',
         '_widget_shadow',
-        'min_rebalance',
+        'min_rebalance',  # ✅ preserve
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -783,6 +782,11 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
     asset_inputs[ticker] = (base_value * delta_factor) + real_val
     - real_val = ค่าหุ้นจริง (ค่าที่อ่าน/เขียน ThingSpeak)
     - base_value * delta_factor = exposure เสมือนของออปชัน
+
+    ✅ ทำให้ Value/P&L optimistic และกัน KeyError:
+       - อ่านค่า widget แบบปลอดภัย: st.session_state.get(key, last_val)
+       - ถ้ามี override: บังคับ init key เมื่อ key ยังไม่ถูกสร้าง หรือเมื่อค่าจริงเปลี่ยน
+       - ใช้ _widget_shadow เพื่อไม่ทับค่าที่ผู้ใช้กำลังพิมพ์
     """
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
@@ -873,7 +877,7 @@ def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float
 
 def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel], last_assets: Dict[str, float]) -> None:
     """
-    ปุ่มใน expander ใช้เส้นทางเดียวกับ GO_SELL/GO_BUY:
+    ทำให้ปุ่มใน expander ใช้เส้นทางเดียวกับ GO_SELL/GO_BUY:
     - เฟสที่ 1: _optimistic_apply_asset() → override + เข้าคิว
     - เฟสที่ 2: process_pending_updates() (รอบถัดไป)
     """
@@ -957,7 +961,7 @@ def trading_section(
             except Exception as e:
                 st.error(f"SELL {ticker} error: {e}")
 
-    # Price & P/L — บรรทัดเดียวแบบเรียบ + diff ต่อท้าย (tooltip แสดงค่า)
+    # Price & P/L — บรรทัดเดียวแบบเรียบ
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -967,7 +971,6 @@ def trading_section(
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
 
             trade_only_when = float(fix_value) * float(min_rebalance)  # ใช้แสดงใน "Min (... vs ...)"
-            diff_label_html = f"<span title='Diff={float(diff):,.0f}'>diff</span>"
 
             st.markdown(
                 (
@@ -975,11 +978,11 @@ def trading_section(
                     f"Value: **{pv:,.2f}** | "
                     f"P/L (vs {fix_value:,.0f}) | "
                     f"Min ({trade_only_when:,.0f} vs {float(diff):,.0f}) | "
-                    f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span> | "
-                    f"{diff_label_html}"
+                    f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>"
                 ),
                 unsafe_allow_html=True
             )
+            # ❌ ไม่มี st.caption เพิ่มเติม
 
         else:
             st.info(f"Price data for {ticker} is currently unavailable.")
@@ -1165,8 +1168,6 @@ with tab1:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_tickers]
     elif selected_option == "Filter Sell Tickers":
         sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]  # ✅ แก้ให้ถูกต้อง
-    else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
     calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
@@ -1179,7 +1180,7 @@ with tab1:
             'buy': buy(asset_value, fix_c=fix_c, Diff=float(x_2)),
         }
 
-    for config in configs_to_display:
+    for config in (configs_to_display if selected_option != "" else ASSET_CONFIGS):
         ticker = config['ticker']
         df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
         asset_last = float(last_assets_all.get(ticker, 0.0))
