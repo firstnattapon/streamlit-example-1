@@ -1012,7 +1012,7 @@ def trading_section(
                     f"Value: **{pv:,.2f}** | "
                     f"P/L (vs {fix_value:,.0f}) | "
                     f"Min ({trade_only_when:,.0f} vs {float(diff):,.0f}) | "
-                    f"<span style='color:{pl_color}; font-weight:thin;'>{pl_value:,.2f}</span>"
+                    f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>"
                 ),
                 unsafe_allow_html=True
             )
