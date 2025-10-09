@@ -5,6 +5,7 @@
 # - get_cached_price() มี fallback เป็นชั้น ๆ: fast_info → info → last close [SIMPLE/STABLE]
 # - แก้ bug ตัวกรอง "Filter Sell Tickers" ให้กรองได้จริง                [SIMPLE/STABLE]
 # - เก็บโครงสร้าง Optimistic UI / rate-limit / คำนวณเดิมทุกประการ
+# - เพิ่ม Optimistic UI ให้ net_str ผ่านคิวงาน BUY/SELL                [OPT-NET]
 # ------------------------------------------------------------
 
 import streamlit as st
@@ -790,6 +791,46 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results, 'trade_stats': trade_stats_results}
 
 # ---------------------------------------------------------------------------------
+# [OPT-NET] — Pending delta → optimistic net_str
+# ---------------------------------------------------------------------------------
+def get_pending_net_delta_for_ticker(ticker: str) -> int:
+    """รวม delta net จากคิวงาน BUY/SELL ที่ยัง pending สำหรับ ticker นั้น ๆ"""
+    q = st.session_state.get('_pending_ts_update', [])
+    delta = 0
+    for job in q:
+        if job.get('ticker') != ticker:
+            continue
+        op = str(job.get('op', '')).upper()
+        if op == 'BUY':
+            delta += 1
+        elif op == 'SELL':
+            delta -= 1
+        else:
+            # เผื่อกรณีไม่มี op ให้เทียบค่า
+            try:
+                nv = float(job.get('new_value', 0.0))
+                pv = float(job.get('prev_value', 0.0))
+                if nv > pv:
+                    delta += 1
+                elif nv < pv:
+                    delta -= 1
+            except Exception:
+                pass
+    return int(delta)
+
+def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
+    """คืนสตริง net พร้อมแสดงผล optimistic (ถ้ามี) เช่น '2  →  3  (⏳+1)' """
+    try:
+        pend = get_pending_net_delta_for_ticker(ticker)
+        if pend == 0:
+            return str(int(base_net))
+        sign = '+' if pend > 0 else ''
+        preview = int(base_net) + int(pend)
+        return f"{int(base_net)}  →  {preview}  (⏳{sign}{int(pend)})"
+    except Exception:
+        return str(int(base_net))
+
+# ---------------------------------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------------------------------
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
@@ -1122,7 +1163,11 @@ with tab1:
                 pass
 
         ticker_actions[ticker] = final_action_val
-        net_str = trade_nets_all.get(ticker, 0)
+
+        # --------- [OPT-NET] ใช้ net แบบ optimistic ----------
+        base_net = int(trade_nets_all.get(ticker, 0))
+        net_str = make_net_str_with_optimism(ticker, base_net)
+
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
 
     all_tickers = [c['ticker'] for c in ASSET_CONFIGS]
