@@ -1101,7 +1101,7 @@ with tab2:
 
     st.write("---")
     x_2 = st.sidebar.number_input('Diff', step=1, value=60)
-    st.write("---")
+    # st.write("---")
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
 
     st.write("_____")
