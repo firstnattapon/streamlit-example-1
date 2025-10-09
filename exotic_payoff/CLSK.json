@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "exported_at": "2025-10-09T06:08:45.006Z",
+  "params": {
+    "x0_1": 12.5,
+    "x0_2": 13.22,
+    "x1Range": [
+      5,
+      25
+    ],
+    "delta1": 0.2,
+    "delta2": 1,
+    "constant1": 5000,
+    "constant2": 1500,
+    "refConst": 2200,
+    "b1": -157,
+    "b2": 0,
+    "autoRolloverB1": false,
+    "autoRolloverB2": false,
+    "b1Base": 0,
+    "b2Base": 0,
+    "includePremium": false,
+    "callContracts": 100,
+    "putContracts": 200,
+    "premiumCall": 2.6,
+    "premiumPut": 2.78
+  },
+  "toggles": {
+    "showY1": false,
+    "showY2": false,
+    "showY3": true,
+    "showY4": false,
+    "showY5": true,
+    "showY6": true,
+    "showY7": false,
+    "showY8": false,
+    "showY9": true
+  }
+}
