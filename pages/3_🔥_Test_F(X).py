@@ -1,12 +1,9 @@
-# 📈_Monitor.py  — Pro Optimistic UI (2-phase queue) + Min_Rebalance comment
+# 📈_Monitor.py  — Pro Optimistic UI (2-phase queue) + Min_Rebalance (clean UI)
 # ------------------------------------------------------------
-# สิ่งที่เพิ่ม/เปลี่ยนหลัก ๆ:
-# 1) เพิ่ม input: Min_Rebalance (ค่าแนะนำเริ่มต้น 0.04) วางคู่ nex_day ในแท็บ ⚙️ Controls
-# 2) เปลี่ยนสตริงสรุปผลหน้า Monitor:
-#    Price | Value | P/L (vs fix_c) | Min ({เทรดเฉพาะเมื่อ} vs {diff}) | P/L
-#    โดย {เทรดเฉพาะเมื่อ} = fix_c * Min_Rebalance (คอมเมนต์เชิงหลักการ, ไม่แตะตรรกะเทรด)
-# 3) แสดงคอมเมนต์ “โซนไม่เทรด” ใต้ผล เมื่อ |P/L| < Min(เทรดเฉพาะเมื่อ, Diff)
-# 4) ไม่แตะพฤติกรรม Optimistic UI/ThingSpeak/คิวเดิม
+# เปลี่ยนแปลงรอบนี้:
+# - คง input Min_Rebalance และบรรทัดสรุป: Price | Value | P/L (vs fix_c) | Min ({fix_c*Min_Rebalance} vs {Diff}) | P/L
+# - ลบข้อความคอมเมนต์ยาว/โซนไม่เทรด (st.caption) ออกให้ “เรียบ ๆ”
+# - ไม่แตะพฤติกรรม Optimistic UI/ThingSpeak/ตรรกะคำนวณเดิม
 # ------------------------------------------------------------
 
 import streamlit as st
@@ -921,8 +918,8 @@ def trading_section(
     nex: int,
     Nex_day_sell: int,
     clients: Dict[int, thingspeak.Channel],
-    diff: float,                 # ✅ ใหม่: Diff ที่ผู้ใช้ตั้ง
-    min_rebalance: float         # ✅ ใหม่: Min_Rebalance จาก Controls
+    diff: float,                 # Diff ที่ผู้ใช้ตั้ง
+    min_rebalance: float         # Min_Rebalance จาก Controls
 ) -> None:
     ticker = config['ticker']
     asset_conf = config['asset_field']
@@ -964,7 +961,7 @@ def trading_section(
             except Exception as e:
                 st.error(f"SELL {ticker} error: {e}")
 
-    # Price & P/L + คอมเมนต์ "ไม่เทรด"
+    # Price & P/L — บรรทัดเดียวแบบเรียบ
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -973,11 +970,8 @@ def trading_section(
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
 
-            # ✅ คอมเมนต์เชิงหลักการ
-            trade_only_when = float(fix_value) * float(min_rebalance)  # e.g. 5000*0.04 = 200
-            min_gate = min(trade_only_when, float(diff))
+            trade_only_when = float(fix_value) * float(min_rebalance)  # ใช้แสดงใน "Min (... vs ...)"
 
-            # บรรทัดสรุปตามฟอร์แมตที่ผู้ใช้ต้องการ
             st.markdown(
                 (
                     f"Price: **{current_price:,.3f}** | "
@@ -988,14 +982,7 @@ def trading_section(
                 ),
                 unsafe_allow_html=True
             )
-
-            # แปะหมายเหตุ “ไม่เทรด” (คอมเมนต์เท่านั้น ไม่แตะตรรกะ)
-            st.caption(
-                f"เทรดเฉพาะเมื่อ  =  {trade_only_when:,.0f}  =  ln( pt1 / pt0 ) >  (P/L * ลิมิตโซน)  "
-                f"| ลิมิตโซน (Min_Rebalance) = {min_rebalance:.2%}  |  diff = {float(diff):,.0f}"
-            )
-            if abs(pl_value) < min_gate:
-                st.caption(f"🧊 โซน “ไม่เทรด” : |P/L| < Min({trade_only_when:,.0f} vs {float(diff):,.0f})")
+            # ❌ ไม่มี st.caption เพิ่มเติม
 
         else:
             st.info(f"Price data for {ticker} is currently unavailable.")
@@ -1047,7 +1034,7 @@ if '_ts_entry_ids' not in st.session_state:
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
-    st.session_state['min_rebalance'] = 0.04  # ✅ default
+    st.session_state['min_rebalance'] = 0.04  # default
 
 # Bootstrap selection BEFORE widgets (สำหรับ fast focus)
 pending = st.session_state.pop("_pending_select_key", None)
@@ -1077,7 +1064,7 @@ if st.session_state.get('_last_assets_overrides'):
 trade_nets_all = all_data['nets']
 trade_stats_all = all_data['trade_stats']
 
-# ✅ ประมวลผลคิว (เฟสที่ 2) — ยิง API/rollback ที่นี่
+# ✅ ประมวลผลคิว (เฟสที่ 2)
 process_pending_updates(min_interval=16.0, max_wait=8.0)
 
 # Tabs
@@ -1109,7 +1096,7 @@ with tab2:
             'Min_Rebalance',
             min_value=0.0, max_value=1.0,
             step=0.01, value=float(st.session_state.get('min_rebalance', 0.04)),
-            help="ลิมิตโซนคอมเมนต์สำหรับ 'ไม่เทรด' (เช่น 0.04 = 4%)"
+            help="ลิมิตโซนสำหรับคอมโพเนนต์ Min ในบรรทัด P/L (เช่น 0.04 = 4%)"
         )
 
     st.write("---")
@@ -1181,8 +1168,6 @@ with tab1:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_tickers]
     elif selected_option == "Filter Sell Tickers":
         sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]
-    else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
     calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
@@ -1195,7 +1180,7 @@ with tab1:
             'buy': buy(asset_value, fix_c=fix_c, Diff=float(x_2)),
         }
 
-    for config in configs_to_display:
+    for config in (configs_to_display if selected_option != "" else ASSET_CONFIGS):
         ticker = config['ticker']
         df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
         asset_last = float(last_assets_all.get(ticker, 0.0))
@@ -1214,8 +1199,8 @@ with tab1:
             nex=st.session_state.nex,
             Nex_day_sell=st.session_state.Nex_day_sell,
             clients=THINGSPEAK_CLIENTS,
-            diff=float(x_2),                                  # ✅ ส่ง Diff
-            min_rebalance=float(st.session_state['min_rebalance'])  # ✅ ส่ง Min_Rebalance
+            diff=float(x_2),
+            min_rebalance=float(st.session_state['min_rebalance'])
         )
 
         with st.expander("Show Raw Data Action"):
