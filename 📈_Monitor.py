@@ -973,11 +973,11 @@ def trading_section(
     sell_html = (
         f"<span style='color:#ffffff;'>sell</span>&nbsp;&nbsp;"
         f"<span style='color:#ffffff;'>A</span>&nbsp;"
-        f"<span style='color:#fbb; font-size:0.9em; font-weight:500'>{buy_calc[1]}</span> "
+        f"<span style='color:#fbb; font-size:0.9em; font-weight:600'>{buy_calc[1]}</span> "
         f"<span style='color:#ffffff;'>P</span>&nbsp;"
-        f"<span style='color:#fbb; font-size:0.9em; font-weight:500'>{buy_calc[0]}</span> "
+        f"<span style='color:#fbb; font-size:0.9em; font-weight:600'>{buy_calc[0]}</span> "
         f"<span style='color:#ffffff;'>C</span>&nbsp;"
-        f"<span style='color:#fbb; font-size:0.9em; font-weight:500'>{buy_calc[2]}</span>"
+        f"<span style='color:#fbb; font-size:0.9em; font-weight:600'>{buy_calc[2]}</span>"
     )
     st.markdown(sell_html, unsafe_allow_html=True)
 
