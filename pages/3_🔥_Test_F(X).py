@@ -971,13 +971,10 @@ def trading_section(
 
     # SELL — แสดง summary (UI เดิม) ➜ เปลี่ยนเฉพาะ "สีของตัวเลข" เป็นแดง, label คงสีขาว [CHANGED]
     sell_html = (
-        f"<span style='color:#ffffff;'>sell</span>&nbsp;&nbsp;&nbsp;&nbsp;"
-        f"<span style='color:#ffffff;'>A</span> "
-        f"<span style='color:#ff2d55;'>{buy_calc[1]}</span> "
-        f"<span style='color:#ffffff;'>P</span> "
-        f"<span style='color:#ff2d55;'>{buy_calc[0]}</span> "
-        f"<span style='color:#ffffff;'>C</span> "
-        f"<span style='color:#ff2d55;'>{buy_calc[2]}</span>"
+        f"sell&nbsp;&nbsp;"
+        f"A <span style='font-size:0.9em'>{buy_calc[1]}</span> "
+        f"P <span style='font-size:0.9em'>{buy_calc[0]}</span> "
+        f"C <span style='font-size:0.9em'>{buy_calc[2]}</span>"
     )
     st.markdown(sell_html, unsafe_allow_html=True)
 
