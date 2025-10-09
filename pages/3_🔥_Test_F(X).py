@@ -172,7 +172,7 @@ def rerun_keep_selection(ticker: str) -> None:
 # Calc Utils (เดิม)
 # ---------------------------------------------------------------------------------
 @lru_cache(maxsize=128)
-def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
+def sell(asset: float, fix_c: float = 1500, : float = 60) -> Tuple[float, int, float]:
     if asset == 0:
         return 0.0, 0, 0.0
     unit_price = round((fix_c - Diff) / asset, 2)
@@ -1097,7 +1097,7 @@ with tab2:
         )
 
     st.write("---")
-    x_2 = st.number_input('Diff', step=1, value=60)
+    x_2 = st.sidebar.number_input('Diff', step=1, value=60)
     st.write("---")
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
 
