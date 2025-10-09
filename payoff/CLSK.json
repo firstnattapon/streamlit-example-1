@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "exported_at": "2025-10-09T04:58:02.720Z",
+  "exported_at": "2025-10-09T06:08:45.006Z",
   "params": {
     "x0_1": 12.5,
     "x0_2": 13.22,
@@ -10,10 +10,10 @@
     ],
     "delta1": 0.2,
     "delta2": 1,
-    "constant1": 3700,
+    "constant1": 5000,
     "constant2": 1500,
     "refConst": 2200,
-    "b1": -84.00328517292732,
+    "b1": -157,
     "b2": 0,
     "autoRolloverB1": false,
     "autoRolloverB2": false,
@@ -21,7 +21,7 @@
     "b2Base": 0,
     "includePremium": false,
     "callContracts": 100,
-    "putContracts": 100,
+    "putContracts": 200,
     "premiumCall": 2.6,
     "premiumPut": 2.78
   },
