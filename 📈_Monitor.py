@@ -969,8 +969,18 @@ def trading_section(
     sell_calc = calc['sell']
     buy_calc = calc['buy']
 
-    # SELL — แสดง summary (UI เดิม)
-    st.write('sell', '    ', 'A', buy_calc[1], 'P', buy_calc[0], 'C', buy_calc[2])
+    # SELL — สีแดง + เว้น 2 ช่องหลัง 'sell' + ใส่ &nbsp; หลัง A/P/C + ย่อตัวเลข
+    sell_html = (
+        f"<span style='color:#ffffff;'>sell</span>&nbsp;&nbsp;"
+        f"<span style='color:#ffffff;'>A</span>&nbsp;&nbsp;"
+        f"<span style='color:#ff2d55; font-size:0.9em'>{buy_calc[1]}</span> "
+        f"<span style='color:#ffffff;'>P</span>&nbsp;&nbsp;"
+        f"<span style='color:#ff2d55; font-size:0.9em'>{buy_calc[0]}</span> "
+        f"<span style='color:#ffffff;'>C</span>&nbsp;&nbsp;"
+        f"<span style='color:#ff2d55; font-size:0.9em'>{buy_calc[2]}</span>"
+    )
+    st.markdown(sell_html, unsafe_allow_html=True)
+
     col1, col2, col3 = st.columns(3)
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
@@ -1011,7 +1021,7 @@ def trading_section(
     except Exception:
         st.warning(f"Could not retrieve price data for {ticker}.")
 
-    # BUY — แสดง summary (UI เดิม)
+    # BUY — แสดง summary (UI เดิม)  ✅ ไม่แตะต้องตามสเปค
     col4, col5, col6 = st.columns(3)
     st.write('buy', '   ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     if col6.checkbox(f'buy_match_{ticker}'):
