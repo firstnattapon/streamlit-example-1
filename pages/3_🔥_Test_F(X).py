@@ -1,10 +1,11 @@
 # 📈_Monitor.py  — Pro Optimistic UI (2-phase queue) + Min_Rebalance (clean UI)
 # ------------------------------------------------------------
-# รอบนี้เพิ่ม:
-# - แสดง diff ต่อท้ายบรรทัดสรุปในหน้า Monitor แบบ " | diff"
-#   (ใช้ tooltip แสดงค่าจริง Diff เพื่อคงความเรียบ: <span title="Diff=...">diff</span>)
-# - แก้ฟิลเตอร์ "Filter Sell Tickers" ให้ถูกต้อง
-# - ไม่แตะตรรกะคำนวณ/Optimistic UI/ThingSpeak เดิม
+# เปลี่ยนแปลงรอบนี้:
+# - 🔧 ย้าย Input_Diff (global) มาไว้แท็บ 📈 Monitor (ขวาบน) — st.session_state['global_diff']
+# - 🔧 ลบ Diff ออกจากแท็บ ⚙️ Controls (ตัด x_2 เดิม)
+# - 🔧 บรรทัดสรุปใน Monitor ต่อท้าย " | {Input_Diff}" + โชว์ค่า Diff ชิดขวาในคอลัมน์เดียวกับ sell_match_*
+# - คง input Min_Rebalance และบรรทัดสรุป: Price | Value | P/L (vs fix_c) | Min ({fix_c*Min_Rebalance} vs {Diff}) | P/L
+# - ไม่แตะพฤติกรรม Optimistic UI/ThingSpeak/ตรรกะคำนวณเดิม
 # ------------------------------------------------------------
 
 import streamlit as st
@@ -153,7 +154,8 @@ def clear_all_caches() -> None:
         '_ts_last_update_at',
         '_pending_ts_update', '_ts_entry_ids',
         '_widget_shadow',
-        'min_rebalance',
+        'min_rebalance',  # ✅ preserve
+        'global_diff',    # 🔧 preserve global diff
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -162,7 +164,6 @@ def clear_all_caches() -> None:
             except Exception:
                 pass
     st.success("🗑️ Data caches cleared! UI state preserved.")
-
 
 def rerun_keep_selection(ticker: str) -> None:
     st.session_state["_pending_select_key"] = ticker
@@ -179,7 +180,6 @@ def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, in
     adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
     total = round(asset * unit_price + adjust_qty * unit_price, 2)
     return unit_price, adjust_qty, total
-
 
 @lru_cache(maxsize=128)
 def buy(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
@@ -201,7 +201,6 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_history_df_max_close_bkk(ticker: str) -> pd.DataFrame:
     df = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
@@ -211,12 +210,10 @@ def get_history_df_max_close_bkk(ticker: str) -> pd.DataFrame:
         df.index = df.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
     return df
 
-
 @st.cache_data(ttl=60, show_spinner=False)
 def get_current_ny_date() -> datetime.date:
     ny_tz = pytz.timezone('America/New_York')
     return datetime.datetime.now(ny_tz).date()
-
 
 def _previous_weekday(d: datetime.date) -> datetime.date:
     wd = d.weekday()
@@ -226,7 +223,6 @@ def _previous_weekday(d: datetime.date) -> datetime.date:
         return d - datetime.timedelta(days=2)
     else:
         return d - datetime.timedelta(days=1)
-
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_latest_us_premarket_open_bkk() -> datetime.datetime:
@@ -263,7 +259,6 @@ def _field_number(field_value) -> Optional[int]:
     m = re.search(r'(\d+)', str(field_value))
     return int(m.group(1)) if m else None
 
-
 def _http_get_json(url: str, params: Dict) -> Dict:
     try:
         full = f"{url}?{urlencode(params)}" if params else url
@@ -272,7 +267,6 @@ def _http_get_json(url: str, params: Dict) -> Dict:
             return json.loads(payload)
     except Exception:
         return {}
-
 
 def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: float = 5.0) -> str:
     """อัปเดต ThingSpeak ผ่าน HTTP GET; คืนค่า entry_id (string) หรือ '0' ถ้าล้มเหลว"""
@@ -291,7 +285,6 @@ def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: 
 
 def _now_ts() -> float:
     return time.time()
-
 
 def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.0, max_wait: float = 8.0) -> Tuple[bool, float]:
     """
@@ -319,16 +312,13 @@ def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.
     else:
         return False, remaining
 
-
 # ---------------------------------------------------------------------------------
 # ✅ Optimistic queue: apply & process (ใหม่)
 # ---------------------------------------------------------------------------------
 
 def _optimistic_apply_asset(*, ticker: str, new_value: float, prev_value: float, asset_conf: Dict, op_label: str = "SET") -> None:
     """เฟสที่ 1: อัปเดต UI ทันที + เข้าคิว API"""
-    # 1) override ค่าจอทันที
     st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(new_value)
-    # 2) เข้าคิว (เก็บข้อมูลเพียงพอให้ processor ยิง API เองได้)
     st.session_state.setdefault('_pending_ts_update', []).append({
         'ticker': ticker,
         'channel_id': int(asset_conf['channel_id']),
@@ -339,12 +329,10 @@ def _optimistic_apply_asset(*, ticker: str, new_value: float, prev_value: float,
         'op': str(op_label),
         'queued_at': _now_ts(),
     })
-    # 3) UX: ให้จอรีเฟรชเร็วและโฟกัสที่ ticker ที่เพิ่งกด
     st.session_state['_cache_bump'] = st.session_state.get('_cache_bump', 0) + 1
     st.session_state["_pending_select_key"] = ticker
     st.session_state["_skip_refresh_on_rerun"] = True
     st.rerun()
-
 
 def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -> None:
     """เฟสที่ 2: ประมวลผลคิว → ยิง API; สำเร็จ=คง override, ล้มเหลว=rollback"""
@@ -364,7 +352,6 @@ def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -
 
         if not write_key:
             st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน — rollback แล้ว")
-            # rollback ทันที
             st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(prev_val)
             continue
 
@@ -374,24 +361,19 @@ def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -
             remaining.append(job)
             continue
 
-        # ยิง API + retry สั้น ๆ
         resp = ts_update_via_http(write_key, field_name, new_val, timeout_sec=5.0)
         if str(resp).strip() == "0":
             time.sleep(1.8)
             resp = ts_update_via_http(write_key, field_name, new_val, timeout_sec=5.0)
 
         if str(resp).strip() == "0":
-            # ล้มเหลว → rollback
             st.error(f"[{ticker}] {op} ล้มเหลว (resp=0) — rollback เป็น {prev_val}")
             st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(prev_val)
         else:
-            # สำเร็จ
             st.sidebar.success(f"[{ticker}] {op} สำเร็จ (entry #{resp})")
             st.session_state.setdefault('_ts_entry_ids', {}).setdefault(ticker, []).append(resp)
             st.session_state.setdefault('_ts_last_update_at', {})[channel_id] = _now_ts()
-            # คง override ตาม new_val ไว้ ไม่ต้องทำอะไรเพิ่ม
 
-    # อัปเดตคิว (เหลือเฉพาะงานที่ยังรอเวลา)
     st.session_state['_pending_ts_update'] = remaining
 
 # ---------------------------------------------------------------------------------
@@ -468,7 +450,6 @@ def fetch_net_trades_since(asset_field_conf: Dict, window_start_bkk_iso: str, ca
         return int(buys - sells)
     except Exception:
         return 0
-
 
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
@@ -569,7 +550,6 @@ def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso:
         )
     except Exception:
         return dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
-
 
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
@@ -779,10 +759,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
     """
-    เป้าหมาย: รักษา UI เดิม แต่ 'ค่าที่ส่งเข้าโมเดล' จะถูกปรับเป็น Delta-equivalent
-    asset_inputs[ticker] = (base_value * delta_factor) + real_val
-    - real_val = ค่าหุ้นจริง (ค่าที่อ่าน/เขียน ThingSpeak)
-    - base_value * delta_factor = exposure เสมือนของออปชัน
+    รักษา UI เดิม แต่ 'ค่าที่ส่งเข้าโมเดล' จะถูกปรับเป็น Delta-equivalent
     """
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
@@ -807,7 +784,6 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                 display_label = raw_label[:split_pos].strip()
                 base_help = raw_label[split_pos:].strip()
 
-            # Δ-scaling
             try:
                 delta_factor = float(opt.get('delta_factor', 1.0)) if opt else 1.0
             except Exception:
@@ -820,7 +796,6 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                 effective_option = option_base * delta_factor
                 key_name = f"input_{ticker}_real"
 
-                # --- Optimistic sync ---
                 if ticker in overrides:
                     if (key_name not in st.session_state) or (abs(shadow.get(key_name, float('nan')) - last_val) > 1e-12):
                         st.session_state[key_name] = float(last_val)
@@ -863,20 +838,13 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
 
     return asset_inputs
 
-
-
 def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float = 10.0):
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
         fut = ex.submit(client.update, payload)
         return fut.result(timeout=timeout_sec)
 
-
 def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel], last_assets: Dict[str, float]) -> None:
-    """
-    ปุ่มใน expander ใช้เส้นทางเดียวกับ GO_SELL/GO_BUY:
-    - เฟสที่ 1: _optimistic_apply_asset() → override + เข้าคิว
-    - เฟสที่ 2: process_pending_updates() (รอบถัดไป)
-    """
+    """Expander ปุ่มอัปเดต ใช้เส้นทางเดียวกับ GO_SELL/GO_BUY ผ่านคิว Optimistic"""
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
             ticker = config['ticker']
@@ -904,7 +872,6 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingsp
                             op_label="SET"
                         )
 
-
 def trading_section(
     config: Dict,
     asset_val: float,
@@ -914,7 +881,7 @@ def trading_section(
     nex: int,
     Nex_day_sell: int,
     clients: Dict[int, thingspeak.Channel],
-    diff: float,                 # Diff ที่ผู้ใช้ตั้ง
+    diff: float,                 # 🔧 ใช้ global diff
     min_rebalance: float         # Min_Rebalance จาก Controls
 ) -> None:
     ticker = config['ticker']
@@ -957,7 +924,7 @@ def trading_section(
             except Exception as e:
                 st.error(f"SELL {ticker} error: {e}")
 
-    # Price & P/L — บรรทัดเดียวแบบเรียบ + diff ต่อท้าย (tooltip แสดงค่า)
+    # Price & P/L — บรรทัดเดียวแบบเรียบ + ต่อท้ายค่า Diff
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -966,21 +933,25 @@ def trading_section(
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
 
-            trade_only_when = float(fix_value) * float(min_rebalance)  # ใช้แสดงใน "Min (... vs ...)"
-            diff_label_html = f"<span title='Diff={float(diff):,.0f}'>diff</span>"
+            trade_only_when = float(fix_value) * float(min_rebalance)
 
+            # 🔧 ต่อท้ายค่า Diff ในบรรทัดสรุป
             st.markdown(
                 (
                     f"Price: **{current_price:,.3f}** | "
                     f"Value: **{pv:,.2f}** | "
                     f"P/L (vs {fix_value:,.0f}) | "
                     f"Min ({trade_only_when:,.0f} vs {float(diff):,.0f}) | "
-                    f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span> | "
-                    f"{diff_label_html}"
+                    f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>"
+                    f" | <strong>{float(diff):,.0f}</strong>"
                 ),
                 unsafe_allow_html=True
             )
-
+            # 🔧 ชิดขวาในคอลัมน์เดียวกับ sell_match_*
+            col3.markdown(
+                f"<div style='text-align:right; opacity:0.85'>Diff:&nbsp;<strong>{float(diff):,.0f}</strong></div>",
+                unsafe_allow_html=True
+            )
         else:
             st.info(f"Price data for {ticker} is currently unavailable.")
     except Exception:
@@ -1032,6 +1003,9 @@ if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
     st.session_state['min_rebalance'] = 0.04  # default
+# 🔧 global diff state
+if 'global_diff' not in st.session_state:
+    st.session_state['global_diff'] = 60.0
 
 # Bootstrap selection BEFORE widgets (สำหรับ fast focus)
 pending = st.session_state.pop("_pending_select_key", None)
@@ -1097,8 +1071,10 @@ with tab2:
         )
 
     st.write("---")
-    x_2 = st.number_input('Diff', step=1, value=60)
-    st.write("---")
+    # 🔥 ลบ Diff ออก — เดิมคือ:
+    # x_2 = st.number_input('Diff', step=1, value=60)
+    # st.write("---")
+    # 🔧 คงส่วนรับค่า assets เหมือนเดิม
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
 
     st.write("_____")
@@ -1107,7 +1083,18 @@ with tab2:
         render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS, last_assets_all)
 
 with tab1:
+    # 🔧 Global Input_Diff อยู่ Monitor (ขวาบน)
+    top_left, top_right = st.columns([3, 1])
+    with top_right:
+        st.session_state['global_diff'] = st.number_input(
+            'Input_Diff',
+            step=1, value=float(st.session_state.get('global_diff', 60.0)),
+            key='global_diff',
+            help="ระยะห่างราคาใช้คำนวณหน่วย A/P/C และแสดงในบรรทัดสรุป (Global)"
+        )
+
     current_ny_date = get_current_ny_date()
+    diff_value = float(st.session_state.get('global_diff', 60.0))  # 🔧 ใช้ค่านี้ทุกที่
 
     selectbox_labels: Dict[str, str] = {}
     ticker_actions: Dict[str, Optional[int]] = {}
@@ -1137,6 +1124,7 @@ with tab1:
 
     all_tickers = [c['ticker'] for c in ASSET_CONFIGS]
     selectbox_options: List[str] = [""]
+
     if st.session_state.nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
     selectbox_options.extend(all_tickers)
@@ -1165,7 +1153,7 @@ with tab1:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_tickers]
     elif selected_option == "Filter Sell Tickers":
         sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]  # ✅ แก้ให้ถูกต้อง
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]
     else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
@@ -1175,8 +1163,8 @@ with tab1:
         asset_value = float(asset_inputs.get(ticker, 0.0))
         fix_c = float(config['fix_c'])
         calculations[ticker] = {
-            'sell': sell(asset_value, fix_c=fix_c, Diff=float(x_2)),
-            'buy': buy(asset_value, fix_c=fix_c, Diff=float(x_2)),
+            'sell': sell(asset_value, fix_c=fix_c, Diff=float(diff_value)),  # 🔧 ใช้ global diff
+            'buy':  buy(asset_value,  fix_c=fix_c, Diff=float(diff_value)),  # 🔧 ใช้ global diff
         }
 
     for config in configs_to_display:
@@ -1198,7 +1186,7 @@ with tab1:
             nex=st.session_state.nex,
             Nex_day_sell=st.session_state.Nex_day_sell,
             clients=THINGSPEAK_CLIENTS,
-            diff=float(x_2),
+            diff=float(diff_value),  # 🔧 ส่ง global diff เข้า section
             min_rebalance=float(st.session_state['min_rebalance'])
         )
 
