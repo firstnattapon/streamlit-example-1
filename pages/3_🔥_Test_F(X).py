@@ -1,4 +1,4 @@
-# 📈_Monitor.py — Pro Optimistic UI (2-phase queue) + Min_Rebalance (clean UI)
+# 📈_Monitor.py  — Pro Optimistic UI (2-phase queue) + Min_Rebalance (clean UI)
 # ------------------------------------------------------------
 
 import streamlit as st
@@ -162,7 +162,8 @@ def clear_all_caches() -> None:
         '_ts_last_update_at',
         '_pending_ts_update', '_ts_entry_ids',
         '_widget_shadow',
-        'min_rebalance', 'global_diff'
+        'min_rebalance',
+        'diff_value', '_last_selected_ticker' # <-- รักษา state ใหม่
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -943,8 +944,8 @@ def trading_section(
     nex: int,
     Nex_day_sell: int,
     clients: Dict[int, thingspeak.Channel],
-    diff: float,                  # Diff ที่ผู้ใช้ตั้ง
-    min_rebalance: float          # Min_Rebalance จาก Controls
+    diff: float,                # Diff ที่ผู้ใช้ตั้ง
+    min_rebalance: float        # Min_Rebalance จาก Controls
 ) -> None:
     ticker = config['ticker']
     asset_conf = config['asset_field']
@@ -1066,8 +1067,15 @@ if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
     st.session_state['min_rebalance'] = 0.04  # default
-if 'global_diff' not in st.session_state:
-    st.session_state['global_diff'] = 60 # default
+
+# === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
+# ตั้งค่า state สำหรับ Diff และตัวติดตาม Ticker ที่เลือกล่าสุด
+if 'diff_value' not in st.session_state:
+    # กำหนดค่าเริ่มต้นครั้งแรก โดยใช้ diff จาก asset ตัวแรกใน config
+    st.session_state.diff_value = ASSET_CONFIGS[0].get('diff', 60) if ASSET_CONFIGS else 60
+if '_last_selected_ticker' not in st.session_state:
+    st.session_state._last_selected_ticker = ""
+# === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
 # Bootstrap selection BEFORE widgets
 pending = st.session_state.pop("_pending_select_key", None)
@@ -1104,7 +1112,7 @@ process_pending_updates(min_interval=16.0, max_wait=8.0)
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 with tab2:
-    # ---------- [REVERT] Header row: ปรับ layout กลับไปคล้ายเดิม ----------
+    # ---------- Header row: nex_day | Min_Rebalance ----------
     left, right = st.columns([2, 1])
     with left:
         Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
@@ -1124,7 +1132,6 @@ with tab2:
         Nex_day_sell = st.session_state.Nex_day_sell
         if Nex_day_:
             st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
-
     with right:
         st.session_state['min_rebalance'] = st.number_input(
             'Min_Rebalance',
@@ -1134,6 +1141,30 @@ with tab2:
         )
 
     st.write("---")
+
+    # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
+    # ตรวจจับการเปลี่ยนแปลงของ Ticker ที่เลือก และอัปเดตค่า Diff
+    selected_ticker = st.session_state.get('select_key', "")
+    if selected_ticker != st.session_state.get('_last_selected_ticker'):
+        new_diff = None
+        # หา config ของ ticker ที่เลือก
+        if selected_ticker and selected_ticker in [c['ticker'] for c in ASSET_CONFIGS]:
+            for config in ASSET_CONFIGS:
+                if config['ticker'] == selected_ticker:
+                    new_diff = config.get('diff', 60)
+                    break
+        
+        # ถ้าหาเจอ ให้อัปเดตค่าใน session state
+        if new_diff is not None:
+            st.session_state.diff_value = new_diff
+        
+        # อัปเดต ticker ล่าสุดที่ประมวลผลไปแล้ว
+        st.session_state._last_selected_ticker = selected_ticker
+    
+    # ใช้ 'key' เพื่อผูกวิดเจ็ตกับ session_state โดยตรง
+    x_2_from_state = st.sidebar.number_input('Diff', step=1, key='diff_value')
+    # === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
+
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
 
     st.write("_____")
@@ -1215,22 +1246,17 @@ with tab1:
         ticker = config['ticker']
         asset_value = float(asset_inputs.get(ticker, 0.0))
         fix_c = float(config['fix_c'])
-        # --- LOGIC REMAINS THE SAME ---
-        ticker_diff = float(config.get('diff', st.session_state.global_diff))
-        # --------------------
         calculations[ticker] = {
-            'sell': sell(asset_value, fix_c=fix_c, Diff=ticker_diff),
-            'buy': buy(asset_value, fix_c=fix_c, Diff=ticker_diff),
+            'sell': sell(asset_value, fix_c=fix_c, Diff=float(x_2_from_state)),
+            'buy': buy(asset_value, fix_c=fix_c, Diff=float(x_2_from_state)),
         }
 
     for config in configs_to_display:
         ticker = config['ticker']
         df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
         asset_last = float(last_assets_all.get(ticker, 0.0))
-        asset_val = float(asset_inputs.get(ticker, 0.0))
+        asset_val = float(asset_inputs.get(ticker, 0.0))  # delta-equivalent
         calc = calculations.get(ticker, {})
-        
-        ticker_diff_for_display = float(config.get('diff', st.session_state.global_diff))
 
         title_label = selectbox_labels.get(ticker, ticker)
         st.write(title_label)
@@ -1244,25 +1270,13 @@ with tab1:
             nex=st.session_state.nex,
             Nex_day_sell=st.session_state.Nex_day_sell,
             clients=THINGSPEAK_CLIENTS,
-            diff=ticker_diff_for_display,
+            diff=float(x_2_from_state),
             min_rebalance=float(st.session_state['min_rebalance'])
         )
 
         with st.expander("Show Raw Data Action"):
             st.dataframe(df_data, use_container_width=True)
         st.write("_____")
-
-# ---------------------------------------------------------------------------------
-# Sidebar Controls
-# ---------------------------------------------------------------------------------
-# [MOVE] ย้าย Global Diff กลับมาที่ Sidebar ตามคำขอ
-st.sidebar.header("Global Controls")
-st.session_state['global_diff'] = st.sidebar.number_input(
-    'Global Diff',
-    step=1, value=int(st.session_state.get('global_diff', 60)),
-    help="ค่า Diff เริ่มต้นหากไม่ได้กำหนดไว้ใน Config ของแต่ละ Ticker"
-)
-st.sidebar.write("---")
 
 # Sidebar Rerun (Hard Reload)
 if st.sidebar.button("RERUN"):
