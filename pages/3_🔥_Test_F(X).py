@@ -677,7 +677,7 @@ def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
             return str(int(base_net))
         sign = '+' if pend > 0 else ''
         preview = int(base_net) + int(pend)
-        return f"{int(base_net)}  →  {preview}  (⏳{sign}{int(pend)})"
+        return f"{int(base_net)}  →  {preview}  ({sign}{int(pend)})"
     except Exception:
         return str(int(base_net))
 
