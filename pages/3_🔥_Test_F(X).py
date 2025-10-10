@@ -819,4 +819,456 @@ def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
             return str(int(base_net))
         sign = '+' if pend > 0 else ''
         preview = int(base_net) + int(pend)
-        return f
+        return f"{int(base_net)}  →  {preview}  (⏳{sign}{int(pend)})"
+    except Exception:
+        return str(int(base_net))
+
+# ---------------------------------------------------------------------------------
+# UI helpers
+# ---------------------------------------------------------------------------------
+def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
+    """
+    รักษา UI เดิม; ค่าที่ส่งเข้าโมเดล = real_val + (base_value*delta_factor)
+    """
+    asset_inputs: Dict[str, float] = {}
+    cols = st.columns(len(configs)) if configs else [st]
+
+    overrides = st.session_state.get('_last_assets_overrides', {})
+    shadow: Dict[str, float] = st.session_state.setdefault('_widget_shadow', {})
+
+    for i, config in enumerate(configs):
+        with cols[i]:
+            ticker = config['ticker']
+            last_val = safe_float(last_assets.get(ticker, 0.0), 0.0)
+
+            opt = config.get('option_config') or {}
+            raw_label = opt.get('label', ticker)
+            base_help = ""
+            display_label = raw_label
+            split_pos = raw_label.find('(')
+            if split_pos != -1:
+                display_label = raw_label[:split_pos].strip()
+                base_help = raw_label[split_pos:].strip()
+
+            delta_factor = safe_float(opt.get('delta_factor', 1.0), 1.0)
+            help_text_final = base_help if base_help else f"net_since_us_premarket_open = {net_since_open_map.get(ticker, 0)}"
+
+            if opt:
+                option_base = safe_float(opt.get('base_value', 0.0), 0.0)
+                effective_option = option_base * delta_factor
+                key_name = f"input_{ticker}_real"
+
+                if ticker in overrides:
+                    if (key_name not in st.session_state) or (abs(shadow.get(key_name, float('nan')) - last_val) > 1e-12):
+                        st.session_state[key_name] = float(last_val)
+                        shadow[key_name] = float(last_val)
+                else:
+                    if key_name not in st.session_state:
+                        st.session_state[key_name] = float(last_val)
+                        shadow[key_name] = float(last_val)
+
+                safe_val = safe_float(st.session_state.get(key_name, last_val), last_val)
+                real_val = st.number_input(
+                    label=display_label,
+                    help=help_text_final,
+                    step=0.001,
+                    value=safe_val,
+                    key=key_name,
+                )
+                asset_inputs[ticker] = float(effective_option + float(real_val))
+            else:
+                key_name = f"input_{ticker}_asset"
+
+                if ticker in overrides:
+                    if (key_name not in st.session_state) or (abs(shadow.get(key_name, float('nan')) - last_val) > 1e-12):
+                        st.session_state[key_name] = float(last_val)
+                        shadow[key_name] = float(last_val)
+                else:
+                    if key_name not in st.session_state:
+                        st.session_state[key_name] = float(last_val)
+                        shadow[key_name] = float(last_val)
+
+                safe_val = safe_float(st.session_state.get(key_name, last_val), last_val)
+                val = st.number_input(
+                    label=display_label,
+                    help=help_text_final,
+                    step=0.001,
+                    value=safe_val,
+                    key=key_name,
+                )
+                asset_inputs[ticker] = float(val)
+
+    return asset_inputs
+
+def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float = 10.0):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        fut = ex.submit(client.update, payload)
+        return fut.result(timeout=timeout_sec)
+
+def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel], last_assets: Dict[str, float]) -> None:
+    """ใช้เส้นทางเดียวกับ GO_SELL/GO_BUY: optimistic → queue"""
+    with st.expander("Update Assets on ThingSpeak"):
+        for config in configs:
+            ticker = config['ticker']
+            asset_conf = config['asset_field']
+            field_name = asset_conf['field']
+
+            if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
+                current_val = safe_float(last_assets.get(ticker, 0.0), 0.0)
+                add_val = st.number_input(
+                    f"New Value for {ticker}",
+                    step=0.001,
+                    value=current_val,
+                    key=f'input_{ticker}'
+                )
+                if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
+                    write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
+                    if not write_key:
+                        st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน")
+                    else:
+                        _optimistic_apply_asset(
+                            ticker=ticker,
+                            new_value=float(add_val),
+                            prev_value=float(current_val),
+                            asset_conf=asset_conf,
+                            op_label="SET"
+                        )
+
+def trading_section(
+    config: Dict,
+    asset_val: float,
+    asset_last: float,
+    df_data: pd.DataFrame,
+    calc: Dict[str, Tuple[float, int, float]],
+    nex: int,
+    Nex_day_sell: int,
+    clients: Dict[int, thingspeak.Channel],
+    diff: float,                  # Diff ที่ผู้ใช้ตั้ง
+    min_rebalance: float          # Min_Rebalance จาก Controls
+) -> None:
+    ticker = config['ticker']
+    asset_conf = config['asset_field']
+
+    def get_action_val() -> Optional[int]:
+        """ใช้ XOR แทน if: final = raw ^ Nex_day_sell  [SIMPLE/STABLE]"""
+        try:
+            if df_data.empty or df_data.action.values[1 + nex] == "":
+                return None
+            raw_action = int(df_data.action.values[1 + nex]) & 1
+            flip = int(Nex_day_sell) & 1
+            return xor01(raw_action, flip)
+        except Exception:
+            return None
+
+    action_val = get_action_val()
+    has_signal = action_val is not None
+    limit_order_checked = st.checkbox(f'Limit_Order_{ticker}', value=has_signal, key=f'limit_order_{ticker}')
+    if not limit_order_checked:
+        return
+
+    sell_calc = calc['sell']
+    buy_calc = calc['buy']
+
+    # SELL — #fbb + เว้น 2 ช่อง + &nbsp; หลัง A/P/C + ย่อตัวเลข + ตัวหนา
+    sell_html = (
+        f"<span style='color:#ffffff;'>sell</span>&nbsp;&nbsp;"
+        f"<span style='color:#ffffff;'>A</span>&nbsp;"
+        f"<span style='color:#fbb; font-size:0.9em; font-weight:600'>{buy_calc[1]}</span> "
+        f"<span style='color:#ffffff;'>P</span>&nbsp;"
+        f"<span style='color:#fbb; font-size:0.9em; font-weight:600'>{buy_calc[0]}</span> "
+        f"<span style='color:#ffffff;'>C</span>&nbsp;"
+        f"<span style='color:#fbb; font-size:0.9em; font-weight:600'>{buy_calc[2]}</span>"
+    )
+    st.markdown(sell_html, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns(3)
+    if col3.checkbox(f'sell_match_{ticker}'):
+        if col3.button(f"GO_SELL_{ticker}"):
+            try:
+                new_asset_val = float(asset_last) - float(buy_calc[1])  # หุ้นจริงที่ต้องลด
+                _optimistic_apply_asset(
+                    ticker=ticker,
+                    new_value=float(new_asset_val),
+                    prev_value=float(asset_last),
+                    asset_conf=asset_conf,
+                    op_label="SELL"
+                )
+            except Exception as e:
+                st.error(f"SELL {ticker} error: {e}")
+
+    # Price & P/L — บรรทัดเดียวแบบเรียบ (เหมือนเดิม)
+    try:
+        current_price = get_cached_price(ticker)
+        if current_price > 0:
+            pv = current_price * float(asset_val)
+            fix_value = float(config['fix_c'])
+            pl_value = pv - fix_value
+            pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
+            trade_only_when = float(fix_value) * float(min_rebalance)
+
+            st.markdown(
+                (
+                    f"Price: **{current_price:,.3f}** | "
+                    f"Value: **{pv:,.2f}** | "
+                    f"P/L (vs {fix_value:,.0f}) | "
+                    f"Min ({trade_only_when:,.0f} vs {float(diff):,.0f}) | "
+                    f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>"
+                ),
+                unsafe_allow_html=True
+            )
+        else:
+            st.info(f"Price data for {ticker} is currently unavailable.")
+    except Exception:
+        st.warning(f"Could not retrieve price data for {ticker}.")
+
+    # BUY — แสดง summary (UI เดิม)  ✅ ไม่แตะต้องตามสเปค
+    col4, col5, col6 = st.columns(3)
+    st.write('buy', '    ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
+    if col6.checkbox(f'buy_match_{ticker}'):
+        if col6.button(f"GO_BUY_{ticker}"):
+            try:
+                new_asset_val = float(asset_last) + float(sell_calc[1])  # หุ้นจริงที่ต้องเพิ่ม
+                _optimistic_apply_asset(
+                    ticker=ticker,
+                    new_value=float(new_asset_val),
+                    prev_value=float(asset_last),
+                    asset_conf=asset_conf,
+                    op_label="BUY"
+                )
+            except Exception as e:
+                st.error(f"BUY {ticker} error: {e}")
+
+# ---------------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------------
+# Session State init
+if 'select_key' not in st.session_state:
+    st.session_state.select_key = ""
+if 'nex' not in st.session_state:
+    st.session_state.nex = 0
+if 'Nex_day_sell' not in st.session_state:
+    st.session_state.Nex_day_sell = 0
+if '_cache_bump' not in st.session_state:
+    st.session_state['_cache_bump'] = 0
+if '_last_assets_overrides' not in st.session_state:
+    st.session_state['_last_assets_overrides'] = {}
+if '_skip_refresh_on_rerun' not in st.session_state:
+    st.session_state['_skip_refresh_on_rerun'] = False
+if '_all_data_cache' not in st.session_state:
+    st.session_state['_all_data_cache'] = None
+if '_ts_last_update_at' not in st.session_state:
+    st.session_state['_ts_last_update_at'] = {}
+if '_pending_ts_update' not in st.session_state:
+    st.session_state['_pending_ts_update'] = []
+if '_ts_entry_ids' not in st.session_state:
+    st.session_state['_ts_entry_ids'] = {}
+if '_widget_shadow' not in st.session_state:
+    st.session_state['_widget_shadow'] = {}
+if 'min_rebalance' not in st.session_state:
+    st.session_state['min_rebalance'] = 0.04  # default
+if 'global_diff' not in st.session_state:
+    st.session_state['global_diff'] = 60 # default
+
+# Bootstrap selection BEFORE widgets
+pending = st.session_state.pop("_pending_select_key", None)
+if pending:
+    st.session_state.select_key = pending
+
+# เวลาตลาด US premarket ล่าสุด (BKK) = window_start
+latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
+window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
+
+# ดึงข้อมูลหลัก — มี fast rerun
+CACHE_BUMP = st.session_state.get('_cache_bump', 0)
+if st.session_state.get('_skip_refresh_on_rerun', False) and st.session_state.get('_all_data_cache'):
+    all_data = st.session_state['_all_data_cache']
+    st.session_state['_skip_refresh_on_rerun'] = False
+else:
+    all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, window_start_bkk_iso, cache_bump=CACHE_BUMP)
+    st.session_state['_all_data_cache'] = all_data
+
+monitor_data_all = all_data['monitors']
+last_assets_all = all_data['assets']
+
+# optimistic overrides (แสดงผลทันทีตามที่ผู้ใช้เพิ่งกด)
+if st.session_state.get('_last_assets_overrides'):
+    last_assets_all = {**last_assets_all, **st.session_state['_last_assets_overrides']}
+
+trade_nets_all = all_data['nets']
+trade_stats_all = all_data['trade_stats']
+
+# ✅ ประมวลผลคิว (เฟสที่ 2)
+process_pending_updates(min_interval=16.0, max_wait=8.0)
+
+# Tabs
+tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
+
+with tab2:
+    # ---------- [REVERT] Header row: ปรับ layout กลับไปคล้ายเดิม ----------
+    left, right = st.columns([2, 1])
+    with left:
+        Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
+        if Nex_day_:
+            nex_col, Nex_day_sell_col, *_ = st.columns([1, 1, 3])
+            if nex_col.button("Nex_day"):
+                st.session_state.nex = 1
+                st.session_state.Nex_day_sell = 0
+            if Nex_day_sell_col.button("Nex_day_sell"):
+                st.session_state.nex = 1
+                st.session_state.Nex_day_sell = 1
+        else:
+            st.session_state.nex = 0
+            st.session_state.Nex_day_sell = 0
+
+        nex = st.session_state.nex
+        Nex_day_sell = st.session_state.Nex_day_sell
+        if Nex_day_:
+            st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
+
+    with right:
+        st.session_state['min_rebalance'] = st.number_input(
+            'Min_Rebalance',
+            min_value=0.0, max_value=1.0,
+            step=0.01, value=float(st.session_state.get('min_rebalance', 0.04)),
+            help="ลิมิตโซนสำหรับคอมโพเนนต์ Min ในบรรทัด P/L (เช่น 0.04 = 4%)"
+        )
+
+    st.write("---")
+    asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
+
+    st.write("_____")
+    Start = st.checkbox('start')
+    if Start:
+        render_asset_update_controls(ASSET_CONFIGS, THINGSPEAK_CLIENTS, last_assets_all)
+
+with tab1:
+    current_ny_date = get_current_ny_date()
+
+    selectbox_labels: Dict[str, str] = {}
+    ticker_actions: Dict[str, Optional[int]] = {}
+
+    for config in ASSET_CONFIGS:
+        ticker = config['ticker']
+        df_data, fx_js_str, last_data_date = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
+        action_emoji, final_action_val = "", None
+
+        if st.session_state.nex == 0 and last_data_date and last_data_date < current_ny_date:
+            action_emoji = "🟡 "
+        else:
+            try:
+                if not df_data.empty and df_data.action.values[1 + st.session_state.nex] != "":
+                    raw_action = int(df_data.action.values[1 + st.session_state.nex]) & 1
+                    flip = int(st.session_state.Nex_day_sell) & 1
+                    final_action_val = xor01(raw_action, flip)  # [SIMPLE/STABLE]
+                    if final_action_val == 1:
+                        action_emoji = "🟢 "
+                    elif final_action_val == 0:
+                        action_emoji = "🔴 "
+            except Exception:
+                pass
+
+        ticker_actions[ticker] = final_action_val
+
+        # --------- [OPT-NET] ใช้ net แบบ optimistic ----------
+        base_net = int(trade_nets_all.get(ticker, 0))
+        net_str = make_net_str_with_optimism(ticker, base_net)
+
+        selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
+
+    all_tickers = [c['ticker'] for c in ASSET_CONFIGS]
+    selectbox_options: List[str] = [""]
+    if st.session_state.nex == 1:
+        selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
+    selectbox_options.extend(all_tickers)
+
+    if st.session_state.select_key not in selectbox_options:
+        st.session_state.select_key = ""
+
+    def format_selectbox_options(option_name: str) -> str:
+        if option_name in ["", "Filter Buy Tickers", "Filter Sell Tickers"]:
+            return "Show All" if option_name == "" else option_name
+        return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
+
+    st.selectbox(
+        "Select Ticker to View:",
+        options=selectbox_options,
+        format_func=format_selectbox_options,
+        key="select_key"
+    )
+    st.write("_____")
+
+    selected_option = st.session_state.select_key
+    if selected_option == "":
+        configs_to_display = ASSET_CONFIGS
+    elif selected_option == "Filter Buy Tickers":
+        buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_tickers]
+    elif selected_option == "Filter Sell Tickers":
+        sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]  # FIX BUG [SIMPLE/STABLE]
+    else:
+        # ติ๊กเกอร์เฉพาะ
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
+
+    calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
+    for config in ASSET_CONFIGS:
+        ticker = config['ticker']
+        asset_value = float(asset_inputs.get(ticker, 0.0))
+        fix_c = float(config['fix_c'])
+        # --- LOGIC REMAINS THE SAME ---
+        ticker_diff = float(config.get('diff', st.session_state.global_diff))
+        # --------------------
+        calculations[ticker] = {
+            'sell': sell(asset_value, fix_c=fix_c, Diff=ticker_diff),
+            'buy': buy(asset_value, fix_c=fix_c, Diff=ticker_diff),
+        }
+
+    for config in configs_to_display:
+        ticker = config['ticker']
+        df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
+        asset_last = float(last_assets_all.get(ticker, 0.0))
+        asset_val = float(asset_inputs.get(ticker, 0.0))
+        calc = calculations.get(ticker, {})
+        
+        ticker_diff_for_display = float(config.get('diff', st.session_state.global_diff))
+
+        title_label = selectbox_labels.get(ticker, ticker)
+        st.write(title_label)
+
+        trading_section(
+            config=config,
+            asset_val=asset_val,
+            asset_last=asset_last,
+            df_data=df_data,
+            calc=calc,
+            nex=st.session_state.nex,
+            Nex_day_sell=st.session_state.Nex_day_sell,
+            clients=THINGSPEAK_CLIENTS,
+            diff=ticker_diff_for_display,
+            min_rebalance=float(st.session_state['min_rebalance'])
+        )
+
+        with st.expander("Show Raw Data Action"):
+            st.dataframe(df_data, use_container_width=True)
+        st.write("_____")
+
+# ---------------------------------------------------------------------------------
+# Sidebar Controls
+# ---------------------------------------------------------------------------------
+# [MOVE] ย้าย Global Diff กลับมาที่ Sidebar ตามคำขอ
+st.sidebar.header("Global Controls")
+st.session_state['global_diff'] = st.sidebar.number_input(
+    'Global Diff',
+    step=1, value=int(st.session_state.get('global_diff', 60)),
+    help="ค่า Diff เริ่มต้นหากไม่ได้กำหนดไว้ใน Config ของแต่ละ Ticker"
+)
+st.sidebar.write("---")
+
+# Sidebar Rerun (Hard Reload)
+if st.sidebar.button("RERUN"):
+    current_selection = st.session_state.get("select_key", "")
+    clear_all_caches()
+    if current_selection in [c['ticker'] for c in ASSET_CONFIGS]:
+        rerun_keep_selection(current_selection)
+    else:
+        st.rerun()
