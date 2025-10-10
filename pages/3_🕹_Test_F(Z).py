@@ -28,14 +28,14 @@ st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initia
 # Small math helpers (0/1 logic)
 # ---------------------------------------------------------------------------------
 def xor01(a: int, b: int) -> int:
-    """XOR สำหรับบิต 0/1 โดยใช้คณิตศาสตร์ (เร็วกว่าและไม่มี try-except) [SIMPLE/STABLE]"""
+    """XOR สำหรับบิต 0/1 โดยใช้ bitwise operation ที่เร็วและปลอดภัย [SIMPLE/STABLE]"""
     try:
-        # (a ^ b) & 1 เป็นวิธี bitwise ที่เร็วและปลอดภัยที่สุด
         return (int(a) ^ int(b)) & 1
     except (ValueError, TypeError):
         return 0
 
 def safe_float(x, default: float = 0.0) -> float:
+    """แปลงค่าเป็น float อย่างปลอดภัย ถ้าแปลงไม่ได้จะคืนค่า default [SIMPLE/STABLE]"""
     try:
         return float(x)
     except (ValueError, TypeError, AttributeError):
@@ -128,17 +128,16 @@ if not ASSET_CONFIGS:
     st.stop()
 
 # ---------------------------------------------------------------------------------
-# ThingSpeak Clients (อ่านอย่างเดียว)
+# ThingSpeak Clients
 # ---------------------------------------------------------------------------------
 @st.cache_resource
 def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
     clients: Dict[int, thingspeak.Channel] = {}
     unique_channels = set()
     for config in configs:
-        mon_conf = config['monitor_field']
-        unique_channels.add((mon_conf['channel_id'], mon_conf['api_key']))
-        asset_conf = config['asset_field']
-        unique_channels.add((asset_conf['channel_id'], asset_conf['api_key']))
+        unique_channels.add((config['monitor_field']['channel_id'], config['monitor_field']['api_key']))
+        unique_channels.add((config['asset_field']['channel_id'], config['asset_field']['api_key']))
+    
     for channel_id, api_key in unique_channels:
         try:
             clients[int(channel_id)] = thingspeak.Channel(int(channel_id), api_key, fmt='json')
@@ -179,7 +178,7 @@ def rerun_keep_selection(ticker: str) -> None:
     st.rerun()
 
 # ---------------------------------------------------------------------------------
-# Calc Utils (เดิม)
+# Calc Utils
 # ---------------------------------------------------------------------------------
 @lru_cache(maxsize=128)
 def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
@@ -207,21 +206,18 @@ def buy(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int
 def get_cached_price(ticker: str) -> float:
     try:
         tk = yf.Ticker(ticker)
-        # ชั้น 1: fast_info
+        # 1: fast_info
         p = safe_float(tk.fast_info.get('lastPrice', 0.0))
-        if p > 0:
-            return p
-        # ชั้น 2: info
+        if p > 0: return p
+        # 2: info
         inf = getattr(tk, 'info', {}) or {}
         p = safe_float(inf.get('regularMarketPrice', 0.0))
-        if p > 0:
-            return p
-        # ชั้น 3: ปิดล่าสุด
+        if p > 0: return p
+        # 3: history
         df = tk.history(period='5d')
         if isinstance(df, pd.DataFrame) and not df.empty and 'Close' in df:
             p = safe_float(df['Close'].iloc[-1])
-            if p > 0:
-                return p
+            if p > 0: return p
         return 0.0
     except Exception:
         return 0.0
@@ -251,8 +247,7 @@ def _previous_weekday(d: datetime.date) -> datetime.date:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_latest_us_premarket_open_bkk() -> datetime.datetime:
-    tz_ny = pytz.timezone('America/New_York')
-    tz_bkk = pytz.timezone('Asia/Bangkok')
+    tz_ny, tz_bkk = pytz.timezone('America/New_York'), pytz.timezone('Asia/Bangkok')
     now_ny = datetime.datetime.now(tz_ny)
     date_ny = now_ny.date()
 
@@ -325,7 +320,7 @@ def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.
         return False, remaining
 
 # ---------------------------------------------------------------------------------
-# ✅ Optimistic queue: apply & process
+# Optimistic queue: apply & process
 # ---------------------------------------------------------------------------------
 def _optimistic_apply_asset(*, ticker: str, new_value: float, prev_value: float, asset_conf: Dict, op_label: str = "SET") -> None:
     st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(new_value)
@@ -351,12 +346,14 @@ def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -
 
     remaining = []
     for job in q:
-        ticker, field_name = job.get('ticker'), job.get('field_name')
-        write_key, channel_id = job.get('write_key'), int(job.get('channel_id', 0))
-        new_val, prev_val, op = job.get('new_value'), job.get('prev_value'), job.get('op', 'SET')
+        ticker = job.get('ticker')
+        write_key = job.get('write_key')
+        channel_id = int(job.get('channel_id', 0))
+        new_val, prev_val = job.get('new_value'), job.get('prev_value')
+        op, field_name = job.get('op', 'SET'), job.get('field_name')
 
         if not write_key:
-            st.error(f"[{ticker}] No write_api_key/api_key found — rolling back.")
+            st.error(f"[{ticker}] No write_api_key found — rolling back.")
             st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(prev_val)
             continue
 
@@ -383,7 +380,7 @@ def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -
     st.session_state['_pending_ts_update'] = remaining
 
 # ---------------------------------------------------------------------------------
-# Net stats (ปรับปรุงใหม่)
+# Net stats
 # ---------------------------------------------------------------------------------
 EMPTY_STATS_RESULT = dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
@@ -392,8 +389,7 @@ def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int) -> List[Tu
     try:
         channel_id, fnum = int(asset_field_conf['channel_id']), _field_number(asset_field_conf['field'])
         if fnum is None: return []
-        field_key = f"field{fnum}"
-
+        
         params = {'results': 8000}
         if asset_field_conf.get('api_key'):
             params['api_key'] = asset_field_conf.get('api_key')
@@ -408,7 +404,7 @@ def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int) -> List[Tu
         for r in feeds:
             try:
                 dt_utc = datetime.datetime.fromisoformat(str(r.get('created_at', '')).replace('Z', '+00:00'))
-                v = r.get(field_key)
+                v = r.get(f"field{fnum}")
                 if v is not None:
                     rows.append((dt_utc.astimezone(tz_bkk), v))
             except Exception:
@@ -420,8 +416,7 @@ def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int) -> List[Tu
 
 def _calculate_detailed_stats(
     rows: List[Tuple[datetime.datetime, Optional[str]]],
-    window_start_local: datetime.datetime,
-    window_end_local: Optional[datetime.datetime] = None
+    window_start_local: datetime.datetime
 ) -> Dict[str, float]:
     baseline: Optional[float] = None
     for dt_local, v in rows:
@@ -435,14 +430,12 @@ def _calculate_detailed_stats(
     last_in_window: Optional[float] = None
 
     prev: Optional[float] = baseline
-    for dt_local, v in rows:
+    for dt_local, v_str in rows:
         if dt_local < window_start_local:
-            prev = safe_float(v, prev)
+            prev = safe_float(v_str, prev)
             continue
-        if window_end_local and dt_local > window_end_local:
-            break
-
-        curr = safe_float(v)
+        
+        curr = safe_float(v_str)
         if prev is not None:
             step = curr - prev
             if step > 0:
@@ -477,20 +470,17 @@ def _get_tz_aware_datetime(iso_str: str, tz: datetime.tzinfo) -> datetime.dateti
 def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
     rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump)
     if not rows: return EMPTY_STATS_RESULT.copy()
-    tz_bkk = pytz.timezone('Asia/Bangkok')
-    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, tz_bkk)
-    return _calculate_detailed_stats(rows, start_dt, None)
-
+    
+    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, pytz.timezone('Asia/Bangkok'))
+    return _calculate_detailed_stats(rows, start_dt)
 
 # ---------------------------------------------------------------------------------
-# Fetch all data — รองรับ fast rerun
+# Data Fetching
 # ---------------------------------------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional[str],
                    window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, dict]:
-    results = {
-        'monitors': {}, 'assets': {}, 'nets': {}, 'trade_stats': {}
-    }
+    results = {'monitors': {}, 'assets': {}, 'nets': {}, 'trade_stats': {}}
 
     def fetch_monitor(asset_config: Dict):
         ticker = asset_config['ticker']
@@ -508,8 +498,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             try:
                 field_data = client.get_field_last(field=str(field_num))
                 retrieved_val = json.loads(field_data).get(f"field{field_num}")
-                if retrieved_val is not None:
-                    fx_js_str = str(retrieved_val)
+                if retrieved_val is not None: fx_js_str = str(retrieved_val)
             except Exception: pass
 
             df = pd.concat([tickerData, pd.DataFrame(index=['+' + str(i) for i in range(5)])], axis=0).fillna("")
@@ -529,9 +518,9 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 
     def fetch_asset_and_stats(asset_config: Dict):
         ticker = asset_config['ticker']
+        asset_conf = asset_config['asset_field']
         # Asset
         try:
-            asset_conf = asset_config['asset_field']
             client = _clients_ref[int(asset_conf['channel_id'])]
             field_name = asset_conf['field']
             data = client.get_field_last(field=field_name)
@@ -540,7 +529,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             results['assets'][ticker] = 0.0
         # Stats
         try:
-            stats = fetch_net_detailed_stats_since(asset_config['asset_field'], window_start_bkk_iso, cache_bump=cache_bump)
+            stats = fetch_net_detailed_stats_since(asset_conf, window_start_bkk_iso, cache_bump=cache_bump)
             results['trade_stats'][ticker] = stats
             results['nets'][ticker] = int(stats.get('net_count', 0))
         except Exception:
@@ -556,7 +545,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     return results
 
 # ---------------------------------------------------------------------------------
-# [OPT-NET] — Pending delta → optimistic net_str
+# Optimistic Net String
 # ---------------------------------------------------------------------------------
 def get_pending_net_delta_for_ticker(ticker: str) -> int:
     q = st.session_state.get('_pending_ts_update', [])
@@ -576,13 +565,14 @@ def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
     try:
         pend = get_pending_net_delta_for_ticker(ticker)
         if pend == 0: return str(int(base_net))
-        sign, preview = ('+' if pend > 0 else ''), int(base_net) + int(pend)
+        sign = '+' if pend > 0 else ''
+        preview = int(base_net) + int(pend)
         return f"{int(base_net)}&nbsp;&nbsp;→&nbsp;&nbsp;{preview}&nbsp;&nbsp;(⏳{sign}{int(pend)})"
     except Exception:
         return str(int(base_net))
 
 # ---------------------------------------------------------------------------------
-# UI helpers
+# UI Helpers
 # ---------------------------------------------------------------------------------
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
     asset_inputs: Dict[str, float] = {}
@@ -593,8 +583,8 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
     for i, config in enumerate(configs):
         with cols[i]:
             ticker = config['ticker']
-            last_val = safe_float(last_assets.get(ticker, 0.0), 0.0)
-            opt = config.get('option_config', {})
+            last_val = safe_float(last_assets.get(ticker, 0.0))
+            opt = config.get('option_config', {}) # ✅ แก้ไข Attribute Error ที่นี่
             raw_label = opt.get('label', ticker)
             
             display_label, base_help = raw_label, ""
@@ -638,9 +628,8 @@ def render_asset_update_controls(configs: List[Dict], last_assets: Dict[str, flo
                 current_val = safe_float(last_assets.get(ticker, 0.0))
                 new_val = st.number_input(f"New Value for {ticker}", step=0.001, value=current_val, key=f'input_{ticker}')
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
-                    write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
-                    if not write_key:
-                        st.error(f"[{ticker}] No write_api_key/api_key for writing.")
+                    if not (asset_conf.get('write_api_key') or asset_conf.get('api_key')):
+                        st.error(f"[{ticker}] No write_api_key for writing.")
                     else:
                         _optimistic_apply_asset(
                             ticker=ticker, new_value=float(new_val), prev_value=float(current_val),
@@ -662,9 +651,9 @@ def trading_section(
         """Helper to generate consistent HTML for buy/sell rows [SIMPLE/STABLE]"""
         a, p, c = trade_calc[1], trade_calc[0], trade_calc[2]
         return (f"<span style='color:white;'>{label}</span>&nbsp;&nbsp;"
-                f"<span style='color:white;'>A</span>&nbsp;<span style='color:{color}; font-size:0.9em; font-weight:600'>{a}</span> "
-                f"<span style='color:white;'>P</span>&nbsp;<span style='color:{color}; font-size:0.9em; font-weight:600'>{p}</span> "
-                f"<span style='color:white;'>C</span>&nbsp;<span style='color:{color}; font-size:0.9em; font-weight:600'>{c}</span>")
+                f"A:&nbsp;<span style='color:{color}; font-weight:600'>{a}</span>&nbsp;&nbsp;"
+                f"P:&nbsp;<span style='color:{color}; font-weight:600'>{p}</span>&nbsp;&nbsp;"
+                f"C:&nbsp;<span style='color:{color}; font-weight:600'>{c}</span>")
 
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -697,7 +686,7 @@ def trading_section(
 
     col3, col4 = st.columns([3, 1])
     with col3:
-        st.markdown(make_trade_html('buy', '#a8d5a2', sell_calc), unsafe_allow_html=True) # [SIMPLE/STABLE] Clean UI
+        st.markdown(make_trade_html('buy', '#a8d5a2', sell_calc), unsafe_allow_html=True)
     with col4:
         if st.checkbox(f'b_match', key=f'buy_match_{ticker}', label_visibility="collapsed"):
             if st.button(f"GO BUY", key=f"GO_BUY_{ticker}", use_container_width=True):
@@ -707,9 +696,9 @@ def trading_section(
                 )
 
 # ---------------------------------------------------------------------------------
-# Main
+# Main App
 # ---------------------------------------------------------------------------------
-# Session State init
+# Session State Initialization
 DEFAULTS = {
     'select_key': "", 'nex': 0, 'Nex_day_sell': 0, '_cache_bump': 0,
     '_last_assets_overrides': {}, '_skip_refresh_on_rerun': False,
@@ -723,11 +712,11 @@ for k, v in DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# Bootstrap selection BEFORE widgets
+# Bootstrap selection from pending actions (e.g., after button clicks)
 if pending := st.session_state.pop("_pending_select_key", None):
     st.session_state.select_key = pending
 
-# Time & Data Fetch
+# Time & Data Fetching
 latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
 window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
 
@@ -736,14 +725,16 @@ if st.session_state.get('_skip_refresh_on_rerun', False) and st.session_state.ge
     all_data = st.session_state['_all_data_cache']
     st.session_state['_skip_refresh_on_rerun'] = False
 else:
-    all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, window_start_bkk_iso, cache_bump=CACHE_BUMP)
+    with st.spinner("Fetching latest data..."):
+        all_data = fetch_all_data(ASSET_CONFIGS, THINGSPEAK_CLIENTS, GLOBAL_START_DATE, window_start_bkk_iso, cache_bump=CACHE_BUMP)
     st.session_state['_all_data_cache'] = all_data
 
+# Apply optimistic overrides to data
 monitor_data_all = all_data['monitors']
 last_assets_all = {**all_data['assets'], **st.session_state.get('_last_assets_overrides', {})}
 trade_nets_all = all_data['nets']
 
-# Tabs
+# --- UI Tabs ---
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 with tab2:
@@ -765,18 +756,15 @@ with tab2:
                         help="ลิมิตโซนสำหรับคอมโพเนนต์ Min ในบรรทัด P/L (เช่น 0.04 = 4%)")
     st.divider()
 
-    # === 💡 DYNAMIC DIFF LOGIC [SIMPLE/STABLE] ===
+    # Dynamic Diff Logic
     selected_ticker = st.session_state.get('select_key', "")
     if selected_ticker and selected_ticker != st.session_state.get('_last_selected_ticker'):
-        # หา config และอัปเดต diff_value ถ้าเจอ
         matching_config = next((c for c in ASSET_CONFIGS if c['ticker'] == selected_ticker), None)
         if matching_config:
             st.session_state.diff_value = matching_config.get('diff', 60)
         st.session_state._last_selected_ticker = selected_ticker
     
-    # วิดเจ็ตจะอ่านและเขียนจาก session_state โดยตรงผ่าน key
     x_2_from_state = st.sidebar.number_input('Diff', step=1, key='diff_value')
-    # === 💡 END ===
 
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
     st.divider()
@@ -849,7 +837,7 @@ with tab1:
             config=config,
             asset_val=float(asset_inputs.get(ticker, 0.0)),
             asset_last=float(last_assets_all.get(ticker, 0.0)),
-            action_val=ticker_actions.get(ticker), # [SIMPLE/STABLE]
+            action_val=ticker_actions.get(ticker),
             calc=calculations.get(ticker, {}),
             diff=float(x_2_from_state),
             min_rebalance=float(st.session_state['min_rebalance'])
@@ -858,7 +846,7 @@ with tab1:
             st.dataframe(df_data, use_container_width=True)
         st.divider()
 
-# Sidebar Rerun
+# --- Sidebar ---
 if st.sidebar.button("RERUN"):
     current_selection = st.session_state.get("select_key", "")
     clear_all_caches()
@@ -867,5 +855,5 @@ if st.sidebar.button("RERUN"):
     else:
         st.rerun()
 
-# Process queue at the very end
+# --- Process Pending API Calls at the End ---
 process_pending_updates(min_interval=16.0, max_wait=8.0)
