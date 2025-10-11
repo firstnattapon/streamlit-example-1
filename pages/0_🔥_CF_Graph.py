@@ -34,7 +34,9 @@ with tabs[3]:
 
 with tabs[4]:
     with st.expander("Historical_Backtest_CF", expanded=True):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=fLyda7yGeP4GNz66yaY3JK", width=1500, height=1000, scrolling=0)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=3jbzLWCvVLfjVJQhFgxoJn", width=1500, height=1000, scrolling=0)
+        with st.expander("3_piecewise_line_v1", expanded=False):        
+            st.components.v1.iframe("https://monica.im/share/artifact?id=fLyda7yGeP4GNz66yaY3JK", width=1500, height=1000, scrolling=0)
         
 with tabs[5]:
     with st.expander("3_piecewise_line", expanded=True):
