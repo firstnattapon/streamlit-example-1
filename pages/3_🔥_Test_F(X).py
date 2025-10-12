@@ -1068,6 +1068,12 @@ with tab1:
 
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
 
+    # สร้างชุด/ลิสต์สำหรับ Filter เสมอ (เพื่อใช้กับ Navigator)
+    buy_set  = {t for t, a in ticker_actions.items() if a == 1}
+    sell_set = {t for t, a in ticker_actions.items() if a == 0}
+    buy_list  = [t for t in ALL_TICKERS if t in buy_set]
+    sell_list = [t for t in ALL_TICKERS if t in sell_set]
+
     all_tickers = [c['ticker'] for c in ASSET_CONFIGS]
     selectbox_options: List[str] = [""]
     if st.session_state.nex == 1:
@@ -1094,11 +1100,9 @@ with tab1:
     if selected_option == "":
         configs_to_display = ASSET_CONFIGS
     elif selected_option == "Filter Buy Tickers":
-        buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_tickers]
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_set]
     elif selected_option == "Filter Sell Tickers":
-        sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]  # FIX BUG [SIMPLE/STABLE]
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_set]  # FIX BUG [SIMPLE/STABLE]
     else:
         # ติ๊กเกอร์เฉพาะ
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
@@ -1140,21 +1144,64 @@ with tab1:
             st.dataframe(df_data, use_container_width=True)
         st.write("_____")
 
-# === 🧭 Sidebar Ticker Navigator (Goal_1) ===
+# === 🧭 Sidebar Ticker Navigator (Goal_1 — filtered groups) ===
 with st.sidebar:
-    curr = st.session_state.get("select_key", "")
-    if curr in ALL_TICKERS and len(ALL_TICKERS) > 0:
-        idx = ALL_TICKERS.index(curr)
-        st.markdown(f"**Ticker Navigator**  \n{idx+1}/{len(ALL_TICKERS)} · `{curr}`")
+    sel = st.session_state.get("select_key", "")
+
+    # 1) ถ้าอยู่โหมด Filter → เลื่อนในกลุ่มที่กรอง แล้วพาเข้า "รายตัว" ของสมาชิกกลุ่ม
+    if sel == "Filter Buy Tickers" and buy_list:
+        idx = int(st.session_state.get('_filter_nav_idx_buy', 0)) % len(buy_list)
+        current_preview = buy_list[idx]
+        st.markdown(f"**Buy Navigator**  \n{idx+1}/{len(buy_list)} · `{current_preview}`")
         c1, c2 = st.columns(2)
-        if c1.button("◀ Prev", use_container_width=True, key="__nav_prev"):
-            new_idx = (idx - 1) % len(ALL_TICKERS)
-            st.session_state["_pending_select_key"] = ALL_TICKERS[new_idx]
+        if c1.button("◀ Prev", use_container_width=True, key="__nav_prev_buy"):
+            st.session_state['_filter_nav_idx_buy'] = (idx - 1) % len(buy_list)
+            st.session_state["_pending_select_key"] = buy_list[st.session_state['_filter_nav_idx_buy']]
             st.rerun()
-        if c2.button("Next ▶", use_container_width=True, key="__nav_next"):
-            new_idx = (idx + 1) % len(ALL_TICKERS)
-            st.session_state["_pending_select_key"] = ALL_TICKERS[new_idx]
+        if c2.button("Next ▶", use_container_width=True, key="__nav_next_buy"):
+            st.session_state['_filter_nav_idx_buy'] = (idx + 1) % len(buy_list)
+            st.session_state["_pending_select_key"] = buy_list[st.session_state['_filter_nav_idx_buy']]
             st.rerun()
+
+    elif sel == "Filter Sell Tickers" and sell_list:
+        idx = int(st.session_state.get('_filter_nav_idx_sell', 0)) % len(sell_list)
+        current_preview = sell_list[idx]
+        st.markdown(f"**Sell Navigator**  \n{idx+1}/{len(sell_list)} · `{current_preview}`")
+        c1, c2 = st.columns(2)
+        if c1.button("◀ Prev", use_container_width=True, key="__nav_prev_sell"):
+            st.session_state['_filter_nav_idx_sell'] = (idx - 1) % len(sell_list)
+            st.session_state["_pending_select_key"] = sell_list[st.session_state['_filter_nav_idx_sell']]
+            st.rerun()
+        if c2.button("Next ▶", use_container_width=True, key="__nav_next_sell"):
+            st.session_state['_filter_nav_idx_sell'] = (idx + 1) % len(sell_list)
+            st.session_state["_pending_select_key"] = sell_list[st.session_state['_filter_nav_idx_sell']]
+            st.rerun()
+
+    # 2) ถ้าอยู่ “รายตัว” → เลื่อนในกลุ่มของมัน (ถ้ามี) มิฉะนั้น fallback เป็นทุกตัว (พฤติกรรมเดิม)
+    elif sel in ALL_TICKERS:
+        act = ticker_actions.get(sel, None)
+        if act == 1 and buy_list:
+            nav_list = buy_list
+            title = "Buy Navigator"
+        elif act == 0 and sell_list:
+            nav_list = sell_list
+            title = "Sell Navigator"
+        else:
+            nav_list = ALL_TICKERS
+            title = "Ticker Navigator"
+
+        if nav_list:
+            idx = nav_list.index(sel) if sel in nav_list else 0
+            st.markdown(f"**{title}**  \n{idx+1}/{len(nav_list)} · `{sel}`")
+            c1, c2 = st.columns(2)
+            if c1.button("◀ Prev", use_container_width=True, key="__nav_prev_single"):
+                new_idx = (idx - 1) % len(nav_list)
+                st.session_state["_pending_select_key"] = nav_list[new_idx]
+                st.rerun()
+            if c2.button("Next ▶", use_container_width=True, key="__nav_next_single"):
+                new_idx = (idx + 1) % len(nav_list)
+                st.session_state["_pending_select_key"] = nav_list[new_idx]
+                st.rerun()
 
 # Sidebar Rerun (Hard Reload)
 if st.sidebar.button("RERUN"):
