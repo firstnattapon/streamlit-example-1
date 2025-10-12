@@ -164,8 +164,7 @@ def clear_all_caches() -> None:
         '_pending_ts_update', '_ts_entry_ids',
         '_widget_shadow',
         'min_rebalance',
-        'diff_value', '_last_selected_ticker',
-        'current_filtered_list', 'filtered_tickers_index' # <-- [💡 GOAL_1] รักษา state ใหม่
+        'diff_value', '_last_selected_ticker' # <-- รักษา state ใหม่
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -927,21 +926,17 @@ if '_ts_entry_ids' not in st.session_state:
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
+    ## <-- [EDIT] Goal 1: Change default value from 0.04 to 2.4
     st.session_state['min_rebalance'] = 2.4
 
-# === 💡 GOAL_1: NAVIGATION STATE LOGIC START ===
-if 'filtered_tickers_index' not in st.session_state:
-    st.session_state.filtered_tickers_index = 0
-if 'current_filtered_list' not in st.session_state:
-    st.session_state.current_filtered_list = []
-# === 💡 GOAL_1: NAVIGATION STATE LOGIC END ===
-
+# === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
 # ตั้งค่า state สำหรับ Diff และตัวติดตาม Ticker ที่เลือกล่าสุด
 if 'diff_value' not in st.session_state:
+    # กำหนดค่าเริ่มต้นครั้งแรก โดยใช้ diff จาก asset ตัวแรกใน config
     st.session_state.diff_value = ASSET_CONFIGS[0].get('diff', 60) if ASSET_CONFIGS else 60
 if '_last_selected_ticker' not in st.session_state:
     st.session_state._last_selected_ticker = ""
-
+# === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
 # Bootstrap selection BEFORE widgets
 pending = st.session_state.pop("_pending_select_key", None)
@@ -996,6 +991,7 @@ with tab2:
         if Nex_day_:
             st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
     with right:
+        ## <-- [EDIT] Goal 1: Update UI widget parameters
         st.session_state['min_rebalance'] = st.number_input(
             'Min_Rebalance',
             min_value=0.0,
@@ -1005,7 +1001,8 @@ with tab2:
         )
 
     st.write("---")
-    
+
+    # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
     # ตรวจจับการเปลี่ยนแปลงของ Ticker ที่เลือก และอัปเดตค่า Diff
     selected_ticker = st.session_state.get('select_key', "")
     if selected_ticker != st.session_state.get('_last_selected_ticker'):
@@ -1026,33 +1023,7 @@ with tab2:
     
     # ใช้ 'key' เพื่อผูกวิดเจ็ตกับ session_state โดยตรง
     x_2_from_state = st.sidebar.number_input('Diff', step=1, key='diff_value')
-    
-    # === 💡 GOAL_1: SIDEBAR NAVIGATION BUTTONS START ===
-    # จะแสดงปุ่มก็ต่อเมื่อมีการเลือก Filter เท่านั้น
-    if st.session_state.get('current_filtered_list'):
-        st.sidebar.write("---")
-        st.sidebar.write(f"**Filtered View Navigation**")
-
-        num_filtered = len(st.session_state.current_filtered_list)
-        current_idx = st.session_state.get('filtered_tickers_index', 0)
-        
-        # แสดงสถานะปัจจุบัน
-        st.sidebar.caption(f"Showing {current_idx + 1} of {num_filtered}")
-
-        prev_col, next_col = st.sidebar.columns(2)
-        
-        # ปุ่ม Previous
-        if prev_col.button("⬅️ Previous", use_container_width=True):
-            new_index = (current_idx - 1 + num_filtered) % num_filtered
-            st.session_state.filtered_tickers_index = new_index
-            st.rerun()
-
-        # ปุ่ม Next
-        if next_col.button("Next ➡️", use_container_width=True):
-            new_index = (current_idx + 1) % num_filtered
-            st.session_state.filtered_tickers_index = new_index
-            st.rerun()
-    # === 💡 GOAL_1: SIDEBAR NAVIGATION BUTTONS END ===
+    # === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
 
@@ -1088,8 +1059,11 @@ with tab1:
                 pass
 
         ticker_actions[ticker] = final_action_val
+
+        # --------- [OPT-NET] ใช้ net แบบ optimistic ----------
         base_net = int(trade_nets_all.get(ticker, 0))
         net_str = make_net_str_with_optimism(ticker, base_net)
+
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
 
     all_tickers = [c['ticker'] for c in ASSET_CONFIGS]
@@ -1106,55 +1080,26 @@ with tab1:
             return "Show All" if option_name == "" else option_name
         return selectbox_labels.get(option_name, option_name).split(' (f(x):')[0]
 
-    # === 💡 GOAL_1: SELECTBOX ON_CHANGE LOGIC START ===
-    # สร้าง callback function เพื่อจัดการเมื่อค่าใน selectbox เปลี่ยน
-    def handle_selection_change():
-        selected_option = st.session_state.select_key
-        # รีเซ็ต index และ list ทุกครั้งที่มีการเลือกใหม่
-        st.session_state.filtered_tickers_index = 0
-        st.session_state.current_filtered_list = []
-        
-        if selected_option == "Filter Buy Tickers":
-            buy_tickers = [t for t, action in ticker_actions.items() if action == 1]
-            st.session_state.current_filtered_list = buy_tickers
-        elif selected_option == "Filter Sell Tickers":
-            sell_tickers = [t for t, action in ticker_actions.items() if action == 0]
-            st.session_state.current_filtered_list = sell_tickers
-    # === 💡 GOAL_1: SELECTBOX ON_CHANGE LOGIC END ===
-
     st.selectbox(
         "Select Ticker to View:",
         options=selectbox_options,
         format_func=format_selectbox_options,
-        key="select_key",
-        on_change=handle_selection_change # ผูก callback function ที่นี่
+        key="select_key"
     )
     st.write("_____")
-    
-    # === 💡 GOAL_1: DISPLAY LOGIC START ===
-    configs_to_display = []
-    selected_option = st.session_state.select_key
-    
-    if selected_option in ["Filter Buy Tickers", "Filter Sell Tickers"]:
-        filtered_list = st.session_state.get('current_filtered_list', [])
-        if filtered_list:
-            current_index = st.session_state.get('filtered_tickers_index', 0)
-            # ป้องกัน index out of bounds
-            if current_index >= len(filtered_list):
-                current_index = 0
-                st.session_state.filtered_tickers_index = 0
-            
-            ticker_to_show = filtered_list[current_index]
-            # หา config ของ ticker ที่จะแสดง
-            configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == ticker_to_show]
-        else:
-            st.info(f"No tickers found for the filter: '{selected_option}'")
 
-    elif selected_option == "":
+    selected_option = st.session_state.select_key
+    if selected_option == "":
         configs_to_display = ASSET_CONFIGS
-    else: # เลือก Ticker เดี่ยวๆ
+    elif selected_option == "Filter Buy Tickers":
+        buy_tickers = {t for t, action in ticker_actions.items() if action == 1}
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_tickers]
+    elif selected_option == "Filter Sell Tickers":
+        sell_tickers = {t for t, action in ticker_actions.items() if action == 0}
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_tickers]  # FIX BUG [SIMPLE/STABLE]
+    else:
+        # ติ๊กเกอร์เฉพาะ
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
-    # === 💡 GOAL_1: DISPLAY LOGIC END ===
 
     calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
     for config in ASSET_CONFIGS:
