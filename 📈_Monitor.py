@@ -866,15 +866,21 @@ def trading_section(
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
             
-            # <-- [EDIT] Goal 1: Change calculation equation
+            # <-- [EDIT] Goal 1: trade_only_when และ new_pct
             trade_only_when = math.sqrt(float(fix_value) * float(min_rebalance))
+            if fix_value > 0:
+                new_pct = (trade_only_when / fix_value) * 100.0  # ตรงตามตัวอย่าง 60/1500*100 = 4%
+            else:
+                new_pct = 0.0
+            # ฟอร์แมต: <1% แสดงทศนิยม 2 ตำแหน่ง, >=1% ปัดเต็ม
+            new_pct_str = f"{new_pct:.2f}%" if new_pct < 1 else f"{new_pct:.0f}%"
 
             st.markdown(
                 (
                     f"Price: **{current_price:,.3f}** | "
                     f"Value: **{pv:,.2f}** | "
                     f"P/L (vs {fix_value:,.0f}) | "
-                    f"Min ({trade_only_when:,.0f} vs {float(diff):,.0f}) | "
+                    f"Min ({trade_only_when:,.0f}:{new_pct_str} vs {float(diff):,.0f}) | "  # <-- [EDIT] แทรก new_pct_str
                     f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>"
                 ),
                 unsafe_allow_html=True
