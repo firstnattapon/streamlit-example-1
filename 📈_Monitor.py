@@ -1,5 +1,5 @@
 # 📈_Monitor.py — Pro Optimistic UI (2-phase queue) + Min_Rebalance (clean UI)
-# ========================= SIMPLE–STABLE REFACTOR ==============================
+# ========================= SIMPLE–STABLE REFACTOR (FAST) =======================
 
 import streamlit as st
 import numpy as np
@@ -26,10 +26,16 @@ import math  # ใช้ sqrt ฯลฯ
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------------------------------
-# Math utils [SIMPLE/STABLE]
+# Globals (ลดงานจุกจิก/เร่งความเร็ว)
 # ---------------------------------------------------------------------------------
 _EPS = 1e-12
+TZ_BKK = pytz.timezone('Asia/Bangkok')
+TZ_NY = pytz.timezone('America/New_York')
+_FIELD_NUM_RE = re.compile(r'(\d+)')
 
+# ---------------------------------------------------------------------------------
+# Math utils [SIMPLE/STABLE]
+# ---------------------------------------------------------------------------------
 def r2(x: float) -> float:
     """Stable 2-dec rounding (เหมือนเดิมเชิงผลลัพธ์)"""
     try:
@@ -197,7 +203,7 @@ def rerun_keep_selection(ticker: str) -> None:
     st.rerun()
 
 # ---------------------------------------------------------------------------------
-# TRADE CORE [SIMPLE/STABLE]: ฟังก์ชันกลาง + wrapper เดิม
+# TRADE CORE [SIMPLE/STABLE]
 # ---------------------------------------------------------------------------------
 @lru_cache(maxsize=1024)
 def _trade_math(asset: float, fix_c: float = 1500.0, Diff: float = 60.0, side: int = +1) -> Tuple[float, int, float]:
@@ -224,7 +230,6 @@ def _trade_math(asset: float, fix_c: float = 1500.0, Diff: float = 60.0, side: i
 
 @lru_cache(maxsize=128)
 def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
-    # คง output เดิม (สูตรเหมือนที่คุณใช้) แต่รวมให้เป็นสมการเดียวกัน
     if asset == 0:
         return 0.0, 0, 0.0
     return _trade_math(asset, fix_c, Diff, side=-1)
@@ -272,19 +277,35 @@ def get_cached_price(ticker: str) -> float:
     except Exception:
         return 0.0
 
+@st.cache_data(ttl=120, show_spinner=False)
+def get_prices_map(tickers: List[str]) -> Dict[str, float]:
+    """Prefetch ราคาทั้งชุดแบบขนาน เพื่อเร่งตอนแสดงหลายตัวพร้อมกัน"""
+    tickers = list(dict.fromkeys([t for t in tickers if isinstance(t, str) and t]))  # unique & clean
+    out: Dict[str, float] = {}
+    if not tickers:
+        return out
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(tickers))) as ex:
+        futs = {ex.submit(get_cached_price, t): t for t in tickers}
+        for f in concurrent.futures.as_completed(futs):
+            t = futs[f]
+            try:
+                out[t] = float(f.result() or 0.0)
+            except Exception:
+                out[t] = 0.0
+    return out
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_history_df_max_close_bkk(ticker: str) -> pd.DataFrame:
     df = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
     try:
-        df.index = df.index.tz_convert('Asia/Bangkok')
+        df.index = df.index.tz_convert(TZ_BKK)
     except TypeError:
-        df.index = df.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+        df.index = df.index.tz_localize('UTC').tz_convert(TZ_BKK)
     return df
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_current_ny_date() -> datetime.date:
-    ny_tz = pytz.timezone('America/New_York')
-    return datetime.datetime.now(ny_tz).date()
+    return datetime.datetime.now(TZ_NY).date()
 
 def _previous_weekday(d: datetime.date) -> datetime.date:
     wd = d.weekday()
@@ -297,14 +318,12 @@ def _previous_weekday(d: datetime.date) -> datetime.date:
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_latest_us_premarket_open_bkk() -> datetime.datetime:
-    tz_ny = pytz.timezone('America/New_York')
-    tz_bkk = pytz.timezone('Asia/Bangkok')
-    now_ny = datetime.datetime.now(tz_ny)
+    now_ny = datetime.datetime.now(TZ_NY)
     date_ny = now_ny.date()
 
     def make_open(dt_date: datetime.date) -> datetime.datetime:
         dt_naive = datetime.datetime(dt_date.year, dt_date.month, dt_date.day, 4, 0, 0)
-        return tz_ny.localize(dt_naive)
+        return TZ_NY.localize(dt_naive)
 
     candidate = make_open(date_ny)
     while candidate.weekday() >= 5:
@@ -318,7 +337,7 @@ def get_latest_us_premarket_open_bkk() -> datetime.datetime:
             date_ny = _previous_weekday(date_ny)
             candidate = make_open(date_ny)
 
-    return candidate.astimezone(tz_bkk)
+    return candidate.astimezone(TZ_BKK)
 
 # ---------------------------------------------------------------------------------
 # ThingSpeak helpers
@@ -326,7 +345,7 @@ def get_latest_us_premarket_open_bkk() -> datetime.datetime:
 def _field_number(field_value) -> Optional[int]:
     if isinstance(field_value, int):
         return field_value
-    m = re.search(r'(\d+)', str(field_value))
+    m = _FIELD_NUM_RE.search(str(field_value))
     return int(m.group(1)) if m else None
 
 def _http_get_json(url: str, params: Dict) -> Dict:
@@ -444,12 +463,17 @@ def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -
     st.session_state['_pending_ts_update'] = remaining
 
 # ---------------------------------------------------------------------------------
-# Net stats — เวกเตอร์ไรซ์ [SIMPLE/STABLE]
+# Net stats — เวกเตอร์ไรซ์ [SIMPLE/STABLE] + WINDOW-AWARE THINGSPEAK FETCH
 # ---------------------------------------------------------------------------------
 EMPTY_STATS_RESULT = dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
 @st.cache_data(ttl=180, show_spinner=False)
-def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int) -> List[Tuple[datetime.datetime, Optional[str]]]:
+def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int, window_start_bkk_iso: Optional[str] = None) -> List[Tuple[datetime.datetime, Optional[str]]]:
+    """
+    ดึงฟีดแบบ 'รู้หน้าต่างเวลา':
+      - ถ้าให้ window_start_bkk_iso → ขอด้วย 'start' เป็น UTC (บัฟเฟอร์ 36 ชม.) ลด payload มหาศาล
+      - ถ้าล้มเหลว/ได้น้อยเกิน → fallback mode (results=8000) เพื่อคงผลลัพธ์เดิม
+    """
     try:
         channel_id = int(asset_field_conf['channel_id'])
         fnum = _field_number(asset_field_conf['field'])
@@ -457,22 +481,43 @@ def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int) -> List[Tu
             return []
         field_key = f"field{fnum}"
 
-        params = {'results': 8000}
-        if asset_field_conf.get('api_key'):
-            params['api_key'] = asset_field_conf.get('api_key')
+        # --- primary: windowed fetch ---
+        feeds: List[Dict] = []
+        if window_start_bkk_iso:
+            try:
+                start_local = datetime.datetime.fromisoformat(window_start_bkk_iso)
+                if start_local.tzinfo is None:
+                    start_local = TZ_BKK.localize(start_local)
+                # บัฟเฟอร์ถอยหลัง 36 ชั่วโมง เพื่อให้มี baseline ก่อนเริ่ม window
+                start_with_buffer_utc = (start_local - datetime.timedelta(hours=36)).astimezone(pytz.UTC)
+                start_param = start_with_buffer_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-        url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
-        data = _http_get_json(url, params)
-        feeds = data.get('feeds', [])
+                params = {'start': start_param}
+                if asset_field_conf.get('api_key'):
+                    params['api_key'] = asset_field_conf.get('api_key')
+
+                url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
+                data = _http_get_json(url, params)
+                feeds = data.get('feeds', []) or []
+            except Exception:
+                feeds = []
+
+        # --- fallback: wide fetch ---
+        if not feeds:
+            params = {'results': 8000}
+            if asset_field_conf.get('api_key'):
+                params['api_key'] = asset_field_conf.get('api_key')
+            url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
+            data = _http_get_json(url, params)
+            feeds = data.get('feeds', []) or []
+
         if not feeds:
             return []
-
-        tz_bkk = pytz.timezone('Asia/Bangkok')
 
         def _parse_row(r):
             try:
                 dt_utc = datetime.datetime.fromisoformat(str(r.get('created_at', '')).replace('Z', '+00:00'))
-                return dt_utc.astimezone(tz_bkk), r.get(field_key)
+                return dt_utc.astimezone(TZ_BKK), r.get(field_key)
             except Exception:
                 return None, None
 
@@ -547,21 +592,19 @@ def _calc_stats_vectorized(
 
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
-    rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump)
+    rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump, window_start_bkk_iso=window_start_bkk_iso)
     if not rows:
         return EMPTY_STATS_RESULT.copy()
-    tz_bkk = pytz.timezone('Asia/Bangkok')
-    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, tz_bkk)
+    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, TZ_BKK)
     return _calc_stats_vectorized(rows, start_dt, None)
 
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
-    rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump)
+    rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump, window_start_bkk_iso=window_start_bkk_iso)
     if not rows:
         return EMPTY_STATS_RESULT.copy()
-    tz_bkk = pytz.timezone('Asia/Bangkok')
-    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, tz_bkk)
-    end_dt = _get_tz_aware_datetime(window_end_bkk_iso, tz_bkk)
+    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, TZ_BKK)
+    end_dt = _get_tz_aware_datetime(window_end_bkk_iso, TZ_BKK)
     return _calc_stats_vectorized(rows, start_dt, end_dt)
 
 def _get_tz_aware_datetime(iso_str: str, tz: datetime.tzinfo) -> datetime.datetime:
@@ -820,7 +863,8 @@ def trading_section(
     Nex_day_sell: int,
     clients: Dict[int, thingspeak.Channel],
     diff: float,
-    min_rebalance: float
+    min_rebalance: float,
+    price_hint: Optional[float] = None
 ) -> None:
     ticker = config['ticker']
     asset_conf = config['asset_field']
@@ -845,7 +889,7 @@ def trading_section(
     sell_calc = calc['sell']
     buy_calc  = calc['buy']
 
-    # SELL — คง UI/สี/ตัวหนา ตามที่คุณตั้งไว้
+    # SELL — คง UI/สี/ตัวหนา ตามที่คุณตั้งไว้ (ใช้ buy_calc ตามพฤติกรรมเดิม)
     sell_html = (
         f"<span style='color:#ffffff;'>sell</span>&nbsp;&nbsp;"
         f"<span style='color:#ffffff;'>A</span>&nbsp;"
@@ -872,9 +916,9 @@ def trading_section(
             except Exception as e:
                 st.error(f"SELL {ticker} error: {e}")
 
-    # Price & P/L
+    # Price & P/L (ใช้ price_hint ถ้ามี เพื่อไม่ต้องเรียกซ้ำ)
     try:
-        current_price = get_cached_price(ticker)
+        current_price = float(price_hint) if (price_hint is not None and price_hint > 0) else get_cached_price(ticker)
         if current_price > 0:
             pv = current_price * float(asset_val)
             fix_value = float(config['fix_c'])
@@ -1105,6 +1149,10 @@ with tab1:
     else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
+    # ✅ Prefetch ราคาทั้งชุดในหน้า Monitor รอบเดียว
+    display_tickers = [c['ticker'] for c in configs_to_display]
+    prices_hint_map = get_prices_map(display_tickers)
+
     calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
     for config in ASSET_CONFIGS:
         ticker = config['ticker']
@@ -1135,7 +1183,8 @@ with tab1:
             Nex_day_sell=st.session_state.Nex_day_sell,
             clients=THINGSPEAK_CLIENTS,
             diff=float(st.session_state.diff_value),
-            min_rebalance=float(st.session_state['min_rebalance'])
+            min_rebalance=float(st.session_state['min_rebalance']),
+            price_hint=prices_hint_map.get(ticker)
         )
 
         with st.expander("Show Raw Data Action"):
