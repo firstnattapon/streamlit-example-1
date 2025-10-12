@@ -923,7 +923,7 @@ if '_ts_entry_ids' not in st.session_state:
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
-    st.session_state['min_rebalance'] = 0.04  # default
+    st.session_state['min_rebalance'] = 2.4  # default
 
 # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
 # ตั้งค่า state สำหรับ Diff และตัวติดตาม Ticker ที่เลือกล่าสุด
