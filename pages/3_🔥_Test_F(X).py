@@ -873,7 +873,7 @@ def trading_section(
             else:
                 new_pct = 0.0
             # ฟอร์แมต: <1% แสดงทศนิยม 2 ตำแหน่ง, >=1% ปัดเต็ม
-            new_pct_str = f"{new_pct:.2f}%" if new_pct < 1 else f"{new_pct:.1f}%"
+            new_pct_str = f"{new_pct:.2f}%" if new_pct < 1 else f"{new_pct:.0f}%"
 
             st.markdown(
                 (
