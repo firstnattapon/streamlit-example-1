@@ -1203,7 +1203,6 @@ with st.sidebar:
                 new_idx = (idx + 1) % len(nav_list)
                 st.session_state["_pending_select_key"] = nav_list[new_idx]
                 st.rerun()
-    st.write("_____")
 
 # Sidebar Rerun (Hard Reload)
 if st.sidebar.button("RERUN"):
