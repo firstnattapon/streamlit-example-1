@@ -1,5 +1,5 @@
 # 📈_Monitor.py — Pro Optimistic UI (2-phase queue) + Min_Rebalance (clean UI)
-# ------------------------------------------------------------
+# ========================= SIMPLE–STABLE REFACTOR ==============================
 
 import streamlit as st
 import numpy as np
@@ -18,7 +18,7 @@ import re
 from urllib.parse import urlencode
 from urllib.request import urlopen
 import time  # RATE-LIMIT
-import math  # <-- [EDIT] Goal 1: Import math for sqrt function
+import math  # ใช้ sqrt ฯลฯ
 
 # ---------------------------------------------------------------------------------
 # App Setup
@@ -26,8 +26,25 @@ import math  # <-- [EDIT] Goal 1: Import math for sqrt function
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------------------------------
-# Small math helpers (0/1 logic)  [SIMPLE/STABLE]
+# Math utils [SIMPLE/STABLE]
 # ---------------------------------------------------------------------------------
+_EPS = 1e-12
+
+def r2(x: float) -> float:
+    """Stable 2-dec rounding (เหมือนเดิมเชิงผลลัพธ์)"""
+    try:
+        return round(float(x), 2)
+    except Exception:
+        return 0.0
+
+def heaviside(x: float) -> int:
+    """H(x): 1 หาก x>0, 0 หาก x<=0 (no branch side-effect)"""
+    return 1 if x > 0 else 0
+
+def sgn(x: float) -> int:
+    """sign function -> {-1,0,1}"""
+    return (x > 0) - (x < 0)
+
 def xor01(a: int, b: int) -> int:
     """XOR สำหรับบิต 0/1 (เลี่ยง if-else)"""
     try:
@@ -42,7 +59,7 @@ def safe_float(x, default: float = 0.0) -> float:
         return float(default)
 
 # ---------------------------------------------------------------------------------
-# SimulationTracer (เดิม)
+# SimulationTracer (คงเดิม)
 # ---------------------------------------------------------------------------------
 class SimulationTracer:
     def __init__(self, encoded_string: str):
@@ -122,16 +139,14 @@ if not CONFIG_DATA:
 
 ASSET_CONFIGS: List[Dict] = CONFIG_DATA.get('assets', [])
 GLOBAL_START_DATE: Optional[str] = CONFIG_DATA.get('global_settings', {}).get('start_date')
-
 if not ASSET_CONFIGS:
     st.error("No 'assets' list found in monitor_config.json")
     st.stop()
 
-# [NEW] Helper list for navigation
 ALL_TICKERS: List[str] = [c['ticker'] for c in ASSET_CONFIGS]
 
 # ---------------------------------------------------------------------------------
-# ThingSpeak Clients (อ่านอย่างเดียว)
+# ThingSpeak Clients
 # ---------------------------------------------------------------------------------
 @st.cache_resource
 def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]:
@@ -182,25 +197,43 @@ def rerun_keep_selection(ticker: str) -> None:
     st.rerun()
 
 # ---------------------------------------------------------------------------------
-# Calc Utils (เดิม)
+# TRADE CORE [SIMPLE/STABLE]: ฟังก์ชันกลาง + wrapper เดิม
 # ---------------------------------------------------------------------------------
+@lru_cache(maxsize=1024)
+def _trade_math(asset: float, fix_c: float = 1500.0, Diff: float = 60.0, side: int = +1) -> Tuple[float, int, float]:
+    """
+    ฟิสิกส์เดียวกันสำหรับ buy/sell:
+      unit_price = round2( (fix_c + side*Diff) / max(|asset|, ε) )
+      Δqty       = round( |asset*unit_price - fix_c| / max(unit_price, ε) )
+      total      = round2( asset*unit_price - side*Δqty*unit_price )
+
+    side = +1 => BUY (เหมือนเดิม)
+    side = -1 => SELL (เหมือนเดิม)
+    """
+    a = float(asset)
+    if abs(a) <= _EPS:
+        return 0.0, 0, 0.0
+
+    up = r2( (float(fix_c) + float(side)*float(Diff)) / max(abs(a), _EPS) )
+    if abs(up) <= _EPS:
+        return 0.0, 0, 0.0
+
+    delta_qty = int( round( abs(a*up - float(fix_c)) / max(abs(up), _EPS) ) )
+    total = r2( a*up - float(side)*delta_qty*up )
+    return float(up), int(delta_qty), float(total)
+
 @lru_cache(maxsize=128)
 def sell(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
+    # คง output เดิม (สูตรเหมือนที่คุณใช้) แต่รวมให้เป็นสมการเดียวกัน
     if asset == 0:
         return 0.0, 0, 0.0
-    unit_price = round((fix_c - Diff) / asset, 2)
-    adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
-    total = round(asset * unit_price + adjust_qty * unit_price, 2)
-    return unit_price, adjust_qty, total
+    return _trade_math(asset, fix_c, Diff, side=-1)
 
 @lru_cache(maxsize=128)
 def buy(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int, float]:
     if asset == 0:
         return 0.0, 0, 0.0
-    unit_price = round((fix_c + Diff) / asset, 2)
-    adjust_qty = round(abs(asset * unit_price - fix_c) / unit_price) if unit_price != 0 else 0
-    total = round(asset * unit_price - adjust_qty * unit_price, 2)
-    return unit_price, adjust_qty, total
+    return _trade_math(asset, fix_c, Diff, side=+1)
 
 # ---------------------------------------------------------------------------------
 # Price & Time
@@ -218,7 +251,7 @@ def get_cached_price(ticker: str) -> float:
                 return p
         except Exception:
             pass
-        # ชั้น 2: info (บางตัวใช้ regularMarketPrice)
+        # ชั้น 2: info
         try:
             inf = getattr(tk, 'info', {}) or {}
             p = float(inf.get('regularMarketPrice', 0.0))
@@ -318,7 +351,6 @@ def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: 
     except Exception:
         return "0"
 
-# RATE-LIMIT helpers
 def _now_ts() -> float:
     return time.time()
 
@@ -412,13 +444,12 @@ def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -
     st.session_state['_pending_ts_update'] = remaining
 
 # ---------------------------------------------------------------------------------
-# Net stats (ปรับปรุงใหม่)
+# Net stats — เวกเตอร์ไรซ์ [SIMPLE/STABLE]
 # ---------------------------------------------------------------------------------
 EMPTY_STATS_RESULT = dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
 @st.cache_data(ttl=180, show_spinner=False)
 def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int) -> List[Tuple[datetime.datetime, Optional[str]]]:
-    """Helper: ดึงข้อมูลและแปลงเป็น list ของ (datetime, value) ที่จัดเรียงแล้ว"""
     try:
         channel_id = int(asset_field_conf['channel_id'])
         fnum = _field_number(asset_field_conf['field'])
@@ -455,70 +486,83 @@ def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int) -> List[Tu
     except Exception:
         return []
 
-def _calculate_detailed_stats(
+def _calc_stats_vectorized(
     rows: List[Tuple[datetime.datetime, Optional[str]]],
     window_start_local: datetime.datetime,
     window_end_local: Optional[datetime.datetime] = None
 ) -> Dict[str, float]:
-    """Helper: คำนวณสถิติจากข้อมูลที่ผ่านการจัดเรียงแล้ว"""
-    baseline: Optional[float] = None
-    for dt_local, v in rows:
-        if dt_local < window_start_local:
-            try:
-                baseline = float(v)
-            except Exception:
-                continue
-        else:
-            break
+    if not rows:
+        return EMPTY_STATS_RESULT.copy()
 
-    buy_count = sell_count = 0
-    buy_units = sell_units = 0.0
-    first_in_window: Optional[float] = None
-    last_in_window: Optional[float] = None
+    t = np.array([r[0] for r in rows], dtype='datetime64[ns]')
+    v = np.array([safe_float(r[1], np.nan) for r in rows], dtype=float)
+    mask_valid = ~np.isnan(v)
+    if not mask_valid.any():
+        return EMPTY_STATS_RESULT.copy()
 
-    prev: Optional[float] = baseline
-    for dt_local, v in rows:
-        try:
-            curr = float(v)
-        except Exception:
-            continue
+    t = t[mask_valid]
+    v = v[mask_valid]
 
-        if dt_local < window_start_local:
-            prev = curr
-            continue
-        
-        if window_end_local and dt_local > window_end_local:
-            break
+    # baseline = ค่าสุดท้ายก่อนเริ่มหน้าต่าง
+    before_mask = (t < np.datetime64(window_start_local))
+    baseline = None
+    if before_mask.any():
+        baseline = float(v[before_mask][-1])
 
-        if first_in_window is None:
-            first_in_window = curr
-            
-        if prev is not None:
-            step = curr - prev
-            if step > 0:
-                buy_count += 1
-                buy_units += step
-            elif step < 0:
-                sell_count += 1
-                sell_units += abs(step)
-        
-        prev = curr
-        last_in_window = curr
+    # หน้าต่าง
+    inside_mask = (t >= np.datetime64(window_start_local))
+    if window_end_local is not None:
+        inside_mask &= (t <= np.datetime64(window_end_local))
 
-    if last_in_window is None:
-        net_units = 0.0
-    else:
-        ref = baseline if baseline is not None else (first_in_window if first_in_window is not None else last_in_window)
-        net_units = float(last_in_window - ref)
+    v_inside = v[inside_mask]
+    if v_inside.size == 0:
+        return EMPTY_STATS_RESULT.copy()
+
+    # เริ่มจากค่า ref_prev = baseline หรือ ค่าตัวแรกในหน้าต่าง
+    ref_prev = baseline if baseline is not None else float(v_inside[0])
+
+    # sequence สำหรับ diff = [ref_prev, v_inside...]
+    seq = np.concatenate([[ref_prev], v_inside.astype(float)])
+    steps = np.diff(seq)
+
+    buy_steps = steps[steps > 0]
+    sell_steps = steps[steps < 0]
+    buy_units = float(buy_steps.sum()) if buy_steps.size else 0.0
+    sell_units = float((-sell_steps).sum()) if sell_steps.size else 0.0
+
+    buy_count = int(np.count_nonzero(steps > 0))
+    sell_count = int(np.count_nonzero(steps < 0))
+    last_in_window = float(seq[-1])
+    ref_for_net = baseline if baseline is not None else float(v_inside[0])
+    net_units = float(last_in_window - ref_for_net)
 
     return dict(
-        buy_count=int(buy_count),
-        sell_count=int(sell_count),
+        buy_count=buy_count,
+        sell_count=sell_count,
         net_count=int(buy_count - sell_count),
         buy_units=float(buy_units),
         sell_units=float(sell_units),
         net_units=float(net_units)
     )
+
+@st.cache_data(ttl=180, show_spinner=False)
+def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
+    rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump)
+    if not rows:
+        return EMPTY_STATS_RESULT.copy()
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, tz_bkk)
+    return _calc_stats_vectorized(rows, start_dt, None)
+
+@st.cache_data(ttl=180, show_spinner=False)
+def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
+    rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump)
+    if not rows:
+        return EMPTY_STATS_RESULT.copy()
+    tz_bkk = pytz.timezone('Asia/Bangkok')
+    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, tz_bkk)
+    end_dt = _get_tz_aware_datetime(window_end_bkk_iso, tz_bkk)
+    return _calc_stats_vectorized(rows, start_dt, end_dt)
 
 def _get_tz_aware_datetime(iso_str: str, tz: datetime.tzinfo) -> datetime.datetime:
     """แปลง ISO string เป็น datetime ที่มี timezone ถูกต้อง"""
@@ -529,30 +573,6 @@ def _get_tz_aware_datetime(iso_str: str, tz: datetime.tzinfo) -> datetime.dateti
         return dt.astimezone(tz)
     except Exception:
         return datetime.datetime.now(tz)
-
-@st.cache_data(ttl=180, show_spinner=False)
-def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
-    rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump)
-    if not rows:
-        return EMPTY_STATS_RESULT.copy()
-    
-    tz_bkk = pytz.timezone('Asia/Bangkok')
-    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, tz_bkk)
-    
-    return _calculate_detailed_stats(rows, start_dt, None)
-
-@st.cache_data(ttl=180, show_spinner=False)
-def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
-    rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump)
-    if not rows:
-        return EMPTY_STATS_RESULT.copy()
-
-    tz_bkk = pytz.timezone('Asia/Bangkok')
-    start_dt = _get_tz_aware_datetime(window_start_bkk_iso, tz_bkk)
-    end_dt = _get_tz_aware_datetime(window_end_bkk_iso, tz_bkk)
-
-    return _calculate_detailed_stats(rows, start_dt, end_dt)
-
 
 # ---------------------------------------------------------------------------------
 # Fetch all data — รองรับ fast rerun
@@ -649,7 +669,6 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 # [OPT-NET] — Pending delta → optimistic net_str
 # ---------------------------------------------------------------------------------
 def get_pending_net_delta_for_ticker(ticker: str) -> int:
-    """รวม delta net จากคิวงาน BUY/SELL ที่ยัง pending สำหรับ ticker นั้น ๆ"""
     q = st.session_state.get('_pending_ts_update', [])
     delta = 0
     for job in q:
@@ -673,7 +692,6 @@ def get_pending_net_delta_for_ticker(ticker: str) -> int:
     return int(delta)
 
 def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
-    """คืนสตริง net พร้อมแสดงผล optimistic (ถ้ามี) เช่น '2  →  3  (+1)' """
     try:
         pend = get_pending_net_delta_for_ticker(ticker)
         if pend == 0:
@@ -688,9 +706,6 @@ def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
 # UI helpers
 # ---------------------------------------------------------------------------------
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
-    """
-    รักษา UI เดิม; ค่าที่ส่งเข้าโมเดล = real_val + (base_value*delta_factor)
-    """
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
 
@@ -804,14 +819,14 @@ def trading_section(
     nex: int,
     Nex_day_sell: int,
     clients: Dict[int, thingspeak.Channel],
-    diff: float,                # Diff ที่ผู้ใช้ตั้ง
-    min_rebalance: float        # Min_Rebalance จาก Controls
+    diff: float,
+    min_rebalance: float
 ) -> None:
     ticker = config['ticker']
     asset_conf = config['asset_field']
 
     def get_action_val() -> Optional[int]:
-        """ใช้ XOR แทน if: final = raw ^ Nex_day_sell  [SIMPLE/STABLE]"""
+        """ใช้ XOR แทน if: final = (raw&1) ^ (flip&1)  [SIMPLE/STABLE]"""
         try:
             if df_data.empty or df_data.action.values[1 + nex] == "":
                 return None
@@ -828,9 +843,9 @@ def trading_section(
         return
 
     sell_calc = calc['sell']
-    buy_calc = calc['buy']
+    buy_calc  = calc['buy']
 
-    # SELL — #fbb + เว้น 2 ช่อง +  &nbsp; หลัง A/P/C + ย่อตัวเลข + ตัวหนา
+    # SELL — คง UI/สี/ตัวหนา ตามที่คุณตั้งไว้
     sell_html = (
         f"<span style='color:#ffffff;'>sell</span>&nbsp;&nbsp;"
         f"<span style='color:#ffffff;'>A</span>&nbsp;"
@@ -846,7 +861,7 @@ def trading_section(
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
             try:
-                new_asset_val = float(asset_last) - float(buy_calc[1])  # หุ้นจริงที่ต้องลด
+                new_asset_val = float(asset_last) - float(buy_calc[1])  # ใช้ buy_calc ตามพฤติกรรมเดิม
                 _optimistic_apply_asset(
                     ticker=ticker,
                     new_value=float(new_asset_val),
@@ -857,7 +872,7 @@ def trading_section(
             except Exception as e:
                 st.error(f"SELL {ticker} error: {e}")
 
-    # Price & P/L — บรรทัดเดียวแบบเรียบ (เหมือนเดิม)
+    # Price & P/L
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -865,14 +880,10 @@ def trading_section(
             fix_value = float(config['fix_c'])
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
-            
-            # <-- [EDIT] Goal 1: trade_only_when และ new_pct
+
+            # trade_only_when และ % แสดงผล
             trade_only_when = math.sqrt(float(fix_value) * float(min_rebalance))
-            if fix_value > 0:
-                new_pct = (trade_only_when / fix_value) * 100.0  # ตรงตามตัวอย่าง 60/1500*100 = 4%
-            else:
-                new_pct = 0.0
-            # ฟอร์แมต: <1% แสดงทศนิยม 2 ตำแหน่ง, >=1% ปัดเต็ม
+            new_pct = (trade_only_when / fix_value) * 100.0 if fix_value > 0 else 0.0
             new_pct_str = f"{new_pct:.2f}%" if new_pct < 1 else f"{new_pct:.0f}%"
 
             st.markdown(
@@ -880,7 +891,7 @@ def trading_section(
                     f"Price: **{current_price:,.3f}** | "
                     f"Value: **{pv:,.2f}** | "
                     f"P/L (vs {fix_value:,.0f}) | "
-                    f"Min ({trade_only_when:,.0f}:{new_pct_str} vs {float(diff):,.0f}) | "  # <-- [EDIT] แทรก new_pct_str
+                    f"Min ({trade_only_when:,.0f}:{new_pct_str} vs {float(diff):,.0f}) | "
                     f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>"
                 ),
                 unsafe_allow_html=True
@@ -890,13 +901,13 @@ def trading_section(
     except Exception:
         st.warning(f"Could not retrieve price data for {ticker}.")
 
-    # BUY — แสดง summary (UI เดิม)  ✅ ไม่แตะต้องตามสเปค
+    # BUY — คง UI เดิม (ใช้ sell_calc ตามพฤติกรรมเดิม)
     col4, col5, col6 = st.columns(3)
     st.write('buy', '    ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     if col6.checkbox(f'buy_match_{ticker}'):
         if col6.button(f"GO_BUY_{ticker}"):
             try:
-                new_asset_val = float(asset_last) + float(sell_calc[1])  # หุ้นจริงที่ต้องเพิ่ม
+                new_asset_val = float(asset_last) + float(sell_calc[1])
                 _optimistic_apply_asset(
                     ticker=ticker,
                     new_value=float(new_asset_val),
@@ -934,28 +945,22 @@ if '_ts_entry_ids' not in st.session_state:
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
-    # <-- [EDIT] Goal 1: Change default value from 0.04 to 2.4
-    st.session_state['min_rebalance'] = 2.4
+    st.session_state['min_rebalance'] = 2.4  # คงสเปค
 
 # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
-# ตั้งค่า state สำหรับ Diff และตัวติดตาม Ticker ที่เลือกล่าสุด
 if 'diff_value' not in st.session_state:
-    # กำหนดค่าเริ่มต้นครั้งแรก โดยใช้ diff จาก asset ตัวแรกใน config
     st.session_state.diff_value = ASSET_CONFIGS[0].get('diff', 60) if ASSET_CONFIGS else 60
 if '_last_selected_ticker' not in st.session_state:
     st.session_state._last_selected_ticker = ""
 # === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
-# Bootstrap selection BEFORE widgets
 pending = st.session_state.pop("_pending_select_key", None)
 if pending:
     st.session_state.select_key = pending
 
-# เวลาตลาด US premarket ล่าสุด (BKK) = window_start
 latest_us_premarket_open_bkk = get_latest_us_premarket_open_bkk()
 window_start_bkk_iso = latest_us_premarket_open_bkk.isoformat()
 
-# ดึงข้อมูลหลัก — มี fast rerun
 CACHE_BUMP = st.session_state.get('_cache_bump', 0)
 if st.session_state.get('_skip_refresh_on_rerun', False) and st.session_state.get('_all_data_cache'):
     all_data = st.session_state['_all_data_cache']
@@ -967,7 +972,7 @@ else:
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
 
-# optimistic overrides (แสดงผลทันทีตามที่ผู้ใช้เพิ่งกด)
+# optimistic overrides
 if st.session_state.get('_last_assets_overrides'):
     last_assets_all = {**last_assets_all, **st.session_state['_last_assets_overrides']}
 
@@ -978,7 +983,6 @@ trade_stats_all = all_data['trade_stats']
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 with tab2:
-    # ---------- Header row: nex_day | Min_Rebalance ----------
     left, right = st.columns([2, 1])
     with left:
         Nex_day_ = st.checkbox('nex_day', value=(st.session_state.nex == 1))
@@ -999,37 +1003,29 @@ with tab2:
         if Nex_day_:
             st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
     with right:
-        # <-- [EDIT] Goal 1: Update UI widget parameters
         st.session_state['min_rebalance'] = st.number_input(
             'Min_Rebalance',
             min_value=0.0,
-            step=0.1,  # Changed from 0.01
-            value=float(st.session_state.get('min_rebalance', 2.4)),  # Changed from 0.04
+            step=0.1,
+            value=float(st.session_state.get('min_rebalance', 2.4)),
             help="แฟกเตอร์สำหรับคำนวณ trade_only_when ด้วยสมการ sqrt(Min_Rebalance * fix_value)"
         )
 
     st.write("---")
 
     # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
-    # ตรวจจับการเปลี่ยนแปลงของ Ticker ที่เลือก และอัปเดตค่า Diff
     selected_ticker = st.session_state.get('select_key', "")
     if selected_ticker != st.session_state.get('_last_selected_ticker'):
         new_diff = None
-        # หา config ของ ticker ที่เลือก
         if selected_ticker and selected_ticker in [c['ticker'] for c in ASSET_CONFIGS]:
             for config in ASSET_CONFIGS:
                 if config['ticker'] == selected_ticker:
                     new_diff = config.get('diff', 60)
                     break
-        
-        # ถ้าหาเจอ ให้อัปเดตค่าใน session state
         if new_diff is not None:
             st.session_state.diff_value = new_diff
-        
-        # อัปเดต ticker ล่าสุดที่ประมวลผลไปแล้ว
         st.session_state._last_selected_ticker = selected_ticker
-    
-    # ใช้ 'key' เพื่อผูกวิดเจ็ตกับ session_state โดยตรง
+
     x_2_from_state = st.sidebar.number_input('Diff', step=1, key='diff_value')
     # === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
@@ -1058,7 +1054,7 @@ with tab1:
                 if not df_data.empty and df_data.action.values[1 + st.session_state.nex] != "":
                     raw_action = int(df_data.action.values[1 + st.session_state.nex]) & 1
                     flip = int(st.session_state.Nex_day_sell) & 1
-                    final_action_val = xor01(raw_action, flip)  # [SIMPLE/STABLE]
+                    final_action_val = xor01(raw_action, flip)
                     if final_action_val == 1:
                         action_emoji = "🟢 "
                     elif final_action_val == 0:
@@ -1068,13 +1064,10 @@ with tab1:
 
         ticker_actions[ticker] = final_action_val
 
-        # --------- [OPT-NET] ใช้ net แบบ optimistic ----------
         base_net = int(trade_nets_all.get(ticker, 0))
         net_str = make_net_str_with_optimism(ticker, base_net)
-
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
 
-    # สร้างชุด/ลิสต์สำหรับ Filter เสมอ (เพื่อใช้กับ Navigator)
     buy_set  = {t for t, a in ticker_actions.items() if a == 1}
     sell_set = {t for t, a in ticker_actions.items() if a == 0}
     buy_list  = [t for t in ALL_TICKERS if t in buy_set]
@@ -1108,9 +1101,8 @@ with tab1:
     elif selected_option == "Filter Buy Tickers":
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_set]
     elif selected_option == "Filter Sell Tickers":
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_set]  # FIX BUG [SIMPLE/STABLE]
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_set]
     else:
-        # ติ๊กเกอร์เฉพาะ
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
     calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
@@ -1120,7 +1112,7 @@ with tab1:
         fix_c = float(config['fix_c'])
         calculations[ticker] = {
             'sell': sell(asset_value, fix_c=fix_c, Diff=float(st.session_state.diff_value)),
-            'buy': buy(asset_value, fix_c=fix_c, Diff=float(st.session_state.diff_value)),
+            'buy':  buy(asset_value,  fix_c=fix_c, Diff=float(st.session_state.diff_value)),
         }
 
     for config in configs_to_display:
@@ -1150,12 +1142,11 @@ with tab1:
             st.dataframe(df_data, use_container_width=True)
         st.write("_____")
 
-# === 🧭 Sidebar Ticker Navigator (Goal_1 — filtered groups) ===
+# === 🧭 Sidebar Ticker Navigator
 with st.sidebar:
     st.write("_____")
     sel = st.session_state.get("select_key", "")
 
-    # 1) ถ้าอยู่โหมด Filter → เลื่อนในกลุ่มที่กรอง แล้วพาเข้า "รายตัว" ของสมาชิกกลุ่ม
     if sel == "Filter Buy Tickers" and buy_list:
         idx = int(st.session_state.get('_filter_nav_idx_buy', 0)) % len(buy_list)
         current_preview = buy_list[idx]
@@ -1184,9 +1175,8 @@ with st.sidebar:
             st.session_state["_pending_select_key"] = sell_list[st.session_state['_filter_nav_idx_sell']]
             st.rerun()
 
-    # 2) ถ้าอยู่ “รายตัว” → เลื่อนในกลุ่มของมัน (ถ้ามี) มิฉะนั้น fallback เป็นทุกตัว (พฤติกรรมเดิม)
     elif sel in ALL_TICKERS:
-        act = ticker_actions.get(sel, None)
+        act = locals().get('ticker_actions', {}).get(sel, None)
         if act == 1 and buy_list:
             nav_list = buy_list
             title = "Buy Navigator"
@@ -1219,7 +1209,5 @@ if st.sidebar.button("RERUN"):
     else:
         st.rerun()
 
-# ✅=============== [FIX] PROCESS PENDING UPDATES AT THE END ===============✅
-# ย้ายมาไว้ท้ายสุดเพื่อให้ UI ที่ใช้ optimistic state แสดงผลก่อน
-# จากนั้นค่อยประมวลผลคิวเพื่อยิง API ในเบื้องหลัง
+# ✅ PROCESS PENDING UPDATES AT THE END
 process_pending_updates(min_interval=16.0, max_wait=8.0)
