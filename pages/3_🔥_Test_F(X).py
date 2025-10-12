@@ -164,7 +164,7 @@ def clear_all_caches() -> None:
         '_pending_ts_update', '_ts_entry_ids',
         '_widget_shadow',
         'min_rebalance',
-        'diff_value', '_last_selected_ticker' # <-- รักษา state ใหม่
+        'diff_value', '_last_selected_ticker'
     }
     for key in list(st.session_state.keys()):
         if key not in ui_state_keys_to_preserve:
@@ -802,8 +802,8 @@ def trading_section(
     nex: int,
     Nex_day_sell: int,
     clients: Dict[int, thingspeak.Channel],
-    diff: float,                # Diff ที่ผู้ใช้ตั้ง
-    min_rebalance: float        # Min_Rebalance จาก Controls
+    diff: float,          # Diff ที่ผู้ใช้ตั้ง
+    min_rebalance: float      # Min_Rebalance จาก Controls
 ) -> None:
     ticker = config['ticker']
     asset_conf = config['asset_field']
@@ -864,7 +864,6 @@ def trading_section(
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
             
-            ## <-- [EDIT] Goal 1: Change calculation equation
             trade_only_when = math.sqrt(float(fix_value) * float(min_rebalance))
 
             st.markdown(
@@ -926,17 +925,13 @@ if '_ts_entry_ids' not in st.session_state:
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
-    ## <-- [EDIT] Goal 1: Change default value from 0.04 to 2.4
     st.session_state['min_rebalance'] = 2.4
 
-# === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
 # ตั้งค่า state สำหรับ Diff และตัวติดตาม Ticker ที่เลือกล่าสุด
 if 'diff_value' not in st.session_state:
-    # กำหนดค่าเริ่มต้นครั้งแรก โดยใช้ diff จาก asset ตัวแรกใน config
     st.session_state.diff_value = ASSET_CONFIGS[0].get('diff', 60) if ASSET_CONFIGS else 60
 if '_last_selected_ticker' not in st.session_state:
     st.session_state._last_selected_ticker = ""
-# === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
 # Bootstrap selection BEFORE widgets
 pending = st.session_state.pop("_pending_select_key", None)
@@ -991,18 +986,16 @@ with tab2:
         if Nex_day_:
             st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
     with right:
-        ## <-- [EDIT] Goal 1: Update UI widget parameters
         st.session_state['min_rebalance'] = st.number_input(
             'Min_Rebalance',
             min_value=0.0,
-            step=0.1, # Changed from 0.01
-            value=float(st.session_state.get('min_rebalance', 2.4)), # Changed from 0.04
+            step=0.1, 
+            value=float(st.session_state.get('min_rebalance', 2.4)), 
             help="แฟกเตอร์สำหรับคำนวณ trade_only_when ด้วยสมการ sqrt(Min_Rebalance * fix_value)"
         )
 
     st.write("---")
 
-    # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
     # ตรวจจับการเปลี่ยนแปลงของ Ticker ที่เลือก และอัปเดตค่า Diff
     selected_ticker = st.session_state.get('select_key', "")
     if selected_ticker != st.session_state.get('_last_selected_ticker'):
@@ -1023,7 +1016,6 @@ with tab2:
     
     # ใช้ 'key' เพื่อผูกวิดเจ็ตกับ session_state โดยตรง
     x_2_from_state = st.sidebar.number_input('Diff', step=1, key='diff_value')
-    # === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
 
@@ -1065,8 +1057,10 @@ with tab1:
         net_str = make_net_str_with_optimism(ticker, base_net)
 
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
-
+    
+    # [EDIT] Goal 1: สร้าง Master List ของ Ticker ไว้ตรงนี้เพื่อใช้ร่วมกัน
     all_tickers = [c['ticker'] for c in ASSET_CONFIGS]
+
     selectbox_options: List[str] = [""]
     if st.session_state.nex == 1:
         selectbox_options.extend(["Filter Buy Tickers", "Filter Sell Tickers"])
@@ -1138,11 +1132,53 @@ with tab1:
             st.dataframe(df_data, use_container_width=True)
         st.write("_____")
 
+# [EDIT] Goal 1: เพิ่มปุ่ม Previous/Next ใน Sidebar
+st.sidebar.write("---") # เส้นคั่นเพื่อความสวยงาม
+prev_col, next_col = st.sidebar.columns(2)
+
+if prev_col.button('⬅️ Previous'):
+    if all_tickers: # ตรวจสอบว่ามี Ticker ในลิสต์หรือไม่
+        try:
+            current_selection = st.session_state.get('select_key', all_tickers[0])
+            # ถ้าตัวที่เลือกอยู่ไม่ใช่ Ticker จริง ให้เริ่มจากตัวแรก
+            if current_selection not in all_tickers:
+                current_selection = all_tickers[0]
+            
+            current_index = all_tickers.index(current_selection)
+            # คำนวณ Index ใหม่แบบวนลูปไปด้านหลัง
+            new_index = (current_index - 1 + len(all_tickers)) % len(all_tickers)
+            st.session_state.select_key = all_tickers[new_index]
+            st.rerun()
+        except (ValueError, IndexError):
+             # หากเกิดข้อผิดพลาด ให้เลือกตัวแรก
+            st.session_state.select_key = all_tickers[0]
+            st.rerun()
+
+
+if next_col.button('Next ➡️'):
+    if all_tickers: # ตรวจสอบว่ามี Ticker ในลิสต์หรือไม่
+        try:
+            current_selection = st.session_state.get('select_key', all_tickers[-1])
+            # ถ้าตัวที่เลือกอยู่ไม่ใช่ Ticker จริง ให้เริ่มจากตัวสุดท้าย (เพื่อให้กด Next แล้วไปตัวแรก)
+            if current_selection not in all_tickers:
+                 current_selection = all_tickers[-1]
+
+            current_index = all_tickers.index(current_selection)
+            # คำนวณ Index ใหม่แบบวนลูปไปด้านหน้า
+            new_index = (current_index + 1) % len(all_tickers)
+            st.session_state.select_key = all_tickers[new_index]
+            st.rerun()
+        except (ValueError, IndexError):
+            # หากเกิดข้อผิดพลาด ให้เลือกตัวแรก
+            st.session_state.select_key = all_tickers[0]
+            st.rerun()
+
+
 # Sidebar Rerun (Hard Reload)
 if st.sidebar.button("RERUN"):
     current_selection = st.session_state.get("select_key", "")
     clear_all_caches()
-    if current_selection in [c['ticker'] for c in ASSET_CONFIGS]:
+    if current_selection in all_tickers: # ใช้ all_tickers ที่สร้างไว้แล้ว
         rerun_keep_selection(current_selection)
     else:
         st.rerun()
