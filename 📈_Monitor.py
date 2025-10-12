@@ -18,6 +18,7 @@ import re
 from urllib.parse import urlencode
 from urllib.request import urlopen
 import time  # RATE-LIMIT
+import math ## <-- [EDIT] Goal 1: Import math for sqrt function
 
 # ---------------------------------------------------------------------------------
 # App Setup
@@ -677,7 +678,7 @@ def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
             return str(int(base_net))
         sign = '+' if pend > 0 else ''
         preview = int(base_net) + int(pend)
-        return f"{int(base_net)}  →  {preview}  ({sign}{int(pend)})"
+        return f"{int(base_net)}  →  {preview}  ({sign}{int(pend)})"
     except Exception:
         return str(int(base_net))
 
@@ -862,7 +863,9 @@ def trading_section(
             fix_value = float(config['fix_c'])
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
-            trade_only_when = float(fix_value) * float(min_rebalance)
+            
+            ## <-- [EDIT] Goal 1: Change calculation equation
+            trade_only_when = math.sqrt(float(fix_value) * float(min_rebalance))
 
             st.markdown(
                 (
@@ -923,7 +926,8 @@ if '_ts_entry_ids' not in st.session_state:
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
-    st.session_state['min_rebalance'] = 2.4  # default
+    ## <-- [EDIT] Goal 1: Change default value from 0.04 to 2.4
+    st.session_state['min_rebalance'] = 2.4
 
 # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
 # ตั้งค่า state สำหรับ Diff และตัวติดตาม Ticker ที่เลือกล่าสุด
@@ -987,11 +991,13 @@ with tab2:
         if Nex_day_:
             st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
     with right:
+        ## <-- [EDIT] Goal 1: Update UI widget parameters
         st.session_state['min_rebalance'] = st.number_input(
             'Min_Rebalance',
-            min_value=0.0, max_value=1.0,
-            step=0.01, value=float(st.session_state.get('min_rebalance', 0.04)),
-            help="ลิมิตโซนสำหรับคอมโพเนนต์ Min ในบรรทัด P/L (เช่น 0.04 = 4%)"
+            min_value=0.0,
+            step=0.1, # Changed from 0.01
+            value=float(st.session_state.get('min_rebalance', 2.4)), # Changed from 0.04
+            help="แฟกเตอร์สำหรับคำนวณ trade_only_when ด้วยสมการ sqrt(Min_Rebalance * fix_value)"
         )
 
     st.write("---")
