@@ -18,7 +18,7 @@ import re
 from urllib.parse import urlencode
 from urllib.request import urlopen
 import time  # RATE-LIMIT
-import math  # <-- [EDIT] Goal 1: Import math for sqrt function
+import math  # <-- [EDIT] sqrt ใช้ตรงคำนวณ trade_only_when
 
 # ---------------------------------------------------------------------------------
 # App Setup
@@ -857,7 +857,7 @@ def trading_section(
             except Exception as e:
                 st.error(f"SELL {ticker} error: {e}")
 
-    # Price & P/L — บรรทัดเดียวแบบเรียบ (เหมือนเดิม)
+    # Price & P/L — บรรทัดเดียวแบบเรียบ (เหมือนเดิม + เพิ่ม new)
     try:
         current_price = get_cached_price(ticker)
         if current_price > 0:
@@ -866,15 +866,18 @@ def trading_section(
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
             
-            # <-- [EDIT] Goal 1: Change calculation equation
+            # คำนวณ trade_only_when ด้วยสูตรใหม่ (เดิม)
             trade_only_when = math.sqrt(float(fix_value) * float(min_rebalance))
+
+            # <-- [EDIT - GOAL_1] เพิ่มสมการ new และกันหารศูนย์
+            new = (float(fix_value) / float(trade_only_when) * 100.0) if trade_only_when > 0 else 0.0
 
             st.markdown(
                 (
                     f"Price: **{current_price:,.3f}** | "
                     f"Value: **{pv:,.2f}** | "
                     f"P/L (vs {fix_value:,.0f}) | "
-                    f"Min ({trade_only_when:,.0f} vs {float(diff):,.0f}) | "
+                    f"Min ({trade_only_when:,.0f}:{new:,.0f} vs {float(diff):,.0f}) | "
                     f"<span style='color:{pl_color}; font-weight:bold;'>{pl_value:,.2f}</span>"
                 ),
                 unsafe_allow_html=True
@@ -884,7 +887,7 @@ def trading_section(
     except Exception:
         st.warning(f"Could not retrieve price data for {ticker}.")
 
-    # BUY — แสดง summary (UI เดิม)  ✅ ไม่แตะต้องตามสเปค
+    # BUY — แสดง summary (UI เดิม)
     col4, col5, col6 = st.columns(3)
     st.write('buy', '    ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     if col6.checkbox(f'buy_match_{ticker}'):
@@ -928,13 +931,11 @@ if '_ts_entry_ids' not in st.session_state:
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
-    # <-- [EDIT] Goal 1: Change default value from 0.04 to 2.4
+    # ค่าตั้งต้นใหม่
     st.session_state['min_rebalance'] = 2.4
 
 # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
-# ตั้งค่า state สำหรับ Diff และตัวติดตาม Ticker ที่เลือกล่าสุด
 if 'diff_value' not in st.session_state:
-    # กำหนดค่าเริ่มต้นครั้งแรก โดยใช้ diff จาก asset ตัวแรกใน config
     st.session_state.diff_value = ASSET_CONFIGS[0].get('diff', 60) if ASSET_CONFIGS else 60
 if '_last_selected_ticker' not in st.session_state:
     st.session_state._last_selected_ticker = ""
@@ -961,7 +962,7 @@ else:
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
 
-# optimistic overrides (แสดงผลทันทีตามที่ผู้ใช้เพิ่งกด)
+# optimistic overrides
 if st.session_state.get('_last_assets_overrides'):
     last_assets_all = {**last_assets_all, **st.session_state['_last_assets_overrides']}
 
@@ -993,37 +994,30 @@ with tab2:
         if Nex_day_:
             st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
     with right:
-        # <-- [EDIT] Goal 1: Update UI widget parameters
+        # ช่วยจำสูตร
         st.session_state['min_rebalance'] = st.number_input(
             'Min_Rebalance',
             min_value=0.0,
-            step=0.1,  # Changed from 0.01
-            value=float(st.session_state.get('min_rebalance', 2.4)),  # Changed from 0.04
-            help="แฟกเตอร์สำหรับคำนวณ trade_only_when ด้วยสมการ sqrt(Min_Rebalance * fix_value)"
+            step=0.1,
+            value=float(st.session_state.get('min_rebalance', 2.4)),
+            help="ใช้คำนวณ trade_only_when = sqrt(Min_Rebalance * fix_value)"
         )
 
     st.write("---")
 
     # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
-    # ตรวจจับการเปลี่ยนแปลงของ Ticker ที่เลือก และอัปเดตค่า Diff
     selected_ticker = st.session_state.get('select_key', "")
     if selected_ticker != st.session_state.get('_last_selected_ticker'):
         new_diff = None
-        # หา config ของ ticker ที่เลือก
         if selected_ticker and selected_ticker in [c['ticker'] for c in ASSET_CONFIGS]:
             for config in ASSET_CONFIGS:
                 if config['ticker'] == selected_ticker:
                     new_diff = config.get('diff', 60)
                     break
-        
-        # ถ้าหาเจอ ให้อัปเดตค่าใน session state
         if new_diff is not None:
             st.session_state.diff_value = new_diff
-        
-        # อัปเดต ticker ล่าสุดที่ประมวลผลไปแล้ว
         st.session_state._last_selected_ticker = selected_ticker
     
-    # ใช้ 'key' เพื่อผูกวิดเจ็ตกับ session_state โดยตรง
     x_2_from_state = st.sidebar.number_input('Diff', step=1, key='diff_value')
     # === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
@@ -1052,7 +1046,7 @@ with tab1:
                 if not df_data.empty and df_data.action.values[1 + st.session_state.nex] != "":
                     raw_action = int(df_data.action.values[1 + st.session_state.nex]) & 1
                     flip = int(st.session_state.Nex_day_sell) & 1
-                    final_action_val = xor01(raw_action, flip)  # [SIMPLE/STABLE]
+                    final_action_val = xor01(raw_action, flip)
                     if final_action_val == 1:
                         action_emoji = "🟢 "
                     elif final_action_val == 0:
@@ -1068,7 +1062,6 @@ with tab1:
 
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
 
-    # สร้างชุด/ลิสต์สำหรับ Filter เสมอ (เพื่อใช้กับ Navigator)
     buy_set  = {t for t, a in ticker_actions.items() if a == 1}
     sell_set = {t for t, a in ticker_actions.items() if a == 0}
     buy_list  = [t for t in ALL_TICKERS if t in buy_set]
@@ -1102,9 +1095,8 @@ with tab1:
     elif selected_option == "Filter Buy Tickers":
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in buy_set]
     elif selected_option == "Filter Sell Tickers":
-        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_set]  # FIX BUG [SIMPLE/STABLE]
+        configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] in sell_set]
     else:
-        # ติ๊กเกอร์เฉพาะ
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
     calculations: Dict[str, Dict[str, Tuple[float, int, float]]] = {}
@@ -1149,7 +1141,6 @@ with st.sidebar:
     st.write("_____")
     sel = st.session_state.get("select_key", "")
 
-    # 1) ถ้าอยู่โหมด Filter → เลื่อนในกลุ่มที่กรอง แล้วพาเข้า "รายตัว" ของสมาชิกกลุ่ม
     if sel == "Filter Buy Tickers" and buy_list:
         idx = int(st.session_state.get('_filter_nav_idx_buy', 0)) % len(buy_list)
         current_preview = buy_list[idx]
@@ -1178,7 +1169,6 @@ with st.sidebar:
             st.session_state["_pending_select_key"] = sell_list[st.session_state['_filter_nav_idx_sell']]
             st.rerun()
 
-    # 2) ถ้าอยู่ “รายตัว” → เลื่อนในกลุ่มของมัน (ถ้ามี) มิฉะนั้น fallback เป็นทุกตัว (พฤติกรรมเดิม)
     elif sel in ALL_TICKERS:
         act = ticker_actions.get(sel, None)
         if act == 1 and buy_list:
@@ -1214,6 +1204,4 @@ if st.sidebar.button("RERUN"):
         st.rerun()
 
 # ✅=============== [FIX] PROCESS PENDING UPDATES AT THE END ===============✅
-# ย้ายมาไว้ท้ายสุดเพื่อให้ UI ที่ใช้ optimistic state แสดงผลก่อน
-# จากนั้นค่อยประมวลผลคิวเพื่อยิง API ในเบื้องหลัง
 process_pending_updates(min_interval=16.0, max_wait=8.0)
