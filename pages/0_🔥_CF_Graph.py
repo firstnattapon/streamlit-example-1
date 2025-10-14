@@ -34,7 +34,7 @@ with tabs[3]:
 
 with tabs[4]:
     with st.expander("Historical_Backtest_CF", expanded=True):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=sjbADLCcnqXKFmvVPCL3fA", width=1500, height=1000, scrolling=0)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=DioBCRhLKWgMw2ey5YMRKJ", width=1500, height=1000, scrolling=0)
         with st.expander("Monthly", expanded=False):        
             st.components.v1.iframe("https://monica.im/share/artifact?id=cgYnircvQqM9YUf58VHd8a", width=1500, height=1000, scrolling=0)
         
