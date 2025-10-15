@@ -38,7 +38,7 @@
       "channel_id": 2385118,
       "write_api_key": "IPSG3MMMBJEB9DY8",
       "production_params": {
-        "t0": 14.20,
+        "t0": 16.0,
         "fix": 1500.0
       }
     },
