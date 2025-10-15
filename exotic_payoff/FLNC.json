@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "exported_at": "2025-10-15T14:34:15.518Z",
+  "exported_at": "2025-10-15T15:23:43.460Z",
   "params": {
     "x0_1": 18,
     "x0_2": 13,
@@ -13,7 +13,7 @@
     "constant1": 5000,
     "constant2": 1500,
     "refConst": 1500,
-    "b1": 2169.1,
+    "b1": -188.26,
     "b2": 0,
     "autoRolloverB1": false,
     "autoRolloverB2": false,
