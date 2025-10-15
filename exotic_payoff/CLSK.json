@@ -1,19 +1,19 @@
 {
   "version": "1.0.0",
-  "exported_at": "2025-10-09T06:08:45.006Z",
+  "exported_at": "2025-10-15T15:30:04.580Z",
   "params": {
-    "x0_1": 12.5,
-    "x0_2": 13.22,
+    "x0_1": 20,
+    "x0_2": 16,
     "x1Range": [
       5,
-      25
+      40
     ],
     "delta1": 0.2,
     "delta2": 1,
     "constant1": 5000,
     "constant2": 1500,
     "refConst": 2200,
-    "b1": -157,
+    "b1": -313.79,
     "b2": 0,
     "autoRolloverB1": false,
     "autoRolloverB2": false,
