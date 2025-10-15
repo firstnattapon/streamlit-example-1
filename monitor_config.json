@@ -55,8 +55,8 @@
             "ticker": "FLNC",
             "monitor_field": { "field": 1, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V" },
             "asset_field": { "field": "field1", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
-            "fix_c": 3000,
-            "diff": 80,
+            "fix_c": 5000,
+            "diff": 120,
             "option_config": { "base_value": 100, "delta_factor": 1, "label": "FLNC(LV:100@15.1, Δ=1.00)" }
         },
         {
