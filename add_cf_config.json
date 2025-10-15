@@ -32,9 +32,11 @@
     { "type": "option", "option_type": "call", "name": "CLSK Call @ 20.00", "underlying_ticker": "CLSK", "contracts_or_shares": 200, "premium_paid_per_share": 9.87, "strike": 20.0 },
     { "type": "option", "option_type": "call", "name": "LUNR Call @ 14.00", "underlying_ticker": "LUNR", "contracts_or_shares": 100, "premium_paid_per_share": 2.92, "strike": 11.0 },
     
-    { "type": "option", "option_type": "put", "name": "FLNC Put @ 10.90", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 3.10, "strike": 14.0 },
-    { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.22", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.78, "strike": 16.0 },
-    { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.22", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.55, "strike": 16.0 },
+    { "type": "option", "option_type": "put", "name": "FLNC Put @ 14.0", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 3.10, "strike": 14.0 },
+    { "type": "option", "option_type": "put", "name": "FLNC Put @ 14.0", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 4.31, "strike": 14.0 },
+    { "type": "option", "option_type": "put", "name": "FLNC Put @ 14.0", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 4.41, "strike": 14.0 },
+    { "type": "option", "option_type": "put", "name": "CLSK Put @ 16.0", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.78, "strike": 16.0 },
+    { "type": "option", "option_type": "put", "name": "CLSK Put @ 16.0", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.55, "strike": 16.0 },
 
     { "type": "stock", "ticker": "FFWM", "reference_price": 6.88, "fix_c": 1500, "b_offset": 0.0, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field1" } },
     { "type": "stock", "ticker": "NEGG", "reference_price": 25.20, "fix_c": 500, "b_offset": 718.28, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field2" } },
