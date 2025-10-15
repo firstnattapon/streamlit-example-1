@@ -19,7 +19,7 @@
     { "type": "option", "option_type": "call", "name": "FFWM Call @ 6.88", "underlying_ticker": "FFWM", "contracts_or_shares": 200,  "premium_paid_per_share": 1.17,  "strike": 5.0 },
     { "type": "option", "option_type": "call", "name": "AGL Call @ 2.00",  "underlying_ticker": "AGL",  "contracts_or_shares": 1000, "premium_paid_per_share": 0.305, "strike": 1.750 },
     { "type": "option", "option_type": "call", "name": "RXRX Call @ 5.40", "underlying_ticker": "RXRX", "contracts_or_shares": 200,  "premium_paid_per_share": 1.4,   "strike": 4.0 },
-    { "type": "option", "option_type": "call", "name": "FLNC Call @ 18.00", "underlying_ticker": "FLNC", "contracts_or_shares": 100,  "premium_paid_per_share": 8.2,  "strike": 18 },
+    { "type": "option", "option_type": "call", "name": "FLNC Call @ 18.00", "underlying_ticker": "FLNC", "contracts_or_shares": 100,  "premium_paid_per_share": -3.85,  "strike": 18.0 },
     { "type": "option", "option_type": "call", "name": "GERN Call @ 1.85", "underlying_ticker": "GERN", "contracts_or_shares": 800,  "premium_paid_per_share": 0.36,  "strike": 1.5 },
     { "type": "option", "option_type": "call", "name": "DYN Call @ 12.60", "underlying_ticker": "DYN",  "contracts_or_shares": 100,  "premium_paid_per_share": 2.61,  "strike": 10.0 },
     { "type": "option", "option_type": "call", "name": "NVTS Call @ 8.25", "underlying_ticker": "NVTS", "contracts_or_shares": 100,  "premium_paid_per_share": 1.26,  "strike": 7.0 },
