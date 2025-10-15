@@ -158,7 +158,7 @@
       "channel_id": 2988808,
       "write_api_key": "QBIPN1AIZ88QQW5V",
       "production_params": {
-        "t0": 12.50,
+        "t0": 20.0,
         "fix": 5000.0
       }  
     },
