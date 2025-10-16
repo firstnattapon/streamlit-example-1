@@ -59,8 +59,7 @@ def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dic
             channel_info = asset.get('holding_channel', {})
             if channel_info.get('channel_id'):
                 asset_clients[ticker] = thingspeak.Channel(channel_info['channel_id'], channel_info['write_api_key'])
-        # 🔁 Reverted to the original success message (for 100% UI parity)
-        st.success(f"Initialized main client and {len(asset_clients)} asset {len(option_assets)} option holding clients.")
+        st.success(f"Initialized main client and {len(asset_clients)} asset holding clients; options tracked: {len(option_assets)}.")
         return client_main, asset_clients
     except Exception as e:
         st.error(f"Failed to initialize ThingSpeak clients: {e}")
@@ -102,6 +101,7 @@ def compute_default_beta_memory_from_assets(stock_assets: List[Dict[str, Any]]) 
         try:
             total += float(a.get('b_offset', 0.0))
         except (TypeError, ValueError):
+            # if malformed b_offset, treat as 0
             pass
     return total
 
@@ -280,7 +280,7 @@ def display_results(
         st.metric(label=baseline_label, value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
 
         baseline_target = config.get('baseline_target', 0.0)
-        adjusted_cf = metrics['net_cf'] - metrics['cashflow_offset']
+        adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
 
@@ -369,10 +369,11 @@ def calculate_metrics(
 
         options_pl_all += intrinsic_value - total_cost_basis
 
-    # NEW: now_pv = β_mem + Stocks + Cash + Max_Roll (รวม CALL+PUT)
+    # NEW: now_pv = β_mem + Stocks + Cash + Max_Roll
+    #      Max_Roll รวม = -(total_option_cost_all)
     max_roll_total = - total_option_cost_all
     metrics['now_pv'] = beta_memory + total_stock_value + portfolio_cash + max_roll_total
-    metrics['max_roll_total'] = max_roll_total  # transparency
+    metrics['max_roll_total'] = max_roll_total  # for transparency / future use
 
     log_pv_baseline = 0.0
     ln_weighted_sum = 0.0
