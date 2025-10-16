@@ -97,7 +97,7 @@
             "asset_field": { "field": "field5", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
             "fix_c": 3000,
             "diff": 90,
-            "option_config": { "base_value": 100, "delta_factor": 0.90, "label": "NVTS(LV:100@12.0, Δ=0.90)" }
+            "option_config": { "base_value": 100, "delta_factor": 1.0, "label": "NVTS(LV:100@12.0, Δ=1.0)" }
         },
         {
             "ticker": "QXO",
