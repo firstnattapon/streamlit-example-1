@@ -1,4 +1,3 @@
-#main code
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -90,6 +89,16 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
                 st.warning(f"Could not fetch holding for {ticker}. Defaulting to 0. Error: {e}")
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
+
+# --- Helper: compute default beta_memory from JSON (stocks only) ---
+def compute_default_beta_memory_from_assets(stock_assets: List[Dict[str, Any]]) -> float:
+    total = 0.0
+    for a in stock_assets:
+        try:
+            total += float(a.get('b_offset', 0.0))
+        except (TypeError, ValueError):
+            pass
+    return total
 
 # --- N-K BREAKDOWN ---
 def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -184,7 +193,7 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
 def display_nk_breakdown(nk: Dict[str, Any]):
     with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=False):
         n_total = nk.get("N_total", 0.0)
-        kv_total = nk.get("KValue_total", 0.0)        # CALL-only
+        kv_total = nk.get("KValue_total", 0.0)      # CALL-only
         kp_total = nk.get("Kpremium_total", 0.0)      # CALL-only
         control_total = nk.get("control_total", 0.0)
 
@@ -221,26 +230,41 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         )
 
 # --- Results & Charts ---
+# <<< GOAL 1 MODIFIED: Reworked the entire function for new display logic
 def display_results(
     metrics: Dict[str, float],
+    user_inputs: Dict[str, Any],
     options_pl_all: float,
-    total_option_cost_all: float,
     total_option_cost_calls_only: float,
     total_option_cost_puts_only: float,
     config: Dict[str, Any]
 ):
-    """
-    Show results; Current_Options P/L = CALL+PUT (รวม),
-    Max_Roll_Over แยกแสดงเป็น (CALL) และ (PUT) โดยแปลงเป็นค่าติดลบในวงเล็บเพื่อสื่อว่าเป็น outflow.
-    """
     st.divider()
     with st.expander("📈 Results", expanded=True):
-        metric_label = (
-            f"Current Total Value (Stocks + Cash + Current_Options P/L: {options_pl_all:,.2f}) "
-            f"| Max_Roll_Over: (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f})"
-        )
-        st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
+        beta_memory_val = user_inputs.get('beta_memory', 0.0)
+        sum_stocks = user_inputs.get('total_stock_value', 0.0)
+        portfolio_cash = user_inputs.get('portfolio_cash', 0.0)
+        max_roll = -(total_option_cost_calls_only + total_option_cost_puts_only)
 
+        # --- New Display Logic ---
+        st.write("#### Current Total Value")
+        
+        # Display components as sub-headers/captions
+        st.markdown(f"**Max_Roll** = `fx_sum( (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f}) )`")
+        st.markdown(f"**Opt P/L** = `{options_pl_all:,.2f}`")
+        
+        formula_caption = (
+            f"<small><b>Formula:</b> (β_mem: {beta_memory_val:,.0f} + "
+            f"Stocks: {sum_stocks:,.0f} + "
+            f"Cash: {portfolio_cash:,.0f} + "
+            f"(Max_Roll: {max_roll:,.0f}))</small>"
+        )
+        st.markdown(formula_caption, unsafe_allow_html=True)
+        
+        # Display the final calculated value
+        st.metric(label=" ", value=f"{metrics['now_pv']:,.2f}") # Label is blank as details are above
+
+        # --- Other metrics remain the same ---
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
         col2.metric('log_pv Adjustment (ln_weighted)', f"{metrics.get('ln_weighted', 0.0):,.2f}")
@@ -283,6 +307,7 @@ def display_results(
         st.code("-------------------------------------------------------------------------")
         st.code(f"Total Sum (ln_weighted) = {total_dynamic_contribution:+51.4f}")
 
+
 def render_charts(config: Dict[str, Any]):
     st.write("📊 ThingSpeak Charts")
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
@@ -301,7 +326,7 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-# --- Core calculation (UNCHANGED semantics for P/L; now track CALL vs PUT roll-over costs) ---
+# --- Core calculation ---
 def calculate_metrics(
     stock_assets: List[Dict[str, Any]],
     option_assets: List[Dict[str, Any]],
@@ -311,15 +336,16 @@ def calculate_metrics(
     """
     Returns:
       metrics,
-      options_pl_all,                # P/L รวม CALL+PUT
-      total_option_cost_all,         # ต้นทุนรวมออปชันทั้งหมด
-      total_option_cost_calls_only,  # ต้นทุนฝั่ง CALL
-      total_option_cost_puts_only    # ต้นทุนฝั่ง PUT
+      options_pl_all,                 # P/L รวม CALL+PUT
+      total_option_cost_all,          # ต้นทุนรวมออปชันทั้งหมด
+      total_option_cost_calls_only,   # ต้นทุนฝั่ง CALL
+      total_option_cost_puts_only     # ต้นทุนฝั่ง PUT
     """
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
     total_stock_value = user_inputs['total_stock_value']
+    beta_memory = user_inputs['beta_memory']
 
     options_pl_all = 0.0
     total_option_cost_all = 0.0
@@ -347,7 +373,8 @@ def calculate_metrics(
 
         options_pl_all += intrinsic_value - total_cost_basis
 
-    metrics['now_pv'] = total_stock_value + portfolio_cash + options_pl_all
+    # <<< GOAL 1 MODIFIED: Changed formula to use total_option_cost_all (as a cost) instead of options_pl_all
+    metrics['now_pv'] = beta_memory + total_stock_value + portfolio_cash - total_option_cost_all
 
     log_pv_baseline = 0.0
     ln_weighted_sum = 0.0
@@ -422,9 +449,14 @@ def main():
     config = load_config()
     if not config:
         return
+
     all_assets = config.get('assets', [])
     stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
     option_assets = [item for item in all_assets if item.get('type') == 'option']
+
+    if 'beta_memory' not in st.session_state:
+        st.session_state.beta_memory = compute_default_beta_memory_from_assets(stock_assets)
+
     clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
     initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
 
@@ -438,7 +470,6 @@ def main():
     if st.button("Recalculate"):
         pass
 
-    # 1) calc
     (
         metrics,
         options_pl_all,
@@ -447,17 +478,15 @@ def main():
         total_option_cost_puts_only
     ) = calculate_metrics(stock_assets, option_assets, user_inputs, config)
 
-    # 2) dynamic offset (unchanged)
     log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
     product_cost = user_inputs.get('product_cost', 0.0)
     dynamic_offset = product_cost - log_pv_baseline
     config['cashflow_offset'] = dynamic_offset
 
-    # 3) display: Max_Roll_Over now shows CALL + PUT separately; P/L shows all
     display_results(
         metrics,
+        user_inputs,
         options_pl_all,
-        total_option_cost_all,
         total_option_cost_calls_only,
         total_option_cost_puts_only,
         config
@@ -469,12 +498,14 @@ def main():
 # --- UI forms (kept at end to keep code compact) ---
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
     user_inputs = {}
+
     st.write("📊 Current Asset Prices")
     current_prices = {}
     all_tickers = {asset['ticker'].strip() for asset in stock_assets}
     all_tickers.update({opt['underlying_ticker'].strip() for opt in option_assets if opt.get('underlying_ticker')})
     pre_prices = {}
     pre_holdings = {}
+
     for ticker in sorted(list(all_tickers)):
         ss_key_price = f"price_{ticker}"
         pre_prices[ticker] = st.session_state.get(ss_key_price, initial_data.get(ticker, {}).get('last_price', 0.0))
@@ -523,6 +554,10 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     st.divider()
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
+    
+    st.number_input('beta_memory', key='beta_memory', format="%.2f")
+    user_inputs['beta_memory'] = st.session_state.beta_memory
+
     st.number_input('Portfolio_cash', key='portfolio_cash', format="%.2f")
     user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
 
