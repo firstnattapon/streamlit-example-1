@@ -230,7 +230,6 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         )
 
 # --- Results & Charts ---
-# <<< GOAL 1 MODIFIED: Reworked the entire function for new display logic
 def display_results(
     metrics: Dict[str, float],
     user_inputs: Dict[str, Any],
@@ -244,6 +243,8 @@ def display_results(
         beta_memory_val = user_inputs.get('beta_memory', 0.0)
         sum_stocks = user_inputs.get('total_stock_value', 0.0)
         portfolio_cash = user_inputs.get('portfolio_cash', 0.0)
+        
+        # <<< GOAL 1: ค่า max_roll ยังคงถูกคำนวณไว้เพื่อแสดงผล แต่ไม่ได้ถูกใช้ในสมการ Current Total Value อีกต่อไป
         max_roll = -(total_option_cost_calls_only + total_option_cost_puts_only)
 
         # --- New Display Logic ---
@@ -253,11 +254,11 @@ def display_results(
         st.markdown(f"**Max_Roll** = `fx_sum( (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f}) )`")
         st.markdown(f"**Opt P/L** = `{options_pl_all:,.2f}`")
         
+        # <<< GOAL 1: แก้ไขสูตรที่แสดงผลให้ตรงกับการคำนวณใหม่ โดยลบ Max_Roll ออก
         formula_caption = (
             f"<small><b>Formula:</b> (β_mem: {beta_memory_val:,.0f} + "
             f"Stocks: {sum_stocks:,.0f} + "
-            f"Cash: {portfolio_cash:,.0f} + "
-            f"(Max_Roll: {max_roll:,.0f}))</small>"
+            f"Cash: {portfolio_cash:,.0f})</small>"
         )
         st.markdown(formula_caption, unsafe_allow_html=True)
         
@@ -336,10 +337,10 @@ def calculate_metrics(
     """
     Returns:
       metrics,
-      options_pl_all,                 # P/L รวม CALL+PUT
-      total_option_cost_all,          # ต้นทุนรวมออปชันทั้งหมด
-      total_option_cost_calls_only,   # ต้นทุนฝั่ง CALL
-      total_option_cost_puts_only     # ต้นทุนฝั่ง PUT
+      options_pl_all,              # P/L รวม CALL+PUT
+      total_option_cost_all,       # ต้นทุนรวมออปชันทั้งหมด
+      total_option_cost_calls_only,  # ต้นทุนฝั่ง CALL
+      total_option_cost_puts_only    # ต้นทุนฝั่ง PUT
     """
     metrics = {}
     portfolio_cash = user_inputs['portfolio_cash']
@@ -373,8 +374,8 @@ def calculate_metrics(
 
         options_pl_all += intrinsic_value - total_cost_basis
 
-    # <<< GOAL 1 MODIFIED: Changed formula to use total_option_cost_all (as a cost) instead of options_pl_all
-    metrics['now_pv'] = beta_memory + total_stock_value + portfolio_cash - total_option_cost_all
+    # <<< GOAL 1: แก้ไขสูตรคำนวณ 'now_pv' โดยการลบ `- total_option_cost_all` ออก
+    metrics['now_pv'] = beta_memory + total_stock_value + portfolio_cash
 
     log_pv_baseline = 0.0
     ln_weighted_sum = 0.0
