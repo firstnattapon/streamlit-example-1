@@ -36,7 +36,7 @@ if 'portfolio_cash' not in st.session_state:
 
 # --- Config & TS clients ---
 @st.cache_data
-def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
+def load_config(filename: str = "x.json") -> Dict[str, Any]:
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             return json.load(f)
