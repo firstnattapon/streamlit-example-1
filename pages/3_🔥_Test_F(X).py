@@ -59,6 +59,7 @@ def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dic
             channel_info = asset.get('holding_channel', {})
             if channel_info.get('channel_id'):
                 asset_clients[ticker] = thingspeak.Channel(channel_info['channel_id'], channel_info['write_api_key'])
+        # 🔁 Reverted to the original success message (for 100% UI parity)
         st.success(f"Initialized main client and {len(asset_clients)} asset {len(option_assets)} option holding clients.")
         return client_main, asset_clients
     except Exception as e:
@@ -101,7 +102,6 @@ def compute_default_beta_memory_from_assets(stock_assets: List[Dict[str, Any]]) 
         try:
             total += float(a.get('b_offset', 0.0))
         except (TypeError, ValueError):
-            # if malformed b_offset, treat as 0
             pass
     return total
 
@@ -244,16 +244,21 @@ def display_results(
     config: Dict[str, Any]
 ):
     """
-    Show results; Current_Options P/L = CALL+PUT (รวม),
-    Max_Roll_Over แยกแสดงเป็น (CALL) และ (PUT) โดยแปลงเป็นค่าติดลบในวงเล็บเพื่อสื่อว่าเป็น outflow.
+    Show results; Current_Options P/L = CALL+PUT (รวม) → แสดงข้อมูลเท่านั้น
+    Max_Roll_Over แยกแสดง (CALL) และ (PUT) และเอา ‘Max_Roll รวม’ (ค่าติดลบ) ไปรวมใน Current Total Value
     """
     st.divider()
     with st.expander("📈 Results", expanded=True):
         beta_memory_val = user_inputs.get('beta_memory', 0.0)
-        
+
+        # NEW: Max_Roll รวม = -(ต้นทุน CALL + PUT)
+        max_roll_total = -(total_option_cost_calls_only + total_option_cost_puts_only)
+
+        # Label ตามรูปแบบที่ขอ
         metric_label = (
-            f"Current Total Value (β_mem: {beta_memory_val:,.0f} + Stocks + Cash + Opt P/L: {options_pl_all:,.2f}) "
-            f"| Max_Roll_Over: (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f})"
+            f"Current Total Value | "
+            f"Max_Roll = {max_roll_total:,.0f} =  Max_Roll_Over: (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f}) "
+            f"(β_mem: {beta_memory_val:,.0f} + Stocks + Cash + (Max_Roll ({max_roll_total:,.0f})) ) |  Opt P/L: {options_pl_all:,.2f}"
         )
         st.metric(label=metric_label, value=f"{metrics['now_pv']:,.2f}")
 
@@ -275,7 +280,7 @@ def display_results(
         st.metric(label=baseline_label, value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
 
         baseline_target = config.get('baseline_target', 0.0)
-        adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
+        adjusted_cf = metrics['net_cf'] - metrics['cashflow_offset']
         final_value = baseline_target - adjusted_cf
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
 
@@ -317,7 +322,7 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('cost_minus_cf'), 'Product_cost - CF')
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
-# --- Core calculation (UNCHANGED semantics for P/L; now track CALL vs PUT roll-over costs) ---
+# --- Core calculation (UPDATED: now_pv uses Max_Roll instead of Opt P/L) ---
 def calculate_metrics(
     stock_assets: List[Dict[str, Any]],
     option_assets: List[Dict[str, Any]],
@@ -327,8 +332,8 @@ def calculate_metrics(
     """
     Returns:
       metrics,
-      options_pl_all,                 # P/L รวม CALL+PUT
-      total_option_cost_all,          # ต้นทุนรวมออปชันทั้งหมด
+      options_pl_all,                 # P/L รวม CALL+PUT (แสดงเป็นข้อมูล, ไม่รวมใน now_pv)
+      total_option_cost_all,          # ต้นทุนรวมออปชันทั้งหมด (CALL+PUT) ใช้ทำ Max_Roll
       total_option_cost_calls_only,   # ต้นทุนฝั่ง CALL
       total_option_cost_puts_only     # ต้นทุนฝั่ง PUT
     """
@@ -336,7 +341,7 @@ def calculate_metrics(
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
     total_stock_value = user_inputs['total_stock_value']
-    beta_memory = user_inputs['beta_memory'] # <-- Get beta_memory from inputs
+    beta_memory = user_inputs['beta_memory']
 
     options_pl_all = 0.0
     total_option_cost_all = 0.0
@@ -364,8 +369,10 @@ def calculate_metrics(
 
         options_pl_all += intrinsic_value - total_cost_basis
 
-    # <-- MODIFIED previously: now_pv includes beta_memory (unchanged here)
-    metrics['now_pv'] = beta_memory + total_stock_value + portfolio_cash + options_pl_all
+    # NEW: now_pv = β_mem + Stocks + Cash + Max_Roll (รวม CALL+PUT)
+    max_roll_total = - total_option_cost_all
+    metrics['now_pv'] = beta_memory + total_stock_value + portfolio_cash + max_roll_total
+    metrics['max_roll_total'] = max_roll_total  # transparency
 
     log_pv_baseline = 0.0
     ln_weighted_sum = 0.0
@@ -477,10 +484,10 @@ def main():
     dynamic_offset = product_cost - log_pv_baseline
     config['cashflow_offset'] = dynamic_offset
 
-    # 3) display: Max_Roll_Over now shows CALL + PUT separately; P/L shows all
+    # 3) display: Max_Roll (CALL + PUT) รวมใน now_pv; Opt P/L โชว์แยก
     display_results(
         metrics,
-        user_inputs, # Pass all user inputs for detailed labeling
+        user_inputs,
         options_pl_all,
         total_option_cost_calls_only,
         total_option_cost_puts_only,
@@ -490,7 +497,7 @@ def main():
     handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
     render_charts(config)
 
-# --- UI forms (kept at end to keep code compact) ---
+# --- UI forms ---
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
     user_inputs = {}
 
