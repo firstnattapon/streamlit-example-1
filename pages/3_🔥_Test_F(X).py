@@ -1,4 +1,5 @@
 #main code
+
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -35,9 +36,7 @@ def fetch_initial_portfolio_cash() -> float:
 if 'portfolio_cash' not in st.session_state:
     st.session_state.portfolio_cash = fetch_initial_portfolio_cash()
 
-# Initialize beta_memory in session_state if it doesn't exist
-if 'beta_memory' not in st.session_state:
-    st.session_state.beta_memory = 4219.0
+# (REMOVED old hard-coded beta_memory init here to satisfy goal_1)
 
 # --- Config & TS clients ---
 @st.cache_data
@@ -94,6 +93,17 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
                 st.warning(f"Could not fetch holding for {ticker}. Defaulting to 0. Error: {e}")
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
+
+# --- Helper: compute default beta_memory from JSON (stocks only) ---
+def compute_default_beta_memory_from_assets(stock_assets: List[Dict[str, Any]]) -> float:
+    total = 0.0
+    for a in stock_assets:
+        try:
+            total += float(a.get('b_offset', 0.0))
+        except (TypeError, ValueError):
+            # if malformed b_offset, treat as 0
+            pass
+    return total
 
 # --- N-K BREAKDOWN ---
 def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -354,7 +364,7 @@ def calculate_metrics(
 
         options_pl_all += intrinsic_value - total_cost_basis
 
-    # <-- MODIFIED: Added beta_memory to the now_pv calculation
+    # <-- MODIFIED previously: now_pv includes beta_memory (unchanged here)
     metrics['now_pv'] = beta_memory + total_stock_value + portfolio_cash + options_pl_all
 
     log_pv_baseline = 0.0
@@ -430,9 +440,15 @@ def main():
     config = load_config()
     if not config:
         return
+
     all_assets = config.get('assets', [])
     stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
     option_assets = [item for item in all_assets if item.get('type') == 'option']
+
+    # Initialize default beta_memory from JSON sum of b_offset (stocks only)
+    if 'beta_memory' not in st.session_state:
+        st.session_state.beta_memory = compute_default_beta_memory_from_assets(stock_assets)
+
     clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
     initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
 
@@ -477,12 +493,14 @@ def main():
 # --- UI forms (kept at end to keep code compact) ---
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
     user_inputs = {}
+
     st.write("📊 Current Asset Prices")
     current_prices = {}
     all_tickers = {asset['ticker'].strip() for asset in stock_assets}
     all_tickers.update({opt['underlying_ticker'].strip() for opt in option_assets if opt.get('underlying_ticker')})
     pre_prices = {}
     pre_holdings = {}
+
     for ticker in sorted(list(all_tickers)):
         ss_key_price = f"price_{ticker}"
         pre_prices[ticker] = st.session_state.get(ss_key_price, initial_data.get(ticker, {}).get('last_price', 0.0))
@@ -532,7 +550,7 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
     
-    # <-- ADDED: Input for beta_memory using session_state
+    # Input for beta_memory using session_state (default now comes from JSON sum)
     st.number_input('beta_memory', key='beta_memory', format="%.2f")
     user_inputs['beta_memory'] = st.session_state.beta_memory
 
