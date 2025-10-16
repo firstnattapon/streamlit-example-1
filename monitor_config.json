@@ -41,7 +41,7 @@
             "asset_field": { "field": "field3", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 1500,
             "diff": 60,
-            "option_config": { "base_value": 100, "delta_factor": 0.85 , "label": "DYN(LV:100@12.60, Δ=0.85)" }
+            "option_config": { "base_value": 100, "delta_factor": 0.75 , "label": "DYN(LV:100@12.60, Δ=0.75)" }
         },
         {
             "ticker": "FFWM",
