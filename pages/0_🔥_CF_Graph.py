@@ -19,6 +19,34 @@ current_prices = {}
 asset_params = {}
 
 with tabs[1]:
+    st.json({
+  "pnl_tracking_strategy": {
+    "description": "กลยุทธ์การติดตามกำไรและขาดทุน (P&L) เพื่อประเมินผลการเทรดแต่ละรอบอย่างแม่นยำ",
+    "components": [
+      {
+        "variable_name": "accumulated_realized_pnl",
+        "description": "กำไร/ขาดทุนที่เกิดขึ้นจริงสะสมจากอดีต",
+        "purpose": "เก็บยอดสะสมจากรอบการเทรดที่ปิดไปแล้ว ไม่นำมาคำนวณในรอบปัจจุบัน",
+        "initial_value": -313.79
+      },
+      {
+        "variable_name": "current_unrealized_pnl",
+        "description": "กำไร/ขาดทุนที่ยังไม่เกิดขึ้นจริงของรอบปัจจุบัน",
+        "purpose": "ใช้ติดตามผลการดำเนินงานของรอบปัจจุบันเท่านั้น โดยจะเริ่มนับจาก 0",
+        "formula": "5000 * ln(P / 20.0)",
+        "note": "ค่า P คือราคาปัจจุบัน (Price) และ P&L จะเป็น 0 เมื่อ P = 20.0"
+      },
+      {
+        "variable_name": "total_lifetime_pnl",
+        "description": "กำไร/ขาดทุนรวมทั้งหมดตั้งแต่เริ่มต้น",
+        "purpose": "ใช้สำหรับดูภาพรวมของผลการดำเนินงานทั้งหมด",
+        "formula": "accumulated_realized_pnl + current_unrealized_pnl"
+      }
+    ],
+    "summary": "สำหรับการเทรดรอบใหม่ ให้เริ่มนับ P&L ของรอบใหม่จากศูนย์เสมอ ส่วนผลลัพธ์ของรอบเก่าให้เก็บไว้เป็นยอดสะสมแยกต่างหาก วิธีนี้จะทำให้คุณประเมินกลยุทธ์ในแต่ละรอบการเทรดได้อย่างแม่นยำที่สุดครับ"
+  }
+})
+    
     with st.expander("หลักการ BATA", expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=a3cRH7RVEHvBTjPhBC5Hd7", width=1500, height=1000, scrolling=0)
     with st.expander("หลักการ Rollover"):
