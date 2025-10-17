@@ -7,74 +7,10 @@ import thingspeak
 import json
 import requests
 import streamlit.components.v1 as components
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Any, Tuple, List
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Add_CF_V2_Show_Work", page_icon="🧮", layout="centered")
-
-# ----------------------
-# Helpers (Hardening)
-# ----------------------
-def try_parse_float(x: Any, default: float = 0.0) -> float:
-    try:
-        if x is None:
-            return default
-        if isinstance(x, (int, float)):
-            return float(x)
-        s = str(x).strip()
-        if s == "":
-            return default
-        return float(s)
-    except Exception:
-        return default
-
-def try_get_last_price(ticker: str, ref_price: float = 0.0) -> float:
-    """
-    Robust price fetcher:
-      1) yfinance.fast_info['lastPrice'] or ['last_price']
-      2) yfinance.history(period='1d').Close.tail(1)
-      3) fallback to ref_price
-    """
-    try:
-        tk = yf.Ticker(ticker)
-        fi = getattr(tk, "fast_info", {}) or {}
-        lp = fi.get("lastPrice", None)
-        if lp is None:
-            lp = fi.get("last_price", None)
-        if lp is not None:
-            return float(lp)
-        # Fallback to history
-        hist = tk.history(period="1d")
-        if not hist.empty and np.isfinite(hist["Close"].iloc[-1]):
-            return float(hist["Close"].iloc[-1])
-    except Exception:
-        pass
-    return float(ref_price or 0.0)
-
-def parse_thingspeak_last_field(raw: Any, field_key: str) -> float:
-    """
-    Accept both JSON-string payloads like '{"field1":"123.45"}'
-    and plain numeric strings like '123.45'.
-    """
-    if raw is None:
-        return 0.0
-    try:
-        # Try JSON
-        obj = json.loads(raw)
-        if isinstance(obj, dict):
-            if field_key in obj:
-                return try_parse_float(obj[field_key], 0.0)
-            # If dict but not keyed by field, try first numeric
-            for v in obj.values():
-                val = try_parse_float(v, None)
-                if val is not None:
-                    return val
-            return 0.0
-        # If JSON is a primitive (number/string), parse as float
-        return try_parse_float(obj, 0.0)
-    except Exception:
-        # Not JSON -> try direct float
-        return try_parse_float(raw, 0.0)
 
 # --- Fetch initial cash from ThingSpeak ---
 @st.cache_data
@@ -84,13 +20,12 @@ def fetch_initial_portfolio_cash() -> float:
         response = requests.get(url, timeout=5)
         response.raise_for_status()
         data = response.json()
-        feeds = data.get("feeds", [])
-        if feeds:
-            cash_value_str = feeds[0].get("field3")
+        last_feed = data.get("feeds", [])
+        if last_feed:
+            cash_value_str = last_feed[0].get("field3")
             if cash_value_str is not None:
-                val = try_parse_float(cash_value_str, 0.0)
-                st.success(f"Successfully fetched initial cash from ThingSpeak: {val:,.2f}")
-                return val
+                st.success(f"Successfully fetched initial cash from ThingSpeak: {float(cash_value_str):,.2f}")
+                return float(cash_value_str)
         st.warning("ThingSpeak API returned data but in an unexpected format. Defaulting cash to 0.00.")
         return 0.00
     except (requests.exceptions.RequestException, json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
@@ -111,63 +46,46 @@ def load_config(filename: str = "add_cf_config.json") -> Dict[str, Any]:
         st.stop()
 
 @st.cache_resource
-def initialize_thingspeak_clients(
-    config: Dict[str, Any],
-    stock_assets: List[Dict[str, Any]],
-    option_assets: List[Dict[str, Any]],
-) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
+def initialize_thingspeak_clients(config: Dict[str, Any], stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]]) -> Tuple[thingspeak.Channel, Dict[str, thingspeak.Channel]]:
     main_channel_config = config.get('thingspeak_channels', {}).get('main_output', {})
     try:
         client_main = thingspeak.Channel(main_channel_config['channel_id'], main_channel_config['write_api_key'])
-        asset_clients: Dict[str, thingspeak.Channel] = {}
+        asset_clients = {}
         for asset in stock_assets:
-            ticker = asset['ticker'].strip()
+            ticker = asset['ticker']
             channel_info = asset.get('holding_channel', {})
             if channel_info.get('channel_id'):
                 asset_clients[ticker] = thingspeak.Channel(channel_info['channel_id'], channel_info['write_api_key'])
-        st.success(f"Initialized main client and {len(asset_clients)} asset holding client(s).")
+        st.success(f"Initialized main client and {len(asset_clients)} asset {len(option_assets)} option holding clients.")
         return client_main, asset_clients
     except Exception as e:
         st.error(f"Failed to initialize ThingSpeak clients: {e}")
         st.stop()
 
-def fetch_initial_data(
-    stock_assets: List[Dict[str, Any]],
-    option_assets: List[Dict[str, Any]],
-    asset_clients: Dict[str, thingspeak.Channel]
-) -> Dict[str, Dict[str, Any]]:
-    """
-    - ดึงราคาปัจจุบันแบบทนทาน (fast_info → history → ref_price)
-    - ดึง holding ล่าสุดจากช่องของแต่ละ asset (รองรับ JSON/plain number)
-    """
-    initial_data: Dict[str, Dict[str, Any]] = {}
+def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], asset_clients: Dict[str, thingspeak.Channel]) -> Dict[str, Dict[str, Any]]:
+    initial_data = {}
     tickers_to_fetch = {asset['ticker'].strip() for asset in stock_assets}
-    tickers_to_fetch.update({
-        opt.get('underlying_ticker', '').strip()
-        for opt in option_assets
-        if opt.get('underlying_ticker')
-    })
-
-    # ราคาล่าสุด
+    tickers_to_fetch.update({opt.get('underlying_ticker').strip() for opt in option_assets if opt.get('underlying_ticker')})
     for ticker in tickers_to_fetch:
         initial_data[ticker] = {}
-        ref_price = next((try_parse_float(a.get('reference_price', 0.0), 0.0)
-                          for a in stock_assets if a['ticker'].strip() == ticker), 0.0)
-        price = try_get_last_price(ticker, ref_price)
-        initial_data[ticker]['last_price'] = price
-        if price == ref_price and ref_price == 0.0:
+        try:
+            last_price = yf.Ticker(ticker).fast_info['lastPrice']
+            initial_data[ticker]['last_price'] = last_price
+        except Exception:
+            ref_price = next((a.get('reference_price', 0.0) for a in stock_assets if a['ticker'].strip() == ticker), 0.0)
+            initial_data[ticker]['last_price'] = ref_price
             st.warning(f"Could not fetch price for {ticker}. Defaulting to reference price {ref_price}.")
-
-    # holding ล่าสุดของหุ้น
     for asset in stock_assets:
         ticker = asset["ticker"].strip()
         last_holding = 0.0
         if ticker in asset_clients:
             try:
                 client = asset_clients[ticker]
-                field_key = asset['holding_channel']['field']  # e.g., 'field1'
-                raw_last = client.get_field_last(field=field_key)
-                last_holding = parse_thingspeak_last_field(raw_last, field_key)
+                field = asset['holding_channel']['field']
+                last_asset_json_string = client.get_field_last(field=field)
+                if last_asset_json_string:
+                    data_dict = json.loads(last_asset_json_string)
+                    last_holding = float(data_dict[field])
             except Exception as e:
                 st.warning(f"Could not fetch holding for {ticker}. Defaulting to 0. Error: {e}")
         initial_data[ticker]['last_holding'] = last_holding
@@ -223,7 +141,7 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
         pct_N = None
         pct_K = None
         if opt_type != "put":
-            if underlying_n_value is not None and underlying_fix_c:
+            if underlying_n_value is not None and underlying_fix_c and underlying_fix_c != 0:
                 pct_N = (underlying_n_value / underlying_fix_c) * 100.0
                 pct_K = 100.0 - pct_N
 
@@ -266,8 +184,8 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
 def display_nk_breakdown(nk: Dict[str, Any]):
     with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=False):
         n_total = nk.get("N_total", 0.0)
-        kv_total = nk.get("KValue_total", 0.0)        # CALL-only
-        kp_total = nk.get("Kpremium_total", 0.0)      # CALL-only
+        kv_total = nk.get("KValue_total", 0.0)      # CALL-only
+        kp_total = nk.get("Kpremium_total", 0.0)    # CALL-only
         control_total = nk.get("control_total", 0.0)
 
         pct_n_stocks = (n_total / control_total * 100.0) if (control_total and control_total > 0) else None
@@ -313,11 +231,8 @@ def display_results(
     with st.expander("📈 Results", expanded=True):
         sum_stocks = user_inputs.get('total_stock_value', 0.0)
         portfolio_cash = user_inputs.get('portfolio_cash', 0.0)
-
-        # Max_Roll and Option P&L
-        max_roll = -(total_option_cost_calls_only + total_option_cost_puts_only)
-
-        # --- New Display Logic ---
+        
+        # --- ✨ MODIFIED SECTION START ✨ ---
         st.write("#### Current Total Value")
         st.markdown(
             f"**Max_Roll** = `fx_sum( (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f}) )`"
@@ -328,18 +243,23 @@ def display_results(
         st.markdown(f"**Lock_P&L** = `{metrics.get('locked_pl', 0.0):,.0f}`")
         st.markdown(f"**Run_model_P&L** = `{metrics.get('run_model_pl', 0.0):,.0f}`")
         st.markdown(f"**Total_Real_time_P&L** = `Lock_P&L + Run_model_P&L = {metrics.get('total_real_time_pl', 0.0):,.0f}`")
+        
+        # --- 🎯 GOAL 1: ADDED FORMULA DISPLAY ---
+        log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
+        ln_weighted = metrics.get('ln_weighted', 0.0)
+        log_pv = metrics.get('log_pv', 0.0)
+        now_pv = metrics.get('now_pv', 0.0)
+        net_cf = metrics.get('net_cf', 0.0)
 
-        # Formula caption uses ln_weighted now
-        formula_caption = (
-            f"<small><b>Formula:</b> (ln_weighted: {metrics.get('ln_weighted', 0.0):,.2f} + "
-            f"Stocks: {sum_stocks:,.0f} + "
-            f"Cash: {portfolio_cash:,.0f})</small>"
-        )
-        st.markdown(formula_caption, unsafe_allow_html=True)
+        st.markdown(f"**log_pv** = `Σfix_c ({log_pv_baseline:,.0f}) + ln_weighted ({ln_weighted:,.0f}) = {log_pv:,.0f}`")
+        st.markdown(f"**now_pv** = `ln_weighted ({ln_weighted:,.0f}) + Stocks ({sum_stocks:,.0f}) + Cash ({portfolio_cash:,.0f}) = {now_pv:,.0f}`")
+        st.markdown(f"**Net CF** = `now_pv ({now_pv:,.0f}) - log_pv ({log_pv:,.0f}) = {net_cf:,.0f}`")
+        # --- END OF ADDED SECTION ---
 
         # Final value
         st.metric(label=" ", value=f"{metrics['now_pv']:,.2f}")
-
+        # --- ✨ MODIFIED SECTION END ✨ ---
+        
         # Other metrics unchanged
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
@@ -494,13 +414,7 @@ def calculate_metrics(
     return metrics, options_pl_all, total_option_cost_all, total_option_cost_calls_only, total_option_cost_puts_only
 
 # --- ThingSpeak update ---
-def handle_thingspeak_update(
-    config: Dict[str, Any],
-    clients: Tuple,
-    stock_assets: List[Dict[str, Any]],
-    metrics: Dict[str, float],
-    user_inputs: Dict[str, Any]
-):
+def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         if st.button("Confirm and Send All Data"):
@@ -530,13 +444,57 @@ def handle_thingspeak_update(
                     except Exception as e:
                         st.error(f"❌ Failed to update holding for {ticker}: {e}")
 
-# --- UI forms ---
-def render_ui_and_get_inputs(
-    stock_assets: List[Dict[str, Any]],
-    option_assets: List[Dict[str, Any]],
-    initial_data: Dict[str, Dict[str, Any]],
-    product_cost_default: float
-) -> Dict[str, Any]:
+# --- main() ---
+def main():
+    config = load_config()
+    if not config:
+        return
+
+    all_assets = config.get('assets', [])
+    stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
+    option_assets = [item for item in all_assets if item.get('type') == 'option']
+
+    clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
+    initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
+
+    user_inputs = render_ui_and_get_inputs(
+        stock_assets,
+        option_assets,
+        initial_data,
+        config.get('product_cost_default', 0.0)
+    )
+
+    if st.button("Recalculate"):
+        pass
+
+    (
+        metrics,
+        options_pl_all,
+        total_option_cost_all,
+        total_option_cost_calls_only,
+        total_option_cost_puts_only
+    ) = calculate_metrics(stock_assets, option_assets, user_inputs, config)
+
+    # dynamic offset follows baseline control
+    log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
+    product_cost = user_inputs.get('product_cost', 0.0)
+    dynamic_offset = product_cost - log_pv_baseline
+    config['cashflow_offset'] = dynamic_offset
+
+    display_results(
+        metrics,
+        user_inputs,
+        options_pl_all,
+        total_option_cost_calls_only,
+        total_option_cost_puts_only,
+        config
+    )
+
+    handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
+    render_charts(config)
+
+# --- UI forms (kept at end to keep code compact) ---
+def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
     user_inputs: Dict[str, Any] = {}
 
     st.write("📊 Current Asset Prices")
@@ -546,7 +504,6 @@ def render_ui_and_get_inputs(
     pre_prices: Dict[str, float] = {}
     pre_holdings: Dict[str, float] = {}
 
-    # ราคาปัจจุบัน (interactive)
     for ticker in sorted(list(all_tickers)):
         ss_key_price = f"price_{ticker}"
         pre_prices[ticker] = st.session_state.get(ss_key_price, initial_data.get(ticker, {}).get('last_price', 0.0))
@@ -554,7 +511,6 @@ def render_ui_and_get_inputs(
         price_value = initial_data.get(ticker, {}).get('last_price', 0.0)
         current_prices[ticker] = st.number_input(label, value=price_value, key=ss_key_price, format="%.2f")
 
-    # Holidings เดิมเพื่อคำนวณ N_pre (ใช้โชว์ NK breakdown ด้านบน)
     total_stock_value_pre = 0.0
     for asset in stock_assets:
         t = asset["ticker"].strip()
@@ -573,7 +529,6 @@ def render_ui_and_get_inputs(
     nk_top = compute_nk_breakdown(stock_assets, option_assets, _temp_inputs_for_nk_pre)
     display_nk_breakdown(nk_top)
 
-    # Holdings ปัจจุบัน (interactive ที่จะใช้คำนวณจริง)
     current_holdings: Dict[str, float] = {}
     total_stock_value = 0.0
     for asset in stock_assets:
@@ -603,56 +558,6 @@ def render_ui_and_get_inputs(
     user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
 
     return user_inputs
-
-# --- main() ---
-def main():
-    config = load_config()
-    if not config:
-        return
-
-    all_assets = config.get('assets', [])
-    stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
-    option_assets = [item for item in all_assets if item.get('type') == 'option']
-
-    clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
-    initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
-
-    user_inputs = render_ui_and_get_inputs(
-        stock_assets,
-        option_assets,
-        initial_data,
-        config.get('product_cost_default', 0.0)
-    )
-
-    # ปุ่มนี้คงไว้เพื่อรักษา UI เดิม (ไม่ได้กระทบผลลัพธ์)
-    if st.button("Recalculate"):
-        pass
-
-    (
-        metrics,
-        options_pl_all,
-        total_option_cost_all,
-        total_option_cost_calls_only,
-        total_option_cost_puts_only
-    ) = calculate_metrics(stock_assets, option_assets, user_inputs, config)
-
-    # dynamic offset follows baseline control
-    log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
-    product_cost = user_inputs.get('product_cost', 0.0)
-    dynamic_offset = product_cost - log_pv_baseline
-    config['cashflow_offset'] = dynamic_offset
-
-    display_results(
-        metrics,
-        user_inputs,
-        options_pl_all,
-        total_option_cost_calls_only,
-        total_option_cost_puts_only,
-        config
-    )
-
-    handle_thingspeak_update(config, clients, stock_assets, metrics, user_inputs)
-    render_charts(config)
 
 if __name__ == "__main__":
     main()
