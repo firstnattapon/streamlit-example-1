@@ -275,12 +275,12 @@ def display_results(
         baseline_label = f"Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost_cfg} (Cost ค่า N)  + {opt_k:.0f} (Lv ค่า K) "
 
         st.code(
-            "log_pv = Σfix_c + ln_weighted\n"
-            f"        = {sum_fix_c:,.2f} + {lnw:,.2f}\n"
-            f"        = {log_pv:,.2f}\n\n"
             "Opt_K   = (Σfix_c - Product_cost)\n"
             f"        = {sum_fix_c:,.2f} - {product_cost:,.2f}\n"
             f"        = {opt_k:,.2f}\n\n"
+            "log_pv = Σfix_c + ln_weighted\n"
+            f"        = {sum_fix_c:,.2f} + {lnw:,.2f}\n"
+            f"        = {log_pv:,.2f}\n\n"            
             "now_pv  = ln_weighted + Stocks + Cash + Opt_K\n"
             f"        = {lnw:,.2f} + {sum_stocks:,.2f} + {portfolio_cash:,.2f} + {opt_k:,.2f}\n"
             f"        = {now_pv:,.2f}\n\n"
