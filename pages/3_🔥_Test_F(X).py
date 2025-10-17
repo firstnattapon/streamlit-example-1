@@ -272,7 +272,7 @@ def display_results(
         # Show Control decomposition using opt_k (no dependency on cashflow_offset)
         baseline_val = sum_fix_c
         product_cost_cfg = config.get('product_cost_default', 0)
-        baseline_label = f"💰 Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost_cfg} (Cost ค่า N)  + {opt_k:.0f} (Lv ค่า K) "
+        baseline_label = f"Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost_cfg} (Cost ค่า N)  + {opt_k:.0f} (Lv ค่า K) "
 
         st.code(
             "log_pv = Σfix_c + ln_weighted\n"
