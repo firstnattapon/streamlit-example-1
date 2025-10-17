@@ -247,6 +247,15 @@ def display_results(
         st.markdown(f"**Run_model_P&L** = `{metrics.get('run_model_pl', 0.0):,.0f}`")
         st.markdown(f"**Total_Real_time_P&L** = `Lock_P&L + Run_model_P&L = {metrics.get('total_real_time_pl', 0.0):,.0f}`")
 
+
+        # --- New: Formula block with numbers (includes Opt_K) ---
+        sum_fix_c = metrics.get('log_pv_baseline', 0.0)
+        lnw = metrics.get('ln_weighted', 0.0)
+        log_pv = metrics.get('log_pv', 0.0)
+        opt_k = metrics.get('opt_k', sum_fix_c - product_cost)
+        now_pv = metrics.get('now_pv', 0.0)
+        net_cf = metrics.get('net_cf', 0.0)
+        
         st.code(
             "log_pv = Σfix_c + ln_weighted\n"
             f"        = {sum_fix_c:,.2f} + {lnw:,.2f}\n"
