@@ -231,6 +231,8 @@ def display_results(
     with st.expander("📈 Results", expanded=True):
         sum_stocks = user_inputs.get('total_stock_value', 0.0)
         portfolio_cash = user_inputs.get('portfolio_cash', 0.0)
+        # *** ADDED THIS LINE ***
+        ln_weighted = metrics.get('ln_weighted', 0.0)
 
         # Max_Roll and Option P&L
         max_roll = -(total_option_cost_calls_only + total_option_cost_puts_only)
@@ -246,40 +248,31 @@ def display_results(
         st.markdown(f"**Lock_P&L** = `{metrics.get('locked_pl', 0.0):,.0f}`")
         st.markdown(f"**Run_model_P&L** = `{metrics.get('run_model_pl', 0.0):,.0f}`")
         st.markdown(f"**Total_Real_time_P&L** = `Lock_P&L + Run_model_P&L = {metrics.get('total_real_time_pl', 0.0):,.0f}`")
-        
-        # --- START: New UI Block (Goal 1) ---
-        st.write("---") # Separator
-    
+
+        # *** REPLACED BLOCK (lines 280-288) ***
+        # --- New UI Block (Replaces old formula_caption) ---
         log_pv = metrics.get('log_pv', 0.0)
-        log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
-        ln_weighted = metrics.get('ln_weighted', 0.0)
         now_pv = metrics.get('now_pv', 0.0)
         net_cf = metrics.get('net_cf', 0.0)
-        opt_k = metrics.get('Opt_K', 0.0) # <-- ดึงค่า Opt_K
-        
-        # 1. log_pv = Σfix_c + ln_weighted
-        st.markdown(f"**`log_pv`** = `Σfix_c ({log_pv_baseline:,.2f}) + ln_weighted ({ln_weighted:,.2f})` = **`{log_pv:,.2f}`**")
-        
-        # 2. now_pv (อัปเดตสูตรนี้)
-        st.markdown(f"**`now_pv`** = `ln_weighted ({ln_weighted:,.2f}) + Stocks ({sum_stocks:,.2f}) + Cash ({portfolio_cash:,.2f}) + Opt_K ({opt_k:,.2f})` = **`{now_pv:,.2f}`**")
-        
-        # 3. Net CF (อัปเดตสูตรนี้)
-        st.markdown(f"**`Net CF`** = `now_pv ({now_pv:,.2f}) − log_pv ({log_pv:,.2f})` = **`{net_cf:,.2f}`**")
-        st.write("---") # Separator
-        # --- END: New UI Block (Goal 1) ---
+        opt_k = metrics.get('opt_k', 0.0)
+        log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
+        product_cost = user_inputs.get('product_cost', 0.0)
 
-
-        # Formula caption (อัปเดตสูตรนี้)
-        formula_caption = (
-            f"<small><b>Formula:</b> (ln_weighted: {metrics.get('ln_weighted', 0.0):,.2f} + "
-            f"Stocks: {sum_stocks:,.0f} + "
-            f"Cash: {portfolio_cash:,.0f} + "
-            f"Opt_K: {opt_k:,.0f})</small>" # <--- เพิ่ม Opt_K
+        st.markdown(
+            f"**`log_pv`** = `Σfix_c` + `ln_weighted`\n"
+            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; = `{log_pv_baseline:,.0f}` + `{ln_weighted:,.0f}` = **`{log_pv:,.0f}`**"
         )
-        st.markdown(formula_caption, unsafe_allow_html=True)
-
-        # Final value
-        st.metric(label=" ", value=f"{metrics['now_pv']:,.2f}")
+        st.markdown(
+            f"**`now_pv`** = `ln_weighted` + `Stocks` + `Cash` + `Opt_K`\n"
+            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; = `{ln_weighted:,.0f}` + `{sum_stocks:,.0f}` + `{portfolio_cash:,.0f}` + `{opt_k:,.0f}` = **`{now_pv:,.0f}`**"
+        )
+        st.caption(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (Where `Opt_K` = `Σfix_c` - `Product_cost` = `{log_pv_baseline:,.0f}` - `{product_cost:,.0f}` = `{opt_k:,.0f}`)")
+        st.markdown(
+            f"**`Net CF`** = `now_pv` - `log_pv`\n"
+            f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; = `{now_pv:,.0f}` - `{log_pv:,.0f}` = **`{net_cf:,.0f}`**"
+        )
+        # --- End New UI Block ---
+        # *** END REPLACED BLOCK ***
 
         # Other metrics unchanged
         col1, col2 = st.columns(2)
@@ -295,7 +288,7 @@ def display_results(
 
         offset_display_val = -config.get('cashflow_offset', 0.0)
         baseline_val = metrics.get('log_pv_baseline', 0.0)
-        product_cost = user_inputs.get('product_cost', 0.0) # <--- ใช้ user_inputs แทน config
+        product_cost = config.get('product_cost_default', 0)
         baseline_label = f"💰 Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost} (Cost ค่า N)  + {offset_display_val:.0f} (Lv ค่า K) "
         st.metric(label=baseline_label, value=f"{metrics['net_cf'] - config.get('cashflow_offset', 0.0):,.2f}")
 
@@ -352,15 +345,17 @@ def calculate_metrics(
     """
     Returns:
       metrics,
-      options_pl_all,                 # P/L รวม CALL+PUT
-      total_option_cost_all,          # ต้นทุนรวมออปชันทั้งหมด
-      total_option_cost_calls_only,   # ต้นทุนฝั่ง CALL
-      total_option_cost_puts_only     # ต้นทุนฝั่ง PUT
+      options_pl_all,              # P/L รวม CALL+PUT
+      total_option_cost_all,       # ต้นทุนรวมออปชันทั้งหมด
+      total_option_cost_calls_only,    # ต้นทุนฝั่ง CALL
+      total_option_cost_puts_only      # ต้นทุนฝั่ง PUT
     """
     metrics: Dict[str, float] = {}
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
     total_stock_value = user_inputs['total_stock_value']
+    # *** ADDED THIS LINE ***
+    product_cost = user_inputs.get('product_cost', 0.0)
 
     # ---- Options P/L/Costs ----
     options_pl_all = 0.0
@@ -421,6 +416,12 @@ def calculate_metrics(
 
     ln_weighted = total_b_offset + ln_weighted_sum
 
+    # *** ADDED THIS BLOCK ***
+    opt_k_value = log_pv_baseline - product_cost
+    metrics['opt_k'] = opt_k_value
+    # *** END ADDED BLOCK ***
+
+
     # ---- Current Total Value uses ln_weighted ----
     metrics['ln_weighted'] = ln_weighted
     metrics['locked_pl'] = total_b_offset
@@ -429,11 +430,10 @@ def calculate_metrics(
     metrics['log_pv_baseline'] = log_pv_baseline
     metrics['log_pv'] = log_pv_baseline + ln_weighted
     
-    # --- คำนวณเวอร์ชันเก่าก่อน (จะถูกเขียนทับใน main) ---
-    metrics['now_pv'] = ln_weighted + total_stock_value + portfolio_cash 
-    metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
-    # ---
+    # *** MODIFIED THIS LINE ***
+    metrics['now_pv'] = ln_weighted + total_stock_value + portfolio_cash + opt_k_value
     
+    metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
     return metrics, options_pl_all, total_option_cost_all, total_option_cost_calls_only, total_option_cost_puts_only
@@ -443,17 +443,15 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         if st.button("Confirm and Send All Data"):
-            # ใช้ net_cf ที่คำนวณใหม่แล้ว
-            adjusted_cf = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
-            
+            diff = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
             try:
                 fields_map = config.get('thingspeak_channels', {}).get('main_output', {}).get('fields', {})
                 payload = {
-                    fields_map.get('net_cf', 'field1'): adjusted_cf, # <--- ใช้ adjusted_cf
-                    fields_map.get('pure_alpha', 'field2'): adjusted_cf / user_inputs['product_cost'] if user_inputs['product_cost'] != 0 else 0,
+                    fields_map.get('net_cf', 'field1'): diff,
+                    fields_map.get('pure_alpha', 'field2'): diff / user_inputs['product_cost'] if user_inputs['product_cost'] != 0 else 0,
                     fields_map.get('buffer', 'field3'): user_inputs['portfolio_cash'],
-                    fields_map.get('cost_minus_cf', 'field4'): user_inputs['product_cost'] - adjusted_cf,
-                    fields_map.get('now_pv', 'field5'): metrics.get('now_pv', 0.0) # <--- ใช้ now_pv ที่อัปเดตแล้ว
+                    fields_map.get('cost_minus_cf', 'field4'): user_inputs['product_cost'] - diff,
+                    fields_map.get('now_pv', 'field5'): metrics.get('now_pv', 0.0)
                 }
                 client_main.update(payload)
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
@@ -505,21 +503,8 @@ def main():
     # dynamic offset follows baseline control
     log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
     product_cost = user_inputs.get('product_cost', 0.0)
-    dynamic_offset = product_cost - log_pv_baseline # This is Opt_K
+    dynamic_offset = product_cost - log_pv_baseline
     config['cashflow_offset'] = dynamic_offset
-
-    # --- START: Recalculate now_pv and net_cf (Goal 1) ---
-    metrics['Opt_K'] = dynamic_offset # เก็บค่า Opt_Kไว้สำหรับ UI
-    metrics['now_pv'] = (
-        metrics['ln_weighted'] 
-        + user_inputs['total_stock_value'] 
-        + user_inputs['portfolio_cash'] 
-        + dynamic_offset # <--- เพิ่ม Opt_K
-    )
-    # คำนวณ net_cf ใหม่ โดยใช้ now_pv ที่อัปเดตแล้ว
-    metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
-    # --- END: Recalculation ---
-
 
     display_results(
         metrics,
