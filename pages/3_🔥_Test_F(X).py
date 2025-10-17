@@ -285,11 +285,10 @@ def display_results(
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{sum_fix_c:,.2f}")
         col2.metric('log_pv Adjustment (ln_weighted)', f"{lnw:,.2f}")
 
-        col3, col4 , col5  = st.columns(3)
+        col3, col4   = st.columns(2)
         # Final value (now_pv)
         col3.metric(label="Now_pv", value=f"{now_pv:,.2f}")
-        col4.metric(label="", value="-")
-        col5.metric(f"Log PV (Calculated: {sum_fix_c:,.2f} + {lnw:,.2f})",f"{log_pv:,.2f}")
+        col4.metric(f"Log PV (Calculated: {sum_fix_c:,.2f} + {lnw:,.2f})",f"{log_pv:,.2f}")
 
         st.metric(label="💰 Net CF (Combined)", value=f"{net_cf:,.2f}")
 
