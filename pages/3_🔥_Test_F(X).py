@@ -274,7 +274,7 @@ def display_results(
             "Net CF  = now_pv − log_pv\n"
             f"        = {now_pv:,.2f} − {log_pv:,.2f}\n"
             f"        = {net_cf:,.2f}"
-            f"        = {baseline_label:,.2f}"
+            f"        = {baseline_label}"
 
         )
 
