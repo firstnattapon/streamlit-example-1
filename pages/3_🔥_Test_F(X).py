@@ -263,8 +263,10 @@ def display_results(
         product_cost_cfg = config.get('product_cost_default', 0)
         baseline_label = f"💰 Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost_cfg} (Cost ค่า N)  + {offset_display_val:.0f} (Lv ค่า K) "
 
-        st.markdown("#### 📘 Formula (with Opt_K)")
+        # st.markdown("#### 📘 Formula (with Opt_K)")
         st.code(
+            f"{baseline_label}"
+            f""
             "log_pv = Σfix_c + ln_weighted\n"
             f"        = {sum_fix_c:,.2f} + {lnw:,.2f}\n"
             f"        = {log_pv:,.2f}\n\n"
@@ -277,11 +279,10 @@ def display_results(
             "Net CF  = now_pv − log_pv\n"
             f"        = {now_pv:,.2f} − {log_pv:,.2f}\n"
             f"        = {net_cf:,.2f}\n\n"
-            f"{baseline_label}"
         )
 
         # Final value (now_pv)
-        st.metric(label=" ", value=f"{now_pv:,.2f}")
+        st.metric(label="Now_pv", value=f"{now_pv:,.2f}")
 
         # Other metrics unchanged
         col1, col2 = st.columns(2)
