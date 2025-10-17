@@ -280,20 +280,23 @@ def display_results(
             f"{baseline_label}"
         )
 
-        # Final value (now_pv)
-        st.metric(label="Now_pv", value=f"{now_pv:,.2f}")
-
         # Other metrics unchanged
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{sum_fix_c:,.2f}")
         col2.metric('log_pv Adjustment (ln_weighted)', f"{lnw:,.2f}")
 
+        # Final value (now_pv)
+        st.metric(label="Now_pv", value=f"{now_pv:,.2f}")
+        
+        st.metric(label="-")
+
+        
         st.metric(
             f"Log PV (Calculated: {sum_fix_c:,.2f} + {lnw:,.2f})",
             f"{log_pv:,.2f}"
         )
 
-        st.metric(label="💰 Net Cashflow (Combined)", value=f"{net_cf:,.2f}")
+        st.metric(label="💰 Net CF (Combined)", value=f"{net_cf:,.2f}")
 
         # >>> REMOVED this metric per instruction:
         # st.metric(label=baseline_label, value=f"{net_cf - config.get('cashflow_offset', 0.0):,.2f}")
