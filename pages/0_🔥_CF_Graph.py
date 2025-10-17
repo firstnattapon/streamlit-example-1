@@ -54,6 +54,8 @@ with tabs[0]:
     st.write("⚙️ ตั้งค่าทั่วไปและประวัติ Asset")
 
     with st.expander(f"pnl_tracking_strategy"):
+        st.components.v1.iframe("https://monica.im/share/artifact?id=SAjLJA9EjhwvRPQySBW4A8", width=1500, height=1000, scrolling=0)
+        
         st.json({
         "pnl_tracking_strategy": {
         "description": "กลยุทธ์การติดตามกำไรและขาดทุน (P&L) เพื่อประเมินผลการเทรดแต่ละรอบอย่างแม่นยำ",
