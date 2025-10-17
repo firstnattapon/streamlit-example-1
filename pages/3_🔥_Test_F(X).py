@@ -288,7 +288,7 @@ def display_results(
         # Final value (now_pv)
         st.metric(label="Now_pv", value=f"{now_pv:,.2f}")
         
-        st.metric(label="-", value="")
+        st.metric(label="-", value="-")
 
         
         st.metric(
