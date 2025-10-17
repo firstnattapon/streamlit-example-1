@@ -184,8 +184,8 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
 def display_nk_breakdown(nk: Dict[str, Any]):
     with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=False):
         n_total = nk.get("N_total", 0.0)
-        kv_total = nk.get("KValue_total", 0.0)      # CALL-only
-        kp_total = nk.get("Kpremium_total", 0.0)    # CALL-only
+        kv_total = nk.get("KValue_total", 0.0)       # CALL-only
+        kp_total = nk.get("Kpremium_total", 0.0)     # CALL-only
         control_total = nk.get("control_total", 0.0)
 
         pct_n_stocks = (n_total / control_total * 100.0) if (control_total and control_total > 0) else None
@@ -231,8 +231,11 @@ def display_results(
     with st.expander("📈 Results", expanded=True):
         sum_stocks = user_inputs.get('total_stock_value', 0.0)
         portfolio_cash = user_inputs.get('portfolio_cash', 0.0)
-        
-        # --- ✨ MODIFIED SECTION START ✨ ---
+
+        # Max_Roll and Option P&L
+        max_roll = -(total_option_cost_calls_only + total_option_cost_puts_only)
+
+        # --- New Display Logic ---
         st.write("#### Current Total Value")
         st.markdown(
             f"**Max_Roll** = `fx_sum( (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f}) )`"
@@ -244,22 +247,37 @@ def display_results(
         st.markdown(f"**Run_model_P&L** = `{metrics.get('run_model_pl', 0.0):,.0f}`")
         st.markdown(f"**Total_Real_time_P&L** = `Lock_P&L + Run_model_P&L = {metrics.get('total_real_time_pl', 0.0):,.0f}`")
         
-        # --- 🎯 GOAL 1: ADDED FORMULA DISPLAY ---
-        log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
-        ln_weighted = metrics.get('ln_weighted', 0.0)
-        log_pv = metrics.get('log_pv', 0.0)
-        now_pv = metrics.get('now_pv', 0.0)
-        net_cf = metrics.get('net_cf', 0.0)
-
-        st.markdown(f"**log_pv** = `Σfix_c ({log_pv_baseline:,.0f}) + ln_weighted ({ln_weighted:,.0f}) = {log_pv:,.0f}`")
-        st.markdown(f"**now_pv** = `ln_weighted ({ln_weighted:,.0f}) + Stocks ({sum_stocks:,.0f}) + Cash ({portfolio_cash:,.0f}) = {now_pv:,.0f}`")
-        st.markdown(f"**Net CF** = `now_pv ({now_pv:,.0f}) - log_pv ({log_pv:,.0f}) = {net_cf:,.0f}`")
-        # --- END OF ADDED SECTION ---
-
         # Final value
         st.metric(label=" ", value=f"{metrics['now_pv']:,.2f}")
-        # --- ✨ MODIFIED SECTION END ✨ ---
+
+        # --- <<< CHANGED: Goal 1 Additions Start Here ---
+        st.markdown("---")
         
+        # 1. log_pv
+        st.markdown(
+            f"**log_pv** = `Σfix_c ({metrics.get('log_pv_baseline', 0.0):,.0f}) + ln_weighted ({metrics.get('ln_weighted', 0.0):,.2f})` "
+            f"= **{metrics.get('log_pv', 0.0):,.2f}**"
+        )
+
+        # 2. now_pv
+        offset_display_val = -config.get('cashflow_offset', 0.0) # This is the Opt_K term
+        now_pv_formula = (
+            f"<b>now_pv Formula:</b> "
+            f"(ln_weighted: {metrics.get('ln_weighted', 0.0):,.2f} + "
+            f"Stocks: {sum_stocks:,.0f} + "
+            f"Cash: {portfolio_cash:,.0f} + "
+            f"Opt_K: {offset_display_val:,.0f} ({offset_display_val:.0f} (Lv ค่า K)) )" 
+        )
+        st.markdown(now_pv_formula, unsafe_allow_html=True)
+
+        # 3. Net CF
+        st.markdown(
+            f"**Net CF** = `now_pv ({metrics.get('now_pv', 0.0):,.2f}) − log_pv ({metrics.get('log_pv', 0.0):,.2f})` "
+            f"= **{metrics.get('net_cf', 0.0):,.2f}**"
+        )
+        st.markdown("---")
+        # --- <<< CHANGED: Goal 1 Additions End Here ---
+
         # Other metrics unchanged
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
@@ -340,6 +358,7 @@ def calculate_metrics(
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
     total_stock_value = user_inputs['total_stock_value']
+    product_cost = user_inputs.get('product_cost', 0.0) # <<< CHANGED: Get product_cost
 
     # ---- Options P/L/Costs ----
     options_pl_all = 0.0
@@ -400,6 +419,10 @@ def calculate_metrics(
 
     ln_weighted = total_b_offset + ln_weighted_sum
 
+    # --- <<< CHANGED: New offset calculation ---
+    opt_k_offset = log_pv_baseline - product_cost
+    # --- End new ---
+
     # ---- Current Total Value uses ln_weighted ----
     metrics['ln_weighted'] = ln_weighted
     metrics['locked_pl'] = total_b_offset
@@ -407,7 +430,10 @@ def calculate_metrics(
     metrics['total_real_time_pl'] = ln_weighted  # = locked + run
     metrics['log_pv_baseline'] = log_pv_baseline
     metrics['log_pv'] = log_pv_baseline + ln_weighted
-    metrics['now_pv'] = ln_weighted + total_stock_value + portfolio_cash
+    
+    # --- <<< CHANGED: Modified now_pv to include new offset
+    metrics['now_pv'] = ln_weighted + total_stock_value + portfolio_cash + opt_k_offset
+    
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
@@ -480,6 +506,10 @@ def main():
     product_cost = user_inputs.get('product_cost', 0.0)
     dynamic_offset = product_cost - log_pv_baseline
     config['cashflow_offset'] = dynamic_offset
+    
+    # <<< CHANGED: Set product_cost_default for the Baseline_T0 label
+    # This ensures the label matches the calculation even if config changes
+    config['product_cost_default'] = product_cost 
 
     display_results(
         metrics,
