@@ -185,7 +185,7 @@ def display_nk_breakdown(nk: Dict[str, Any]):
     with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=False):
         n_total = nk.get("N_total", 0.0)
         kv_total = nk.get("KValue_total", 0.0)      # CALL-only
-        kp_total = nk.get("Kpremium_total", 0.0)    # CALL-only
+        kp_total = nk.get("Kpremium_total", 0.0)      # CALL-only
         control_total = nk.get("control_total", 0.0)
 
         pct_n_stocks = (n_total / control_total * 100.0) if (control_total and control_total > 0) else None
@@ -247,18 +247,43 @@ def display_results(
         st.markdown(f"**Run_model_P&L** = `{metrics.get('run_model_pl', 0.0):,.0f}`")
         st.markdown(f"**Total_Real_time_P&L** = `Lock_P&L + Run_model_P&L = {metrics.get('total_real_time_pl', 0.0):,.0f}`")
 
-        # === START MODIFICATION (Goal 1 & 4) ===
-        # Formula caption now uses ln_weighted AND the new Opt_K
-        formula_caption = (
-            f"<small><b>Formula:</b> (ln_weighted: {metrics.get('ln_weighted', 0.0):,.2f} + "
-            f"Stocks: {sum_stocks:,.0f} + "
-            f"Cash: {portfolio_cash:,.0f} + "
-            f"Opt_K: {metrics.get('opt_k_lv_k', 0.0):,.0f})</small>"
-        )
-        # === END MODIFICATION ===
-        st.markdown(formula_caption, unsafe_allow_html=True)
+        # --- (GOAL 1) REMOVED OLD FORMULA CAPTION ---
+        # formula_caption = ( ... )
+        # st.markdown(formula_caption, unsafe_allow_html=True)
 
-        # Final value (This now reflects the new 'now_pv' calculated in main)
+        # --- (GOAL 1) ADDED NEW FORMULA BREAKDOWN ---
+        log_pv_val = metrics.get('log_pv', 0.0)
+        log_pv_baseline_val = metrics.get('log_pv_baseline', 0.0)
+        ln_weighted_val = metrics.get('ln_weighted', 0.0)
+        now_pv_val = metrics.get('now_pv', 0.0)
+        net_cf_val = metrics.get('net_cf', 0.0)
+        opt_k_val = metrics.get('opt_k_lv', 0.0) # Get the new value
+        
+        st.markdown("---") # Add a small separator
+        
+        # 1. log_pv = Σfix_c + ln_weighted
+        st.markdown(
+            f"**log_pv** = `{log_pv_val:,.2f}` "
+            f"(`Σfix_c`: {log_pv_baseline_val:,.2f} + `ln_weighted`: {ln_weighted_val:,.2f})"
+        )
+        
+        # 2. now_pv = ln_weighted + Stocks + Cash + Opt_K(Lv ค่า K)
+        st.markdown(
+            f"**now_pv** = `{now_pv_val:,.2f}` "
+            f"(`ln_weighted`: {ln_weighted_val:,.2f} + `Stocks`: {sum_stocks:,.0f} + "
+            f"`Cash`: {portfolio_cash:,.0f} + `Opt_K`: {opt_k_val:,.2f})"
+        )
+        
+        # 3. Net CF = now_pv − log_pv
+        st.markdown(
+            f"**Net CF** = `{net_cf_val:,.2f}` "
+            f"(`now_pv`: {now_pv_val:,.2f} - `log_pv`: {log_pv_val:,.2f})"
+        )
+        st.markdown("---") # Add a small separator
+        
+        # --- END NEW FORMULA BLOCK ---
+
+        # Final value
         st.metric(label=" ", value=f"{metrics['now_pv']:,.2f}")
 
         # Other metrics unchanged
@@ -323,7 +348,6 @@ def render_charts(config: Dict[str, Any]):
     create_chart_iframe(main_channel_id, main_fields_map.get('buffer'), 'Buffer')
 
 # --- Core calculation ---
-# === START MODIFICATION (Goal 1, 3, 4) ===
 def calculate_metrics(
     stock_assets: List[Dict[str, Any]],
     option_assets: List[Dict[str, Any]],
@@ -332,16 +356,19 @@ def calculate_metrics(
 ) -> Tuple[Dict[str, float], float, float, float, float]:
     """
     Returns:
-      metrics (components only: ln_weighted, log_pv_baseline, log_pv, etc.),
-      options_pl_all,                 # P/L รวม CALL+PUT
-      total_option_cost_all,          # ต้นทุนรวมออปชันทั้งหมด
-      total_option_cost_calls_only,   # ต้นทุนฝั่ง CALL
-      total_option_cost_puts_only     # ต้นทุนฝั่ง PUT
+      metrics,
+      options_pl_all,              # P/L รวม CALL+PUT
+      total_option_cost_all,         # ต้นทุนรวมออปชันทั้งหมด
+      total_option_cost_calls_only,    # ต้นทุนฝั่ง CALL
+      total_option_cost_puts_only      # ต้นทุนฝั่ง PUT
     """
     metrics: Dict[str, float] = {}
-    # portfolio_cash = user_inputs['portfolio_cash'] # <-- REMOVED (Goal 3)
+    portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
-    # total_stock_value = user_inputs['total_stock_value'] # <-- REMOVED (Goal 3)
+    total_stock_value = user_inputs['total_stock_value']
+    
+    # --- (GOAL 1) Get product_cost for new calculation ---
+    product_cost = user_inputs.get('product_cost', 0.0)
 
     # ---- Options P/L/Costs ----
     options_pl_all = 0.0
@@ -402,7 +429,12 @@ def calculate_metrics(
 
     ln_weighted = total_b_offset + ln_weighted_sum
 
-    # ---- Store Component Metrics ----
+    # --- (GOAL 1) NEW: Calculate Opt_K (Lv) ---
+    # opt_k_lv = (Lv ค่า K) = log_pv_baseline - product_cost
+    opt_k_lv = log_pv_baseline - product_cost
+    metrics['opt_k_lv'] = opt_k_lv
+
+    # ---- Current Total Value uses ln_weighted ----
     metrics['ln_weighted'] = ln_weighted
     metrics['locked_pl'] = total_b_offset
     metrics['run_model_pl'] = ln_weighted_sum
@@ -410,21 +442,19 @@ def calculate_metrics(
     metrics['log_pv_baseline'] = log_pv_baseline
     metrics['log_pv'] = log_pv_baseline + ln_weighted
     
-    # metrics['now_pv'] and metrics['net_cf'] are REMOVED
-    # They will be calculated in main()
+    # --- (GOAL 1) MODIFIED: now_pv calculation now includes opt_k_lv ---
+    metrics['now_pv'] = ln_weighted + total_stock_value + portfolio_cash + opt_k_lv
     
+    metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
     return metrics, options_pl_all, total_option_cost_all, total_option_cost_calls_only, total_option_cost_puts_only
-# === END MODIFICATION ===
-
 
 # --- ThingSpeak update ---
 def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_assets: List[Dict[str, Any]], metrics: Dict[str, float], user_inputs: Dict[str, Any]):
     client_main, asset_clients = clients
     with st.expander("⚠️ Confirm to Add Cashflow and Update Holdings", expanded=False):
         if st.button("Confirm and Send All Data"):
-            # This 'diff' now correctly uses the new 'net_cf' calculated in main()
             diff = metrics['net_cf'] - config.get('cashflow_offset', 0.0)
             try:
                 fields_map = config.get('thingspeak_channels', {}).get('main_output', {}).get('fields', {})
@@ -433,7 +463,7 @@ def handle_thingspeak_update(config: Dict[str, Any], clients: Tuple, stock_asset
                     fields_map.get('pure_alpha', 'field2'): diff / user_inputs['product_cost'] if user_inputs['product_cost'] != 0 else 0,
                     fields_map.get('buffer', 'field3'): user_inputs['portfolio_cash'],
                     fields_map.get('cost_minus_cf', 'field4'): user_inputs['product_cost'] - diff,
-                    fields_map.get('now_pv', 'field5'): metrics.get('now_pv', 0.0) # This uses the new 'now_pv'
+                    fields_map.get('now_pv', 'field5'): metrics.get('now_pv', 0.0)
                 }
                 client_main.update(payload)
                 st.success("✅ Successfully updated Main Channel on Thingspeak!")
@@ -482,31 +512,21 @@ def main():
         total_option_cost_puts_only
     ) = calculate_metrics(stock_assets, option_assets, user_inputs, config)
 
-    # === START MODIFICATION (Goal 1, 3, 4) ===
-    # --- Post-calculation Assembly ---
-    # Retrieve all components
-    log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
-    ln_weighted = metrics.get('ln_weighted', 0.0)
-    log_pv = metrics.get('log_pv', 0.0) # This is baseline + ln_weighted
-    product_cost = user_inputs.get('product_cost', 0.0)
-    sum_stocks = user_inputs.get('total_stock_value', 0.0)
-    portfolio_cash = user_inputs.get('portfolio_cash', 0.0)
-
-    # Calculate dynamic offset and Opt_K
-    dynamic_offset = product_cost - log_pv_baseline
-    config['cashflow_offset'] = dynamic_offset # Used by display_results & thingspeak
-    opt_k_lv_k = -dynamic_offset # This is (log_pv_baseline - product_cost), as "Lv ค่า K"
-
-    # Calculate the NEW now_pv and net_cf based on Goal 1
-    now_pv = ln_weighted + sum_stocks + portfolio_cash + opt_k_lv_k
-    net_cf = now_pv - log_pv
-
-    # Update metrics dict for downstream functions
-    metrics['now_pv'] = now_pv
-    metrics['net_cf'] = net_cf
-    metrics['opt_k_lv_k'] = opt_k_lv_k # Store for display
-    # --- End Assembly ---
-    # === END MODIFICATION ===
+    # --- (GOAL 1) MODIFIED: dynamic offset now set based on opt_k_lv from metrics ---
+    # old:
+    # log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
+    # product_cost = user_inputs.get('product_cost', 0.0)
+    # dynamic_offset = product_cost - log_pv_baseline
+    # config['cashflow_offset'] = dynamic_offset
+    
+    # new:
+    # (opt_k_lv = log_pv_baseline - product_cost)
+    # (dynamic_offset = product_cost - log_pv_baseline = -opt_k_lv)
+    config['cashflow_offset'] = -metrics.get('opt_k_lv', 0.0)
+    
+    # --- (GOAL 1) Pass product_cost_default to display_results for Baseline_T0 label ---
+    # (This value was already in config, but we'll use the one from user_inputs for consistency)
+    config['product_cost_default'] = user_inputs.get('product_cost', 0.0)
 
 
     display_results(
