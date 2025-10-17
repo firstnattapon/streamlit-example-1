@@ -1,3 +1,4 @@
+# app.py
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -89,16 +90,6 @@ def fetch_initial_data(stock_assets: List[Dict[str, Any]], option_assets: List[D
                 st.warning(f"Could not fetch holding for {ticker}. Defaulting to 0. Error: {e}")
         initial_data[ticker]['last_holding'] = last_holding
     return initial_data
-
-# --- Helper: compute default beta_memory from JSON (stocks only) ---
-def compute_default_beta_memory_from_assets(stock_assets: List[Dict[str, Any]]) -> float:
-    total = 0.0
-    for a in stock_assets:
-        try:
-            total += float(a.get('b_offset', 0.0))
-        except (TypeError, ValueError):
-            pass
-    return total
 
 # --- N-K BREAKDOWN ---
 def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], user_inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -193,7 +184,7 @@ def compute_nk_breakdown(stock_assets: List[Dict[str, Any]], option_assets: List
 def display_nk_breakdown(nk: Dict[str, Any]):
     with st.expander("N vs K Breakdown (แยกค่า N/K + สัดส่วน + K premium)", expanded=False):
         n_total = nk.get("N_total", 0.0)
-        kv_total = nk.get("KValue_total", 0.0)      # CALL-only
+        kv_total = nk.get("KValue_total", 0.0)        # CALL-only
         kp_total = nk.get("Kpremium_total", 0.0)      # CALL-only
         control_total = nk.get("control_total", 0.0)
 
@@ -206,22 +197,20 @@ def display_nk_breakdown(nk: Dict[str, Any]):
         col4.metric("Σ %N (Stocks)", f"{pct_n_stocks:,.2f}%" if pct_n_stocks is not None else "-")
 
         st.write("##### รายละเอียดออปชัน (K)")
-        k_df = pd.DataFrame([
-            {
-                "Name": r["name"],
-                "Underlying": r["underlying"],
-                "Contracts/Shares": r["contracts"],
-                "Strike": r["strike"],
-                "Premium/Share": r["premium_per_share"],
-                "Break-even": r["break_even"],
-                "K_Value (Contracts * BE)": r["K_Value"],
-                "K (Premium cost = -contracts*premium)": r["K_premium"],
-                "Current_Options P/L": r.get("current_pl", None),
-                "%N (n/fix_c*100)": r.get("pct_N", None),
-                "%K (100-%N)": r.get("pct_K", None),
-                "Type": r.get("option_type", None),
-            } for r in nk.get("options", [])
-        ])
+        k_df = pd.DataFrame([{
+            "Name": r["name"],
+            "Underlying": r["underlying"],
+            "Contracts/Shares": r["contracts"],
+            "Strike": r["strike"],
+            "Premium/Share": r["premium_per_share"],
+            "Break-even": r["break_even"],
+            "K_Value (Contracts * BE)": r["K_Value"],
+            "K (Premium cost = -contracts*premium)": r["K_premium"],
+            "Current_Options P/L": r.get("current_pl", None),
+            "%N (n/fix_c*100)": r.get("pct_N", None),
+            "%K (100-%N)": r.get("pct_K", None),
+            "Type": r.get("option_type", None),
+        } for r in nk.get("options", [])])
         st.dataframe(k_df, use_container_width=True)
 
         st.caption(
@@ -240,32 +229,36 @@ def display_results(
 ):
     st.divider()
     with st.expander("📈 Results", expanded=True):
-        beta_memory_val = user_inputs.get('beta_memory', 0.0)
         sum_stocks = user_inputs.get('total_stock_value', 0.0)
         portfolio_cash = user_inputs.get('portfolio_cash', 0.0)
-        
-        # <<< GOAL 1: ค่า max_roll ยังคงถูกคำนวณไว้เพื่อแสดงผล แต่ไม่ได้ถูกใช้ในสมการ Current Total Value อีกต่อไป
+
+        # Max_Roll and Option P&L
         max_roll = -(total_option_cost_calls_only + total_option_cost_puts_only)
 
         # --- New Display Logic ---
         st.write("#### Current Total Value")
-        
-        # Display components as sub-headers/captions
-        st.markdown(f"**Max_Roll** = `fx_sum( (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f}) )`")
+        st.markdown(
+            f"**Max_Roll** = `fx_sum( (CALL: {-total_option_cost_calls_only:,.0f}) , (PUT: {-total_option_cost_puts_only:,.0f}) )`"
+        )
         st.markdown(f"**Opt P/L** = `{options_pl_all:,.2f}`")
-        
-        # <<< GOAL 1: แก้ไขสูตรที่แสดงผลให้ตรงกับการคำนวณใหม่ โดยลบ Max_Roll ออก
+
+        # Lock/Run/Total Real-time P&L
+        st.markdown(f"**Lock_P&L** = `{metrics.get('locked_pl', 0.0):,.0f}`")
+        st.markdown(f"**Run_model_P&L** = `{metrics.get('run_model_pl', 0.0):,.0f}`")
+        st.markdown(f"**Total_Real_time_P&L** = `Lock_P&L + Run_model_P&L = {metrics.get('total_real_time_pl', 0.0):,.0f}`")
+
+        # Formula caption uses ln_weighted now
         formula_caption = (
-            f"<small><b>Formula:</b> (β_mem: {beta_memory_val:,.0f} + "
+            f"<small><b>Formula:</b> (ln_weighted: {metrics.get('ln_weighted', 0.0):,.2f} + "
             f"Stocks: {sum_stocks:,.0f} + "
             f"Cash: {portfolio_cash:,.0f})</small>"
         )
         st.markdown(formula_caption, unsafe_allow_html=True)
-        
-        # Display the final calculated value
-        st.metric(label=" ", value=f"{metrics['now_pv']:,.2f}") # Label is blank as details are above
 
-        # --- Other metrics remain the same ---
+        # Final value
+        st.metric(label=" ", value=f"{metrics['now_pv']:,.2f}")
+
+        # Other metrics unchanged
         col1, col2 = st.columns(2)
         col1.metric('log_pv Baseline (Sum of fix_c)', f"{metrics.get('log_pv_baseline', 0.0):,.2f}")
         col2.metric('log_pv Adjustment (ln_weighted)', f"{metrics.get('ln_weighted', 0.0):,.2f}")
@@ -289,9 +282,9 @@ def display_results(
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
 
     with st.expander("Show 'ln_weighted' Calculation Breakdown"):
-        st.write("ค่า `ln_weighted` คือผลรวมของการเปลี่ยนแปลงทั้งหมด (`sum of b_offset` + `sum of ln part`)")
+        st.write("ค่า `ln_weighted` = `sum(b_offset)` + `sum(fix_c * ln(S / ref))`")
         ln_breakdown_data = metrics.get('ln_breakdown', [])
-        total_dynamic_contribution = 0
+        total_dynamic_contribution = 0.0
         for item in ln_breakdown_data:
             total_dynamic_contribution += item['total_contribution']
             if item['ref_price'] > 0:
@@ -307,7 +300,6 @@ def display_results(
             st.code(formula_string, language='text')
         st.code("-------------------------------------------------------------------------")
         st.code(f"Total Sum (ln_weighted) = {total_dynamic_contribution:+51.4f}")
-
 
 def render_charts(config: Dict[str, Any]):
     st.write("📊 ThingSpeak Charts")
@@ -337,17 +329,17 @@ def calculate_metrics(
     """
     Returns:
       metrics,
-      options_pl_all,              # P/L รวม CALL+PUT
-      total_option_cost_all,       # ต้นทุนรวมออปชันทั้งหมด
-      total_option_cost_calls_only,  # ต้นทุนฝั่ง CALL
-      total_option_cost_puts_only    # ต้นทุนฝั่ง PUT
+      options_pl_all,                 # P/L รวม CALL+PUT
+      total_option_cost_all,          # ต้นทุนรวมออปชันทั้งหมด
+      total_option_cost_calls_only,   # ต้นทุนฝั่ง CALL
+      total_option_cost_puts_only     # ต้นทุนฝั่ง PUT
     """
-    metrics = {}
+    metrics: Dict[str, float] = {}
     portfolio_cash = user_inputs['portfolio_cash']
     current_prices = user_inputs['current_prices']
     total_stock_value = user_inputs['total_stock_value']
-    beta_memory = user_inputs['beta_memory']
 
+    # ---- Options P/L/Costs ----
     options_pl_all = 0.0
     total_option_cost_all = 0.0
     total_option_cost_calls_only = 0.0
@@ -374,20 +366,18 @@ def calculate_metrics(
 
         options_pl_all += intrinsic_value - total_cost_basis
 
-    # <<< GOAL 1: แก้ไขสูตรคำนวณ 'now_pv' โดยการลบ `- total_option_cost_all` ออก
-    metrics['now_pv'] = beta_memory + total_stock_value + portfolio_cash
-
+    # ---- Log-PV / ln_weighted ----
     log_pv_baseline = 0.0
-    ln_weighted_sum = 0.0
-    total_b_offset = 0.0
+    ln_weighted_sum = 0.0  # sum of fix_c * ln(S/ref)
+    total_b_offset = 0.0   # sum of b_offset
     ln_breakdown = []
 
     for asset in stock_assets:
         ticker = asset['ticker'].strip()
-        fix_c = asset.get('fix_c', 1500)
-        b_offset = asset.get('b_offset', 0.0)
-        ref_price = asset.get('reference_price', 0.0)
-        live_price = current_prices.get(ticker, 0.0)
+        fix_c = float(asset.get('fix_c', 1500))
+        b_offset = float(asset.get('b_offset', 0.0))
+        ref_price = float(asset.get('reference_price', 0.0))
+        live_price = float(current_prices.get(ticker, 0.0))
 
         log_pv_baseline += fix_c
         total_b_offset += b_offset
@@ -406,9 +396,16 @@ def calculate_metrics(
             "total_contribution": b_offset + ln_part
         })
 
+    ln_weighted = total_b_offset + ln_weighted_sum
+
+    # ---- Current Total Value uses ln_weighted ----
+    metrics['ln_weighted'] = ln_weighted
+    metrics['locked_pl'] = total_b_offset
+    metrics['run_model_pl'] = ln_weighted_sum
+    metrics['total_real_time_pl'] = ln_weighted  # = locked + run
     metrics['log_pv_baseline'] = log_pv_baseline
-    metrics['ln_weighted'] = total_b_offset + ln_weighted_sum
-    metrics['log_pv'] = metrics['log_pv_baseline'] + metrics['ln_weighted']
+    metrics['log_pv'] = log_pv_baseline + ln_weighted
+    metrics['now_pv'] = ln_weighted + total_stock_value + portfolio_cash
     metrics['net_cf'] = metrics['now_pv'] - metrics['log_pv']
     metrics['ln_breakdown'] = ln_breakdown
 
@@ -455,9 +452,6 @@ def main():
     stock_assets = [item for item in all_assets if item.get('type', 'stock') == 'stock']
     option_assets = [item for item in all_assets if item.get('type') == 'option']
 
-    if 'beta_memory' not in st.session_state:
-        st.session_state.beta_memory = compute_default_beta_memory_from_assets(stock_assets)
-
     clients = initialize_thingspeak_clients(config, stock_assets, option_assets)
     initial_data = fetch_initial_data(stock_assets, option_assets, clients[1])
 
@@ -479,6 +473,7 @@ def main():
         total_option_cost_puts_only
     ) = calculate_metrics(stock_assets, option_assets, user_inputs, config)
 
+    # dynamic offset follows baseline control
     log_pv_baseline = metrics.get('log_pv_baseline', 0.0)
     product_cost = user_inputs.get('product_cost', 0.0)
     dynamic_offset = product_cost - log_pv_baseline
@@ -498,14 +493,14 @@ def main():
 
 # --- UI forms (kept at end to keep code compact) ---
 def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: List[Dict[str, Any]], initial_data: Dict[str, Dict[str, Any]], product_cost_default: float) -> Dict[str, Any]:
-    user_inputs = {}
+    user_inputs: Dict[str, Any] = {}
 
     st.write("📊 Current Asset Prices")
-    current_prices = {}
+    current_prices: Dict[str, float] = {}
     all_tickers = {asset['ticker'].strip() for asset in stock_assets}
     all_tickers.update({opt['underlying_ticker'].strip() for opt in option_assets if opt.get('underlying_ticker')})
-    pre_prices = {}
-    pre_holdings = {}
+    pre_prices: Dict[str, float] = {}
+    pre_holdings: Dict[str, float] = {}
 
     for ticker in sorted(list(all_tickers)):
         ss_key_price = f"price_{ticker}"
@@ -532,7 +527,7 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     nk_top = compute_nk_breakdown(stock_assets, option_assets, _temp_inputs_for_nk_pre)
     display_nk_breakdown(nk_top)
 
-    current_holdings = {}
+    current_holdings: Dict[str, float] = {}
     total_stock_value = 0.0
     for asset in stock_assets:
         ticker = asset["ticker"].strip()
@@ -555,10 +550,8 @@ def render_ui_and_get_inputs(stock_assets: List[Dict[str, Any]], option_assets: 
     st.divider()
     st.write("⚙️ Calculation Parameters")
     user_inputs['product_cost'] = st.number_input('Product_cost', value=product_cost_default, format="%.2f")
-    
-    st.number_input('beta_memory', key='beta_memory', format="%.2f")
-    user_inputs['beta_memory'] = st.session_state.beta_memory
 
+    # 🔥 ลบ input beta_memory ออกแล้ว (ไม่มีการรับ/เก็บค่า)
     st.number_input('Portfolio_cash', key='portfolio_cash', format="%.2f")
     user_inputs['portfolio_cash'] = st.session_state.portfolio_cash
 
