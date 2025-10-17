@@ -265,8 +265,6 @@ def display_results(
 
         # st.markdown("#### 📘 Formula (with Opt_K)")
         st.code(
-            f"{baseline_label}"
-            f""
             "log_pv = Σfix_c + ln_weighted\n"
             f"        = {sum_fix_c:,.2f} + {lnw:,.2f}\n"
             f"        = {log_pv:,.2f}\n\n"
@@ -279,6 +277,7 @@ def display_results(
             "Net CF  = now_pv − log_pv\n"
             f"        = {now_pv:,.2f} − {log_pv:,.2f}\n"
             f"        = {net_cf:,.2f}\n\n"
+            f"{baseline_label}"
         )
 
         # Final value (now_pv)
