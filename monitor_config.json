@@ -87,7 +87,7 @@
             "ticker": "NEGG",
             "monitor_field": { "field": 3, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" },
             "asset_field": { "field": "field2", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
-            "fix_c": 500,
+            "fix_c": 0.01,
             "diff": 60,
             "option_config": null
         },
