@@ -274,7 +274,7 @@ def display_results(
         )
 
         # Final value (now_pv)
-        st.metric(label=" ", value=f"{now_pv:,.2f}")
+        st.metric(label="now_pv", value=f"{now_pv:,.2f}")
 
         # Other metrics unchanged
         col1, col2 = st.columns(2)
@@ -292,7 +292,7 @@ def display_results(
         baseline_val = sum_fix_c
         product_cost_cfg = config.get('product_cost_default', 0)
         baseline_label = f"💰 Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost_cfg} (Cost ค่า N)  + {offset_display_val:.0f} (Lv ค่า K) "
-        st.metric(label=baseline_label, value=f"{net_cf - config.get('cashflow_offset', 0.0):,.2f}")
+        # st.metric(label=baseline_label, value=f"{net_cf - config.get('cashflow_offset', 0.0):,.2f}")
 
         baseline_target = config.get('baseline_target', 0.0)
         adjusted_cf = net_cf - config.get('cashflow_offset', 0.0)
