@@ -261,7 +261,7 @@ def display_results(
         offset_display_val = -config.get('cashflow_offset', 0.0)  # == Opt_K
         baseline_val = sum_fix_c
         product_cost_cfg = config.get('product_cost_default', 0)
-        baseline_label = f"💰 Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost_cfg} (Cost ค่า N)  + {offset_display_val:.0f} (Lv ค่า K) "
+        baseline_label = f"Baseline_T0 | {baseline_val:,.1f}(Control) = {product_cost_cfg} (Cost ค่า N)  + {offset_display_val:.0f} (Lv ค่า K) "
 
         # st.markdown("#### 📘 Formula (with Opt_K)")
         st.code(
