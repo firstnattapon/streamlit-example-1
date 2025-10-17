@@ -1,6 +1,6 @@
 {
   "version": "1.1.0",
-  "exported_at": "2025-10-16T16:24:10.693Z",
+  "exported_at": "2025-10-17T09:33:50.899Z",
   "params": {
     "x0_1": 20,
     "x0_2": 16,
@@ -8,7 +8,7 @@
       5,
       40
     ],
-    "delta1": 0.2,
+    "delta1": 0.3,
     "delta2": 1,
     "constant1": 5000,
     "constant2": 1500,
@@ -34,12 +34,12 @@
     "showY2": false,
     "showY3": true,
     "showY4": false,
-    "showY5": false,
+    "showY5": true,
     "showY6": true,
     "showY7": false,
-    "showY8": true,
+    "showY8": false,
     "showY9": true,
-    "showY10": true,
+    "showY10": false,
     "showY11": false
   }
 }
