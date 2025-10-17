@@ -39,7 +39,7 @@
     { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.45", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.55, "strike": 16.0 },
 
     { "type": "stock", "ticker": "FFWM", "reference_price": 6.88, "fix_c": 1500, "b_offset": -234 , "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field1" } },
-    { "type": "stock", "ticker": "NEGG", "reference_price": 25.20, "fix_c": 500, "b_offset": 718.28, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field2" } },
+    { "type": "stock", "ticker": "NEGG", "reference_price": 25.20, "fix_c": 0.01, "b_offset": 1027.79, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field2" } },
     { "type": "stock", "ticker": "RIVN", "reference_price": 12.0 , "fix_c": 1500, "b_offset": -697.5 , "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field3" } },
     { "type": "stock", "ticker": "APLS", "reference_price": 30.20, "fix_c": 2500, "b_offset": -597.07 , "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field4" } },
     { "type": "stock", "ticker": "NVTS", "reference_price": 12.0, "fix_c": 2000, "b_offset": -254.24 , "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field5" } },
