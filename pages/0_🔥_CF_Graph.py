@@ -57,15 +57,15 @@ def parse_final_two_numbers(s):
 
 with tabs[0]:
     st.write("⚙️ ตั้งค่าทั่วไปและประวัติ Asset")
-    st.markdown(
-    """ 
-    กราฟจะยังยึดหลักต้นทุน (อ้างอิง: T_0 , ทุน: C_0 )  ของจุดเริ่มต้นเสมอ
-    ไม่ว่าจะ Rollover: T_Reference  , C_Capital  , P_Action ไปกี่ครั้งก็ตาม
-    """ 
-    )
 
     with st.expander(f"pnl_tracking_strategy"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=SAjLJA9EjhwvRPQySBW4A8", width=1500, height=1000, scrolling=0)
+
+        st.markdown(
+        """ 
+        กราฟจะยังยึดหลักต้นทุน (อ้างอิง: T_0 , ทุน: C_0 )  ของจุดเริ่มต้นเสมอ
+        ไม่ว่าจะ Rollover: T_Reference  , C_Capital  , P_Action ไปกี่ครั้งก็ตาม
+        """ )                
         
         st.json({
         "pnl_tracking_strategy": {
