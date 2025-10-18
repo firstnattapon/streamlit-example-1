@@ -303,9 +303,8 @@ def display_results(
 
         # Net_Zero @ Offset (ยังคงใช้ baseline_target สำหรับการแสดงผลบน UI เท่าเดิม)
         baseline_target = config.get('baseline_target', 0.0)
-        adjusted_cf = net_cf - baseline_target
-        final_value = baseline_target - adjusted_cf
-        st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value*(-1):,.2f} )")
+        final_value = net_cf + (baseline_target)
+        st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value:,.2f} )")
 
     with st.expander("Show 'ln_weighted' Calculation Breakdown"):
         st.write("ค่า `ln_weighted` = `sum(b_offset)` + `sum(fix_c * ln(S / ref))`")
