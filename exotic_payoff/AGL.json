@@ -1,33 +1,34 @@
 {
-  "version": "1.1.0",
-  "exported_at": "2025-10-17T07:03:32.089Z",
+  "version": "1.1.1",
+  "exported_at": "2025-10-19T14:19:06.878Z",
   "params": {
     "x0_1": 2,
-    "x0_2": 10,
-    "x1Range": [
-      0.1,
-      10
-    ],
-    "delta1": 0.3,
-    "delta2": 1,
     "constant1": 1500,
-    "constant2": 1500,
-    "refConst": 1500,
     "b1": -914,
-    "b2": 0,
-    "autoRolloverB1": false,
-    "autoRolloverB2": false,
     "b1Base": 0,
+    "autoRolloverB1": false,
+    "x0_2": 10,
+    "constant2": 1500,
+    "b2": 0,
     "b2Base": 0,
-    "includePremium": false,
+    "autoRolloverB2": false,
+    "anchorY6": 2,
+    "refConst": 1500,
     "callContracts": 0,
-    "putContracts": 0,
     "premiumCall": 0,
+    "putContracts": 0,
     "premiumPut": 0,
     "longEntryPrice": 0,
     "longShares": 0,
     "shortEntryPrice": 0,
-    "shortShares": 0
+    "shortShares": 0,
+    "delta1": 0.3,
+    "delta2": 1,
+    "includePremium": false,
+    "x1Range": [
+      0.1,
+      10
+    ]
   },
   "toggles": {
     "showY1": false,
