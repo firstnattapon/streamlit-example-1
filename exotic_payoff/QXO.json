@@ -1,6 +1,6 @@
 {
   "version": "1.1.1",
-  "exported_at": "2025-10-19T14:36:07.404Z",
+  "exported_at": "2025-10-20T08:38:00.160Z",
   "params": {
     "x0_1": 22.6,
     "constant1": 2200,
@@ -12,7 +12,7 @@
     "b2": 0,
     "b2Base": 0,
     "autoRolloverB2": false,
-    "anchorY6": 22.6,
+    "anchorY6": 19,
     "refConst": 1500,
     "callContracts": 0,
     "premiumCall": 0,
