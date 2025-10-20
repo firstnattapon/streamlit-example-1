@@ -1,17 +1,19 @@
 {
-  "version": "1.1.1",
-  "exported_at": "2025-10-20T08:38:00.160Z",
+  "version": "1.2.0",
+  "exported_at": "2025-10-20T10:44:19.298Z",
   "params": {
     "x0_1": 22.6,
     "constant1": 2200,
-    "b1": 104.54,
-    "b1Base": 0,
+    "b1": 364.54,
+    "b1Base": 364.54,
     "autoRolloverB1": false,
+    "b1_add_option": 104.54,
     "x0_2": 30,
     "constant2": 1500,
     "b2": 0,
     "b2Base": 0,
     "autoRolloverB2": false,
+    "b2_add_option": 0,
     "anchorY6": 19,
     "refConst": 1500,
     "callContracts": 0,
@@ -25,6 +27,7 @@
     "delta1": 0.1893,
     "delta2": 1,
     "includePremium": false,
+    "biasMode": "real",
     "x1Range": [
       4,
       50
