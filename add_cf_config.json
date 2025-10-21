@@ -35,7 +35,7 @@
     { "type": "option", "option_type": "put", "name": "FLNC Put @ 10.90", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 3.10, "strike": 14.0 },
     { "type": "option", "option_type": "put", "name": "FLNC Put @ 9.69", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 4.31, "strike": 14.0 },
     { "type": "option", "option_type": "put", "name": "FLNC Put @ 9.59", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 4.41, "strike": 14.0 },
-    { "type": "option", "option_type": "Call", "name": "FLNC Call @ 10.0", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 9.10, "strike": 10.0 },
+    { "type": "option", "option_type": "Call", "name": "FLNC Call @ 18.00", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 0.65, "strike": 17.35 },
     { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.22", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.78, "strike": 16.0 },
     { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.45", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.55, "strike": 16.0 },
 
