@@ -30,6 +30,11 @@ with tabs[2]:
         """ 
         กราฟจะยังยึดหลักต้นทุน (อ้างอิง: T_0 , ทุน: C_0 )  ของจุดเริ่มต้นเสมอ
         ไม่ว่าจะ Rollover: T_Reference  , C_Capital  , P_Action ไปกี่ครั้งก็ตาม
+        
+        หลักการบันทึก beta_momory : synthetic_long_stock  
+        beta_momory  = นับ position _cost ที่ถืออยู่แค่นั้น
+        Lock_P&L =  กำไร-ขาดทุน synthetic_long_stock  นับเหมือนหุ้นปกติ
+        Max_Roll  = นับ net _rollover_order            
         """ )        
         st.components.v1.iframe("https://monica.im/share/artifact?id=z6iWHpc2rQjTTMriGBbthi", width=1500, height=1000, scrolling=0)
 
@@ -64,12 +69,7 @@ with tabs[0]:
         st.markdown(
         """ 
         กราฟจะยังยึดหลักต้นทุน (อ้างอิง: T_0 , ทุน: C_0 )  ของจุดเริ่มต้นเสมอ
-        ไม่ว่าจะ Rollover: T_Reference  , C_Capital  , P_Action ไปกี่ครั้งก็ตาม
-        
-        หลักการบันทึก beta_momory : synthetic_long_stock  
-        beta_momory  = นับ position _cost ที่ถืออยู่แค่นั้น
-        Lock_P&L =  กำไร-ขาดทุน synthetic_long_stock  นับเหมือนหุ้นปกติ
-        Max_Roll  = นับ net _rollover_order        
+        ไม่ว่าจะ Rollover: T_Reference  , C_Capital  , P_Action ไปกี่ครั้งก็ตาม    
         """ )                
         
         st.json({
