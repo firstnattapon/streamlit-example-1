@@ -36,6 +36,7 @@
     { "type": "option", "option_type": "put", "name": "FLNC Put @ 9.69", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 4.31, "strike": 14.0 },
     { "type": "option", "option_type": "put", "name": "FLNC Put @ 9.59", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 4.41, "strike": 14.0 },
     { "type": "option", "option_type": "Call", "name": "FLNC Call @ 18.00", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 0.65, "strike": 17.35 },
+    { "type": "option", "option_type": "Call", "name": "FLNC Call @ 18.00", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 0.50, "strike": 17.50 },
     { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.22", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.78, "strike": 16.0 },
     { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.45", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.55, "strike": 16.0 },
 
@@ -47,7 +48,7 @@
     { "type": "stock", "ticker": "QXO", "reference_price": 22.60, "fix_c": 2200, "b_offset":  104.54, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field6" } },
     { "type": "stock", "ticker": "RXRX", "reference_price": 5.00, "fix_c": 1500, "b_offset": -665.44, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field7" } },
     { "type": "stock", "ticker": "AGL", "reference_price": 2.00 , "fix_c": 1500, "b_offset": -913.75, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field8" } },
-    { "type": "stock", "ticker": "FLNC", "reference_price": 18.00, "fix_c": 5000, "b_offset": -253 , "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field1" } },
+    { "type": "stock", "ticker": "FLNC", "reference_price": 18.00, "fix_c": 5000, "b_offset": -303 , "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field1" } },
     { "type": "stock", "ticker": "GERN", "reference_price": 1.85, "fix_c": 1500, "b_offset":  -288, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field2" } },
     { "type": "stock", "ticker": "DYN", "reference_price": 12.60, "fix_c": 1500, "b_offset":  -261, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field3" } },
     { "type": "stock", "ticker": "DJT", "reference_price": 20.40, "fix_c": 2000, "b_offset":  -293, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field4" } },
