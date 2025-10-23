@@ -39,6 +39,7 @@
     { "type": "option", "option_type": "Call", "name": "FLNC Call @ 18.00", "underlying_ticker": "FLNC", "contracts_or_shares": 100, "premium_paid_per_share": 0.50, "strike": 17.50 },
     { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.22", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.78, "strike": 16.0 },
     { "type": "option", "option_type": "put", "name": "CLSK Put @ 13.45", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 2.55, "strike": 16.0 },
+    { "type": "option", "option_type": "Call", "name": "CLSK Call @ 20.00", "underlying_ticker": "CLSK", "contracts_or_shares": 100, "premium_paid_per_share": 0.40, "strike": 19.60 },
 
     { "type": "stock", "ticker": "FFWM", "reference_price": 6.88, "fix_c": 1500, "b_offset": -234 , "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field1" } },
     { "type": "stock", "ticker": "NEGG", "reference_price": 25.20, "fix_c": 0.01, "b_offset": 1027.79, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field2" } },
@@ -54,7 +55,7 @@
     { "type": "stock", "ticker": "DJT", "reference_price": 20.40, "fix_c": 2000, "b_offset":  -293, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field4" } },
     { "type": "stock", "ticker": "IBRX", "reference_price": 3.25, "fix_c": 1800, "b_offset":  -406.9, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field5" } },
     { "type": "stock", "ticker": "SG",   "reference_price": 12.00, "fix_c": 1500, "b_offset":  -195, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field6" } },
-    { "type": "stock", "ticker": "CLSK", "reference_price": 20.00, "fix_c": 5000, "b_offset":  -313.79, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field7" } },
+    { "type": "stock", "ticker": "CLSK", "reference_price": 20.00, "fix_c": 5000, "b_offset":  -353.79, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field7" } },
     { "type": "stock", "ticker": "LUNR", "reference_price": 14.00, "fix_c": 1500, "b_offset":  -292, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field8" } }
     
   ]
