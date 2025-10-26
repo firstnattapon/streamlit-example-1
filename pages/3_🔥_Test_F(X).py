@@ -369,7 +369,7 @@ def generate_actions_hybrid_multi_mutation(
 # ! of the simulation (the seeds), and the output format is preserved.
 class SimulationTracer:
     """
-    คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามิเตอร์
+    คลาสสำหรับห่อหุ้มกระบวนการทั้งหมด ตั้งแต่การถอดรหัสพารามเตอร์
     ไปจนถึงการจำลองกระบวนการกลายพันธุ์ของ action sequence
     """
     def __init__(self, encoded_string: str):
@@ -698,6 +698,10 @@ def render_hybrid_multi_mutation_tab():
                 max_window = len(df_windows)
                 if max_window == 0:
                     st.warning("ไม่มีข้อมูล Window")
+                    # Set default action_length to avoid errors later
+                    action_length_for_encoder = st.number_input(
+                        "Action Length", min_value=1, value=st.session_state.window_size, key="action_length_for_encoder_disabled", disabled=True
+                    )
                 else:
                     window_to_encode = st.number_input(
                         "Select Window #", min_value=1, max_value=max_window, value=1, key="window_encoder_input"
