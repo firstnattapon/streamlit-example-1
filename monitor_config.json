@@ -39,9 +39,9 @@
             "ticker": "DYN",
             "monitor_field": { "field": 3, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V" },
             "asset_field": { "field": "field3", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
-            "fix_c": 1500,
+            "fix_c": 2000,
             "diff": 60,
-            "option_config": { "base_value": 100, "delta_factor": 0.80 , "label": "DYN(LV:100@12.60, Δ=0.80)" }
+            "option_config": { "base_value": 100, "delta_factor": 1.0 , "label": "DYN(LV:100@24.00, Δ=1.0)" }
         },
         {
             "ticker": "FFWM",
