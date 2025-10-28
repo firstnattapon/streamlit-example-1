@@ -31,7 +31,6 @@ with tabs[2]:
         กราฟจะยังยึดหลักต้นทุน (อ้างอิง: T_0 , ทุน: C_0 )  ของจุดเริ่มต้นเสมอ
         ไม่ว่าจะ Rollover: T_Reference  , C_Capital  , P_Action ไปกี่ครั้งก็ตาม
         
-        หลักการบันทึก beta_momory : synthetic_long_stock  
         EV (Extrinsic Value) = Premium - (ราคาหุ้น - Strike)
         P&L สุทธิ = กำไรจากราคาหุ้น (b) ปกติ -  net_EV  ( EV ใหม่ - EV เก่า)
         """ )        
