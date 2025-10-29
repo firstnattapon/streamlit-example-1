@@ -61,7 +61,7 @@ def parse_final_two_numbers(s):
 with tabs[0]:
     st.write("⚙️ ตั้งค่าทั่วไปและประวัติ Asset")
     with st.expander(f"บันทึก beta_memory_EV"):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=P5bBBroDgNhENKXxFUhCRH", width=1500, height=1000, scrolling=0)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=atEAAsV4afxJTBq4jTM3YR", width=1500, height=1000, scrolling=0)
 
     with st.expander(f"pnl_tracking_strategy"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=SAjLJA9EjhwvRPQySBW4A8", width=1500, height=1000, scrolling=0)
