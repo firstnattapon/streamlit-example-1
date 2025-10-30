@@ -17,7 +17,7 @@
             "asset_field": { "field": "field4", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
             "fix_c": 2500,
             "diff": 80,
-            "option_config": { "base_value": 100, "delta_factor": 0.8, "label": "APLS(LV:100@28.5, Δ=0.80)" }
+            "option_config": { "base_value": 100, "delta_factor": 1.0, "label": "APLS(LV:100@28.5, Δ=1.0)" }
         },
         {
             "ticker": "CLSK",
