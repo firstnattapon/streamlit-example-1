@@ -54,7 +54,7 @@ with tabs[5]:
 
 with tabs[6]:
     with st.expander("Stock_Replacement_P&L_Calculator", expanded=True):
-        st.components.v1.iframe("https://stockprice-firstnattapon.streamlit.app/", width=1500, height=1000, scrolling=0)
+        st.write("https://stockprice-firstnattapon.streamlit.app")
         st.components.v1.iframe("https://monica.im/share/artifact?id=d8nc2e3fk3a6SAWxL7e6u3", width=1500, height=1000, scrolling=0)
 
 def parse_final_two_numbers(s):
