@@ -49,8 +49,8 @@ with tabs[4]:
 with tabs[5]:
     with st.expander("3_piecewise_line", expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=zuJkMUdTQzDsqsUisxiAXN", width=1500, height=1000, scrolling=0)
-        with st.expander("3_piecewise_line_v1", expanded=False):
-            st.components.v1.iframe("https://monica.im/share/artifact?id=t8qKXjs8Aywi3PcTf4pDZM", width=1500, height=1000, scrolling=0)
+    with st.expander("3_piecewise_line_v1", expanded=False):
+        st.components.v1.iframe("https://monica.im/share/artifact?id=t8qKXjs8Aywi3PcTf4pDZM", width=1500, height=1000, scrolling=0)
 
 with tabs[6]:
     with st.expander("Stock_Replacement_P&L_Calculator", expanded=True):
