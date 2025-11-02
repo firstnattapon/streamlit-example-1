@@ -139,8 +139,8 @@
     "history_1": "ราคาอ้างอิง: 12.6 → 24 , ทุนคงที่: 1500 → 2500 , ราคาปัจจุบัน: 24",
     "history_1.1": "0.00 += (1500 × ln(24/12.6)) − (2500 × ln(24/24)) | c = 2500 , t = 24 , b = 966.54",
     "comment": "T & C",
-    "beta_momory_1": "10|Call_EV:-261|+0 , 17.5|Call_EV:-1100(-1100-0)|",
-    "beta_momory_1.1": "c-261 , c-1100"
+    "beta_Equation": " Ev: -731.00 + Lock_P&L: +966.54" , 
+    "beta_momory": "Net: 235.54"  
     
   },
   {
@@ -150,7 +150,8 @@
     "Equation": "b += c · ln(P / t) - c' · ln(P / t'); แล้วตั้ง P = P', t = t', c = c'",
     "history_1": "",
     "comment": "",
-    "beta_momory": "Call:-293"
+    "beta_Equation": " Ev: -293.00 + Lock_P&L: +0" , 
+    "beta_momory": "Net: -293.00"  
   },
   {
     "ticker": "IBRX",
@@ -160,7 +161,8 @@
     "history_1": "ราคาอ้างอิง: 3.25 → 3.25 , ทุนคงที่: 1600 → 1800 , ราคาปัจจุบัน: 2.62",
     "history_1.1": "0.00 += (1600 × ln(2.62/3.25)) − (1800 × ln(2.62/3.25)) | c = 1800 , t = 3.25 , b = 43.10",
     "comment": "C",
-    "beta_momory": "Call:-450"
+    "beta_Equation": " Ev: -426.00 + Lock_P&L: +43.10" , 
+    "beta_momory": "Net: -382.9"  
   },
   {
     "ticker": "SG",
