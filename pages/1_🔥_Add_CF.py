@@ -175,7 +175,7 @@ def display_results(
         st.metric(label=f"💰 Net_Zero @ {config.get('cashflow_offset_comment', '')}", value=f"( {final_value:,.2f} )")
 
     with st.expander("Show 'ln_weighted' Calculation Breakdown"):
-        st.write("ค่า `ln_weighted` = `sum(b_offset)` + `sum(fix_c * ln(S / ref))`")
+        st.write("ค่า `ln_weighted` = `sum(b_offset(Lock_P&L-EV))` + `sum(fix_c * ln(S / ref))`")
         ln_breakdown_data = metrics.get('ln_breakdown', [])
         total_dynamic_contribution = 0.0
         for item in ln_breakdown_data:
