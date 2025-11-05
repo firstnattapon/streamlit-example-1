@@ -1,6 +1,6 @@
 {
   "version": "1.2.0",
-  "exported_at": "2025-11-01T07:46:53.872Z",
+  "exported_at": "2025-11-05T05:15:25.438Z",
   "params": {
     "x0_1": 12,
     "constant1": 5000,
@@ -24,13 +24,13 @@
     "longShares": 82,
     "shortEntryPrice": 20,
     "shortShares": 100,
-    "delta1": 0.24,
+    "delta1": 0.25,
     "delta2": 1,
     "includePremium": false,
     "biasMode": "add_option",
     "x1Range": [
-      2,
-      50
+      1,
+      30
     ]
   },
   "toggles": {
