@@ -119,7 +119,7 @@
             "ticker": "RXRX",
             "monitor_field": { "field": 8, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" },
             "asset_field": { "field": "field7", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
-            "fix_c": 1500,
+            "fix_c": 1700,
             "diff": 60,
             "option_config": { "base_value": 300, "delta_factor": 1, "label": "RXRX(LV:200@5.0, Δ=1.00)" }
         },
