@@ -3,11 +3,11 @@
   "exported_at": "2025-11-01T13:20:22.421Z",
   "params": {
     "x0_1": 5,
-    "constant1": 1500,
+    "constant1": 1700,
     "b1": -115.44,
     "b1Base": -115.44,
     "autoRolloverB1": false,
-    "b1_add_option": -455.44,
+    "b1_add_option": -459.4,
     "x0_2": 0.1,
     "constant2": 1500,
     "b2": 0,
