@@ -1,13 +1,13 @@
 {
   "version": "1.2.0",
-  "exported_at": "2025-11-02T07:06:33.067Z",
+  "exported_at": "2025-11-08T14:11:21.269Z",
   "params": {
     "x0_1": 2,
     "constant1": 1500,
     "b1": -334.71,
     "b1Base": -334.71,
     "autoRolloverB1": false,
-    "b1_add_option": -747.71,
+    "b1_add_option": -662.71,
     "x0_2": 10,
     "constant2": 1500,
     "b2": 0,
