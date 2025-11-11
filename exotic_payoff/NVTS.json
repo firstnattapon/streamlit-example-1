@@ -1,14 +1,14 @@
 {
   "version": "1.2.0",
-  "exported_at": "2025-11-08T14:25:54.247Z",
+  "exported_at": "2025-11-11T06:46:09.176Z",
   "params": {
     "x0_1": 12,
-    "constant1": 3500,
-    "b1": 2076.41,
-    "b1Base": 2076.41,
+    "constant1": 2200,
+    "b1": 1939.44,
+    "b1Base": 1939.44,
     "autoRolloverB1": false,
-    "b1_add_option": 521.8,
-    "x0_2": 20,
+    "b1_add_option": 384.83,
+    "x0_2": 14.97,
     "constant2": 1500,
     "b2": 0,
     "b2Base": 0,
@@ -19,18 +19,18 @@
     "callContracts": 100,
     "premiumCall": 0,
     "putContracts": 100,
-    "premiumPut": 2.6,
+    "premiumPut": 2.97,
     "longEntryPrice": 12,
     "longShares": 82,
-    "shortEntryPrice": 20,
+    "shortEntryPrice": 14.97,
     "shortShares": 100,
     "delta1": 0.25,
     "delta2": 1,
-    "includePremium": false,
+    "includePremium": true,
     "biasMode": "add_option",
     "x1Range": [
       0.1,
-      20.3
+      25
     ]
   },
   "toggles": {
@@ -42,7 +42,7 @@
     "showY6": true,
     "showY7": false,
     "showY8": false,
-    "showY9": false,
+    "showY9": true,
     "showY10": false,
     "showY11": false
   }
