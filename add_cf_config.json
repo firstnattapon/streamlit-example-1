@@ -26,7 +26,7 @@
     { "type": "stock", "ticker": "QXO", "reference_price": 22.60, "fix_c": 2200, "b_offset":  104.54, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field6" } },
     { "type": "stock", "ticker": "RXRX", "reference_price": 5.00, "fix_c": 1500, "b_offset": -464.4, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field7" } },
     { "type": "stock", "ticker": "AGL", "reference_price": 2.00 , "fix_c": 1500, "b_offset": -662.71, "holding_channel": { "channel_id": 2528199, "write_api_key": "2E65V8XEIPH9B2VV", "field": "field8" } },
-    { "type": "stock", "ticker": "FLNC", "reference_price": 18.00, "fix_c": 5000, "b_offset": -264.17 , "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field1" } },
+    { "type": "stock", "ticker": "FLNC", "reference_price": 18.00, "fix_c": 2500, "b_offset": -421.62 , "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field1" } },
     { "type": "stock", "ticker": "GERN", "reference_price": 1.85, "fix_c": 1500, "b_offset":  -310.50, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field2" } },
     { "type": "stock", "ticker": "DYN", "reference_price": 24.00, "fix_c": 2500, "b_offset":  235.54, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field3" } },
     { "type": "stock", "ticker": "DJT", "reference_price": 20.40, "fix_c": 2000, "b_offset":  -293.00, "holding_channel": { "channel_id": 2988802, "write_api_key": "85IOR3R3ZG643PBP", "field": "field4" } },
