@@ -112,7 +112,7 @@
             "monitor_field": { "field": 4, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" },
             "asset_field": { "field": "field3", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
             "fix_c": 3500,
-            "diff": 60,
+            "diff": 90,
             "option_config": { "base_value": 200, "delta_factor": 1.00, "label": "RIVN(LV:100@12.00, Δ=1.00)" }
         },
         {
