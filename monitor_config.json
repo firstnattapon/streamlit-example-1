@@ -73,7 +73,7 @@
             "asset_field": { "field": "field5", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 1800,
             "diff": 60,
-            "option_config": { "base_value": 600, "delta_factor": 0.95, "label": "IBRX(LV:600@3.25, Δ=0.95)" }
+            "option_config": { "base_value": 600, "delta_factor": 1, "label": "IBRX(LV:600@3.25, Δ=1)" }
         },
         {
             "ticker": "LUNR",
@@ -105,7 +105,7 @@
             "asset_field": { "field": "field6", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
             "fix_c": 2200,
             "diff": 70,
-            "option_config": { "base_value": 100, "delta_factor": 0.9, "label": "QXO(LV:100@22.6, Δ=0.90)" }
+            "option_config": { "base_value": 100, "delta_factor": 1, "label": "QXO(LV:100@22.6, Δ=1.0)" }
         },
         {
             "ticker": "RIVN",
