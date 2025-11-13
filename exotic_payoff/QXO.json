@@ -1,6 +1,6 @@
 {
   "version": "1.2.0",
-  "exported_at": "2025-10-20T10:44:19.298Z",
+  "exported_at": "2025-11-13T13:09:01.480Z",
   "params": {
     "x0_1": 22.6,
     "constant1": 2200,
@@ -27,7 +27,7 @@
     "delta1": 0.1893,
     "delta2": 1,
     "includePremium": false,
-    "biasMode": "real",
+    "biasMode": "add_option",
     "x1Range": [
       4,
       50
