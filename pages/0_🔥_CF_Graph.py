@@ -55,7 +55,7 @@ with tabs[5]:
 with tabs[6]:
     with st.expander("Stock_Replacement_P&L_Calculator", expanded=True):
         st.write("https://stockprice-firstnattapon.streamlit.app")
-        st.components.v1.iframe("https://monica.im/share/artifact?id=dzAcWz8Gctp5Z4VSyQqvYU", width=1500, height=1000, scrolling=0)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=DtUJVjc9qRiKuYeJmkoaHk", width=1500, height=1000, scrolling=0)
         st.components.v1.iframe("https://monica.im/share/artifact/preview?id=bUZu6BZhKCeDGSG7DQ5pWV", width=1500, height=1000, scrolling=0)
     with st.expander("Stock_Replacement_P&L_Calculator_v1", expanded=False):
         st.components.v1.iframe("https://monica.im/share/artifact?id=d8nc2e3fk3a6SAWxL7e6u3", width=1500, height=1000, scrolling=0)
