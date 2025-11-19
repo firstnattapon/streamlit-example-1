@@ -25,7 +25,6 @@ def load_config() -> Dict[str, Any]:
     return {
         "assets": ["FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" , "DJT", "IBRX" , "SG" , "CLSK" , "LUNR" ],
         "default_settings": {
-            # default_tickers จะถูก override ใน initialize_session_state ให้เป็นทั้งหมด
             "start_date": "2024-01-01",
             "window_size": 30, "num_seeds": 1000, "max_workers": 8,
             "mutation_rate": 10.0, "num_mutations": 5
@@ -36,7 +35,7 @@ def initialize_session_state(config: Dict[str, Any]):
     defaults = config.get('default_settings', {})
     asset_list = config.get('assets', [])
     
-    # ! GOAL 1: Default Select ALL Tickers
+    # ! GOAL: Default Select ALL Tickers
     if 'selected_tickers' not in st.session_state: 
         st.session_state.selected_tickers = asset_list
     
@@ -53,7 +52,7 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'batch_results' not in st.session_state: st.session_state.batch_results = {}
 
 # ==============================================================================
-# 2. Core Calculation & Data Functions (UNCHANGED LOGIC)
+# 2. Core Calculation & Data Functions
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -116,7 +115,7 @@ def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> 
     })
 
 # ==============================================================================
-# 3. Strategy Action Generation (UNCHANGED LOGIC)
+# 3. Strategy Action Generation
 # ==============================================================================
 def generate_actions_rebalance_daily(num_days: int) -> np.ndarray:
     return np.ones(num_days, dtype=np.int32)
@@ -315,7 +314,7 @@ class SimulationTracer:
         return "".join(encoded_parts)
 
 # ==============================================================================
-# 5. UI Rendering & Logic Functions (NEW / REFACTORED)
+# 5. UI Rendering & Logic Functions
 # ==============================================================================
 
 def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
@@ -333,11 +332,11 @@ def render_settings_tab():
     config = load_config()
     asset_list = config.get('assets', [])
 
-    # ! GOAL 1: Default Select ALL Tickers (Using state from initialize_session_state)
+    # Default Select ALL Tickers
     st.session_state.selected_tickers = st.multiselect(
         "เลือก Tickers ที่ต้องการทดสอบ (เลือกได้หลายตัว)", 
         options=asset_list, 
-        default=st.session_state.selected_tickers # Defaults to ALL
+        default=st.session_state.selected_tickers 
     )
 
     c1, c2 = st.columns(2)
@@ -455,7 +454,6 @@ def render_single_ticker_result(ticker: str, result_data: Dict[str, Any]):
             except Exception as e:
                 st.error(f"Encoding Error: {e}")
 
-# ! GOAL 2: Restore Explanations
 def render_methodology_expander():
     st.markdown(f"### 🧬 {Strategy.HYBRID_MULTI_MUTATION}")
     st.info("กลยุทธ์นี้ทำงานโดย: 1. ค้นหา 'DNA' ที่ดีที่สุดในแต่ละ Window 2. นำ DNA นั้นมาพยายาม 'กลายพันธุ์' (Mutate) ซ้ำๆ เพื่อหาผลลัพธ์ที่ดีกว่าเดิม")
@@ -615,8 +613,6 @@ def render_methodology_expander():
 
 def render_simulation_tabs():
     st.write("---")
-    
-    # ! GOAL 2: เรียกใช้ฟังก์ชันแสดงคำอธิบาย
     render_methodology_expander()
     
     st.divider()
@@ -638,18 +634,76 @@ def render_simulation_tabs():
     else:
         st.info("ยังไม่มีผลลัพธ์ กรุณากดปุ่ม Start")
 
+# ! GOAL: Restore Full Tracer (Decode + Encode)
 def render_tracer_tab():
-    st.markdown("### 🔍 Tracer & Decoder")
-    encoded_input = st.text_input("Enter Encoded String:", key="decoder_main_input")
-    if st.button("Trace & Simulate", key="trace_btn_main"):
-        if encoded_input:
-            try:
-                tracer = SimulationTracer(encoded_input)
-                st.code(str(tracer))
-                final_actions = tracer.run()
-                st.dataframe(pd.DataFrame(final_actions, columns=['Action']).T)
-            except Exception as e:
-                st.error(f"Error: {e}")
+    st.markdown("### 🔍 Action Sequence Tracer & Encoder")
+    st.info("เครื่องมือนี้ใช้สำหรับ 1. **ถอดรหัส (Decode)** String เพื่อจำลองผลลัพธ์ และ 2. **เข้ารหัส (Encode)** พารามิเตอร์เพื่อสร้าง String")
+
+    st.markdown("---")
+    st.markdown("#### 1. ถอดรหัส (Decode) String")
+
+    encoded_string = st.text_input(
+        "ป้อน Encoded String ที่นี่:",
+        "26021034252903219354832053493",
+        help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds",
+        key="decoder_input"
+    )
+
+    if st.button("Trace & Simulate", type="primary", key="tracer_button"):
+        if not encoded_string:
+            st.warning("กรุณาป้อน Encoded String")
+        else:
+            with st.spinner(f"กำลังถอดรหัสและจำลองสำหรับ: {encoded_string[:20]}..."):
+                try:
+                    tracer = SimulationTracer(encoded_string=encoded_string)
+                    st.success("ถอดรหัสสำเร็จ!")
+                    st.code(str(tracer), language='bash')
+                    final_actions = tracer.run()
+                    st.write("---")
+                    st.markdown("#### 🎉 ผลลัพธ์ Action Sequence สุดท้าย:")
+                    st.dataframe(pd.DataFrame(final_actions, columns=['Action']), use_container_width=True)
+                    st.write("Raw Array:")
+                    st.code(str(final_actions))
+                except ValueError as e:
+                    st.error(f"❌ เกิดข้อผิดพลาดในการประมวลผล: {e}")
+
+    st.divider()
+
+    st.markdown("#### 2. เข้ารหัส (Encode) พารามิเตอร์")
+    st.write("ป้อนพารามิเตอร์เพื่อสร้าง Encoded String สำหรับการทดลองซ้ำ")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        action_length_input = st.number_input("Action Length", min_value=1, value=60, key="enc_len", help="ความยาวของ action sequence")
+        dna_seed_input = st.number_input("DNA Seed", min_value=0, value=900, format="%d", key="enc_dna", help="Seed สำหรับสร้าง DNA ดั้งเดิม")
+    with col2:
+        mutation_rate_input = st.number_input("Mutation Rate (%)", min_value=0, value=10, key="enc_rate", help="อัตราการกลายพันธุ์เป็นเปอร์เซ็นต์ (เช่น 5 สำหรับ 5%)")
+        mutation_seeds_str = st.text_input(
+            "Mutation Seeds (คั่นด้วยจุลภาค ,)",
+            "899, 530, 35, 814, 646",
+            key="enc_seeds_str",
+            help="ชุดของ Seed สำหรับการกลายพันธุ์แต่ละรอบ คั่นด้วยเครื่องหมายจุลภาค"
+        )
+
+    if st.button("Encode Parameters", key="encoder_button"):
+        try:
+            if mutation_seeds_str.strip():
+                mutation_seeds_list = [int(s.strip()) for s in mutation_seeds_str.split(',')]
+            else:
+                mutation_seeds_list = []
+
+            generated_string = SimulationTracer.encode(
+                action_length=int(action_length_input),
+                mutation_rate=int(mutation_rate_input),
+                dna_seed=int(dna_seed_input),
+                mutation_seeds=mutation_seeds_list
+            )
+
+            st.success("เข้ารหัสสำเร็จ! สามารถคัดลอก String ด้านล่างไปใช้ได้")
+            st.code(generated_string, language='text')
+
+        except (ValueError, TypeError) as e:
+            st.error(f"❌ เกิดข้อผิดพลาด: กรุณาตรวจสอบว่า Mutation Seeds เป็นตัวเลขที่คั่นด้วยจุลภาคเท่านั้น ({e})")
 
 # ==============================================================================
 # 6. Main Application
