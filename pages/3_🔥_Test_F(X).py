@@ -1,4 +1,3 @@
-# main
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -6,7 +5,6 @@ import streamlit as st
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Tuple, Dict, Any
-import time
 
 # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
 from numba import njit
@@ -14,7 +12,7 @@ from numba import njit
 # ==============================================================================
 # 1. Configuration & Constants
 # ==============================================================================
-st.set_page_config(page_title="Hybrid_Multi_Mutation_Batch", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="Hybrid_Multi_Mutation", page_icon="🧬", layout="wide")
 
 class Strategy:
     """คลาสสำหรับเก็บชื่อกลยุทธ์ต่างๆ เพื่อให้เรียกใช้ง่ายและลดข้อผิดพลาด"""
@@ -24,9 +22,8 @@ class Strategy:
     ORIGINAL_DNA = "Original DNA (Pre-Mutation)"
 
 def load_config(filepath: str = "hybrid_seed_config.json") -> Dict[str, Any]:
-    # In a real app, this might load from a JSON file. For simplicity, it's a dict.
     return {
-        "assets": ["FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" , "DJT", "IBRX" , "SG" , "CLSK" , "LUNR"],
+        "assets": ["FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" , "DJT", "IBRX" , "SG" , "CLSK" , "LUNR" ],
         "default_settings": {
             "selected_ticker": "FFWM", "start_date": "2024-01-01",
             "window_size": 30, "num_seeds": 1000, "max_workers": 1,
@@ -48,25 +45,84 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
 
 # ==============================================================================
-# 2. Core Calculation & Data Functions
+# 2. Simulation Tracer & Encoder (Moved up for accessibility)
+# ==============================================================================
+class SimulationTracer:
+    """
+    คลาสสำหรับจัดการ Encoding/Decoding Action Sequence และ Simulation
+    """
+    def __init__(self, encoded_string: str):
+        self.encoded_string: str = encoded_string
+        self._decode_and_set_attributes()
+
+    def _decode_and_set_attributes(self):
+        encoded_string = self.encoded_string
+        if not isinstance(encoded_string, str) or not encoded_string.isdigit():
+            raise ValueError("Input ต้องเป็นสตริงที่ประกอบด้วยตัวเลขเท่านั้น")
+
+        decoded_numbers = []
+        idx = 0
+        while idx < len(encoded_string):
+            try:
+                length_of_number = int(encoded_string[idx]); idx += 1
+                number_str = encoded_string[idx : idx + length_of_number]; idx += length_of_number
+                decoded_numbers.append(int(number_str))
+            except (IndexError, ValueError):
+                raise ValueError(f"รูปแบบของสตริงไม่ถูกต้องที่ตำแหน่ง {idx}")
+
+        if len(decoded_numbers) < 3:
+            raise ValueError("ข้อมูลในสตริงไม่ครบถ้วน (ต้องการอย่างน้อย 3 ค่า)")
+
+        self.action_length: int = decoded_numbers[0]
+        self.mutation_rate: int = decoded_numbers[1]
+        self.dna_seed: int = decoded_numbers[2]
+        self.mutation_seeds: List[int] = decoded_numbers[3:]
+        self.mutation_rate_float: float = self.mutation_rate / 100.0
+
+    def run(self) -> np.ndarray:
+        dna_rng = np.random.default_rng(seed=self.dna_seed)
+        current_actions = dna_rng.integers(0, 2, size=self.action_length).astype(np.int32)
+        current_actions[0] = 1
+        for m_seed in self.mutation_seeds:
+            mutation_rng = np.random.default_rng(seed=m_seed)
+            mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
+            current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
+            current_actions[0] = 1
+        return current_actions
+
+    def __str__(self) -> str:
+        return (
+            "✅ พารามิเตอร์ที่ถอดรหัสสำเร็จ:\n"
+            f"- action_length: {self.action_length}\n"
+            f"- mutation_rate: {self.mutation_rate} ({self.mutation_rate_float:.2f})\n"
+            f"- dna_seed: {self.dna_seed}\n"
+            f"- mutation_seeds: {self.mutation_seeds}"
+        )
+
+    @staticmethod
+    def encode(
+        action_length: int,
+        mutation_rate: int,
+        dna_seed: int,
+        mutation_seeds: List[int]
+    ) -> str:
+        all_numbers = [action_length, mutation_rate, dna_seed] + mutation_seeds
+        encoded_parts = [f"{len(str(num))}{num}" for num in all_numbers]
+        return "".join(encoded_parts)
+
+# ==============================================================================
+# 3. Core Calculation & Data Functions
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     try:
-        # Download data
         data = yf.Ticker(ticker).history(start=start_date, end=end_date)[['Close']]
         if data.empty: return pd.DataFrame()
-        
-        # Handle Timezone
-        if data.index.tz is None: 
-            data = data.tz_localize('UTC').tz_convert('Asia/Bangkok')
-        else: 
-            data = data.tz_convert('Asia/Bangkok')
-            
+        if data.index.tz is None: data = data.tz_localize('UTC').tz_convert('Asia/Bangkok')
+        else: data = data.tz_convert('Asia/Bangkok')
         return data
     except Exception as e:
-        # Return empty dataframe on error instead of printing to streamlit directly (for batch safety)
-        return pd.DataFrame()
+        st.error(f"❌ ไม่สามารถดึงข้อมูล {ticker} ได้: {str(e)}"); return pd.DataFrame()
 
 @njit(cache=True)
 def _calculate_net_profit_numba(action_array: np.ndarray, price_array: np.ndarray, fix: int = 1500) -> float:
@@ -116,7 +172,7 @@ def run_simulation(prices: List[float], actions: List[int], fix: int = 1500) -> 
     })
 
 # ==============================================================================
-# 3. Strategy Action Generation
+# 4. Strategy Action Generation
 # ==============================================================================
 def generate_actions_rebalance_daily(num_days: int) -> np.ndarray:
     return np.ones(num_days, dtype=np.int32)
@@ -240,8 +296,7 @@ def generate_actions_hybrid_multi_mutation(
     num_seeds: int,
     max_workers: int,
     mutation_rate_pct: float,
-    num_mutations: int,
-    progress_callback=None # Optional callback for batch progress
+    num_mutations: int
 ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame]:
 
     prices = ticker_data['Close'].to_numpy()
@@ -251,12 +306,7 @@ def generate_actions_hybrid_multi_mutation(
     window_details_list = []
 
     num_windows = (n + window_size - 1) // window_size
-    
-    # Only show internal progress bar if not in batch mode or if callback not provided
-    internal_bar = None
-    if progress_callback is None:
-        internal_bar = st.progress(0, text="Initializing Hybrid Multi-Mutation Search...")
-    
+    progress_bar = st.progress(0, text="Initializing Hybrid Multi-Mutation Search...")
     mutation_rate = mutation_rate_pct / 100.0
 
     for i, start_index in enumerate(range(0, n, window_size)):
@@ -266,9 +316,8 @@ def generate_actions_hybrid_multi_mutation(
         prices_window = prices[start_index:end_index]
         if len(prices_window) < 2: continue
 
-        if internal_bar:
-            progress_text = f"Window {i+1}/{num_windows} - Phase 1: Searching for Best DNA..."
-            internal_bar.progress((i * progress_total_steps + 1) / (num_windows * progress_total_steps), text=progress_text)
+        progress_text = f"Window {i+1}/{num_windows} - Phase 1: Searching for Best DNA..."
+        progress_bar.progress((i * progress_total_steps + 1) / (num_windows * progress_total_steps), text=progress_text)
 
         dna_seed, current_best_net, current_best_actions = find_best_seed_for_window(prices_window, num_seeds, max_workers)
 
@@ -277,9 +326,8 @@ def generate_actions_hybrid_multi_mutation(
         successful_mutation_seeds = []
 
         for mutation_round in range(num_mutations):
-            if internal_bar:
-                progress_text = f"Window {i+1}/{num_windows} - Mutation Round {mutation_round+1}/{num_mutations}..."
-                internal_bar.progress((i * progress_total_steps + 1 + mutation_round + 1) / (num_windows * progress_total_steps), text=progress_text)
+            progress_text = f"Window {i+1}/{num_windows} - Mutation Round {mutation_round+1}/{num_mutations}..."
+            progress_bar.progress((i * progress_total_steps + 1 + mutation_round + 1) / (num_windows * progress_total_steps), text=progress_text)
 
             mutation_seed, mutated_net, mutated_actions = find_best_mutation_for_sequence(
                 current_best_actions, prices_window, num_seeds, mutation_rate, max_workers
@@ -293,114 +341,34 @@ def generate_actions_hybrid_multi_mutation(
         final_actions = np.concatenate((final_actions, current_best_actions.astype(np.int32)))
         original_actions_full = np.concatenate((original_actions_full, original_actions_window.astype(np.int32)))
 
+        # --- AUTO-ENCODE RESULT IMMEDIATELY ---
+        current_action_length = len(prices_window)
+        encoded_str = SimulationTracer.encode(
+            action_length=current_action_length,
+            mutation_rate=int(mutation_rate_pct),
+            dna_seed=int(dna_seed),
+            mutation_seeds=successful_mutation_seeds
+        )
+
         start_date = ticker_data.index[start_index]; end_date = ticker_data.index[end_index-1]
         detail = {
-            'window': i + 1, 'timeline': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+            'window': i + 1,
+            'timeline': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
             'dna_seed': dna_seed,
             'mutation_seeds': str(successful_mutation_seeds) if successful_mutation_seeds else "None",
             'improvements': len(successful_mutation_seeds),
             'original_net': round(original_net_for_display, 2),
-            'final_net': round(current_best_net, 2)
+            'final_net': round(current_best_net, 2),
+            'encoded_string': encoded_str  # NEW: Auto-generated
         }
         window_details_list.append(detail)
 
-    if internal_bar:
-        internal_bar.empty()
-        
+    progress_bar.empty()
     return original_actions_full, final_actions, pd.DataFrame(window_details_list)
 
 # ==============================================================================
-# 4. Simulation Tracer Class (for the new tab)
+# 5. UI Rendering Functions
 # ==============================================================================
-class SimulationTracer:
-    def __init__(self, encoded_string: str):
-        self.encoded_string: str = encoded_string
-        self._decode_and_set_attributes()
-
-    def _decode_and_set_attributes(self):
-        encoded_string = self.encoded_string
-        if not isinstance(encoded_string, str) or not encoded_string.isdigit():
-            raise ValueError("Input ต้องเป็นสตริงที่ประกอบด้วยตัวเลขเท่านั้น")
-
-        decoded_numbers = []
-        idx = 0
-        while idx < len(encoded_string):
-            try:
-                length_of_number = int(encoded_string[idx]); idx += 1
-                number_str = encoded_string[idx : idx + length_of_number]; idx += length_of_number
-                decoded_numbers.append(int(number_str))
-            except (IndexError, ValueError):
-                raise ValueError(f"รูปแบบของสตริงไม่ถูกต้องที่ตำแหน่ง {idx}")
-
-        if len(decoded_numbers) < 3:
-            raise ValueError("ข้อมูลในสตริงไม่ครบถ้วน (ต้องการอย่างน้อย 3 ค่า)")
-
-        self.action_length: int = decoded_numbers[0]
-        self.mutation_rate: int = decoded_numbers[1]
-        self.dna_seed: int = decoded_numbers[2]
-        self.mutation_seeds: List[int] = decoded_numbers[3:]
-        self.mutation_rate_float: float = self.mutation_rate / 100.0
-
-    def run(self) -> np.ndarray:
-        dna_rng = np.random.default_rng(seed=self.dna_seed)
-        current_actions = dna_rng.integers(0, 2, size=self.action_length).astype(np.int32)
-        current_actions[0] = 1
-        for m_seed in self.mutation_seeds:
-            mutation_rng = np.random.default_rng(seed=m_seed)
-            mutation_mask = mutation_rng.random(self.action_length) < self.mutation_rate_float
-            current_actions[mutation_mask] = 1 - current_actions[mutation_mask]
-            current_actions[0] = 1
-        return current_actions
-
-    def __str__(self) -> str:
-        return (
-            "✅ พารามิเตอร์ที่ถอดรหัสสำเร็จ:\n"
-            f"- action_length: {self.action_length}\n"
-            f"- mutation_rate: {self.mutation_rate} ({self.mutation_rate_float:.2f})\n"
-            f"- dna_seed: {self.dna_seed}\n"
-            f"- mutation_seeds: {self.mutation_seeds}"
-        )
-
-    @staticmethod
-    def encode(action_length: int, mutation_rate: int, dna_seed: int, mutation_seeds: List[int]) -> str:
-        all_numbers = [action_length, mutation_rate, dna_seed] + mutation_seeds
-        encoded_parts = [f"{len(str(num))}{num}" for num in all_numbers]
-        return "".join(encoded_parts)
-
-# ==============================================================================
-# 5. Logic Abstraction & UI Rendering Functions
-# ==============================================================================
-
-def run_strategy_analysis(ticker: str) -> Tuple[Dict[str, pd.DataFrame], pd.DataFrame]:
-    """
-    Function to run the entire analysis for a single ticker.
-    Used by both Single Ticker mode and Batch mode.
-    """
-    ticker_data = get_ticker_data(ticker, str(st.session_state.start_date), str(st.session_state.end_date))
-    if ticker_data.empty:
-        return {}, pd.DataFrame()
-
-    original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
-        ticker_data, st.session_state.window_size, st.session_state.num_seeds,
-        st.session_state.max_workers, st.session_state.mutation_rate,
-        st.session_state.num_mutations
-    )
-
-    prices = ticker_data['Close'].to_numpy()
-    
-    results = {
-        Strategy.HYBRID_MULTI_MUTATION: run_simulation(prices.tolist(), final_actions.tolist()),
-        Strategy.ORIGINAL_DNA: run_simulation(prices.tolist(), original_actions.tolist()),
-        Strategy.REBALANCE_DAILY: run_simulation(prices.tolist(), generate_actions_rebalance_daily(len(prices)).tolist()),
-        Strategy.PERFECT_FORESIGHT: run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
-    }
-    
-    # Set index for charts
-    for name, df in results.items():
-        if not df.empty: df.index = ticker_data.index[:len(df)]
-            
-    return results, df_windows
-
 def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
     if not results: st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟเปรียบเทียบ"); return
     valid_dfs = {name: df for name, df in results.items() if not df.empty and 'net' in df.columns}
@@ -439,193 +407,98 @@ def render_settings_tab():
 def render_hybrid_multi_mutation_tab():
     st.write("---")
     st.markdown(f"### 🧬 {Strategy.HYBRID_MULTI_MUTATION}")
-    st.info("กลยุทธ์นี้ทำงานโดย: 1. ค้นหา 'DNA' ที่ดีที่สุดในแต่ละ Window 2. นำ DNA นั้นมาพยายาม 'กลายพันธุ์' (Mutate) ซ้ำๆ เพื่อหาผลลัพธ์ที่ดีกว่าเดิม")
-
-    with st.expander("📖 คำอธิบายวิธีการทำงานและแนวคิด (Multi-Mutation)"):
-        st.markdown("""
-            แนวคิด **Hybrid (Multi-Mutation)** ได้รับแรงบันดาลใจจากกระบวนการ **วิวัฒนาการและการคัดเลือกสายพันธุ์**...
-            (คงคำอธิบายเดิมไว้ เพื่อความกระชับขอละส่วนข้อความยาวๆไว้ใน Code จริง)
-        """)
-        # ... (Code explanation same as original) ... 
-
-    # --- Control Panel Split ---
-    st.write("#### 🎮 Control Panel")
-    col_single, col_batch = st.columns(2)
     
-    run_single = col_single.button(f"🚀 Start Single Ticker ({st.session_state.test_ticker})", type="primary", use_container_width=True)
-    run_batch = col_batch.button(f"⚡ Run Batch Analysis (All Tickers)", type="secondary", use_container_width=True)
-
-    # --- MODE 1: SINGLE TICKER EXECUTION ---
-    if run_single:
+    # Start Button Section
+    if st.button(f"🚀 Start Hybrid Multi-Mutation (One-Click Loop)", type="primary", help="Run full simulation for selected ticker and generate all outputs"):
         if st.session_state.start_date >= st.session_state.end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
         ticker = st.session_state.test_ticker
-        with st.spinner(f"กำลังดึงข้อมูลและประมวลผลสำหรับ {ticker}..."):
-            results, df_windows = run_strategy_analysis(ticker)
-            
-            if not results:
-                st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก")
-            else:
-                # Store specific results for single view
-                st.session_state.simulation_results = results
-                st.session_state.df_windows_details = df_windows
-                # Cache ticker data for encoder use
-                st.session_state.ticker_data_cache = get_ticker_data(ticker, str(st.session_state.start_date), str(st.session_state.end_date))
-                st.session_state.active_mode = 'single'
+        with st.spinner(f"🚀 Processing Loop for {ticker}... This generates Chart, Summary, Table, and Encoded Strings."):
+            ticker_data = get_ticker_data(ticker, str(st.session_state.start_date), str(st.session_state.end_date))
+            if ticker_data.empty: st.error("ไม่พบข้อมูลสำหรับ Ticker และช่วงวันที่ที่เลือก"); return
 
-    # --- MODE 2: BATCH EXECUTION ---
-    if run_batch:
-        if st.session_state.start_date >= st.session_state.end_date: st.error("❌ กรุณาตั้งค่าช่วงวันที่ให้ถูกต้อง"); return
-        config = load_config()
-        assets = config.get('assets', [])
-        
-        batch_results = []
-        progress_bar = st.progress(0, text="Starting Batch Process...")
-        status_text = st.empty()
-        
-        for i, ticker in enumerate(assets):
-            status_text.write(f"⏳ Processing {ticker} ({i+1}/{len(assets)})...")
-            
-            try:
-                results, _ = run_strategy_analysis(ticker)
-                
-                if results:
-                    # Extract Net Profits
-                    perf_net = results[Strategy.PERFECT_FORESIGHT]['net'].iloc[-1] if not results[Strategy.PERFECT_FORESIGHT].empty else 0
-                    hybrid_net = results[Strategy.HYBRID_MULTI_MUTATION]['net'].iloc[-1] if not results[Strategy.HYBRID_MULTI_MUTATION].empty else 0
-                    orig_net = results[Strategy.ORIGINAL_DNA]['net'].iloc[-1] if not results[Strategy.ORIGINAL_DNA].empty else 0
-                    reb_net = results[Strategy.REBALANCE_DAILY]['net'].iloc[-1] if not results[Strategy.REBALANCE_DAILY].empty else 0
-                    
-                    batch_results.append({
-                        'Ticker': ticker,
-                        'Perfect (Max)': perf_net,
-                        'Hybrid (Genetic)': hybrid_net,
-                        'Original DNA': orig_net,
-                        'Rebalance Daily': reb_net,
-                        'Hybrid % vs Rebalance': ((hybrid_net - reb_net) / abs(reb_net) * 100) if reb_net != 0 else 0
-                    })
-            except Exception as e:
-                st.warning(f"Skipping {ticker} due to error: {e}")
-                
-            progress_bar.progress((i + 1) / len(assets))
-            
-        progress_bar.empty()
-        status_text.empty()
-        
-        if batch_results:
-            df_batch = pd.DataFrame(batch_results)
-            st.session_state.batch_results_df = df_batch
-            st.session_state.active_mode = 'batch'
-            st.success("✅ Batch Analysis Complete!")
-        else:
-            st.error("❌ Failed to process any tickers.")
-
-    # --- RENDER OUTPUT BASED ON MODE ---
-    if st.session_state.get('active_mode') == 'single':
-        if 'simulation_results' in st.session_state:
-            results = st.session_state.simulation_results
-            df_windows = st.session_state.df_windows_details
-            
-            # (Existing Single Ticker Output Logic)
-            chart_results = {k: v for k, v in results.items() if k != Strategy.ORIGINAL_DNA}
-            display_comparison_charts(chart_results)
-
-            st.divider()
-            st.write("### 📈 สรุปผลลัพธ์")
-            
-            if not df_windows.empty:
-                perfect_df = results.get(Strategy.PERFECT_FORESIGHT)
-                total_perfect_net = perfect_df['net'].iloc[-1] if perfect_df is not None and not perfect_df.empty else 0.0
-
-                hybrid_df = results.get(Strategy.HYBRID_MULTI_MUTATION)
-                total_hybrid_net = hybrid_df['net'].iloc[-1] if hybrid_df is not None and not hybrid_df.empty else 0.0
-
-                original_df = results.get(Strategy.ORIGINAL_DNA)
-                total_original_net = original_df['net'].iloc[-1] if original_df is not None and not original_df.empty else 0.0
-
-                rebalance_df = results.get(Strategy.REBALANCE_DAILY)
-                total_rebalance_net = rebalance_df['net'].iloc[-1] if rebalance_df is not None and not rebalance_df.empty else 0.0
-
-                st.write("#### สรุปผลการดำเนินงานโดยรวม (Compounded Final Profit)")
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Perfect Foresight", f"${total_perfect_net:,.2f}")
-                col2.metric("Hybrid Strategy", f"${total_hybrid_net:,.2f}")
-                col3.metric("Original Profits", f"${total_original_net:,.2f}")
-                col4.metric("Rebalance Daily", f"${total_rebalance_net:,.2f}")
-
-                st.write("---")
-                st.write("#### 📝 รายละเอียดผลลัพธ์ราย Window")
-                st.dataframe(df_windows, use_container_width=True)
-                ticker = st.session_state.get('test_ticker', 'TICKER')
-                st.download_button("📥 Download Details (CSV)", df_windows.to_csv(index=False), f'hybrid_multi_mutation_{ticker}.csv', 'text/csv')
-
-                st.divider()
-                st.markdown("#### 🎁 Generate Encoded String from Window Result")
-                # (Existing Encoder Logic)
-                c1, c2 = st.columns([1, 3])
-                with c1:
-                    max_window = len(df_windows)
-                    window_to_encode = st.number_input("Select Window #", min_value=1, max_value=max_window, value=1, key="window_encoder_input")
-                    
-                    default_action_length = st.session_state.get('window_size', 60)
-                    # Try calculate dynamic length if data exists
-                    try:
-                        total_days = len(st.session_state.ticker_data_cache)
-                        window_size = st.session_state.window_size
-                        start_index = (window_to_encode - 1) * window_size
-                        default_action_length = min(window_size, total_days - start_index) * 2
-                    except: pass
-
-                    action_length_for_encoder = st.number_input("Action Length", min_value=1, value=default_action_length, key="action_length_for_encoder")
-
-                with c2:
-                    st.write("\n\n")
-                    if st.button("Encode Selected Window", key="window_encoder_button"):
-                        try:
-                            window_data = df_windows.iloc[window_to_encode - 1]
-                            dna_seed = int(window_data['dna_seed'])
-                            mutation_rate = int(st.session_state.mutation_rate)
-                            mutation_seeds_str = window_data['mutation_seeds']
-                            mutation_seeds = []
-                            if mutation_seeds_str not in ["None", "[]"]:
-                                cleaned_str = mutation_seeds_str.strip('[]')
-                                if cleaned_str: mutation_seeds = [int(s.strip()) for s in cleaned_str.split(',')]
-
-                            encoded_string = SimulationTracer.encode(
-                                action_length=int(action_length_for_encoder),
-                                mutation_rate=mutation_rate,
-                                dna_seed=dna_seed,
-                                mutation_seeds=mutation_seeds
-                            )
-                            st.success(f"**Encoded String for Window #{window_to_encode}:**")
-                            st.code(encoded_string, language='text')
-                        except Exception as e: st.error(f"Encoder Error: {e}")
-
-    elif st.session_state.get('active_mode') == 'batch':
-        if 'batch_results_df' in st.session_state:
-            df_batch = st.session_state.batch_results_df
-            
-            st.markdown("### 🏆 Batch Performance Leaderboard")
-            
-            # Styling for the dataframe
-            st.dataframe(
-                df_batch.style.format({
-                    'Perfect (Max)': "${:,.2f}",
-                    'Hybrid (Genetic)': "${:,.2f}",
-                    'Original DNA': "${:,.2f}",
-                    'Rebalance Daily': "${:,.2f}",
-                    'Hybrid % vs Rebalance': "{:+.2f}%"
-                }).background_gradient(subset=['Hybrid (Genetic)'], cmap='Greens'),
-                use_container_width=True,
-                height=500
+            original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
+                ticker_data, st.session_state.window_size, st.session_state.num_seeds,
+                st.session_state.max_workers, st.session_state.mutation_rate,
+                st.session_state.num_mutations
             )
-            
-            col_dl, _ = st.columns([1, 4])
-            col_dl.download_button(
-                "📥 Download Summary CSV", 
-                df_batch.to_csv(index=False), 
-                f"Batch_Analysis_{datetime.now().strftime('%Y%m%d')}.csv", 
-                "text/csv"
-            )
+
+            prices = ticker_data['Close'].to_numpy()
+
+            results = {
+                Strategy.HYBRID_MULTI_MUTATION: run_simulation(prices.tolist(), final_actions.tolist()),
+                Strategy.ORIGINAL_DNA: run_simulation(prices.tolist(), original_actions.tolist()),
+                Strategy.REBALANCE_DAILY: run_simulation(prices.tolist(), generate_actions_rebalance_daily(len(prices)).tolist()),
+                Strategy.PERFECT_FORESIGHT: run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
+            }
+            for name, df in results.items():
+                if not df.empty: df.index = ticker_data.index[:len(df)]
+
+            st.session_state.simulation_results = results
+            st.session_state.df_windows_details = df_windows
+            st.session_state.ticker_data_cache = ticker_data
+
+    # Result Display Section (Renders automatically if results exist)
+    if 'simulation_results' in st.session_state:
+        results = st.session_state.simulation_results
+        df_windows = st.session_state.get('df_windows_details', pd.DataFrame())
+        
+        # 1. Chart
+        chart_results = {k: v for k, v in results.items() if k != Strategy.ORIGINAL_DNA}
+        display_comparison_charts(chart_results)
+
+        st.divider()
+        
+        # 2. Summary Metrics
+        st.write("### 📈 สรุปผลลัพธ์ (Summary)")
+        if not df_windows.empty:
+            perfect_df = results.get(Strategy.PERFECT_FORESIGHT)
+            hybrid_df = results.get(Strategy.HYBRID_MULTI_MUTATION)
+            original_df = results.get(Strategy.ORIGINAL_DNA)
+            rebalance_df = results.get(Strategy.REBALANCE_DAILY)
+
+            total_perfect = perfect_df['net'].iloc[-1] if perfect_df is not None and not perfect_df.empty else 0.0
+            total_hybrid = hybrid_df['net'].iloc[-1] if hybrid_df is not None and not hybrid_df.empty else 0.0
+            total_original = original_df['net'].iloc[-1] if original_df is not None and not original_df.empty else 0.0
+            total_rebalance = rebalance_df['net'].iloc[-1] if rebalance_df is not None and not rebalance_df.empty else 0.0
+
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Perfect Foresight", f"${total_perfect:,.2f}")
+            col2.metric("Hybrid Strategy", f"${total_hybrid:,.2f}", delta=f"{total_hybrid - total_original:,.2f} vs Orig")
+            col3.metric("Original DNA", f"${total_original:,.2f}")
+            col4.metric("Rebalance Daily", f"${total_rebalance:,.2f}")
+
+        # 3. Window Details & Auto Encoded String
+        st.write("---")
+        st.write("#### 📝 รายละเอียดผลลัพธ์ราย Window & 🎁 Encoded Strings")
+        st.info("Encoded String ถูกสร้างให้อัตโนมัติในคอลัมน์ขวาสุด สามารถ Copy ไปใช้ในแถบ Tracer ได้ทันที")
+        
+        st.dataframe(
+            df_windows, 
+            use_container_width=True, 
+            column_config={
+                "encoded_string": st.column_config.TextColumn(
+                    "Encoded String (Copy me)",
+                    help="Double click to copy this string for the Tracer tab",
+                    width="medium"
+                )
+            }
+        )
+        
+        ticker = st.session_state.get('test_ticker', 'TICKER')
+        csv = df_windows.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download Full Results (CSV)",
+            data=csv,
+            file_name=f'hybrid_multi_mutation_{ticker}.csv',
+            mime='text/csv',
+        )
+
+        # Helper to show Best Window String
+        if not df_windows.empty:
+            best_window_idx = df_windows['final_net'].idxmax()
+            best_row = df_windows.iloc[best_window_idx]
+            st.success(f"🏆 **Best Window: #{best_row['window']}** (Net: ${best_row['final_net']:,.2f})")
+            st.code(best_row['encoded_string'], language="text")
 
 def render_tracer_tab():
     st.markdown("### 🔍 Action Sequence Tracer & Encoder")
@@ -636,8 +509,7 @@ def render_tracer_tab():
 
     encoded_string = st.text_input(
         "ป้อน Encoded String ที่นี่:",
-        "26021034252903219354832053493",
-        help="สตริงที่เข้ารหัสพารามิเตอร์ต่างๆ เช่น action_length, mutation_rate, dna_seed, และ mutation_seeds",
+        help="สตริงที่ได้จากตารางผลลัพธ์ในหน้า Hybrid Strategy",
         key="decoder_input"
     )
 
@@ -661,21 +533,16 @@ def render_tracer_tab():
 
     st.divider()
 
-    st.markdown("#### 2. เข้ารหัส (Encode) พารามิเตอร์")
-    st.write("ป้อนพารามิเตอร์เพื่อสร้าง Encoded String สำหรับการทดลองซ้ำ")
+    st.markdown("#### 2. เข้ารหัส (Encode) พารามิเตอร์ (Manual)")
+    st.caption("ใช้ส่วนนี้หากต้องการสร้าง String เองด้วยมือ (ปกติระบบจะสร้างให้อัตโนมัติในแท็บ Hybrid)")
 
     col1, col2 = st.columns(2)
     with col1:
-        action_length_input = st.number_input("Action Length", min_value=1, value=60, key="enc_len", help="ความยาวของ action sequence")
-        dna_seed_input = st.number_input("DNA Seed", min_value=0, value=900, format="%d", key="enc_dna", help="Seed สำหรับสร้าง DNA ดั้งเดิม")
+        action_length_input = st.number_input("Action Length", min_value=1, value=60, key="enc_len")
+        dna_seed_input = st.number_input("DNA Seed", min_value=0, value=900, format="%d", key="enc_dna")
     with col2:
-        mutation_rate_input = st.number_input("Mutation Rate (%)", min_value=0, value=10, key="enc_rate", help="อัตราการกลายพันธุ์เป็นเปอร์เซ็นต์ (เช่น 5 สำหรับ 5%)")
-        mutation_seeds_str = st.text_input(
-            "Mutation Seeds (คั่นด้วยจุลภาค ,)",
-            "899, 530, 35, 814, 646",
-            key="enc_seeds_str",
-            help="ชุดของ Seed สำหรับการกลายพันธุ์แต่ละรอบ คั่นด้วยเครื่องหมายจุลภาค"
-        )
+        mutation_rate_input = st.number_input("Mutation Rate (%)", min_value=0, value=10, key="enc_rate")
+        mutation_seeds_str = st.text_input("Mutation Seeds (คั่นด้วยจุลภาค ,)", "899, 530", key="enc_seeds_str")
 
     if st.button("Encode Parameters", key="encoder_button"):
         try:
@@ -690,12 +557,10 @@ def render_tracer_tab():
                 dna_seed=int(dna_seed_input),
                 mutation_seeds=mutation_seeds_list
             )
-
-            st.success("เข้ารหัสสำเร็จ! สามารถคัดลอก String ด้านล่างไปใช้ได้")
+            st.success("Encoded String:")
             st.code(generated_string, language='text')
-
-        except (ValueError, TypeError) as e:
-            st.error(f"❌ เกิดข้อผิดพลาด: กรุณาตรวจสอบว่า Mutation Seeds เป็นตัวเลขที่คั่นด้วยจุลภาคเท่านั้น ({e})")
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
 
 # ==============================================================================
 # 6. Main Application
