@@ -43,11 +43,17 @@ def initialize_session_state(config: Dict[str, Any]):
         try: st.session_state.start_date = datetime.strptime(defaults.get('start_date', '2024-01-01'), '%Y-%m-%d').date()
         except ValueError: st.session_state.start_date = datetime(2024, 1, 1).date()
     if 'end_date' not in st.session_state: st.session_state.end_date = datetime.now().date()
+    
+    # Simulation Params
     if 'window_size' not in st.session_state: st.session_state.window_size = defaults.get('window_size', 30)
     if 'num_seeds' not in st.session_state: st.session_state.num_seeds = defaults.get('num_seeds', 1000)
     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
     if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 10.0)
     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
+    
+    # ! GOAL Step 4: Global Encoding Settings
+    if 'trace_target_window' not in st.session_state: st.session_state.trace_target_window = 1
+    if 'trace_action_length' not in st.session_state: st.session_state.trace_action_length = 0 # 0 means Auto (Window Size)
     
     if 'batch_results' not in st.session_state: st.session_state.batch_results = {}
 
@@ -354,6 +360,24 @@ def render_settings_tab():
     st.session_state.mutation_rate = c2.slider("Mutation Rate (%)", 0.0, 50.0, st.session_state.mutation_rate, 0.5)
     st.session_state.num_mutations = c3.number_input("Mutation Rounds", min_value=0, max_value=10, value=st.session_state.num_mutations)
 
+    # ! GOAL: Moved Inputs Here
+    st.divider()
+    with st.expander("🔌 **Global Encoding & Tracing Settings** (Advanced)", expanded=True):
+        st.info("ตั้งค่า Default สำหรับการ Generate Encoded String ในหน้าผลลัพธ์")
+        gc1, gc2 = st.columns(2)
+        st.session_state.trace_target_window = gc1.number_input(
+            "Target Window # (สำหรับ Encode)", 
+            min_value=1, 
+            value=st.session_state.trace_target_window,
+            help="เลือก Window ลำดับที่ต้องการจะนำมาสร้าง Encoded String โดยอัตโนมัติในหน้าผลลัพธ์"
+        )
+        st.session_state.trace_action_length = gc2.number_input(
+            "Action Length (0 = Auto/Window Size)", 
+            min_value=0, 
+            value=st.session_state.trace_action_length,
+            help="กำหนดความยาว Action Sequence สำหรับ Encode (ใส่ 0 เพื่อใช้ความยาวจริงของ Window นั้นๆ)"
+        )
+
 def execute_batch_processing():
     tickers = st.session_state.selected_tickers
     if not tickers:
@@ -423,33 +447,53 @@ def render_single_ticker_result(ticker: str, result_data: Dict[str, Any]):
     st.write(f"📝 **Detailed Window Results ({ticker})**")
     st.dataframe(df_windows, use_container_width=True)
     
+    # ! GOAL: Use Global Settings for Encoding
     st.markdown(f"#### 🎁 Generate Encoded String for **{ticker}**")
-    col_enc_1, col_enc_2 = st.columns([1, 3])
-    with col_enc_1:
-        win_num = st.number_input(f"Select Window #", min_value=1, max_value=len(df_windows), value=1, key=f"win_idx_{ticker}")
-        window_size = st.session_state.window_size
-        start_idx = (win_num - 1) * window_size
-        remaining = data_len - start_idx
-        default_len = min(window_size, remaining)
-        act_len = st.number_input("Action Length", min_value=1, value=default_len, key=f"act_len_{ticker}")
-    with col_enc_2:
-        st.write(""); st.write("")
-        if st.button(f"Encode Window {win_num} ({ticker})", key=f"btn_enc_{ticker}"):
+    
+    # Retrieve Global Settings
+    target_win_num = st.session_state.trace_target_window
+    global_act_len = st.session_state.trace_action_length
+    
+    # Validate Window Num
+    max_win = len(df_windows)
+    if target_win_num > max_win:
+        use_win_num = max_win
+        st.caption(f"⚠️ Window {target_win_num} เกินจำนวนที่มี (Max {max_win}). ใช้ Window {max_win} แทน")
+    else:
+        use_win_num = target_win_num
+        
+    # Logic for Action Length
+    window_size = st.session_state.window_size
+    start_idx = (use_win_num - 1) * window_size
+    remaining = data_len - start_idx
+    real_len = min(window_size, remaining)
+    
+    if global_act_len > 0:
+        final_act_len = global_act_len
+    else:
+        final_act_len = real_len
+
+    c_enc_1, c_enc_2 = st.columns([3, 1])
+    with c_enc_1:
+        st.info(f"Using Global Settings: **Window {use_win_num}**, **Len {final_act_len}** (Rate: {st.session_state.mutation_rate}%)")
+    with c_enc_2:
+        if st.button(f"Encode ({ticker})", key=f"btn_enc_{ticker}", use_container_width=True):
             try:
-                row = df_windows.iloc[win_num - 1]
+                row = df_windows.iloc[use_win_num - 1]
                 dna_seed = int(row['dna_seed'])
                 mut_seeds_str = row['mutation_seeds']
                 mut_seeds = []
                 if mut_seeds_str not in ["None", "[]"]:
                     clean = mut_seeds_str.strip('[]')
                     if clean: mut_seeds = [int(s.strip()) for s in clean.split(',')]
+                
                 encoded = SimulationTracer.encode(
-                    action_length=int(act_len),
+                    action_length=int(final_act_len),
                     mutation_rate=int(st.session_state.mutation_rate),
                     dna_seed=dna_seed,
                     mutation_seeds=mut_seeds
                 )
-                st.success(f"Encoded String for {ticker} Window {win_num}:")
+                st.success(f"Encoded String ({ticker} Win {use_win_num}):")
                 st.code(encoded, language='text')
             except Exception as e:
                 st.error(f"Encoding Error: {e}")
@@ -584,7 +628,7 @@ def render_methodology_expander():
             > ✨ **ผลลัพธ์สุดท้าย** คือ Actions ของ "ผู้ท้าชิง" หนึ่งราย ที่พร้อมจะถูกนำไปประเมินผลกำไรเพื่อท้าชิงตำแหน่งแชมป์เปี้ยนต่อไป กระบวนการทั้งหมดนี้จะเกิดขึ้นซ้ำๆ หลายพันครั้งเพื่อค้นหารูปแบบการกลายพันธุ์ที่ดีที่สุดเพียงหนึ่งเดียวในแต่ละรอบ
             """
         )
-      
+        
         code = """ ตัวอย่าง code
         import numpy as np
         dna_rng = np.random.default_rng(seed=239)
