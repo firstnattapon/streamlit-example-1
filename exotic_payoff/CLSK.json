@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "exported_at": "2025-11-17T15:05:09.352Z",
+  "version": "1.3.0",
+  "exported_at": "2025-12-01T04:23:36.922Z",
   "params": {
     "x0_1": 20,
     "constant1": 4000,
@@ -31,7 +31,10 @@
     "x1Range": [
       2,
       40
-    ]
+    ],
+    "delta1Mode": "dynamic",
+    "dynamic_iv": 951,
+    "dynamic_stock": 0
   },
   "toggles": {
     "showY1": false,
