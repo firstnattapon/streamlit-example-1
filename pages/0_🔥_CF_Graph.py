@@ -12,7 +12,7 @@ except FileNotFoundError:
     st.error("ไม่พบไฟล์ 'cf_graph_config.json'. กรุณาสร้างไฟล์และใส่ข้อมูล Asset ตามโครงสร้างใหม่")
     st.stop()
 
-tab_names = ["DATA", "BATA" , "All_Ticker" , "Option_Sum" , "Historical_Backtest_CF" , "Call_ratio_spread" , "Extrinsic_Value_(EV)"]  
+tab_names = ["DATA", "BATA" , "All_Ticker" , "Historical_Backtest_CF" , "Call_ratio_spread" , "Extrinsic_Value_(EV)"]  
 tabs = st.tabs(tab_names)
 
 current_prices = {}
@@ -36,23 +36,19 @@ with tabs[2]:
         """ )        
         st.components.v1.iframe("https://monica.im/share/artifact?id=z6iWHpc2rQjTTMriGBbthi", width=1500, height=1000, scrolling=0)
 
-# with tabs[3]:
-#     with st.expander("Option_Sum", expanded=True):
-#         st.components.v1.iframe("https://monica.im/share/artifact?id=aYyGrPmCRG24qMZiB4872K", width=1500, height=1000, scrolling=0)
-
-with tabs[4]:
+with tabs[3]:
     with st.expander("Historical_Backtest_CF", expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=DioBCRhLKWgMw2ey5YMRKJ", width=1500, height=1000, scrolling=0)
         with st.expander("Monthly", expanded=False):        
             st.components.v1.iframe("https://monica.im/share/artifact?id=cgYnircvQqM9YUf58VHd8a", width=1500, height=1000, scrolling=0)
         
-with tabs[5]:
+with tabs[4]:
     with st.expander("3_piecewise_line", expanded=True):
         st.components.v1.iframe("https://monica.im/share/artifact?id=x3N4ZKwgPbUDajwgankCrL", width=1500, height=1000, scrolling=0)
     with st.expander("3_piecewise_line_v1", expanded=False):
         st.components.v1.iframe("https://monica.im/share/artifact?id=t8qKXjs8Aywi3PcTf4pDZM", width=1500, height=1000, scrolling=0)
 
-with tabs[6]:
+with tabs[5]:
     with st.expander("Stock_Replacement_P&L_Calculator", expanded=True):
         st.write("https://stockprice-firstnattapon.streamlit.app")
         st.components.v1.iframe("https://monica.im/share/artifact?id=o4ummrnvDbMBYtEZzU5o6Z", width=1500, height=1000, scrolling=0)
