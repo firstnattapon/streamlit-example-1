@@ -12,15 +12,13 @@ except FileNotFoundError:
     st.error("ไม่พบไฟล์ 'cf_graph_config.json'. กรุณาสร้างไฟล์และใส่ข้อมูล Asset ตามโครงสร้างใหม่")
     st.stop()
 
-tab_names = ["DATA", "BATA" , "All_Ticker" , "Historical_Backtest_CF" , "Call_ratio_spread" , "Extrinsic_Value_(EV)"]  
+tab_names = ["DATA", "Rollover" , "All_Ticker" , "Historical_Backtest_CF" , "Call_ratio_spread" , "Extrinsic_Value_(EV)"]  
 tabs = st.tabs(tab_names)
 
 current_prices = {}
 asset_params = {}
 
 with tabs[1]:
-    with st.expander("หลักการ BATA", expanded=True):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=a3cRH7RVEHvBTjPhBC5Hd7", width=1500, height=1000, scrolling=0)
     with st.expander("หลักการ Rollover"):
         st.components.v1.iframe("https://monica.im/share/artifact?id=E9Mg5JX9RaAcfssZsU7K3E", width=1500, height=1000, scrolling=0)
 
