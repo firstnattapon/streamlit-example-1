@@ -445,7 +445,8 @@ def render_single_ticker_result(ticker: str, result_data: Dict[str, Any]):
     
     st.divider()
     st.write(f"📝 **Detailed Window Results ({ticker})**")
-    st.dataframe(df_windows, use_container_width=True)
+    with st.expander("Dataframe_Results"):
+        st.dataframe(df_windows, use_container_width=True)
     
     # ! GOAL: Use Global Settings for Encoding
     st.markdown(f"#### 🎁 Generate Encoded String for **{ticker}**")
