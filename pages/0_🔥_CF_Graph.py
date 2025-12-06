@@ -42,7 +42,7 @@ with tabs[3]:
         
 with tabs[4]:
     with st.expander("3_piecewise_line", expanded=True):
-        st.components.v1.iframe("https://monica.im/share/artifact?id=x3N4ZKwgPbUDajwgankCrL", width=1500, height=1000, scrolling=0)
+        st.components.v1.iframe("https://monica.im/share/artifact?id=Wd9NPncFZneHtEiPQH75Co", width=1500, height=1000, scrolling=0)
     with st.expander("3_piecewise_line_v1", expanded=False):
         st.components.v1.iframe("https://monica.im/share/artifact?id=t8qKXjs8Aywi3PcTf4pDZM", width=1500, height=1000, scrolling=0)
 
