@@ -25,7 +25,7 @@
             "asset_field": { "field": "field7", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 3800,
             "diff": 100,
-            "option_config": { "base_value": 300, "delta_factor": 1.0 , "label": "CLSK(LV:300@20.0, Δ=1.0)" }
+            "option_config": { "base_value": 200, "delta_factor": 1.0 , "label": "CLSK(LV:200@20.0, Δ=1.0)" }
         },
         {
             "ticker": "DJT",
