@@ -121,7 +121,7 @@
             "asset_field": { "field": "field7", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
             "fix_c": 2000,
             "diff": 70,
-            "option_config": { "base_value": 200, "delta_factor": 1, "label": "RXRX(LV:200@5.0, Δ=1.00)" }
+            "option_config": { "base_value": 400, "delta_factor": 1, "label": "RXRX(LV:400@5.0, Δ=1.00)" }
         },
         {
             "ticker": "SG",
