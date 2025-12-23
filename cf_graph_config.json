@@ -41,8 +41,8 @@
     "history_3.1": "263.01 += (1500 × ln(16.41/12)) − (2500 × ln(16.41/12)) | c = 2500 , t = 12 , b = -49.97",
     "comment": "T → T → C",
     "Surplus_Iv" : "Iv_Put: (-1.08*100,-3.3*100)=-438 " , 
-    "beta_Equation": " Ev: -366.00  + Lock_P&L: -49.97-438" , 
-    "beta_momory": "Net: -853.97"
+    "beta_Equation": " Ev: -533.50  + Lock_P&L: -49.97-438" , 
+    "beta_momory": "Net: -1021.47"
   },
   {
     "ticker": "APLS",
