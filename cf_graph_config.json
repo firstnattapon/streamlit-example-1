@@ -209,8 +209,8 @@
     "Equation": "b += c · ln(P / t) - c' · ln(P / t'); แล้วตั้ง P = P', t = t', c = c'",
     "history_1": "",
     "comment": "",
-    "beta_Equation": " Ev: -212.00 + Lock_P&L: +0" , 
-    "beta_momory": "Net: -212.00" 
+    "beta_Equation": " Ev: -601.00 + Lock_P&L: +0" , 
+    "beta_momory": "Net: -601.00" 
   }
 ]
 
