@@ -15,7 +15,7 @@
             "ticker": "APLS",
             "monitor_field": { "field": 5, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" },
             "asset_field": { "field": "field4", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
-            "fix_c": 2700,
+            "fix_c": 2700 ,
             "diff": 80,
             "option_config": { "base_value": 100, "delta_factor": 1.0 , "label": "APLS(LV:100@28.5, Δ=1.0)" }
         },
