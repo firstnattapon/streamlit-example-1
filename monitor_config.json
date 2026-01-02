@@ -103,7 +103,7 @@
             "ticker": "QXO",
             "monitor_field": { "field": 7, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" },
             "asset_field": { "field": "field6", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
-            "fix_c": 2200,
+            "fix_c": 2100,
             "diff": 70,
             "option_config": { "base_value": 100, "delta_factor": 1, "label": "QXO(LV:100@22.6, Δ=1.0)" }
         },
