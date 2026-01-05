@@ -1,6 +1,6 @@
 {
   "version": "1.3.0",
-  "exported_at": "2026-01-05T13:48:12.690Z",
+  "exported_at": "2026-01-05T13:49:14.746Z",
   "params": {
     "x0_1": 1.85,
     "constant1": 1600,
@@ -15,7 +15,7 @@
     "autoRolloverB2": false,
     "b2_add_option": 0,
     "anchorY6": 1.85,
-    "refConst": 1700,
+    "refConst": 1600,
     "callContracts": 0,
     "premiumCall": 0,
     "putContracts": 0,
