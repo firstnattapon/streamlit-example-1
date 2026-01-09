@@ -79,7 +79,7 @@
             "ticker": "LUNR",
             "monitor_field": { "field": 8, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V" },
             "asset_field": { "field": "field8", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
-            "fix_c": 1900 ,
+            "fix_c": 2100 ,
             "diff": 70,
             "option_config": { "base_value": 100, "delta_factor": 1, "label": "LUNR(LV:100@14.0, Δ=1.00)" }
         },
