@@ -213,7 +213,8 @@
     "history_2": "ราคาอ้างอิง: 15 → 15 , ทุนคงที่: 1500 → 2100 , ราคาปัจจุบัน: 15.88",
     "history_2.1": "103.49 += (1500 × ln(15.88/15)) − (2100 × ln(15.88/15)) | c = 2100 , t = 15 , b = 69.28",
     "comment": "T",
-    "beta_Equation": " Ev: -601.00 + Lock_P&L: +69.28" , 
+    "Surplus_Iv" : "Iv_Put: No_Expiry" , 
+    "beta_Equation": "Ev: -1109.00 + Lock_P&L: +69.28" , 
     "beta_momory": "Net: -531.72" 
   }
 ]
