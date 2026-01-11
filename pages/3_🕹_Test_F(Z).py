@@ -7,12 +7,8 @@ import json
 import time
 from numba import njit
 
-# ==========================================
-# PART 1: CORE CALCULATION & DATA FUNCTIONS
-# (รักษา Logic เดิมทุกประการตาม Goal_2)
-# ==========================================
-
-st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
+# --- ส่วนของการคำนวณและฟังก์ชันหลัก (Original Logic - No Changes) ---
+st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠", layout="wide")
 
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=500):
@@ -51,20 +47,16 @@ def calculate_optimized(action_list, price_list, fix=500):
     refer =  sumusd - (refer+fix)
     return buffer, sumusd, cash, asset_value, amount, refer
 
-def feed_data( data = "APLS"):
+def feed_data(data="APLS"):
     Ticker = data
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = yf.Ticker(Ticker)
-    tickerData = tickerData.history(period= 'max' )[['Close']]
+    tickerData = tickerData.history(period='max')[['Close']]
     tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-    filter_date = filter_date
     tickerData = tickerData[tickerData.index >= filter_date]
     
-    prices = np.array( tickerData.Close.values , dtype=np.float64)
-    actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
-    initial_cash = 500.0
-    initial_asset_value = 500.0
-    initial_price = prices[0]
+    prices = np.array(tickerData.Close.values, dtype=np.float64)
+    actions = np.array(np.ones(len(prices)), dtype=np.int64)
     
     net_initial = 0.
     seed = 0
@@ -78,12 +70,12 @@ def feed_data( data = "APLS"):
             seed  = i 
     return seed
 
-def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date ='2023-01-01 12:00:00+07:00'):
+def delta2(Ticker="FFWM", pred=1, filter_date='2023-01-01 12:00:00+07:00'):
+    # ... โค้ดของฟังก์ชัน delta2 เดิม (Original Logic) ...
     try:
         tickerData = yf.Ticker(Ticker)
-        tickerData = tickerData.history(period= 'max' )[['Close']]
+        tickerData = tickerData.history(period='max')[['Close']]
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-        filter_date = filter_date
         tickerData = tickerData[tickerData.index >= filter_date]
         entry  = tickerData.Close[0] ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
         if entry < 10000 :
@@ -144,9 +136,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date ='2023-01-01 12:00:00+07:00
             return  final
     except:pass
 
-# ==========================================
-# PART 2: CONFIG & UTILITY FUNCTIONS
-# ==========================================
+# --- ส่วนจัดการ Config และ Helper Functions ---
 
 def load_config(filename="add_gen_config.json"):
     """Loads asset configurations from a JSON file."""
@@ -160,13 +150,110 @@ def load_config(filename="add_gen_config.json"):
         st.error(f"Error: Could not decode JSON from '{filename}'.")
         return []
 
+def get_config_by_ticker(configs, ticker_name):
+    """Helper to find config dict for a specific ticker."""
+    for config in configs:
+        if config.get('ticker') == ticker_name:
+            return config
+    return None
+
+# --- ส่วน UI และ Logic การทำงานหลัก ---
+
+# โหลดการตั้งค่า Global
+asset_configs = load_config()
+
+# === SIDEBAR: One-Click Bulk Import System ===
+with st.sidebar:
+    st.header("📂 Bulk Data Import")
+    st.write("Upload JSON to update all tickers.")
+    
+    uploaded_file = st.file_uploader("Choose a JSON file", type=['json'])
+    
+    if uploaded_file is not None:
+        try:
+            # Load JSON Data
+            import_data = json.load(uploaded_file)
+            
+            # Show metadata info (Optional)
+            if "metadata" in import_data:
+                st.info(f"Exported at: {import_data['metadata'].get('exported_at', 'N/A')}")
+            
+            if st.button("🚀 Process & Update All", type="primary"):
+                tickers_map = import_data.get("tickers", {})
+                
+                if not tickers_map:
+                    st.warning("No tickers found in the file.")
+                else:
+                    st.write("---")
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    total_items = len(tickers_map)
+                    completed = 0
+                    
+                    # Create an Expander to show detailed logs
+                    with st.status("Processing Tickers...", expanded=True) as status:
+                        
+                        for ticker, value_str in tickers_map.items():
+                            status_text.text(f"Processing: {ticker}")
+                            
+                            # 1. Find Config
+                            config = get_config_by_ticker(asset_configs, ticker)
+                            
+                            if config:
+                                try:
+                                    # 2. Prepare Data
+                                    # Convert string to huge integer
+                                    val_int = int(value_str) 
+                                    
+                                    channel_id = config.get('channel_id')
+                                    write_key = config.get('write_api_key')
+                                    field = config.get('thingspeak_field')
+                                    
+                                    # 3. Update ThingSpeak
+                                    if channel_id and write_key and field:
+                                        client = thingspeak.Channel(channel_id, write_key, fmt='json')
+                                        
+                                        # Update logic
+                                        client.update({f'field{field}': val_int})
+                                        
+                                        status.write(f"✅ **{ticker}**: Updated field{field} with value ending in ...{value_str[-6:]}")
+                                    else:
+                                        status.write(f"⚠️ **{ticker}**: Missing config (Channel/Key/Field).")
+                                        
+                                except Exception as e:
+                                    status.write(f"❌ **{ticker}**: Error - {e}")
+                            else:
+                                status.write(f"⚠️ **{ticker}**: No configuration found in 'add_gen_config.json'.")
+                            
+                            # Update Progress
+                            completed += 1
+                            progress_bar.progress(completed / total_items)
+                            
+                            # Slight delay to be gentle on API (optional, can be removed if keys allow high rate)
+                            time.sleep(0.5) 
+                        
+                        status.update(label="Bulk Update Complete!", state="complete", expanded=False)
+                    
+                    st.success("All operations finished.")
+                    
+        except json.JSONDecodeError:
+            st.error("Invalid JSON file.")
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {e}")
+
+st.write("___")
+
+# === MAIN CONTENT: Tabs for Individual Assets (Existing UI) ===
+
 def Gen_fx(Ticker, field, client):
-    """Original Gen_fx logic (kept for manual rerun)."""
+    """Runs the Gen_fx process and updates ThingSpeak."""
     container = st.container(border=True)
     fx = [0]
     progress_text = f"Processing {Ticker} iterations. Please wait."
     my_bar = st.progress(0, text=progress_text)
     
+    # Initialize z
     pred_init = delta2(Ticker=Ticker)
     if pred_init is not None and not pred_init.empty:
         z = int(pred_init.net_pv.values[-1])
@@ -176,7 +263,7 @@ def Gen_fx(Ticker, field, client):
         my_bar.empty()
         return
 
-    for i in range(1, 2000): 
+    for i in range(1, 2000):
         rng = np.random.default_rng(i)
         siz = len(pred_init)
         pred_run = delta2(Ticker=Ticker, pred=rng.integers(2, size=siz))
@@ -193,6 +280,7 @@ def Gen_fx(Ticker, field, client):
 
     time.sleep(1)
     my_bar.empty()
+    
     best_seed = fx[-1]
     st.write(f"Finished. Best seed found for {Ticker} is: {best_seed}")
     
@@ -203,154 +291,56 @@ def Gen_fx(Ticker, field, client):
         except Exception as e:
             st.error(f"Failed to update ThingSpeak: {e}")
 
-# ==========================================
-# PART 3: NEW FEATURE - BATCH IMPORT
-# ==========================================
+def create_asset_tab_content(asset_config):
+    """Creates the UI content for a single asset tab."""
+    ticker = asset_config.get('ticker', 'N/A')
+    field = asset_config.get('thingspeak_field')
+    channel_id = asset_config.get('channel_id')
+    write_api_key = asset_config.get('write_api_key')
 
-def run_batch_import(json_input, config_map):
-    """
-    Parses JSON and updates ThingSpeak for all matching tickers.
-    Includes rate limiting to avoid API bans.
-    """
+    if not all([field, channel_id, write_api_key]):
+        st.error(f"Configuration for '{ticker}' is incomplete.")
+        return
+
     try:
-        data = json.loads(json_input)
-        tickers_data = data.get("tickers", {})
-        
-        if not tickers_data:
-            st.warning("No 'tickers' found in the provided JSON.")
-            return
-
-        st.info("Starting Batch Update... Do not close this tab.")
-        
-        # Create a progress bar
-        total_items = len(tickers_data)
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        log_container = st.container(border=True)
-        log_container.write("### Log Output")
-
-        processed_count = 0
-
-        for ticker, seed_str in tickers_data.items():
-            processed_count += 1
-            status_text.text(f"Processing ({processed_count}/{total_items}): {ticker}")
-            progress_bar.progress(processed_count / total_items)
-            
-            # Check if we have config for this ticker
-            if ticker in config_map:
-                cfg = config_map[ticker]
-                channel_id = cfg.get('channel_id')
-                write_key = cfg.get('write_api_key')
-                field = cfg.get('thingspeak_field')
-                
-                try:
-                    # Create temporary client
-                    client = thingspeak.Channel(channel_id, write_key, fmt='json')
-                    
-                    # Convert seed string to int (handle large ints)
-                    seed_val = int(seed_str)
-                    
-                    # Update ThingSpeak
-                    client.update({f'field{field}': seed_val})
-                    log_container.success(f"✅ {ticker}: Updated with seed {seed_str[:10]}...")
-                    
-                except Exception as e:
-                    log_container.error(f"❌ {ticker}: Update failed - {e}")
-                
-                # IMPORTANT: ThingSpeak Rate Limiting (Free tier ~15s)
-                # We wait if this is not the last item
-                if processed_count < total_items:
-                    with status_text:
-                        for s in range(16, 0, -1):
-                            st.write(f"⏳ Waiting {s} seconds to respect API limits...")
-                            time.sleep(1)
-            else:
-                log_container.warning(f"⚠️ {ticker}: No configuration found in add_gen_config.json")
-
-        status_text.text("Batch processing complete!")
-        st.success("All operations finished.")
-
-    except json.JSONDecodeError:
-        st.error("Invalid JSON format. Please check your input.")
+        client = thingspeak.Channel(channel_id, write_api_key, fmt='json')
     except Exception as e:
-        st.error(f"An unexpected error occurred: {e}")
+        st.error(f"Failed to create ThingSpeak client for {ticker}: {e}")
+        return
 
-# ==========================================
-# PART 4: UI CONSTRUCTION
-# ==========================================
+    # --- ส่วน Manual Add Gen (Tab Specific) ---
+    st.subheader(f"Manage: {ticker}")
+    gen_m_check = st.checkbox(f'Enable Manual Input for {ticker}', key=f"gen_m_{ticker}")
+    
+    if gen_m_check:
+        input_val_str = st.text_input(
+            f'Insert a seed/value for {ticker}',
+            key=f"text_input_{ticker}",
+            placeholder="Enter a large integer value"
+        )
+        if st.button("Update Manually", key=f"rerun_m_{ticker}"):
+            try:
+                input_val = int(input_val_str)
+                with st.spinner(f"Updating field {field} for {ticker}..."):
+                    try:
+                        client.update({f'field{field}': input_val})
+                        st.success(f"Updated {ticker} with value: {input_val}")
+                    except Exception as e:
+                        st.error(f"Failed to update ThingSpeak: {e}")
+            except ValueError:
+                st.error(f"Invalid input: '{input_val_str}'. Please enter a valid integer.")
+    
+    # --- ส่วน Gen_fx (Optional - Uncomment if needed) ---
+    # if st.button(f"Run Optimizer Loop for {ticker}", key=f"run_gen_{ticker}"):
+    #     Gen_fx(Ticker=ticker, field=field, client=client)
 
-asset_configs = load_config()
-
+# Main UI Logic
 if asset_configs:
-    # 1. Prepare Config Map for Batch Processing (Optimization)
-    # Allows O(1) lookup instead of looping through list every time
-    config_map = {cfg['ticker']: cfg for cfg in asset_configs}
-
-    st.title("System Control Panel")
-
-    # --- NEW: One-Click Loop All Section ---
-    with st.expander("📂 Import Data (One-Click Loop All)", expanded=True):
-        st.write("Paste your exported JSON data here to update all tickers sequentially.")
-        json_input = st.text_area("JSON Input", height=200, placeholder='{\n  "metadata": {...},\n  "tickers": {\n    "FFWM": "123...",\n    ...\n  }\n}')
-        
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("🚀 Run Batch Update", type="primary"):
-                if json_input.strip():
-                    run_batch_import(json_input, config_map)
-                else:
-                    st.error("Please paste JSON data first.")
-
-    st.divider()
-
-    # --- EXISTING: Tabs UI ---
-    tab_names = [config.get('tab_name', f"Tab {i+1}") for i, config in enumerate(asset_configs)]
+    tab_names = [config.get('tab_name', f"Asset {i+1}") for i, config in enumerate(asset_configs)]
     tabs = st.tabs(tab_names)
-
+    
     for i, tab in enumerate(tabs):
         with tab:
-            cfg = asset_configs[i]
-            ticker = cfg.get('ticker', 'N/A')
-            field = cfg.get('thingspeak_field')
-            channel_id = cfg.get('channel_id')
-            write_api_key = cfg.get('write_api_key')
-            
-            # Setup Client
-            if all([field, channel_id, write_api_key]):
-                try:
-                    client = thingspeak.Channel(channel_id, write_api_key, fmt='json')
-                except:
-                    client = None
-            else:
-                client = None
-                st.error("Config missing details.")
-
-            # Manual Controls (Goal 2: Maintain existing UI)
-            if client:
-                # 1. Gen_fx Rerun
-                gen_fx_check = st.checkbox(f'{ticker}_Add_Gen', key=f"gen_fx_{ticker}")
-                if gen_fx_check:
-                    if st.button("Rerun_Gen", key=f"rerun_gen_{ticker}"):
-                        Gen_fx(Ticker=ticker, field=field, client=client)
-
-                # 2. Manual Input
-                gen_m_check = st.checkbox(f'{ticker}_Add_Gen_M', key=f"gen_m_{ticker}")
-                if gen_m_check:
-                    input_val_str = st.text_input(
-                        f'Insert a number for {ticker}',
-                        key=f"text_input_{ticker}",
-                        placeholder="Enter value"
-                    )
-                    if st.button("Rerun_Gen_M", key=f"rerun_m_{ticker}"):
-                        try:
-                            input_val = int(input_val_str)
-                            with st.spinner(f"Updating..."):
-                                client.update({f'field{field}': input_val})
-                                st.success(f"Updated {ticker} manually.")
-                        except ValueError:
-                            st.error("Invalid integer.")
-            
-            st.write("_____")
-
+            create_asset_tab_content(asset_configs[i])
 else:
     st.warning("No asset configurations were loaded. Please check 'add_gen_config.json'.")
