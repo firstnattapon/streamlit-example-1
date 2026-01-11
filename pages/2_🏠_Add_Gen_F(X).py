@@ -7,8 +7,11 @@ import json
 import time
 from numba import njit
 
-# --- ส่วนของการคำนวณและฟังก์ชันหลัก (ไม่มีการเปลี่ยนแปลง) ---
-st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
+# ==========================================
+# 1. CORE CALCULATION LOGIC (ORIGINAL)
+# ==========================================
+
+st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠", layout="wide")
 
 @njit(fastmath=True)
 def calculate_optimized(action_list, price_list, fix=500):
@@ -47,20 +50,16 @@ def calculate_optimized(action_list, price_list, fix=500):
     refer =  sumusd - (refer+fix)
     return buffer, sumusd, cash, asset_value, amount, refer
 
-def feed_data( data = "APLS"):
+def feed_data(data="APLS"):
     Ticker = data
     filter_date = '2023-01-01 12:00:00+07:00'
     tickerData = yf.Ticker(Ticker)
-    tickerData = tickerData.history(period= 'max' )[['Close']]
+    tickerData = tickerData.history(period='max')[['Close']]
     tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-    filter_date = filter_date
     tickerData = tickerData[tickerData.index >= filter_date]
     
-    prices = np.array( tickerData.Close.values , dtype=np.float64)
-    actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
-    initial_cash = 500.0
-    initial_asset_value = 500.0
-    initial_price = prices[0]
+    prices = np.array(tickerData.Close.values, dtype=np.float64)
+    actions = np.array(np.ones(len(prices)), dtype=np.int64)
     
     net_initial = 0.
     seed = 0
@@ -74,14 +73,12 @@ def feed_data( data = "APLS"):
             seed  = i 
     return seed
 
-def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date ='2023-01-01 12:00:00+07:00'):
-    # ... โค้ดของฟังก์ชัน delta2 เดิม (ยาวมาก จึงย่อไว้) ...
-    # ... ไม่มีการเปลี่ยนแปลงในฟังก์ชันนี้ ...
+def delta2(Ticker="FFWM", pred=1, filter_date='2023-01-01 12:00:00+07:00'):
+    # ... โค้ดของฟังก์ชัน delta2 เดิม (รักษาไว้ทุกบรรทัด) ...
     try:
         tickerData = yf.Ticker(Ticker)
-        tickerData = tickerData.history(period= 'max' )[['Close']]
+        tickerData = tickerData.history(period='max')[['Close']]
         tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
-        filter_date = filter_date
         tickerData = tickerData[tickerData.index >= filter_date]
         entry  = tickerData.Close[0] ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
         if entry < 10000 :
@@ -91,7 +88,7 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date ='2023-01-01 12:00:00+07:00
             df['Fixed_Asset_Value'] = Fixed_Asset_Value
             df['Amount_Asset']  =   df['Fixed_Asset_Value']  / df['Asset_Price']
             df_top = df[df.Asset_Price >= np.around(entry, 2) ]
-            df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) *  df_top['Asset_Price']
+            df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) * df_top['Asset_Price']
             df_top.fillna(0, inplace=True)
             np_Cash_Balan_top = df_top['Cash_Balan_top'].values
             xx = np.zeros(len(np_Cash_Balan_top)) ; y_0 = Cash_Balan
@@ -142,12 +139,14 @@ def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date ='2023-01-01 12:00:00+07:00
             return  final
     except:pass
 
-# --- ส่วนที่ปรับปรุงใหม่ ---
+# ==========================================
+# 2. HELPER FUNCTIONS & CONFIG
+# ==========================================
 
-# [ปรับปรุง] แก้ไขฟังก์ชัน Gen_fx ให้รับ client object เป็นพารามิเตอร์
 def Gen_fx(Ticker, field, client):
     """
-    Runs the Gen_fx process and updates ThingSpeak using the provided client.
+    Runs the Gen_fx process (Optimizer Loop).
+    Kept for backward compatibility and potential future use.
     """
     container = st.container(border=True)
     fx = [0]
@@ -164,7 +163,7 @@ def Gen_fx(Ticker, field, client):
         my_bar.empty()
         return
 
-    for i in range(1, 2000): # Start from 1 since 0 is initial
+    for i in range(1, 2000): # Start from 1
         rng = np.random.default_rng(i)
         siz = len(pred_init)
         pred_run = delta2(Ticker=Ticker, pred=rng.integers(2, size=siz))
@@ -192,8 +191,6 @@ def Gen_fx(Ticker, field, client):
         except Exception as e:
             st.error(f"Failed to update ThingSpeak: {e}")
 
-
-# 1. ฟังก์ชันสำหรับโหลดการตั้งค่าจาก JSON
 def load_config(filename="add_gen_config.json"):
     """Loads asset configurations from a JSON file."""
     try:
@@ -207,94 +204,155 @@ def load_config(filename="add_gen_config.json"):
         st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
         return []
 
-# 2. ฟังก์ชันสำหรับสร้าง UI ภายในแต่ละแท็บ (เพื่อลดการเขียนโค้ดซ้ำ)
+def get_config_by_ticker(configs, ticker_name):
+    """Helper to find config dict for a specific ticker."""
+    for config in configs:
+        if config.get('ticker') == ticker_name:
+            return config
+    return None
+
 def create_asset_tab_content(asset_config):
     """Creates the UI content for a single asset tab."""
-    # ดึงค่าทั้งหมดจาก config
     ticker = asset_config.get('ticker', 'N/A')
     field = asset_config.get('thingspeak_field')
     channel_id = asset_config.get('channel_id')
     write_api_key = asset_config.get('write_api_key')
 
-    # ตรวจสอบว่ามีข้อมูล ThingSpeak ครบถ้วนหรือไม่
     if not all([field, channel_id, write_api_key]):
-        st.error(f"Configuration for '{ticker}' is incomplete. Missing field, channel_id, or write_api_key.")
+        st.error(f"Configuration for '{ticker}' is incomplete.")
         return
 
-    # [ปรับปรุง] สร้าง client สำหรับ ThingSpeak เฉพาะใน Tab นี้เท่านั้น
     try:
         client = thingspeak.Channel(channel_id, write_api_key, fmt='json')
     except Exception as e:
         st.error(f"Failed to create ThingSpeak client for {ticker}: {e}")
         return
 
-    # # --- ส่วน Gen_fx ---
-    # gen_fx_check = st.checkbox(f'{ticker}_Add_Gen', key=f"gen_fx_{ticker}")
-    # if gen_fx_check:
-    #     if st.button("Rerun_Gen", key=f"rerun_gen_{ticker}"):
-    #         # [ปรับปรุง] ส่ง client ที่สร้างขึ้นใหม่เข้าไปในฟังก์ชัน
-    #         Gen_fx(Ticker=ticker, field=field, client=client)
-
-    # --- ส่วน Manual Add Gen ---
-    gen_m_check = st.checkbox(f'{ticker}_Add_Gen_M', key=f"gen_m_{ticker}")
+    # --- ส่วน Manual Add Gen (Tab Specific) ---
+    st.subheader(f"Manage: {ticker}")
+    gen_m_check = st.checkbox(f'Enable Manual Input for {ticker}', key=f"gen_m_{ticker}")
+    
     if gen_m_check:
-        # [แก้ไข] เปลี่ยนเป็น st.text_input เพื่อรองรับเลขจำนวนเต็มขนาดใหญ่
-        # The original st.number_input has a limit (~9e15), which caused the error.
-        # st.text_input sends the value as a string, and Python's `int()` can handle arbitrarily large integers.
+        # ใช้ text_input เพื่อรองรับตัวเลขขนาดใหญ่ (Big Int)
         input_val_str = st.text_input(
-            f'Insert a number for {ticker}',
+            f'Insert a seed/value for {ticker}',
             key=f"text_input_{ticker}",
             placeholder="Enter a large integer value"
         )
-        if st.button("Rerun_Gen_M", key=f"rerun_m_{ticker}"):
+        if st.button("Update Manually", key=f"rerun_m_{ticker}"):
             try:
-                # แปลง string เป็น integer และตรวจสอบความถูกต้อง
-                # This will raise a ValueError if the string is not a valid integer.
                 input_val = int(input_val_str)
-                
                 with st.spinner(f"Updating field {field} for {ticker}..."):
                     try:
-                        # ใช้ client ที่สร้างขึ้นสำหรับ Tab นี้
                         client.update({f'field{field}': input_val})
                         st.success(f"Updated {ticker} with value: {input_val}")
                     except Exception as e:
                         st.error(f"Failed to update ThingSpeak: {e}")
-
             except ValueError:
-                # แจ้งเตือนถ้าผู้ใช้ใส่ข้อมูลที่ไม่ใช่ตัวเลข
                 st.error(f"Invalid input: '{input_val_str}'. Please enter a valid integer.")
+    
+    # --- ส่วน Gen_fx Checkbox (Optional: Uncomment to enable legacy loop) ---
+    # gen_fx_check = st.checkbox(f'{ticker}_Add_Gen', key=f"gen_fx_{ticker}")
+    # if gen_fx_check:
+    #     if st.button("Rerun_Gen", key=f"rerun_gen_{ticker}"):
+    #         Gen_fx(Ticker=ticker, field=field, client=client)
 
-    # # --- ส่วน Njit ---
-    # njit_check = st.checkbox(f'{ticker}_njit', key=f"njit_{ticker}")
-    # if njit_check:
-    #     if st.button(f"Run Njit for {ticker}", key=f"run_njit_{ticker}"):
-    #         with st.spinner(f"Running NJIT optimization for {ticker}... This may take a long time."):
-    #             try:
-    #                 ix = feed_data(data=ticker)
-    #                 # [ปรับปรุง] ใช้ client ที่สร้างขึ้นสำหรับ Tab นี้
-    #                 client.update({f'field{field}': ix})
-    #                 st.success(f"Found optimal seed for {ticker}: {ix}. Updated ThingSpeak.")
-    #             except Exception as e:
-    #                 st.error(f"An error occurred during NJIT processing or ThingSpeak update: {e}")
+# ==========================================
+# 3. MAIN APPLICATION UI
+# ==========================================
 
-    st.write("_____")
-
-# --- ส่วนหลักของ Streamlit UI ---
-
-# โหลดการตั้งค่า
+# โหลดการตั้งค่า Global
 asset_configs = load_config()
 
-if asset_configs:
-    # สร้างชื่อแท็บจากข้อมูลที่โหลดมา
-    tab_names = [config.get('tab_name', f"Tab {i+1}") for i, config in enumerate(asset_configs)]
+# --- PART A: One-Click Bulk Import System (Top Section) ---
+st.title("📂 Bulk Data Import")
+with st.expander("Import JSON to update all tickers", expanded=True):
+    uploaded_file = st.file_uploader("Choose a JSON file", type=['json'], label_visibility="collapsed")
     
-    # สร้างแท็บ
+    if uploaded_file is not None:
+        try:
+            # Load JSON Data
+            import_data = json.load(uploaded_file)
+            
+            # Show metadata info (Optional)
+            if "metadata" in import_data:
+                st.caption(f"File Metadata - Exported at: {import_data['metadata'].get('exported_at', 'N/A')}")
+            
+            if st.button("🚀 Process & Update All", type="primary", use_container_width=True):
+                tickers_map = import_data.get("tickers", {})
+                
+                if not tickers_map:
+                    st.warning("No tickers found in the file.")
+                else:
+                    st.write("---")
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    total_items = len(tickers_map)
+                    completed = 0
+                    
+                    # Create an Expander to show detailed logs
+                    with st.status("Processing Tickers...", expanded=True) as status:
+                        
+                        for ticker, value_str in tickers_map.items():
+                            status_text.text(f"Processing: {ticker}")
+                            
+                            # 1. Find Config
+                            config = get_config_by_ticker(asset_configs, ticker)
+                            
+                            if config:
+                                try:
+                                    # 2. Prepare Data
+                                    # Convert string to huge integer safely
+                                    val_int = int(value_str) 
+                                    
+                                    channel_id = config.get('channel_id')
+                                    write_key = config.get('write_api_key')
+                                    field = config.get('thingspeak_field')
+                                    
+                                    # 3. Update ThingSpeak
+                                    if channel_id and write_key and field:
+                                        client = thingspeak.Channel(channel_id, write_key, fmt='json')
+                                        
+                                        # Update logic
+                                        client.update({f'field{field}': val_int})
+                                        
+                                        status.write(f"✅ **{ticker}**: Updated field{field} ...{value_str[-6:]}")
+                                    else:
+                                        status.write(f"⚠️ **{ticker}**: Missing config (Channel/Key/Field).")
+                                        
+                                except Exception as e:
+                                    status.write(f"❌ **{ticker}**: Error - {e}")
+                            else:
+                                status.write(f"⚠️ **{ticker}**: No configuration found in 'add_gen_config.json'.")
+                            
+                            # Update Progress
+                            completed += 1
+                            progress_bar.progress(completed / total_items)
+                            
+                            # Slight delay to respect API limits
+                            time.sleep(0.5) 
+                        
+                        status.update(label="Bulk Update Complete!", state="complete", expanded=False)
+                    
+                    st.success("All operations finished.")
+                    
+        except json.JSONDecodeError:
+            st.error("Invalid JSON file.")
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {e}")
+
+st.divider()
+
+# --- PART B: Tabs for Individual Assets (Original UI preserved) ---
+st.header("Asset Management")
+
+if asset_configs:
+    tab_names = [config.get('tab_name', f"Asset {i+1}") for i, config in enumerate(asset_configs)]
     tabs = st.tabs(tab_names)
     
-    # วนลูปเพื่อสร้างเนื้อหาในแต่ละแท็บ
     for i, tab in enumerate(tabs):
         with tab:
-            # เรียกใช้ฟังก์ชันเพื่อสร้าง UI โดยส่งค่า config ของ Asset นั้นๆ เข้าไป
             create_asset_tab_content(asset_configs[i])
 else:
     st.warning("No asset configurations were loaded. The application cannot proceed.")
