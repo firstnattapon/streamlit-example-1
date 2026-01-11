@@ -5,11 +5,13 @@ import streamlit as st
 import thingspeak
 import json
 import time
+import requests  # เพิ่ม library สำหรับการตรวจสอบค่า (Verify)
 from numba import njit
 
 # ==========================================
 # 1. CORE CALCULATION LOGIC (ORIGINAL)
 # ==========================================
+# ส่วนนี้รักษาไว้ตาม Goal_2 (ห้ามแตะต้อง Logic การคำนวณและ Numba)
 
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠", layout="wide")
 
@@ -74,7 +76,7 @@ def feed_data(data="APLS"):
     return seed
 
 def delta2(Ticker="FFWM", pred=1, filter_date='2023-01-01 12:00:00+07:00'):
-    # ... โค้ดของฟังก์ชัน delta2 เดิม (รักษาไว้ทุกบรรทัด) ...
+    # ... โค้ดของฟังก์ชัน delta2 เดิม (รักษาไว้ทุกบรรทัดตาม Goal_2) ...
     try:
         tickerData = yf.Ticker(Ticker)
         tickerData = tickerData.history(period='max')[['Close']]
@@ -143,6 +145,55 @@ def delta2(Ticker="FFWM", pred=1, filter_date='2023-01-01 12:00:00+07:00'):
 # 2. HELPER FUNCTIONS & CONFIG
 # ==========================================
 
+def update_thingspeak_robust(channel_id, write_key, field_num, value, max_retries=5):
+    """
+    [GOAL 1 & 3] ฟังก์ชันสำหรับอัปเดต ThingSpeak แบบ Double Check
+    - ยิงข้อมูลไปแล้ว (POST)
+    - รอสักครู่ แล้วดึงข้อมูลกลับมาเช็ค (GET)
+    - ถ้าค่าใน Server ไม่ตรงกับที่ส่งไป -> ยิงใหม่ (Retry loop)
+    """
+    target_field = f'field{field_num}'
+    val_str = str(value) # แปลงเป็น string เพื่อเทียบค่าได้แม่นยำ
+    
+    # URL สำหรับตรวจสอบค่าล่าสุด (ใช้ Standard Read API)
+    # หมายเหตุ: หาก Channel เป็น Private ต้องพึ่งพาการ return success จาก write แทน 
+    # แต่โค้ดนี้ออกแบบมาเพื่อ Double check จริงๆ จึงพยายามอ่านกลับมา
+    verify_url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{field_num}/last.json"
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            # 1. ยิงข้อมูล (Action)
+            client = thingspeak.Channel(channel_id, write_key, fmt='json')
+            client.update({target_field: value})
+            
+            # 2. รอ Server ประมวลผล (Wait)
+            # ThingSpeak ฟรีจำกัด 15 วิ แต่เราต้องการความชัวร์ ให้รอ 4-5 วินาทีเพื่อให้ Data propagate
+            time.sleep(4) 
+            
+            # 3. ตรวจสอบค่ากลับ (Verify)
+            r = requests.get(verify_url, timeout=10)
+            
+            if r.status_code == 200:
+                data = r.json()
+                server_val = str(data.get(target_field, ''))
+                
+                # Check: ถ้าค่าตรงกัน แสดงว่า Server เปลี่ยนแล้ว
+                if server_val == val_str:
+                    return True, f"Verified: Server updated to {val_str} (Attempt {attempt})"
+                else:
+                    # ถ้าค่าไม่ตรง ให้ Loop ต่อไป (Retry)
+                    pass 
+            else:
+                # กรณีอ่านไม่ได้ (อาจจะ Private) แต่ Write ไม่ Error -> ถือว่าหยวนๆ ได้
+                # แต่ตามโจทย์ Goal 1 คือ "จนกว่าจะเปลี่ยน" ดังนั้นเราจะลอง Retry ก่อน
+                pass
+
+        except Exception as e:
+            # กรณีเกิด Error ในการเชื่อมต่อ ให้รอแล้ว Retry
+            time.sleep(2)
+    
+    return False, f"Failed: Value mismatch after {max_retries} attempts."
+
 def Gen_fx(Ticker, field, client):
     """
     Runs the Gen_fx process (Optimizer Loop).
@@ -184,6 +235,13 @@ def Gen_fx(Ticker, field, client):
     best_seed = fx[-1]
     st.write(f"Finished. Best seed found for {Ticker} is: {best_seed}")
     
+    # [GOAL 1] ใช้ฟังก์ชัน Update แบบ Robust แทนโค้ดเดิม
+    # ดึง config เพื่อหา channel_id, write_key
+    # หมายเหตุ: Gen_fx เดิมรับมาแค่ client, ต้องแก้ flow เล็กน้อยหากจะใช้จริง
+    # แต่ในบริบทนี้ client ถูกส่งมาจาก create_asset_tab_content ซึ่งมี data ครบ
+    # เพื่อความปลอดภัยในโค้ดเดิม ส่วนนี้ขอคงไว้แบบเดิมหรือ Comment ไว้ตามต้นฉบับ
+    # เพราะผู้ใช้เน้นแก้ส่วน Bulk Import และ Manual เป็นหลัก
+    
     with st.spinner(f"Updating ThingSpeak field {field} for {Ticker}..."):
         try:
             client.update({f'field{field}': best_seed})
@@ -222,6 +280,7 @@ def create_asset_tab_content(asset_config):
         st.error(f"Configuration for '{ticker}' is incomplete.")
         return
 
+    # Client object for legacy uses
     try:
         client = thingspeak.Channel(channel_id, write_api_key, fmt='json')
     except Exception as e:
@@ -233,25 +292,28 @@ def create_asset_tab_content(asset_config):
     gen_m_check = st.checkbox(f'Enable Manual Input for {ticker}', key=f"gen_m_{ticker}")
     
     if gen_m_check:
-        # ใช้ text_input เพื่อรองรับตัวเลขขนาดใหญ่ (Big Int)
         input_val_str = st.text_input(
             f'Insert a seed/value for {ticker}',
             key=f"text_input_{ticker}",
             placeholder="Enter a large integer value"
         )
-        if st.button("Update Manually", key=f"rerun_m_{ticker}"):
+        if st.button("Update Manually (Double Check)", key=f"rerun_m_{ticker}"):
             try:
                 input_val = int(input_val_str)
-                with st.spinner(f"Updating field {field} for {ticker}..."):
-                    try:
-                        client.update({f'field{field}': input_val})
-                        st.success(f"Updated {ticker} with value: {input_val}")
-                    except Exception as e:
-                        st.error(f"Failed to update ThingSpeak: {e}")
+                with st.spinner(f"Updating field {field} for {ticker} with Double Check..."):
+                    
+                    # [GOAL 1 & 3] เรียกใช้ฟังก์ชัน Robust Update
+                    success, msg = update_thingspeak_robust(channel_id, write_api_key, field, input_val)
+                    
+                    if success:
+                        st.success(f"✅ {ticker}: {msg}")
+                    else:
+                        st.error(f"❌ {ticker}: {msg}")
+                        
             except ValueError:
                 st.error(f"Invalid input: '{input_val_str}'. Please enter a valid integer.")
     
-    # --- ส่วน Gen_fx Checkbox (Optional: Uncomment to enable legacy loop) ---
+    # --- ส่วน Gen_fx Checkbox (Optional) ---
     # gen_fx_check = st.checkbox(f'{ticker}_Add_Gen', key=f"gen_fx_{ticker}")
     # if gen_fx_check:
     #     if st.button("Rerun_Gen", key=f"rerun_gen_{ticker}"):
@@ -265,7 +327,7 @@ def create_asset_tab_content(asset_config):
 asset_configs = load_config()
 
 # --- PART A: One-Click Bulk Import System (Top Section) ---
-st.title("📂 Bulk Data Import")
+st.title("📂 Bulk Data Import (Double Check Mode)")
 with st.expander("Import JSON to update all tickers", expanded=True):
     uploaded_file = st.file_uploader("Choose a JSON file", type=['json'], label_visibility="collapsed")
     
@@ -274,7 +336,7 @@ with st.expander("Import JSON to update all tickers", expanded=True):
             # Load JSON Data
             import_data = json.load(uploaded_file)
             
-            # Show metadata info (Optional)
+            # Show metadata info
             if "metadata" in import_data:
                 st.caption(f"File Metadata - Exported at: {import_data['metadata'].get('exported_at', 'N/A')}")
             
@@ -292,7 +354,7 @@ with st.expander("Import JSON to update all tickers", expanded=True):
                     completed = 0
                     
                     # Create an Expander to show detailed logs
-                    with st.status("Processing Tickers...", expanded=True) as status:
+                    with st.status("Processing Tickers with Double Check...", expanded=True) as status:
                         
                         for ticker, value_str in tickers_map.items():
                             status_text.text(f"Processing: {ticker}")
@@ -303,21 +365,21 @@ with st.expander("Import JSON to update all tickers", expanded=True):
                             if config:
                                 try:
                                     # 2. Prepare Data
-                                    # Convert string to huge integer safely
                                     val_int = int(value_str) 
-                                    
                                     channel_id = config.get('channel_id')
                                     write_key = config.get('write_api_key')
                                     field = config.get('thingspeak_field')
                                     
-                                    # 3. Update ThingSpeak
+                                    # 3. Update with Double Check Strategy [GOAL 1]
                                     if channel_id and write_key and field:
-                                        client = thingspeak.Channel(channel_id, write_key, fmt='json')
                                         
-                                        # Update logic
-                                        client.update({f'field{field}': val_int})
+                                        success, msg = update_thingspeak_robust(channel_id, write_key, field, val_int)
                                         
-                                        status.write(f"✅ **{ticker}**: Updated field{field} ...{value_str[-6:]}")
+                                        if success:
+                                            status.write(f"✅ **{ticker}**: {msg}")
+                                        else:
+                                            status.write(f"❌ **{ticker}**: {msg}")
+                                            
                                     else:
                                         status.write(f"⚠️ **{ticker}**: Missing config (Channel/Key/Field).")
                                         
@@ -330,8 +392,8 @@ with st.expander("Import JSON to update all tickers", expanded=True):
                             completed += 1
                             progress_bar.progress(completed / total_items)
                             
-                            # Slight delay to respect API limits
-                            time.sleep(0.5) 
+                            # ไม่ต้อง sleep เพิ่มตรงนี้ เพราะใน update_thingspeak_robust มี sleep อยู่แล้ว
+                            # เพื่อให้ ThingSpeak พักหายใจ
                         
                         status.update(label="Bulk Update Complete!", state="complete", expanded=False)
                     
