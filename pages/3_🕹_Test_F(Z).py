@@ -7,7 +7,10 @@ import json
 import time
 from numba import njit
 
-# --- ส่วนของการคำนวณและฟังก์ชันหลัก (เหมือนเดิมทุกประการ) ---
+# ==========================================
+# 1. CORE CALCULATION LOGIC (ORIGINAL)
+# ==========================================
+
 st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠", layout="wide")
 
 @njit(fastmath=True)
@@ -60,6 +63,7 @@ def feed_data(data="APLS"):
     
     net_initial = 0.
     seed = 0
+    # หมายเหตุ: loop 2,000,000 ครั้งอาจใช้เวลานานมาก
     for i in range(2000000): 
         rng = np.random.default_rng(i)
         actions = rng.integers(0, 2, len(prices))
@@ -70,6 +74,7 @@ def feed_data(data="APLS"):
     return seed
 
 def delta2(Ticker="FFWM", pred=1, filter_date='2023-01-01 12:00:00+07:00'):
+    # ... โค้ดของฟังก์ชัน delta2 เดิม (รักษาไว้ทุกบรรทัด) ...
     try:
         tickerData = yf.Ticker(Ticker)
         tickerData = tickerData.history(period='max')[['Close']]
@@ -134,7 +139,57 @@ def delta2(Ticker="FFWM", pred=1, filter_date='2023-01-01 12:00:00+07:00'):
             return  final
     except:pass
 
-# --- ส่วนจัดการ Config และ Helper Functions ---
+# ==========================================
+# 2. HELPER FUNCTIONS & CONFIG
+# ==========================================
+
+def Gen_fx(Ticker, field, client):
+    """
+    Runs the Gen_fx process (Optimizer Loop).
+    Kept for backward compatibility and potential future use.
+    """
+    container = st.container(border=True)
+    fx = [0]
+    progress_text = f"Processing {Ticker} iterations. Please wait."
+    my_bar = st.progress(0, text=progress_text)
+    
+    # Initialize z with the first run
+    pred_init = delta2(Ticker=Ticker)
+    if pred_init is not None and not pred_init.empty:
+        z = int(pred_init.net_pv.values[-1])
+        container.write(f"Initial Value (x=0), Result: {z}")
+    else:
+        st.error(f"Could not get initial data for {Ticker}. Aborting Gen_fx.")
+        my_bar.empty()
+        return
+
+    for i in range(1, 2000): # Start from 1
+        rng = np.random.default_rng(i)
+        siz = len(pred_init)
+        pred_run = delta2(Ticker=Ticker, pred=rng.integers(2, size=siz))
+        
+        if pred_run is not None and not pred_run.empty:
+            y = int(pred_run.net_pv.values[-1])
+            if y > z:
+                container.write(f"New Best Found! Seed: {i}, Result: {y}")
+                z = y
+                fx.append(i)
+        
+        percent_complete = (i + 1) / 2000
+        my_bar.progress(percent_complete, text=progress_text)
+
+    time.sleep(1)
+    my_bar.empty()
+    
+    best_seed = fx[-1]
+    st.write(f"Finished. Best seed found for {Ticker} is: {best_seed}")
+    
+    with st.spinner(f"Updating ThingSpeak field {field} for {Ticker}..."):
+        try:
+            client.update({f'field{field}': best_seed})
+            st.success(f"Successfully updated ThingSpeak for {Ticker} with seed: {best_seed}")
+        except Exception as e:
+            st.error(f"Failed to update ThingSpeak: {e}")
 
 def load_config(filename="add_gen_config.json"):
     """Loads asset configurations from a JSON file."""
@@ -143,9 +198,10 @@ def load_config(filename="add_gen_config.json"):
             return json.load(f)
     except FileNotFoundError:
         st.error(f"Error: Configuration file '{filename}' not found.")
+        st.info(f"Please create a '{filename}' file in the same directory as the script.")
         return []
     except json.JSONDecodeError:
-        st.error(f"Error: Could not decode JSON from '{filename}'.")
+        st.error(f"Error: Could not decode JSON from '{filename}'. Please check its format.")
         return []
 
 def get_config_by_ticker(configs, ticker_name):
@@ -177,6 +233,7 @@ def create_asset_tab_content(asset_config):
     gen_m_check = st.checkbox(f'Enable Manual Input for {ticker}', key=f"gen_m_{ticker}")
     
     if gen_m_check:
+        # ใช้ text_input เพื่อรองรับตัวเลขขนาดใหญ่ (Big Int)
         input_val_str = st.text_input(
             f'Insert a seed/value for {ticker}',
             key=f"text_input_{ticker}",
@@ -193,15 +250,21 @@ def create_asset_tab_content(asset_config):
                         st.error(f"Failed to update ThingSpeak: {e}")
             except ValueError:
                 st.error(f"Invalid input: '{input_val_str}'. Please enter a valid integer.")
+    
+    # --- ส่วน Gen_fx Checkbox (Optional: Uncomment to enable legacy loop) ---
+    # gen_fx_check = st.checkbox(f'{ticker}_Add_Gen', key=f"gen_fx_{ticker}")
+    # if gen_fx_check:
+    #     if st.button("Rerun_Gen", key=f"rerun_gen_{ticker}"):
+    #         Gen_fx(Ticker=ticker, field=field, client=client)
 
-# --- UI และ Logic การทำงานหลัก ---
+# ==========================================
+# 3. MAIN APPLICATION UI
+# ==========================================
 
 # โหลดการตั้งค่า Global
 asset_configs = load_config()
 
-# === [MOVED] One-Click Bulk Import System (Main Page) ===
-# ย้ายมาไว้ด้านบนสุดของ Main Container แทน Sidebar
-
+# --- PART A: One-Click Bulk Import System (Top Section) ---
 st.title("📂 Bulk Data Import")
 with st.expander("Import JSON to update all tickers", expanded=True):
     uploaded_file = st.file_uploader("Choose a JSON file", type=['json'], label_visibility="collapsed")
@@ -240,7 +303,7 @@ with st.expander("Import JSON to update all tickers", expanded=True):
                             if config:
                                 try:
                                     # 2. Prepare Data
-                                    # Convert string to huge integer
+                                    # Convert string to huge integer safely
                                     val_int = int(value_str) 
                                     
                                     channel_id = config.get('channel_id')
@@ -267,7 +330,7 @@ with st.expander("Import JSON to update all tickers", expanded=True):
                             completed += 1
                             progress_bar.progress(completed / total_items)
                             
-                            # Slight delay
+                            # Slight delay to respect API limits
                             time.sleep(0.5) 
                         
                         status.update(label="Bulk Update Complete!", state="complete", expanded=False)
@@ -281,7 +344,7 @@ with st.expander("Import JSON to update all tickers", expanded=True):
 
 st.divider()
 
-# === MAIN CONTENT: Tabs for Individual Assets (Existing UI) ===
+# --- PART B: Tabs for Individual Assets (Original UI preserved) ---
 st.header("Asset Management")
 
 if asset_configs:
@@ -292,4 +355,4 @@ if asset_configs:
         with tab:
             create_asset_tab_content(asset_configs[i])
 else:
-    st.warning("No asset configurations were loaded. Please check 'add_gen_config.json'.")
+    st.warning("No asset configurations were loaded. The application cannot proceed.")
