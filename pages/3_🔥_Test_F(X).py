@@ -2,10 +2,10 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import streamlit as st
-import json  # ! NEW: Added for JSON Export
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Tuple, Dict, Any
+import json  # ! NEW: For Export Functionality
 
 # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
 from numba import njit
@@ -324,6 +324,48 @@ class SimulationTracer:
 # 5. UI Rendering & Logic Functions
 # ==============================================================================
 
+# ! GOAL Step 3: Optimization & Refactoring
+# Helper Function เพื่อใช้ซ้ำทั้งใน UI รายตัว และใน Batch Export
+def generate_encoded_dna_for_ticker(
+    df_windows: pd.DataFrame, 
+    data_len: int, 
+    target_win_num: int, 
+    global_act_len: int, 
+    mutation_rate: float, 
+    window_size: int
+) -> Tuple[str, int, int]:
+    """
+    Generate Encoded String logic extracted for reuse.
+    Returns: (Encoded String, Actual Window Used, Final Action Length)
+    """
+    max_win = len(df_windows)
+    use_win_num = target_win_num if target_win_num <= max_win else max_win
+    
+    start_idx = (use_win_num - 1) * window_size
+    remaining = data_len - start_idx
+    real_len = min(window_size, remaining)
+    
+    final_act_len = global_act_len if global_act_len > 0 else real_len
+    
+    row = df_windows.iloc[use_win_num - 1]
+    dna_seed = int(row['dna_seed'])
+    mut_seeds_str = row['mutation_seeds']
+    
+    mut_seeds = []
+    if mut_seeds_str not in ["None", "[]"]:
+        clean = mut_seeds_str.strip('[]')
+        if clean: mut_seeds = [int(s.strip()) for s in clean.split(',')]
+            
+    encoded_string = SimulationTracer.encode(
+        action_length=int(final_act_len),
+        mutation_rate=int(mutation_rate),
+        dna_seed=dna_seed,
+        mutation_seeds=mut_seeds
+    )
+    
+    return encoded_string, use_win_num, int(final_act_len)
+
+
 def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
     valid_dfs = {name: df for name, df in results.items() if not df.empty and 'net' in df.columns}
     if not valid_dfs: st.warning("ไม่มีข้อมูลสำหรับสร้างกราฟ"); return
@@ -449,80 +491,34 @@ def render_single_ticker_result(ticker: str, result_data: Dict[str, Any]):
     with st.expander("Dataframe_Results"):
         st.dataframe(df_windows, use_container_width=True)
     
-    # ! GOAL: Use Global Settings for Encoding
+    # ! GOAL: Use Global Settings for Encoding (Refactored to use Helper)
     st.markdown(f"#### 🎁 Generate Encoded String for **{ticker}**")
     
-    # Retrieve Global Settings
     target_win_num = st.session_state.trace_target_window
     global_act_len = st.session_state.trace_action_length
-    
-    # Validate Window Num
-    max_win = len(df_windows)
-    if target_win_num > max_win:
-        use_win_num = max_win
-        st.caption(f"⚠️ Window {target_win_num} เกินจำนวนที่มี (Max {max_win}). ใช้ Window {max_win} แทน")
-    else:
-        use_win_num = target_win_num
-        
-    # Logic for Action Length
     window_size = st.session_state.window_size
-    start_idx = (use_win_num - 1) * window_size
-    remaining = data_len - start_idx
-    real_len = min(window_size, remaining)
     
-    if global_act_len > 0:
-        final_act_len = global_act_len
-    else:
-        final_act_len = real_len
-
+    # Calculate display parameters first for UI (logic duplication minimalized for display only)
+    max_win = len(df_windows)
+    use_win_num_disp = target_win_num if target_win_num <= max_win else max_win
+    
     c_enc_1, c_enc_2 = st.columns([3, 1])
     with c_enc_1:
-        st.info(f"Using Global Settings: **Window {use_win_num}**, **Len {final_act_len}** (Rate: {st.session_state.mutation_rate}%)")
-    
+        st.info(f"Using Global Settings: **Window {use_win_num_disp}**, **Len {global_act_len if global_act_len>0 else 'Auto'}** (Rate: {st.session_state.mutation_rate}%)")
+        if target_win_num > max_win:
+             st.caption(f"⚠️ Window {target_win_num} เกินจำนวนที่มี (Max {max_win}). ใช้ Window {max_win} แทน")
+
     with c_enc_2:
         if st.button(f"Encode ({ticker})", key=f"btn_enc_{ticker}", use_container_width=True):
             try:
-                row = df_windows.iloc[use_win_num - 1]
-                dna_seed = int(row['dna_seed'])
-                mut_seeds_str = row['mutation_seeds']
-                mut_seeds = []
-                if mut_seeds_str not in ["None", "[]"]:
-                    clean = mut_seeds_str.strip('[]')
-                    if clean: mut_seeds = [int(s.strip()) for s in clean.split(',')]
-                
-                encoded = SimulationTracer.encode(
-                    action_length=int(final_act_len),
-                    mutation_rate=int(st.session_state.mutation_rate),
-                    dna_seed=dna_seed,
-                    mutation_seeds=mut_seeds
+                # ! REFACTORED: Use helper function
+                encoded, final_win, final_len = generate_encoded_dna_for_ticker(
+                    df_windows, data_len, target_win_num, global_act_len, 
+                    st.session_state.mutation_rate, window_size
                 )
                 
-                st.success(f"Encoded String ({ticker} Win {use_win_num}):")
+                st.success(f"Encoded String ({ticker} Win {final_win}):")
                 st.code(encoded, language='text')
-
-                # ! GOAL: JSON Export Logic
-                export_data = {
-                    "ticker": ticker,
-                    "window_index": int(use_win_num),
-                    "parameters": {
-                        "action_length": int(final_act_len),
-                        "mutation_rate": float(st.session_state.mutation_rate),
-                        "dna_seed": dna_seed,
-                        "mutation_seeds": mut_seeds
-                    },
-                    "encoded_string": encoded
-                }
-                
-                json_str = json.dumps(export_data, indent=4)
-                
-                st.download_button(
-                    label=f"📥 Download JSON ({ticker})",
-                    data=json_str,
-                    file_name=f"{ticker}_win{use_win_num}_encoded.json",
-                    mime="application/json",
-                    key=f"dl_btn_{ticker}"
-                )
-
             except Exception as e:
                 st.error(f"Encoding Error: {e}")
 
@@ -696,7 +692,50 @@ def render_simulation_tabs():
         if st.button("🚀 Start One-Click Loop All", type="primary", use_container_width=True):
             execute_batch_processing()
             
+    # ! GOAL Step 1: Export JSON Feature
     if st.session_state.batch_results:
+        st.write("---")
+        exp_c1, exp_c2 = st.columns([3, 1])
+        with exp_c1:
+            st.markdown("#### 💾 Export Encoded Strings")
+            st.caption(f"Settings: Window {st.session_state.trace_target_window}, Len {st.session_state.trace_action_length}, Rate {st.session_state.mutation_rate}%")
+        
+        with exp_c2:
+            # Prepare data for JSON export
+            export_payload = {
+                "metadata": {
+                    "trace_target_window": st.session_state.trace_target_window,
+                    "trace_action_length": st.session_state.trace_action_length,
+                    "mutation_rate_percent": st.session_state.mutation_rate,
+                    "exported_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                },
+                "tickers": {}
+            }
+            
+            # Loop through all results and generate strings
+            for ticker, data in st.session_state.batch_results.items():
+                try:
+                    encoded, final_win, final_len = generate_encoded_dna_for_ticker(
+                        data["df_windows"], 
+                        data["data_len"], 
+                        st.session_state.trace_target_window, 
+                        st.session_state.trace_action_length, 
+                        st.session_state.mutation_rate, 
+                        st.session_state.window_size
+                    )
+                    export_payload["tickers"][ticker] = encoded
+                except Exception as e:
+                    export_payload["tickers"][ticker] = f"Error: {str(e)}"
+
+            json_str = json.dumps(export_payload, indent=4)
+            st.download_button(
+                label="💾 Download JSON (All Tickers)",
+                data=json_str,
+                file_name="encoded_strings.json",
+                mime="application/json",
+                use_container_width=True
+            )
+
         tickers = list(st.session_state.batch_results.keys())
         st.write(f"✅ Results available for: {', '.join(tickers)}")
         tabs = st.tabs([f"📈 {t}" for t in tickers])
