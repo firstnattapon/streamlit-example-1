@@ -1,0 +1,356 @@
+import numpy as np
+import pandas as pd
+import yfinance as yf
+import streamlit as st
+import thingspeak
+import json
+import time
+from numba import njit
+
+# ==========================================
+# PART 1: CORE CALCULATION & DATA FUNCTIONS
+# (รักษา Logic เดิมทุกประการตาม Goal_2)
+# ==========================================
+
+st.set_page_config(page_title="_Add_Gen_F(X)", page_icon="🏠")
+
+@njit(fastmath=True)
+def calculate_optimized(action_list, price_list, fix=500):
+    action_array = np.asarray(action_list, dtype=np.int32)
+    action_array[0] = 1
+    price_array = np.asarray(price_list, dtype=np.float64)
+    n = len(action_array)
+    
+    amount = np.empty(n, dtype=np.float64)
+    buffer = np.zeros(n, dtype=np.float64)
+    cash = np.empty(n, dtype=np.float64)
+    asset_value = np.empty(n, dtype=np.float64)
+    sumusd = np.empty(n, dtype=np.float64)
+    
+    initial_price = price_array[0]
+    amount[0] = fix / initial_price
+    cash[0] = fix
+    asset_value[0] = amount[0] * initial_price
+    sumusd[0] = cash[0] + asset_value[0]
+    
+    refer = fix * (1 - np.log(initial_price / price_array))
+    
+    for i in range(1, n):
+        curr_price = price_array[i]
+        if action_array[i] == 0:
+            amount[i] = amount[i-1]
+            buffer[i] = 0
+        else:
+            amount[i] = fix / curr_price
+            buffer[i] = amount[i-1] * curr_price - fix
+        
+        cash[i] = cash[i-1] + buffer[i]
+        asset_value[i] = amount[i] * curr_price
+        sumusd[i] = cash[i] + asset_value[i]
+
+    refer =  sumusd - (refer+fix)
+    return buffer, sumusd, cash, asset_value, amount, refer
+
+def feed_data( data = "APLS"):
+    Ticker = data
+    filter_date = '2023-01-01 12:00:00+07:00'
+    tickerData = yf.Ticker(Ticker)
+    tickerData = tickerData.history(period= 'max' )[['Close']]
+    tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+    filter_date = filter_date
+    tickerData = tickerData[tickerData.index >= filter_date]
+    
+    prices = np.array( tickerData.Close.values , dtype=np.float64)
+    actions = np.array( np.ones( len(prices) ) , dtype=np.int64)
+    initial_cash = 500.0
+    initial_asset_value = 500.0
+    initial_price = prices[0]
+    
+    net_initial = 0.
+    seed = 0
+    # หมายเหตุ: loop 2,000,000 ครั้งอาจใช้เวลานานมาก
+    for i in range(2000000): 
+        rng = np.random.default_rng(i)
+        actions = rng.integers(0, 2, len(prices))
+        _, _, _, _, _ , net_cf = calculate_optimized(actions, prices)
+        if net_cf[-1] > net_initial:
+            net_initial = net_cf[-1]
+            seed  = i 
+    return seed
+
+def delta2(Ticker = "FFWM" , pred = 1 ,  filter_date ='2023-01-01 12:00:00+07:00'):
+    try:
+        tickerData = yf.Ticker(Ticker)
+        tickerData = tickerData.history(period= 'max' )[['Close']]
+        tickerData.index = tickerData.index.tz_convert(tz='Asia/bangkok')
+        filter_date = filter_date
+        tickerData = tickerData[tickerData.index >= filter_date]
+        entry  = tickerData.Close[0] ; step = 0.01 ;  Fixed_Asset_Value = 1500. ; Cash_Balan = 650.
+        if entry < 10000 :
+            samples = np.arange( 0  ,  np.around(entry, 2) * 3 + step  ,  step)
+            df = pd.DataFrame()
+            df['Asset_Price'] =   np.around(samples, 2)
+            df['Fixed_Asset_Value'] = Fixed_Asset_Value
+            df['Amount_Asset']  =   df['Fixed_Asset_Value']  / df['Asset_Price']
+            df_top = df[df.Asset_Price >= np.around(entry, 2) ]
+            df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) -  df_top['Amount_Asset']) * df_top['Asset_Price']
+            df_top.fillna(0, inplace=True)
+            np_Cash_Balan_top = df_top['Cash_Balan_top'].values
+            xx = np.zeros(len(np_Cash_Balan_top)) ; y_0 = Cash_Balan
+            for idx, v_0  in enumerate(np_Cash_Balan_top) :
+                z_0 = y_0 + v_0; y_0 = z_0; xx[idx] = y_0
+            df_top['Cash_Balan_top'] = xx
+            df_top = df_top.rename(columns={'Cash_Balan_top': 'Cash_Balan'}); df_top  = df_top.sort_values(by='Amount_Asset'); df_top  = df_top[:-1]
+            df_down = df[df.Asset_Price <= np.around(entry, 2) ]
+            df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) -  df_down['Amount_Asset']) * df_down['Asset_Price']
+            df_down.fillna(0, inplace=True)
+            df_down = df_down.sort_values(by='Asset_Price' , ascending=False)
+            np_Cash_Balan_down = df_down['Cash_Balan_down'].values
+            xxx= np.zeros(len(np_Cash_Balan_down)) ; y_1 = Cash_Balan
+            for idx, v_1  in enumerate(np_Cash_Balan_down) :
+                z_1 = y_1 + v_1; y_1 = z_1; xxx[idx] = y_1
+            df_down['Cash_Balan_down'] = xxx
+            df_down = df_down.rename(columns={'Cash_Balan_down': 'Cash_Balan'})
+            df = pd.concat([df_top, df_down], axis=0)
+            Production_Costs = (df['Cash_Balan'].values[-1]) -  Cash_Balan
+            tickerData['Close'] = np.around(tickerData['Close'].values , 2)
+            tickerData['pred'] = pred
+            tickerData['Fixed_Asset_Value'] = Fixed_Asset_Value
+            tickerData['Amount_Asset']  =  0.
+            tickerData['Amount_Asset'][0]  =  tickerData['Fixed_Asset_Value'][0] / tickerData['Close'][0]
+            tickerData['re']  =  0.
+            tickerData['Cash_Balan'] = Cash_Balan
+            Close =   tickerData['Close'].values; pred =  tickerData['pred'].values; Amount_Asset =  tickerData['Amount_Asset'].values; re = tickerData['re'].values; Cash_Balan = tickerData['Cash_Balan'].values
+            for idx, x_0 in enumerate(Amount_Asset):
+                if idx != 0:
+                    if pred[idx] == 0: Amount_Asset[idx] = Amount_Asset[idx-1]
+                    elif  pred[idx] == 1: Amount_Asset[idx] =   Fixed_Asset_Value / Close[idx]
+            tickerData['Amount_Asset'] = Amount_Asset
+            for idx, x_1 in enumerate(re):
+                if idx != 0:
+                    if pred[idx] == 0: re[idx] =  0
+                    elif  pred[idx] == 1: re[idx] =  (Amount_Asset[idx-1] * Close[idx])  - Fixed_Asset_Value
+            tickerData['re'] = re
+            for idx, x_2 in enumerate(Cash_Balan):
+                if idx != 0: Cash_Balan[idx] = Cash_Balan[idx-1] + re[idx]
+            tickerData['Cash_Balan'] = Cash_Balan
+            tickerData ['refer_model'] = 0.
+            price = np.around(tickerData['Close'].values, 2); Cash  = tickerData['Cash_Balan'].values; refer_model =  tickerData['refer_model'].values
+            for idx, x_3 in enumerate(price):
+                try: refer_model[idx] = (df[df['Asset_Price'] == x_3]['Cash_Balan'].values[0])
+                except: refer_model[idx] = np.nan
+            tickerData['Production_Costs'] = abs(Production_Costs); tickerData['refer_model'] = refer_model; tickerData['pv'] =  tickerData['Cash_Balan'] + ( tickerData['Amount_Asset'] * tickerData['Close']  ); tickerData['refer_pv'] = tickerData['refer_model'] + Fixed_Asset_Value; tickerData['net_pv'] =   tickerData['pv'] - tickerData['refer_pv']  
+            final = tickerData[['net_pv']]
+            return  final
+    except:pass
+
+# ==========================================
+# PART 2: CONFIG & UTILITY FUNCTIONS
+# ==========================================
+
+def load_config(filename="add_gen_config.json"):
+    """Loads asset configurations from a JSON file."""
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        st.error(f"Error: Configuration file '{filename}' not found.")
+        return []
+    except json.JSONDecodeError:
+        st.error(f"Error: Could not decode JSON from '{filename}'.")
+        return []
+
+def Gen_fx(Ticker, field, client):
+    """Original Gen_fx logic (kept for manual rerun)."""
+    container = st.container(border=True)
+    fx = [0]
+    progress_text = f"Processing {Ticker} iterations. Please wait."
+    my_bar = st.progress(0, text=progress_text)
+    
+    pred_init = delta2(Ticker=Ticker)
+    if pred_init is not None and not pred_init.empty:
+        z = int(pred_init.net_pv.values[-1])
+        container.write(f"Initial Value (x=0), Result: {z}")
+    else:
+        st.error(f"Could not get initial data for {Ticker}. Aborting Gen_fx.")
+        my_bar.empty()
+        return
+
+    for i in range(1, 2000): 
+        rng = np.random.default_rng(i)
+        siz = len(pred_init)
+        pred_run = delta2(Ticker=Ticker, pred=rng.integers(2, size=siz))
+        
+        if pred_run is not None and not pred_run.empty:
+            y = int(pred_run.net_pv.values[-1])
+            if y > z:
+                container.write(f"New Best Found! Seed: {i}, Result: {y}")
+                z = y
+                fx.append(i)
+        
+        percent_complete = (i + 1) / 2000
+        my_bar.progress(percent_complete, text=progress_text)
+
+    time.sleep(1)
+    my_bar.empty()
+    best_seed = fx[-1]
+    st.write(f"Finished. Best seed found for {Ticker} is: {best_seed}")
+    
+    with st.spinner(f"Updating ThingSpeak field {field} for {Ticker}..."):
+        try:
+            client.update({f'field{field}': best_seed})
+            st.success(f"Successfully updated ThingSpeak for {Ticker} with seed: {best_seed}")
+        except Exception as e:
+            st.error(f"Failed to update ThingSpeak: {e}")
+
+# ==========================================
+# PART 3: NEW FEATURE - BATCH IMPORT
+# ==========================================
+
+def run_batch_import(json_input, config_map):
+    """
+    Parses JSON and updates ThingSpeak for all matching tickers.
+    Includes rate limiting to avoid API bans.
+    """
+    try:
+        data = json.loads(json_input)
+        tickers_data = data.get("tickers", {})
+        
+        if not tickers_data:
+            st.warning("No 'tickers' found in the provided JSON.")
+            return
+
+        st.info("Starting Batch Update... Do not close this tab.")
+        
+        # Create a progress bar
+        total_items = len(tickers_data)
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        log_container = st.container(border=True)
+        log_container.write("### Log Output")
+
+        processed_count = 0
+
+        for ticker, seed_str in tickers_data.items():
+            processed_count += 1
+            status_text.text(f"Processing ({processed_count}/{total_items}): {ticker}")
+            progress_bar.progress(processed_count / total_items)
+            
+            # Check if we have config for this ticker
+            if ticker in config_map:
+                cfg = config_map[ticker]
+                channel_id = cfg.get('channel_id')
+                write_key = cfg.get('write_api_key')
+                field = cfg.get('thingspeak_field')
+                
+                try:
+                    # Create temporary client
+                    client = thingspeak.Channel(channel_id, write_key, fmt='json')
+                    
+                    # Convert seed string to int (handle large ints)
+                    seed_val = int(seed_str)
+                    
+                    # Update ThingSpeak
+                    client.update({f'field{field}': seed_val})
+                    log_container.success(f"✅ {ticker}: Updated with seed {seed_str[:10]}...")
+                    
+                except Exception as e:
+                    log_container.error(f"❌ {ticker}: Update failed - {e}")
+                
+                # IMPORTANT: ThingSpeak Rate Limiting (Free tier ~15s)
+                # We wait if this is not the last item
+                if processed_count < total_items:
+                    with status_text:
+                        for s in range(16, 0, -1):
+                            st.write(f"⏳ Waiting {s} seconds to respect API limits...")
+                            time.sleep(1)
+            else:
+                log_container.warning(f"⚠️ {ticker}: No configuration found in add_gen_config.json")
+
+        status_text.text("Batch processing complete!")
+        st.success("All operations finished.")
+
+    except json.JSONDecodeError:
+        st.error("Invalid JSON format. Please check your input.")
+    except Exception as e:
+        st.error(f"An unexpected error occurred: {e}")
+
+# ==========================================
+# PART 4: UI CONSTRUCTION
+# ==========================================
+
+asset_configs = load_config()
+
+if asset_configs:
+    # 1. Prepare Config Map for Batch Processing (Optimization)
+    # Allows O(1) lookup instead of looping through list every time
+    config_map = {cfg['ticker']: cfg for cfg in asset_configs}
+
+    st.title("System Control Panel")
+
+    # --- NEW: One-Click Loop All Section ---
+    with st.expander("📂 Import Data (One-Click Loop All)", expanded=True):
+        st.write("Paste your exported JSON data here to update all tickers sequentially.")
+        json_input = st.text_area("JSON Input", height=200, placeholder='{\n  "metadata": {...},\n  "tickers": {\n    "FFWM": "123...",\n    ...\n  }\n}')
+        
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("🚀 Run Batch Update", type="primary"):
+                if json_input.strip():
+                    run_batch_import(json_input, config_map)
+                else:
+                    st.error("Please paste JSON data first.")
+
+    st.divider()
+
+    # --- EXISTING: Tabs UI ---
+    tab_names = [config.get('tab_name', f"Tab {i+1}") for i, config in enumerate(asset_configs)]
+    tabs = st.tabs(tab_names)
+
+    for i, tab in enumerate(tabs):
+        with tab:
+            cfg = asset_configs[i]
+            ticker = cfg.get('ticker', 'N/A')
+            field = cfg.get('thingspeak_field')
+            channel_id = cfg.get('channel_id')
+            write_api_key = cfg.get('write_api_key')
+            
+            # Setup Client
+            if all([field, channel_id, write_api_key]):
+                try:
+                    client = thingspeak.Channel(channel_id, write_api_key, fmt='json')
+                except:
+                    client = None
+            else:
+                client = None
+                st.error("Config missing details.")
+
+            # Manual Controls (Goal 2: Maintain existing UI)
+            if client:
+                # 1. Gen_fx Rerun
+                gen_fx_check = st.checkbox(f'{ticker}_Add_Gen', key=f"gen_fx_{ticker}")
+                if gen_fx_check:
+                    if st.button("Rerun_Gen", key=f"rerun_gen_{ticker}"):
+                        Gen_fx(Ticker=ticker, field=field, client=client)
+
+                # 2. Manual Input
+                gen_m_check = st.checkbox(f'{ticker}_Add_Gen_M', key=f"gen_m_{ticker}")
+                if gen_m_check:
+                    input_val_str = st.text_input(
+                        f'Insert a number for {ticker}',
+                        key=f"text_input_{ticker}",
+                        placeholder="Enter value"
+                    )
+                    if st.button("Rerun_Gen_M", key=f"rerun_m_{ticker}"):
+                        try:
+                            input_val = int(input_val_str)
+                            with st.spinner(f"Updating..."):
+                                client.update({f'field{field}': input_val})
+                                st.success(f"Updated {ticker} manually.")
+                        except ValueError:
+                            st.error("Invalid integer.")
+            
+            st.write("_____")
+
+else:
+    st.warning("No asset configurations were loaded. Please check 'add_gen_config.json'.")
