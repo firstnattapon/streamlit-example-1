@@ -33,7 +33,7 @@
       10
     ],
     "delta1Mode": "dynamic",
-    "dynamic_iv": 256.5,
+    "dynamic_iv": 24,
     "dynamic_stock": 186
   },
   "toggles": {
