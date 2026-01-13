@@ -81,7 +81,7 @@
             "asset_field": { "field": "field8", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 3900 ,
             "diff": 100,
-            "option_config": { "base_value": 100, "delta_factor": 1, "label": "LUNR(LV:100@14.0, Δ=1.00)" }
+            "option_config": { "base_value": 200, "delta_factor": 1, "label": "LUNR(LV:200@14.0, Δ=1.00)" }
         },
         {
             "ticker": "NEGG",
@@ -97,7 +97,7 @@
             "asset_field": { "field": "field5", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
             "fix_c": 2200,
             "diff": 70,
-            "option_config": { "base_value": 200, "delta_factor": 1.0, "label": "NVTS(LV:100@12.0, Δ=1.0)" }
+            "option_config": { "base_value": 200, "delta_factor": 1.0, "label": "NVTS(LV:200@12.0, Δ=1.0)" }
         },
         {
             "ticker": "QXO",
