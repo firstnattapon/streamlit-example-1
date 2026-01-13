@@ -3,7 +3,7 @@
   "exported_at": "2026-01-11T13:22:48.925Z",
   "params": {
     "x0_1": 28.5,
-    "constant1": 2800,
+    "constant1": 2700,
     "b1": -321.91,
     "b1Base": -321.91,
     "autoRolloverB1": false,
