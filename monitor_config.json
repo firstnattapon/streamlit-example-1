@@ -73,7 +73,7 @@
             "asset_field": { "field": "field5", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 0.01,
             "diff": 60,
-            "option_config": { "base_value": 600, "delta_factor": 1, "label": "IBRX(LV:600@3.25, Δ=1)" }
+            "option_config": { "base_value": 0, "delta_factor": 1, "label": "IBRX(LV:0@3.25, Δ=1)" }
         },
         {
             "ticker": "LUNR",
