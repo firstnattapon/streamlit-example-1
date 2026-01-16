@@ -1,13 +1,13 @@
 {
   "version": "1.3.0",
-  "exported_at": "2025-12-06T10:21:28.960Z",
+  "exported_at": "2026-01-16T04:47:55.224Z",
   "params": {
     "x0_1": 3.25,
-    "constant1": 1800,
-    "b1": 43.1,
-    "b1Base": 43.1,
+    "constant1": 100,
+    "b1": 176.49,
+    "b1Base": 176.49,
     "autoRolloverB1": false,
-    "b1_add_option": -382.9,
+    "b1_add_option": -249.519,
     "x0_2": 0.1,
     "constant2": 1500,
     "b2": 0,
@@ -33,8 +33,8 @@
       10
     ],
     "delta1Mode": "dynamic",
-    "dynamic_iv": 24,
-    "dynamic_stock": 186
+    "dynamic_iv": 0,
+    "dynamic_stock": 0
   },
   "toggles": {
     "showY1": false,
