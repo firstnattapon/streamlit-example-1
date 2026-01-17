@@ -129,7 +129,7 @@
             "asset_field": { "field": "field6", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 1700,
             "diff": 60,
-            "option_config": { "base_value": 200, "delta_factor": 1, "label": "SG(LV:200@12.0, Δ=1.00)" }
+            "option_config": { "base_value": 0, "delta_factor": 1, "label": "SG(LV:200@12.0, Δ=1.00)" }
         }
     ]
 }
