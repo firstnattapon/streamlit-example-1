@@ -33,7 +33,7 @@
             "asset_field": { "field": "field4", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 1700,
             "diff": 70,
-            "option_config": { "base_value": 0, "delta_factor": 1, "label": "DJT(LV:100@20.40, Δ=1.00)" }
+            "option_config": { "base_value": 100, "delta_factor": 1, "label": "DJT(LV:100@20.40, Δ=1.00)" }
         },
         {
             "ticker": "DYN",
@@ -49,7 +49,7 @@
             "asset_field": { "field": "field1", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
             "fix_c": 1500,
             "diff": 60,
-            "option_config": { "base_value": 0, "delta_factor": 1, "label": "FFWM(LV:200@6.88, Δ=1.00)" }
+            "option_config": { "base_value": 200, "delta_factor": 1, "label": "FFWM(LV:200@6.88, Δ=1.00)" }
         },
         {
             "ticker": "FLNC",
@@ -65,7 +65,7 @@
             "asset_field": { "field": "field2", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 1600,
             "diff": 70,
-            "option_config": { "base_value": 300, "delta_factor": 1, "label": "GERN(LV:1100@1.85, Δ=1.00)" }
+            "option_config": { "base_value": 1100, "delta_factor": 1, "label": "GERN(LV:1100@1.85, Δ=1.00)" }
         },
         {
             "ticker": "IBRX",
@@ -97,7 +97,7 @@
             "asset_field": { "field": "field5", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
             "fix_c": 2200,
             "diff": 70,
-            "option_config": { "base_value": 100, "delta_factor": 1.0, "label": "NVTS(LV:200@12.0, Δ=1.0)" }
+            "option_config": { "base_value": 200, "delta_factor": 1.0, "label": "NVTS(LV:200@12.0, Δ=1.0)" }
         },
         {
             "ticker": "QXO",
@@ -129,7 +129,7 @@
             "asset_field": { "field": "field6", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 1700,
             "diff": 60,
-            "option_config": { "base_value": 0, "delta_factor": 1, "label": "SG(LV:200@12.0, Δ=1.00)" }
+            "option_config": { "base_value": 200, "delta_factor": 1, "label": "SG(LV:200@12.0, Δ=1.00)" }
         }
     ]
 }
