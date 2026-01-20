@@ -72,8 +72,8 @@
     "history_4.1": "1918.37 += (2000 × ln(10.8/12)) − (2200 × ln(10.8/12)) | c = 2200 , t = 12 , b = 1939.44",
     "comment": "T → T → C → C",
     "Surplus_Iv" : "Iv_Put: (1.34*100)=134" , 
-    "beta_Equation": " Ev: -1640.61 + Lock_P&L: +1939.44|+134 +" , 
-    "beta_momory": "Net: +298.83"
+    "beta_Equation": " Ev: -1640.61 + Lock_P&L: +1939.44|+134" , 
+    "beta_momory": "Net: +432.83"
   },
   {
     "ticker": "QXO",
@@ -131,8 +131,8 @@
     "history_4.1": "1813.74 += (5000 × ln(21.79/18)) − (2500 × ln(21.79/18)) | c = 2500 , t = 18 , b = 2290.29",
     "comment": "C → T → T → C",    
     "Surplus_Iv" : "Iv_Put: (3.65*200)=730 , (2.47*100)=247 " , 
-    "beta_Equation": " Ev: -2239.91 + Lock_P&L: +2290.29+730+247" , 
-    "beta_momory": "Net: 1027.38"
+    "beta_Equation": " Ev: -2233.91 + Lock_P&L: +2290.29+730+247" , 
+    "beta_momory": "Net: 1033.38"
   },
   {
     "ticker": "GERN",
