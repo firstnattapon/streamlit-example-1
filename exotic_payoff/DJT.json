@@ -1,11 +1,11 @@
 {
   "version": "1.3.0",
-  "exported_at": "2025-12-24T13:47:03.794Z",
+  "exported_at": "2026-01-20T09:57:29.739Z",
   "params": {
     "x0_1": 20.4,
     "constant1": 1700,
-    "b1": 0,
-    "b1Base": 0,
+    "b1": -109.75,
+    "b1Base": -109.75,
     "autoRolloverB1": false,
     "b1_add_option": -402.75,
     "x0_2": 20.4,
@@ -34,7 +34,7 @@
     ],
     "delta1Mode": "dynamic",
     "dynamic_iv": 0,
-    "dynamic_stock": 19
+    "dynamic_stock": 26
   },
   "toggles": {
     "showY1": false,
