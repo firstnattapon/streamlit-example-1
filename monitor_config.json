@@ -9,7 +9,7 @@
             "asset_field": { "field": "field8", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
             "fix_c": 1500,
             "diff": 60,
-            "option_config": { "base_value": 400, "delta_factor": 1, "label": "AGL(LV:1400@2.00, Δ=1.00)" }
+            "option_config": { "base_value": 1400, "delta_factor": 1, "label": "AGL(LV:1400@2.00, Δ=1.00)" }
         },
         {
             "ticker": "APLS",
