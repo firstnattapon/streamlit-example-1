@@ -6,8 +6,8 @@
     "Equation": "b += c · ln(P / t) - c' · ln(P / t'); แล้วตั้ง P = P', t = t', c = c'",
     "history_1": "",
     "comment": "",
-    "beta_Equation": " Ev: -152.0 + Lock_P&L: +0" , 
-    "beta_momory": "Net: -152.0"
+    "beta_Equation": " Ev: -204.00 + Lock_P&L: +0" , 
+    "beta_momory": "Net: -204.00"
   },
   {
     "ticker": "NEGG",
@@ -41,8 +41,8 @@
     "history_3.1": "263.01 += (1500 × ln(16.41/12)) − (2500 × ln(16.41/12)) | c = 2500 , t = 12 , b = -49.97",
     "comment": "T → T → C",
     "Surplus_Iv" : "Iv_Put: (-1.08*100,-3.3*100)=-438 " , 
-    "beta_Equation": " Ev: -616.00  + Lock_P&L: -49.97-438" , 
-    "beta_momory": "Net: -1103.97"
+    "beta_Equation": " Ev: -649.50  + Lock_P&L: -49.97-438" , 
+    "beta_momory": "Net: -1137.47"
   },
   {
     "ticker": "APLS",
@@ -72,8 +72,8 @@
     "history_4.1": "1918.37 += (2000 × ln(10.8/12)) − (2200 × ln(10.8/12)) | c = 2200 , t = 12 , b = 1939.44",
     "comment": "T → T → C → C",
     "Surplus_Iv" : "Iv_Put: (1.34*100)=134" , 
-    "beta_Equation": " Ev: -1640.61 + Lock_P&L: +1939.44|+134" , 
-    "beta_momory": "Net: +432.83"
+    "beta_Equation": " Ev: -1692.61 + Lock_P&L: +1939.44|+134" , 
+    "beta_momory": "Net: +380.83"
   },
   {
     "ticker": "QXO",
@@ -140,8 +140,8 @@
     "Original": "ราคาอ้างอิง: 1.85, ทุนคงที่: 1600",
     "history_1": "",
     "comment": "",
-    "beta_Equation": " Ev: -504.00 + Lock_P&L: +0" , 
-    "beta_momory": "Net: -504.00"  
+    "beta_Equation": " Ev: -584.00 + Lock_P&L: +0" , 
+    "beta_momory": "Net: -584.00"  
   },
   {
     "ticker": "DYN",
@@ -163,8 +163,8 @@
     "history_1": "ราคาอ้างอิง: 20.4 → 20.4 , ทุนคงที่: 2000 → 1700 , ราคาปัจจุบัน: 14.15",
     "history_1.1": "0.00 += (2000 × ln(14.15/20.4)) − (1700 × ln(14.15/20.4)) | c = 1700 , t = 20.4 , b = -109.75",
     "comment": "C",
-    "beta_Equation": " Ev: -293.00 + Lock_P&L: -109.75" , 
-    "beta_momory": "Net: -402.75"  
+    "beta_Equation": " Ev: -336.58 + Lock_P&L: -109.75" , 
+    "beta_momory": "Net: -446.33"  
   },
   {
     "ticker": "IBRX",
@@ -186,8 +186,8 @@
     "Equation": "b += c · ln(P / t) - c' · ln(P / t'); แล้วตั้ง P = P', t = t', c = c'",
     "history_1": "",
     "comment": "",
-    "beta_Equation": " Ev: -186.00 + Lock_P&L: +0" , 
-    "beta_momory": "Net: -186.00" 
+    "beta_Equation": " Ev: -261.00 + Lock_P&L: +0" , 
+    "beta_momory": "Net: -261.00" 
   },
   {
     "ticker": "CLSK",
@@ -219,8 +219,8 @@
     "history_2.1": "103.49 += (1500 × ln(15.88/15)) − (3900 × ln(15.88/15)) | c = 3900 , t = 15 , b = -33.33",
     "comment": "T",
     "Surplus_Iv" : "Iv_Put: No_Expiry" , 
-    "beta_Equation": "Ev: -1357.86 + Lock_P&L: -33.33" , 
-    "beta_momory": "Net: -1391.19"
+    "beta_Equation": "Ev: -1643.86 + Lock_P&L: -33.33" , 
+    "beta_momory": "Net: -1677.19"
   }
 ]
 
