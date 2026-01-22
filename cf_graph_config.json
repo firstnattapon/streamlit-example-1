@@ -131,8 +131,8 @@
     "history_4.1": "1813.74 += (5000 × ln(21.79/18)) − (3000 × ln(21.79/18)) | c = 3000 , t = 18 , b = 2195.90",
     "comment": "C → T → T → C",    
     "Surplus_Iv" : "Iv_Put: (3.65*200)=730 , (2.47*100)=247 " , 
-    "beta_Equation": " Ev: -2233.91 + Lock_P&L: +2195.90+730+247" , 
-    "beta_momory": "Net: 938.99"
+    "beta_Equation": " Ev: -2393.91 + Lock_P&L: +2195.90+730+247" , 
+    "beta_momory": "Net: 778.99"
   },
   {
     "ticker": "GERN",
