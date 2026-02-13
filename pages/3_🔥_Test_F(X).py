@@ -4,17 +4,17 @@ import pandas as pd
 import plotly.graph_objects as go
 import math
 
-st.set_page_config(page_title="Market Crash: LEAPS vs Stock Rebalance", layout="wide")
+st.set_page_config(page_title="LEAPS Rebalance 80/20", layout="wide")
 
-st.title("📉 Market Crash Simulator: ทำไม LEAPS ถึงเป็นร่มชูชีพชั้นดี")
+st.title("🔥 The Ultimate Convexity: LEAPS Rebalance + Liquidity Pool")
 st.markdown("""
-จำลองสภาวะ **"ตลาดพังทลาย" (Severe Drawdown)** เพื่อเปรียบเทียบ:
+พิสูจน์กลยุทธ์ **Stock Replacement + Liquidity Rebalance**
 1. **Benchmark:** $fix\_c \cdot \ln(P_t / P_0)$
-2. **Stock Rebalance:** การพยายามซื้อถัวเพื่อรักษาสมดุล $fix\_c$ (รับมีดตก)
-3. **LEAPS Convexity:** การใช้ Option ที่ล็อกความเสี่ยงขาลงไว้แค่ค่า Premium
+2. **Stock Rebalance:** รักษามูลค่าหุ้นให้เท่ากับ $fix\_c$ 100%
+3. **LEAPS Rebalance (80/20):** รักษามูลค่า LEAPS ไว้ที่ 80% และถือเงินสด 20% เพื่อคอย Rebalance และกินดอกเบี้ย
 """)
 
-# --- Custom Normal CDF (ไม่ใช้ scipy) ---
+# --- Custom Normal CDF ---
 def norm_cdf(x):
     vectorized_erf = np.vectorize(math.erf)
     return 0.5 * (1.0 + vectorized_erf(x / np.sqrt(2.0)))
@@ -28,24 +28,24 @@ def bs_call(S, K, T, r, sigma):
 
 # --- Sidebar Inputs ---
 st.sidebar.header("⚙️ ตั้งค่าพารามิเตอร์")
-fix_c = st.sidebar.number_input("Fixed Capital (fix_c)", value=100000, step=10000)
-P0 = st.sidebar.number_input("Initial Price (P0)", value=100.0, step=10.0)
+fix_c = st.sidebar.number_input("Total Capital (fix_c)", value=100000, step=10000)
+P0 = st.sidebar.number_input("Initial Stock Price (P0)", value=100.0, step=10.0)
 
-st.sidebar.subheader("LEAPS Option Specs")
+st.sidebar.subheader("🎯 Portfolio Allocation")
+leaps_weight = st.sidebar.slider("สัดส่วน LEAPS (%)", min_value=10, max_value=100, value=80, step=10) / 100
+cash_weight = 1.0 - leaps_weight
+st.sidebar.info(f"LEAPS Target: {fix_c * leaps_weight:,.0f} ฿\n\nLiquidity Pool: {fix_c * cash_weight:,.0f} ฿")
+
+st.sidebar.subheader("LEAPS Specs")
 strike = st.sidebar.number_input("Strike Price (K)", value=80.0, step=5.0)
-r = st.sidebar.number_input("Risk-free Rate (r)", value=0.02, step=0.01)
+r = st.sidebar.number_input("Risk-free Rate (r) - ดอกเบี้ยเงินสด", value=0.03, step=0.01)
 
 st.sidebar.subheader("Market Dynamics")
 sigma = st.sidebar.slider("Volatility (Sigma)", min_value=0.1, max_value=1.0, value=0.4, step=0.05)
+drift = st.sidebar.slider("Drift (Mu)", min_value=-0.5, max_value=0.5, value=0.0, step=0.05)
 days = st.sidebar.slider("Days to Expiry (T)", min_value=100, max_value=730, value=365, step=30)
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("🚨 Market Crash Event")
-simulate_crash = st.sidebar.checkbox("เปิดโหมดจำลองวิกฤตตลาด", value=True)
-crash_day = st.sidebar.slider("เกิดวิกฤตในวันที่", min_value=10, max_value=days-10, value=days//2)
-crash_magnitude = st.sidebar.slider("ความรุนแรง (หุ้นร่วง %)", min_value=10, max_value=80, value=40, step=5)
-
-if st.sidebar.button("🎲 สุ่มกราฟราคาใหม่"):
+if st.sidebar.button("🎲 สุ่มกราฟตลาดใหม่"):
     st.rerun()
 
 # --- Simulation Logic ---
@@ -54,40 +54,46 @@ np.random.seed()
 Z = np.random.normal(0, 1, days)
 P_t = np.zeros(days)
 P_t[0] = P0
-drift = 0.05
 
-# 1. สร้างเส้นทางราคา + แทรก Market Crash
+# 1. สร้างเส้นทางราคา (GBM)
 for t in range(1, days):
-    if simulate_crash and t == crash_day:
-        # วันที่เกิดวิกฤต หุ้นร่วงหนักทันที
-        P_t[t] = P_t[t-1] * (1 - (crash_magnitude / 100))
-    else:
-        # วันปกติ วิ่งตาม GBM
-        P_t[t] = P_t[t-1] * np.exp((drift - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z[t])
+    P_t[t] = P_t[t-1] * np.exp((drift - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z[t])
 
-# 2. Benchmark
+# 2. Benchmark Line
 benchmark = fix_c * np.log(P_t / P0)
 
-# 3. Stock Rebalance
-returns = np.diff(P_t) / P_t[:-1]
-daily_rebalance_pnl = fix_c * returns
-rebalance_cum = np.insert(np.cumsum(daily_rebalance_pnl), 0, 0)
+# 3. Stock Rebalance Line (Linear Volatility Premium)
+ret_stock = np.diff(P_t) / P_t[:-1]
+daily_pnl_stock = fix_c * ret_stock
+cum_pnl_stock = np.insert(np.cumsum(daily_pnl_stock), 0, 0)
 
-# 4. LEAPS Convexity
-qty = fix_c / P0 
+# 4. LEAPS Rebalance Line (Convexity + Gamma Premium)
 T_array = np.linspace(days/365, 0.001, days)
-leaps_price = bs_call(P_t, strike, T_array, r, sigma)
-leaps_price_0 = bs_call(P0, strike, days/365, r, sigma)
+C_t = bs_call(P_t, strike, T_array, r, sigma)
 
-# Max Loss ของ LEAPS คือเสียค่า Premium ทั้งหมดที่จ่ายไปตอนแรก (qty * leaps_price_0)
-leaps_pnl = qty * (leaps_price - leaps_price_0)
+# ผลตอบแทนรายวันของ Option
+ret_opt = np.diff(C_t) / C_t[:-1]
+
+# Rebalance ให้มูลค่า Option คงที่เท่ากับ (leaps_weight * fix_c) ทุกวัน
+# ดังนั้น PnL ในแต่ละวันคือ มูลค่าเป้าหมาย x ผลตอบแทนออปชัน
+daily_pnl_leaps = (leaps_weight * fix_c) * ret_opt
+
+# ดอกเบี้ยรับจาก Liquidity Pool (cash_weight * fix_c)
+daily_interest = (cash_weight * fix_c) * (np.exp(r * dt) - 1)
+
+# รวม PnL สะสม (กำไรจาก Option Rebalance + ดอกเบี้ยรับจากเงินสด)
+cum_pnl_leaps = np.insert(np.cumsum(daily_pnl_leaps + daily_interest), 0, 0)
+
+# แกะค่า EV ออกมาโชว์
+intrinsic = np.maximum(P_t - strike, 0)
+ev = C_t - intrinsic
 
 df = pd.DataFrame({
     "Day": np.arange(days),
     "Price": P_t,
     "Benchmark": benchmark,
-    "Stock Rebalance": rebalance_cum,
-    "LEAPS PnL": leaps_pnl
+    "Stock Rebalance": cum_pnl_stock,
+    "LEAPS Rebalance": cum_pnl_leaps
 })
 
 # --- Plotting ---
@@ -96,44 +102,39 @@ col1, col2 = st.columns([1, 2])
 with col1:
     st.subheader("📉 ราคาสินทรัพย์ (Asset Price)")
     fig_price = go.Figure()
-    fig_price.add_trace(go.Scatter(x=df["Day"], y=df["Price"], mode='lines', name='Price', line=dict(color='black')))
-    if simulate_crash:
-        fig_price.add_vline(x=crash_day, line_width=2, line_dash="dash", line_color="red", annotation_text="💥 CRASH!")
-    fig_price.update_layout(height=400, margin=dict(l=0, r=0, t=30, b=0))
+    fig_price.add_trace(go.Scatter(x=df["Day"], y=df["Price"], mode='lines', name='Stock Price', line=dict(color='black')))
+    fig_price.update_layout(height=450, margin=dict(l=0, r=0, t=30, b=0))
     st.plotly_chart(fig_price, use_container_width=True)
 
 with col2:
-    st.subheader("📊 เปรียบเทียบ PnL ขาลง (Downside Protection)")
+    st.subheader("📊 เปรียบเทียบ Cashflow: Linear vs Convex Rebalance")
     fig_pnl = go.Figure()
 
     fig_pnl.add_trace(go.Scatter(x=df["Day"], y=df["Benchmark"], mode='lines', 
                              name='1. Benchmark', line=dict(color='gray', dash='dash')))
 
     fig_pnl.add_trace(go.Scatter(x=df["Day"], y=df["Stock Rebalance"], mode='lines', 
-                             name='2. Stock Rebalance (รับมีดตก)', line=dict(color='blue', width=2)))
+                             name='2. Stock Rebalance (100%)', line=dict(color='blue', width=2)))
 
-    fig_pnl.add_trace(go.Scatter(x=df["Day"], y=df["LEAPS PnL"], mode='lines', 
-                             name='3. LEAPS (ล็อกขาดทุนสูงสุด)', line=dict(color='magenta', width=3)))
+    # เส้นไฮไลต์: LEAPS Rebalance
+    fig_pnl.add_trace(go.Scatter(x=df["Day"], y=df["LEAPS Rebalance"], mode='lines', 
+                             name=f'3. LEAPS Rebalance ({leaps_weight*100:.0f}/{cash_weight*100:.0f})', 
+                             line=dict(color='magenta', width=3)))
 
-    if simulate_crash:
-        fig_pnl.add_vline(x=crash_day, line_width=2, line_dash="dash", line_color="red")
-        
-    # เพิ่มเส้นสมมติ Max Loss ของ LEAPS
-    max_loss = -(qty * leaps_price_0)
-    fig_pnl.add_hline(y=max_loss, line_width=1, line_dash="dot", line_color="magenta", annotation_text="Max Loss Capped")
-
-    fig_pnl.update_layout(height=400, margin=dict(l=0, r=0, t=30, b=0), hovermode="x unified")
+    fig_pnl.update_layout(height=450, margin=dict(l=0, r=0, t=30, b=0), hovermode="x unified")
     st.plotly_chart(fig_pnl, use_container_width=True)
 
 # --- Summary Metrics ---
 st.divider()
-st.subheader("บทสรุปความเสียหายหลังผ่านวิกฤต (วันสุดท้าย)")
+st.subheader("🎯 สรุปผลงานระบบเมื่อจบรอบ (Expiry Day)")
 m1, m2, m3 = st.columns(3)
 
-m1.metric("Stock Rebalance PnL", f"{rebalance_cum[-1]:,.2f} ฿", "ถูกลากลงจากการพยายามซื้อถัว (Buy the dip)")
+m1.metric("Stock Rebalance PnL", f"{cum_pnl_stock[-1]:,.2f} ฿", 
+          delta=f"On Top Benchmark: {cum_pnl_stock[-1] - benchmark[-1]:,.2f} ฿", delta_color="normal")
 
-leaps_advantage = leaps_pnl[-1] - rebalance_cum[-1]
-m2.metric("LEAPS PnL", f"{leaps_pnl[-1]:,.2f} ฿", 
-          delta=f"ขาดทุนน้อยกว่า Stock: +{leaps_advantage:,.2f} ฿", delta_color="normal")
+leaps_vs_stock = cum_pnl_leaps[-1] - cum_pnl_stock[-1]
+m2.metric(f"LEAPS {leaps_weight*100:.0f}/{cash_weight*100:.0f} PnL", f"{cum_pnl_leaps[-1]:,.2f} ฿", 
+          delta=f"vs Stock Rebalance: {leaps_vs_stock:,.2f} ฿", delta_color="normal" if leaps_vs_stock > 0 else "inverse")
 
-m3.metric("LEAPS Max Risk (Premium Paid)", f"{-qty * leaps_price_0:,.2f} ฿", "นี่คือจุดที่แย่ที่สุดที่จะเกิดขึ้นได้")
+m3.metric("Total EV Decay (Theta Cost)", f"{-((ev[0] - ev[-1])/C_t[0]) * (leaps_weight * fix_c):,.2f} ฿", 
+          "ถูกชดเชยด้วย Gamma Premium เรียบร้อยแล้ว")
