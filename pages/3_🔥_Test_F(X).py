@@ -83,7 +83,6 @@ df = pd.DataFrame({
 })
 
 # --- Plotting ---
-# แถวที่ 1: กราฟเทียบกับเวลา (Time Series)
 col1, col2 = st.columns([1, 2])
 with col1:
     st.subheader("📉 ราคาสินทรัพย์เทียบกับเวลา")
@@ -103,24 +102,27 @@ with col2:
 
 st.divider()
 
-# แถวที่ 2: กราฟ X=Price, Y=Cashflow (Payoff Profile)
-st.subheader("📍 Payoff Profile: ราคา (X) vs กระแสเงินสดสะสม (Y)")
+# แถวที่ 2: กราฟ X=Price, Y=Cashflow (Payoff Profile - Path Version)
+st.subheader("📍 Trading Path: ราคา (X) vs กระแสเงินสดสะสม (Y)")
 fig_payoff = go.Figure()
 
-# ใช้โหมด markers (จุด) เพื่อแสดงให้เห็นการกระจายตัวของ PnL ในแต่ละช่วงราคา
-fig_payoff.add_trace(go.Scatter(x=df["Price"], y=df["Benchmark"], mode='markers', 
-                                marker=dict(size=4, color='gray', opacity=0.5), name='1. Benchmark'))
+# เปลี่ยน mode เป็น 'lines' เพื่อลากเส้นต่อเนื่องตามลำดับเวลา
+fig_payoff.add_trace(go.Scatter(x=df["Price"], y=df["Benchmark"], mode='lines', 
+                                line=dict(color='gray', width=1.5, dash='dot'), name='1. Benchmark Path'))
 
-fig_payoff.add_trace(go.Scatter(x=df["Price"], y=df["Stock Rebalance"], mode='markers', 
-                                marker=dict(size=4, color='blue', opacity=0.6), name='2. Stock Rebalance'))
+fig_payoff.add_trace(go.Scatter(x=df["Price"], y=df["Stock Rebalance"], mode='lines', 
+                                line=dict(color='blue', width=1.5), opacity=0.7, name='2. Stock Path'))
 
-fig_payoff.add_trace(go.Scatter(x=df["Price"], y=df["LEAPS Rebalance"], mode='markers', 
-                                marker=dict(size=5, color='magenta', opacity=0.8), name='3. LEAPS Rebalance'))
+fig_payoff.add_trace(go.Scatter(x=df["Price"], y=df["LEAPS Rebalance"], mode='lines', 
+                                line=dict(color='magenta', width=2), opacity=0.9, name='3. LEAPS Path'))
+
+# เพิ่มเส้น Zero Line (ทุน = 0)
+fig_payoff.add_hline(y=0, line_width=1, line_dash="solid", line_color="black", opacity=0.3)
 
 fig_payoff.update_layout(
     xaxis_title="Stock Price (P_t)",
     yaxis_title="Cumulative PnL (Cashflow)",
-    height=450,
+    height=500,
     hovermode="closest",
     template="plotly_white"
 )
