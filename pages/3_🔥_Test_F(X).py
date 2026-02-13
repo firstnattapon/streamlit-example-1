@@ -2,17 +2,25 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-import scipy.stats as si
+import math
 
 st.set_page_config(page_title="LEAPS Convexity vs Stock Rebalance", layout="wide")
 
 st.title("🚀 Convexity Simulator: Stock Rebalance vs LEAPS Option")
 st.markdown("""
-กราฟจำลองเปรียบเทียบกลยุทธ์ตามที่คุณออกแบบ:
+กราฟจำลองเปรียบเทียบกลยุทธ์:
 1. **Benchmark:** $fix\_c \cdot \ln(P_t / P_0)$
-2. **Rebalance:** กระแสเงินสดสะสมจากการ Rebalance หุ้นรายวัน (Volatility Premium)
-3. **LEAPS Convexity:** การใช้ Deep ITM Call Option แทนหุ้น (สะท้อนพลังของ Gamma และการหดตัวของ EV)
+2. **Rebalance:** กระแสเงินสดสะสมจากการ Rebalance หุ้นรายวัน
+3. **LEAPS Convexity:** การใช้ Deep ITM Call Option แทนหุ้น 
+*(เวอร์ชันลด Dependencies: ไม่ใช้ scipy)*
 """)
+
+# --- Custom Normal CDF (ไม่ต้องง้อ scipy) ---
+def norm_cdf(x):
+    """คำนวณ Normal CDF โดยใช้ math.erf พื้นฐานของ Python"""
+    # ใช้ np.vectorize เพื่อให้ math.erf ทำงานกับ Numpy Array ได้
+    vectorized_erf = np.vectorize(math.erf)
+    return 0.5 * (1.0 + vectorized_erf(x / np.sqrt(2.0)))
 
 # --- Black-Scholes Formula ---
 def bs_call(S, K, T, r, sigma):
@@ -20,7 +28,9 @@ def bs_call(S, K, T, r, sigma):
     T = np.maximum(T, 1e-5)
     d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
     d2 = d1 - sigma * np.sqrt(T)
-    call = (S * si.norm.cdf(d1, 0.0, 1.0) - K * np.exp(-r * T) * si.norm.cdf(d2, 0.0, 1.0))
+    
+    # ใช้ฟังก์ชัน norm_cdf ที่เราเขียนขึ้นมาเอง
+    call = (S * norm_cdf(d1) - K * np.exp(-r * T) * norm_cdf(d2))
     return call
 
 # --- Sidebar Inputs ---
@@ -29,7 +39,6 @@ fix_c = st.sidebar.number_input("Fixed Capital (fix_c)", value=100000, step=1000
 P0 = st.sidebar.number_input("Initial Price (P0)", value=100.0, step=10.0)
 
 st.sidebar.subheader("LEAPS Option Specs")
-# กำหนดให้เป็น Deep ITM เพื่อใช้แทนหุ้น
 strike = st.sidebar.number_input("Strike Price (K) - ควรต่ำกว่า P0", value=80.0, step=5.0)
 r = st.sidebar.number_input("Risk-free Rate (r)", value=0.02, step=0.01)
 
@@ -48,36 +57,28 @@ Z = np.random.normal(0, 1, days)
 P_t = np.zeros(days)
 P_t[0] = P0
 
-# 1. สร้างเส้นทางราคา (GBM)
 for t in range(1, days):
     P_t[t] = P_t[t-1] * np.exp((drift - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z[t])
 
-# 2. คำนวณเส้นที่ 1: Benchmark (Log Return)
 benchmark = fix_c * np.log(P_t / P0)
 
-# 3. คำนวณเส้นที่ 2: Daily Rebalance (Stock)
 returns = np.diff(P_t) / P_t[:-1]
 daily_rebalance_pnl = fix_c * returns
 rebalance_cum = np.insert(np.cumsum(daily_rebalance_pnl), 0, 0)
 
-# 4. คำนวณเส้นที่ 3: LEAPS Option Convexity
-# สมมติเราซื้อ Option ให้ครอบคลุมมูลค่าเทียบเท่าการถือหุ้น fix_c (เทียบเท่าจำนวนหุ้น = fix_c / P0)
 qty = fix_c / P0 
-T_array = np.linspace(days/365, 0.001, days) # เวลาค่อยๆ นับถอยหลังสู่ 0
+T_array = np.linspace(days/365, 0.001, days)
 
-# หาราคา Option แต่ละวัน
+# เรียกใช้ bs_call ที่ปรับปรุงแล้ว
 leaps_price = bs_call(P_t, strike, T_array, r, sigma)
 leaps_price_0 = bs_call(P0, strike, days/365, r, sigma)
 
-# PnL ของ LEAPS
 leaps_pnl = qty * (leaps_price - leaps_price_0)
 
-# แกะค่า EV (Extrinsic Value) ออกมาดู
 intrinsic_value = np.maximum(P_t - strike, 0)
 ev_array = leaps_price - intrinsic_value
 total_ev_value = qty * ev_array
 
-# สร้าง DataFrame
 df = pd.DataFrame({
     "Day": np.arange(days),
     "Price": P_t,
@@ -91,19 +92,15 @@ df = pd.DataFrame({
 st.subheader("📊 เปรียบเทียบผลตอบแทน: Linear vs Convexity")
 fig = go.Figure()
 
-# 1. เส้น Benchmark
 fig.add_trace(go.Scatter(x=df["Day"], y=df["Benchmark"], mode='lines', 
                          name='1. Benchmark: fix_c * ln(P_t/P_0)', line=dict(color='gray', dash='dash')))
 
-# 2. เส้น Stock Rebalance
 fig.add_trace(go.Scatter(x=df["Day"], y=df["Stock Rebalance"], mode='lines', 
                          name='2. Daily Rebalance (Stock)', line=dict(color='blue', width=2)))
 
-# 3. เส้น LEAPS PnL (Convex Function)
 fig.add_trace(go.Scatter(x=df["Day"], y=df["LEAPS PnL"], mode='lines', 
                          name='3. LEAPS Convex PnL', line=dict(color='magenta', width=2.5)))
 
-# 4. เส้น EV (ไว้ดูล่างกราฟ)
 fig.add_trace(go.Scatter(x=df["Day"], y=df["LEAPS EV (Cost of Convexity)"], mode='lines', 
                          name='Option EV (Theta Decay)', line=dict(color='orange', width=1, dash='dot')))
 
@@ -118,7 +115,6 @@ col1, col2, col3 = st.columns(3)
 col1.metric("Stock Rebalance PnL", f"{rebalance_cum[-1]:,.2f} ฿", 
             delta=f"On Top: {rebalance_cum[-1] - benchmark[-1]:,.2f}", delta_color="normal")
 
-# ค้นหาว่า LEAPS ชนะ Stock หรือไม่
 leaps_vs_stock = leaps_pnl[-1] - rebalance_cum[-1]
 col2.metric("LEAPS PnL", f"{leaps_pnl[-1]:,.2f} ฿", 
             delta=f"vs Stock: {leaps_vs_stock:,.2f}", delta_color="normal" if leaps_vs_stock > 0 else "inverse")
