@@ -71,17 +71,16 @@ cum_pnl_stock = np.insert(np.cumsum(daily_pnl_stock), 0, 0)
 T_array = np.linspace(days/365, 0.001, days)
 C_t = bs_call(P_t, strike, T_array, r, sigma)
 
-# ผลตอบแทนรายวันของ Option
-ret_opt = np.diff(C_t) / C_t[:-1]
+# แก้บั๊ก: ป้องกันตัวหารเป็น 0 หากออปชันหมดมูลค่า (Out of money ใกล้วันหมดอายุ)
+ret_opt = np.diff(C_t) / np.maximum(C_t[:-1], 1e-8)
 
 # Rebalance ให้มูลค่า Option คงที่เท่ากับ (leaps_weight * fix_c) ทุกวัน
-# ดังนั้น PnL ในแต่ละวันคือ มูลค่าเป้าหมาย x ผลตอบแทนออปชัน
 daily_pnl_leaps = (leaps_weight * fix_c) * ret_opt
 
 # ดอกเบี้ยรับจาก Liquidity Pool (cash_weight * fix_c)
 daily_interest = (cash_weight * fix_c) * (np.exp(r * dt) - 1)
 
-# รวม PnL สะสม (กำไรจาก Option Rebalance + ดอกเบี้ยรับจากเงินสด)
+# รวม PnL สะสม
 cum_pnl_leaps = np.insert(np.cumsum(daily_pnl_leaps + daily_interest), 0, 0)
 
 # แกะค่า EV ออกมาโชว์
@@ -134,7 +133,7 @@ m1.metric("Stock Rebalance PnL", f"{cum_pnl_stock[-1]:,.2f} ฿",
 
 leaps_vs_stock = cum_pnl_leaps[-1] - cum_pnl_stock[-1]
 m2.metric(f"LEAPS {leaps_weight*100:.0f}/{cash_weight*100:.0f} PnL", f"{cum_pnl_leaps[-1]:,.2f} ฿", 
-          delta=f"vs Stock Rebalance: {leaps_vs_stock:,.2f} ฿", delta_color="normal" if leaps_vs_stock > 0 else "inverse")
+          delta=f"vs Stock: {leaps_vs_stock:,.2f} ฿", delta_color="normal" if leaps_vs_stock > 0 else "inverse")
 
 m3.metric("Total EV Decay (Theta Cost)", f"{-((ev[0] - ev[-1])/C_t[0]) * (leaps_weight * fix_c):,.2f} ฿", 
           "ถูกชดเชยด้วย Gamma Premium เรียบร้อยแล้ว")
