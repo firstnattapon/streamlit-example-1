@@ -1,6 +1,6 @@
 numpy
 pandas
-streamlit
+streamlit>=1.23.0   
 yfinance  
 thingspeak
 plotly
@@ -14,3 +14,4 @@ requests
 numpy-financial
 matplotlib
 requests_cache
+altair<5
