@@ -33,7 +33,7 @@
             "asset_field": { "field": "field4", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 1700,
             "diff": 70,
-            "option_config": { "base_value": 100, "delta_factor": 1, "label": "DJT(LV:100@20.40, Δ=1.00)" }
+            "option_config": { "base_value": 200, "delta_factor": 1, "label": "DJT(LV:100@20.40, Δ=1.00)" }
         },
         {
             "ticker": "DYN",
