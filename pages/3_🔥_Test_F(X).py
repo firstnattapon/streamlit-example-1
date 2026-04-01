@@ -1,4 +1,4 @@
-# 📈_Monitor.py — Pro Optimistic UI (2-phase queue) + Min_Rebalance (clean UI)
+# 📈_Monitor.py — Pro Optimistic UI (Decoupled Thread Worker) + Min_Rebalance
 # ========================= FULL CODE QC VERSION ================================
 
 import streamlit as st
@@ -17,16 +17,20 @@ import pytz
 import re
 from urllib.parse import urlencode 
 from urllib.request import urlopen
-import time  # RATE-LIMIT
-import math  # ใช้ sqrt ฯลฯ
+import time
+import math
+import logging
+import threading
+import queue
 
 # ---------------------------------------------------------------------------------
-# App Setup
+# App Setup & Logging (Commercial Grade)
 # ---------------------------------------------------------------------------------
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # ---------------------------------------------------------------------------------
-# Globals (ลดงานจุกจิก/เร่งความเร็ว)
+# Globals
 # ---------------------------------------------------------------------------------
 _EPS = 1e-12
 TZ_BKK = pytz.timezone('Asia/Bangkok')
@@ -37,22 +41,18 @@ _FIELD_NUM_RE = re.compile(r'(\d+)')
 # Math utils [SIMPLE/STABLE]
 # ---------------------------------------------------------------------------------
 def r2(x: float) -> float:
-    """Stable 2-dec rounding (เหมือนเดิมเชิงผลลัพธ์)"""
     try:
         return round(float(x), 2)
     except Exception:
         return 0.0
 
 def heaviside(x: float) -> int:
-    """H(x): 1 หาก x>0, 0 หาก x<=0 (no branch side-effect)"""
     return 1 if x > 0 else 0
 
 def sgn(x: float) -> int:
-    """sign function -> {-1,0,1}"""
     return (x > 0) - (x < 0)
 
 def xor01(a: int, b: int) -> int:
-    """XOR สำหรับบิต 0/1 (เลี่ยง if-else)"""
     try:
         return (int(a) ^ int(b)) & 1
     except Exception:
@@ -65,7 +65,7 @@ def safe_float(x, default: float = 0.0) -> float:
         return float(default)
 
 # ---------------------------------------------------------------------------------
-# SimulationTracer (คงเดิม)
+# SimulationTracer
 # ---------------------------------------------------------------------------------
 class SimulationTracer:
     def __init__(self, encoded_string: str):
@@ -125,28 +125,39 @@ class SimulationTracer:
         return current_actions
 
 # ---------------------------------------------------------------------------------
-# Config Loading
+# Config Loading (Commercial Grade: Support st.secrets)
 # ---------------------------------------------------------------------------------
 @st.cache_data
 def load_config(file_path: str = 'monitor_config.json') -> Dict:
-    if not os.path.exists(file_path):
-        st.error(f"Configuration file not found: {file_path}")
-        return {}
+    config_data = {}
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON in config file: {e}")
+            st.error(f"Invalid JSON in config file: {e}")
+    
+    # Override with st.secrets if available (Secure)
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        st.error(f"Invalid JSON in config file: {e}")
-        return {}
+        if 'assets' in st.secrets:
+            config_data['assets'] = st.secrets['assets']
+        if 'global_settings' in st.secrets:
+            config_data['global_settings'] = st.secrets['global_settings']
+    except Exception:
+        pass
+        
+    return config_data
 
 CONFIG_DATA = load_config()
 if not CONFIG_DATA:
+    st.warning("System loaded without configuration. Please check monitor_config.json or st.secrets.")
     st.stop()
 
 ASSET_CONFIGS: List[Dict] = CONFIG_DATA.get('assets', [])
 GLOBAL_START_DATE: Optional[str] = CONFIG_DATA.get('global_settings', {}).get('start_date')
 if not ASSET_CONFIGS:
-    st.error("No 'assets' list found in monitor_config.json")
+    st.error("No 'assets' list found in config.")
     st.stop()
 
 ALL_TICKERS: List[str] = [c['ticker'] for c in ASSET_CONFIGS]
@@ -167,27 +178,83 @@ def get_thingspeak_clients(configs: List[Dict]) -> Dict[int, thingspeak.Channel]
         try:
             clients[int(channel_id)] = thingspeak.Channel(int(channel_id), api_key, fmt='json')
         except Exception as e:
-            st.error(f"Failed to create client for Channel ID {channel_id}: {e}")
+            logging.error(f"Failed to create client for Channel ID {channel_id}: {e}")
     return clients
 
 THINGSPEAK_CLIENTS = get_thingspeak_clients(ASSET_CONFIGS)
+
+# ---------------------------------------------------------------------------------
+# Background Worker Queue (FAST & STABLE)
+# ---------------------------------------------------------------------------------
+def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: float = 5.0) -> str:
+    fnum = _field_number(field_name)
+    if fnum is None:
+        return "0"
+    params = {"api_key": write_api_key, f"field{fnum}": value}
+    try:
+        full = "https://api.thingspeak.com/update?" + urlencode(params)
+        with urlopen(full, timeout=timeout_sec) as resp:
+            return resp.read().decode("utf-8", errors="ignore").strip()
+    except Exception:
+        return "0"
+
+@st.cache_resource
+def get_background_worker_queue():
+    q = queue.Queue()
+    def worker():
+        last_channel_update = {}
+        while True:
+            job = q.get()
+            if job is None: break
+            
+            ticker = job.get('ticker')
+            channel_id = job.get('channel_id')
+            field_name = job.get('field_name')
+            write_key = job.get('write_key')
+            new_val = job.get('new_value')
+            op = job.get('op', 'SET')
+            
+            # Apply Rate Limit Delay (16s buffer)
+            now = time.time()
+            last = last_channel_update.get(channel_id, 0.0)
+            elapsed = now - last
+            if elapsed < 16.0:
+                time.sleep(16.0 - elapsed)
+            
+            try:
+                resp = ts_update_via_http(write_key, field_name, new_val, timeout_sec=5.0)
+                if str(resp).strip() == "0":
+                    time.sleep(2.0)
+                    resp = ts_update_via_http(write_key, field_name, new_val, timeout_sec=5.0)
+                
+                if str(resp).strip() != "0":
+                    logging.info(f"[{ticker}] {op} SUCCESS: Value {new_val} (Entry #{resp})")
+                    last_channel_update[channel_id] = time.time()
+                else:
+                    logging.error(f"[{ticker}] {op} FAILED: ThingSpeak returned 0")
+            except Exception as e:
+                logging.error(f"[{ticker}] {op} EXCEPTION: {e}")
+            
+            q.task_done()
+            
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+    return q
+
+TS_QUEUE = get_background_worker_queue()
 
 # ---------------------------------------------------------------------------------
 # Cache / Rerun Management
 # ---------------------------------------------------------------------------------
 def clear_all_caches() -> None:
     st.cache_data.clear()
-    st.cache_resource.clear()
     sell.cache_clear()
     buy.cache_clear()
     ui_state_keys_to_preserve = {
         'select_key', 'nex', 'Nex_day_sell',
         '_cache_bump', '_last_assets_overrides',
         '_all_data_cache', '_skip_refresh_on_rerun',
-        '_ts_last_update_at',
-        '_pending_ts_update', '_ts_entry_ids',
-        '_widget_shadow',
-        'min_rebalance',
+        '_widget_shadow', 'min_rebalance',
         'diff_value', '_last_selected_ticker'
     }
     for key in list(st.session_state.keys()):
@@ -333,100 +400,28 @@ def _http_get_json(url: str, params: Dict) -> Dict:
     except Exception:
         return {}
 
-def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: float = 5.0) -> str:
-    fnum = _field_number(field_name)
-    if fnum is None:
-        return "0"
-    params = {"api_key": write_api_key, f"field{fnum}": value}
-    try:
-        full = "https://api.thingspeak.com/update?" + urlencode(params)
-        with urlopen(full, timeout=timeout_sec) as resp:
-            return resp.read().decode("utf-8", errors="ignore").strip()
-    except Exception:
-        return "0"
-
-def _now_ts() -> float:
-    return time.time()
-
-def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.0, max_wait: float = 8.0) -> Tuple[bool, float]:
-    try:
-        last_map: Dict[int, float] = st.session_state.get('_ts_last_update_at', {})
-        last = float(last_map.get(int(channel_id), 0.0))
-    except Exception:
-        last = 0.0
-
-    now = _now_ts()
-    elapsed = now - last
-    if elapsed >= min_interval:
-        return True, 0.0
-    remaining = max(0.0, min_interval - elapsed)
-    if remaining <= max_wait:
-        with st.spinner(f"Waiting {remaining:.1f}s for ThingSpeak cooldown..."):
-            time.sleep(remaining + 0.3)
-        return True, remaining
-    else:
-        return False, remaining
-
 # ---------------------------------------------------------------------------------
-# Optimistic queue: apply & process
+# Optimistic Queue Push (Decoupled)
 # ---------------------------------------------------------------------------------
 def _optimistic_apply_asset(*, ticker: str, new_value: float, prev_value: float, asset_conf: Dict, op_label: str = "SET") -> None:
     st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(new_value)
-    st.session_state.setdefault('_pending_ts_update', []).append({
+    
+    # Push to background queue
+    TS_QUEUE.put({
         'ticker': ticker,
         'channel_id': int(asset_conf['channel_id']),
         'field_name': asset_conf['field'],
         'write_key': asset_conf.get('write_api_key') or asset_conf.get('api_key'),
         'new_value': float(new_value),
         'prev_value': float(prev_value),
-        'op': str(op_label),
-        'queued_at': _now_ts(),
+        'op': str(op_label)
     })
+    
+    # UI update trigger
     st.session_state['_cache_bump'] = st.session_state.get('_cache_bump', 0) + 1
     st.session_state["_pending_select_key"] = ticker
     st.session_state["_skip_refresh_on_rerun"] = True
     st.rerun()
-
-def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -> None:
-    q = list(st.session_state.get('_pending_ts_update', []))
-    if not q:
-        return
-
-    remaining = []
-    for job in q:
-        ticker = job.get('ticker')
-        field_name = job.get('field_name')
-        write_key = job.get('write_key')
-        channel_id = int(job.get('channel_id', 0))
-        new_val = job.get('new_value')
-        prev_val = job.get('prev_value')
-        op = job.get('op', 'SET')
-
-        if not write_key:
-            st.error(f"[{ticker}] ไม่มี write_api_key/api_key สำหรับเขียน — rollback แล้ว")
-            st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(prev_val)
-            continue
-
-        allowed, remaining_sec = _ensure_rate_limit_and_maybe_wait(channel_id, min_interval=min_interval, max_wait=max_wait)
-        if not allowed:
-            st.info(f"[{ticker}] ต้องรอ ~{remaining_sec:.1f}s ก่อนยิง API (ThingSpeak ~15s/ช่อง) → จะลองใหม่อัตโนมัติ")
-            remaining.append(job)
-            continue
-
-        resp = ts_update_via_http(write_key, field_name, new_val, timeout_sec=5.0)
-        if str(resp).strip() == "0":
-            time.sleep(1.8)
-            resp = ts_update_via_http(write_key, field_name, new_val, timeout_sec=5.0)
-
-        if str(resp).strip() == "0":
-            st.error(f"[{ticker}] {op} ล้มเหลว (resp=0) — rollback เป็น {prev_val}")
-            st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(prev_val)
-        else:
-            st.sidebar.success(f"[{ticker}] {op} สำเร็จ (entry #{resp})")
-            st.session_state.setdefault('_ts_entry_ids', {}).setdefault(ticker, []).append(resp)
-            st.session_state.setdefault('_ts_last_update_at', {})[channel_id] = _now_ts()
-
-    st.session_state['_pending_ts_update'] = remaining
 
 # ---------------------------------------------------------------------------------
 # Net stats
@@ -560,7 +555,7 @@ def _get_tz_aware_datetime(iso_str: str, tz: datetime.tzinfo) -> datetime.dateti
         return datetime.datetime.now(tz)
 
 # ---------------------------------------------------------------------------------
-# 🚀 FETCH ALL DATA (QC Decoupled Architecture)
+# 🚀 FETCH ALL DATA
 # ---------------------------------------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional[str],
@@ -577,32 +572,26 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             client = _clients_ref[int(monitor_field_config['channel_id'])]
             field_num = monitor_field_config['field']
 
-            # ดึงข้อมูลจาก yfinance
             history = get_history_df_max_close_bkk(ticker)
             if start_date:
                 history = history[history.index >= start_date]
 
             last_data_date: Optional[datetime.date] = history.index[-1].date() if not history.empty else None
 
-            # 1. จัดเรียงข้อมูลประวัติศาสตร์จากใหม่ไปเก่า (Descending)
             filtered_data = history.copy()
             history_desc = filtered_data.sort_index(ascending=False)
 
-            # 2. เตรียม Dummy อนาคตให้อยู่บนสุด (ตาม UI ที่ต้องการ)
             future_index = ['+4', '+3', '+2', '+1', '0']
             future_df = pd.DataFrame(index=future_index, columns=['Close'])
 
-            # 3. ต่อ Dataframe และเคลียร์ค่าว่าง ป้องกัน PyArrow Crash 
             combined_df = pd.concat([future_df, history_desc])
             combined_df.fillna("", inplace=True)
             combined_df['index'] = ""
             combined_df['action'] = ""
             combined_df = combined_df[['index', 'Close', 'action']]
             
-            # 4. ล็อกคอลัมน์ index จากมากสุดลงมาที่ 0 (ได้ index 28, 27, 26...)
             combined_df['index'] = range(len(combined_df) - 1, -1, -1)
 
-            # 5. ดึงค่า String Action จาก ThingSpeak
             fx_js_str = "0"
             try:
                 field_data = client.get_field_last(field=str(field_num))
@@ -612,7 +601,6 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             except Exception:
                 pass
 
-            # 6. ถอดรหัส DNA Action และผูกติดกับ 'index' ด้วย apply() 
             try:
                 tracer = SimulationTracer(encoded_string=fx_js_str)
                 final_actions = tracer.run()
@@ -622,25 +610,18 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
                         return final_actions[row_index_val]
                     return ""
 
-                # วิธีนี้แม่นยำ 100% ต่อให้ Array ยาวไม่เท่า Dataframe ก็ไม่เลื่อน
                 combined_df['action'] = combined_df['index'].apply(get_action_for_row)
             except Exception as e:
-                st.warning(f"Tracer Error for {ticker}: {e}")
+                logging.warning(f"Tracer Error for {ticker}: {e}")
                 combined_df['action'] = ""
 
             combined_df.index.name = '↓ index'
             
-            # =================================================================
-            # 🪄 Backend Layer: พลิกตารางกลับหัวเพื่อรักษา Goal_2 (1+nex)
-            # ตัวแปร df นี้จะเรียงข้อมูล อดีต->อนาคต เพื่อให้สูตรคณิตศาสตร์ทำงานถูก
-            # =================================================================
             df = combined_df.iloc[::-1].copy()
-
-            # ส่งออก .tail(7) ซึ่งพอดิบพอดีกับ 7 แถวล่าสุดที่จะโชว์ให้ User ดูด้วย
             return ticker, (df.tail(7), fx_js_str, last_data_date)
             
         except Exception as e:
-            st.error(f"Error in Monitor for {ticker}: {str(e)}")
+            logging.error(f"Error in Monitor for {ticker}: {str(e)}")
             return ticker, (pd.DataFrame(), "0", None)
 
     def fetch_asset(asset_config: Dict) -> Tuple[str, float]:
@@ -680,45 +661,13 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
     return {'monitors': monitor_results, 'assets': asset_results, 'nets': nets_results, 'trade_stats': trade_stats_results}
 
 # ---------------------------------------------------------------------------------
-# [OPT-NET] — Pending delta → optimistic net_str
-# ---------------------------------------------------------------------------------
-def get_pending_net_delta_for_ticker(ticker: str) -> int:
-    q = st.session_state.get('_pending_ts_update', [])
-    delta = 0
-    for job in q:
-        if job.get('ticker') != ticker:
-            continue
-        op = str(job.get('op', '')).upper()
-        if op == 'BUY':
-            delta += 1
-        elif op == 'SELL':
-            delta -= 1
-        else:
-            try:
-                nv = float(job.get('new_value', 0.0))
-                pv = float(job.get('prev_value', 0.0))
-                if nv > pv:
-                    delta += 1
-                elif nv < pv:
-                    delta -= 1
-            except Exception:
-                pass
-    return int(delta)
-
-def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
-    try:
-        pend = get_pending_net_delta_for_ticker(ticker)
-        if pend == 0:
-            return str(int(base_net))
-        sign = '+' if pend > 0 else ''
-        preview = int(base_net) + int(pend)
-        return f"{int(base_net)}  →  {preview}  ({sign}{int(pend)})"
-    except Exception:
-        return str(int(base_net))
-
-# ---------------------------------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------------------------------
+def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
+    # Simplified for decoupled worker: The UI updates immediately based on st.session_state['_last_assets_overrides'] 
+    # so pending delta visual cue is less needed, maintaining clean UI.
+    return str(int(base_net))
+
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
     asset_inputs: Dict[str, float] = {}
     cols = st.columns(len(configs)) if configs else [st]
@@ -790,17 +739,11 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
 
     return asset_inputs
 
-def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float = 10.0):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(client.update, payload)
-        return fut.result(timeout=timeout_sec)
-
 def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel], last_assets: Dict[str, float]) -> None:
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
             ticker = config['ticker']
             asset_conf = config['asset_field']
-            field_name = asset_conf['field']
 
             if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
                 current_val = safe_float(last_assets.get(ticker, 0.0), 0.0)
@@ -928,7 +871,7 @@ def trading_section(
                 st.error(f"BUY {ticker} error: {e}")
 
 # ---------------------------------------------------------------------------------
-# Main
+# Main Execution Flow
 # ---------------------------------------------------------------------------------
 if 'select_key' not in st.session_state:
     st.session_state.select_key = ""
@@ -944,17 +887,10 @@ if '_skip_refresh_on_rerun' not in st.session_state:
     st.session_state['_skip_refresh_on_rerun'] = False
 if '_all_data_cache' not in st.session_state:
     st.session_state['_all_data_cache'] = None
-if '_ts_last_update_at' not in st.session_state:
-    st.session_state['_ts_last_update_at'] = {}
-if '_pending_ts_update' not in st.session_state:
-    st.session_state['_pending_ts_update'] = []
-if '_ts_entry_ids' not in st.session_state:
-    st.session_state['_ts_entry_ids'] = {}
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
     st.session_state['min_rebalance'] = 2.4
-
 if 'diff_value' not in st.session_state:
     st.session_state.diff_value = ASSET_CONFIGS[0].get('diff', 60) if ASSET_CONFIGS else 60
 if '_last_selected_ticker' not in st.session_state:
@@ -1040,7 +976,6 @@ with tab2:
 
 with tab1:
     current_ny_date = get_current_ny_date()
-
     selectbox_labels: Dict[str, str] = {}
     ticker_actions: Dict[str, Optional[int]] = {}
 
@@ -1065,7 +1000,6 @@ with tab1:
                 pass
 
         ticker_actions[ticker] = final_action_val
-
         base_net = int(trade_nets_all.get(ticker, 0))
         net_str = make_net_str_with_optimism(ticker, base_net)
         selectbox_labels[ticker] = f"{action_emoji}{ticker} (f(x): {fx_js_str})  {net_str}"
@@ -1145,13 +1079,8 @@ with tab1:
         )
 
         with st.expander("Show Raw Data Action"):
-            # =================================================================
-            # 🪄 Frontend Layer: พลิกตารางโชว์ให้ User เห็นเป็นแบบ อนาคต->อดีต (+4 อยู่บน)
-            # =================================================================
             if df_data is not None and not df_data.empty:
                 df_display = df_data.iloc[::-1].copy()
-                
-                # 🛡️ Data Sanitization Layer ป้องกัน PyArrow แครช (จอแดง)
                 num_cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
                 for col in num_cols:
                     if col in df_display.columns:
@@ -1224,7 +1153,6 @@ with st.sidebar:
                 st.session_state["_pending_select_key"] = nav_list[new_idx]
                 st.rerun()
 
-# Sidebar Rerun (Hard Reload)
 if st.sidebar.button("RERUN"):
     current_selection = st.session_state.get("select_key", "")
     clear_all_caches()
@@ -1232,6 +1160,3 @@ if st.sidebar.button("RERUN"):
         rerun_keep_selection(current_selection)
     else:
         st.rerun()
-
-# ✅ PROCESS PENDING UPDATES AT THE END
-process_pending_updates(min_interval=16.0, max_wait=8.0)
