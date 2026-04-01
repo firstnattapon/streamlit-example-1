@@ -1,5 +1,5 @@
 # 📈_Monitor.py — Pro Optimistic UI (2-phase queue) + Min_Rebalance (clean UI)
-# ========================= SIMPLE–STABLE REFACTOR (FAST) =======================
+# ========================= FULL CODE QC VERSION ================================
 
 import streamlit as st
 import numpy as np
@@ -560,7 +560,7 @@ def _get_tz_aware_datetime(iso_str: str, tz: datetime.tzinfo) -> datetime.dateti
         return datetime.datetime.now(tz)
 
 # ---------------------------------------------------------------------------------
-# 🚀 FETCH ALL DATA (Modified for Calculator Logic)
+# 🚀 FETCH ALL DATA (QC Decoupled Architecture)
 # ---------------------------------------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional[str],
@@ -584,14 +584,11 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 
             last_data_date: Optional[datetime.date] = history.index[-1].date() if not history.empty else None
 
-            # =================================================================
-            # 🐛 จุดแก้ไข: สวมลอจิกจาก Calculator.py ลงไป 100%
-            # =================================================================
             # 1. จัดเรียงข้อมูลประวัติศาสตร์จากใหม่ไปเก่า (Descending)
             filtered_data = history.copy()
             history_desc = filtered_data.sort_index(ascending=False)
 
-            # 2. เตรียม Dummy อนาคตให้อยู่บนสุด (ตามต้นฉบับ Calculator)
+            # 2. เตรียม Dummy อนาคตให้อยู่บนสุด (ตาม UI ที่ต้องการ)
             future_index = ['+4', '+3', '+2', '+1', '0']
             future_df = pd.DataFrame(index=future_index, columns=['Close'])
 
@@ -602,7 +599,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             combined_df['action'] = ""
             combined_df = combined_df[['index', 'Close', 'action']]
             
-            # 4. ล็อกคอลัมน์ index จากมากสุดลงมาที่ 0 (Calculator Logic)
+            # 4. ล็อกคอลัมน์ index จากมากสุดลงมาที่ 0 (ได้ index 28, 27, 26...)
             combined_df['index'] = range(len(combined_df) - 1, -1, -1)
 
             # 5. ดึงค่า String Action จาก ThingSpeak
@@ -634,14 +631,12 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             combined_df.index.name = '↓ index'
             
             # =================================================================
-            # 🪄 The Magic Flip: รักษา Goal_2 (คงหน้าตาและ UI ของ Monitor ไว้)
+            # 🪄 Backend Layer: พลิกตารางกลับหัวเพื่อรักษา Goal_2 (1+nex)
+            # ตัวแปร df นี้จะเรียงข้อมูล อดีต->อนาคต เพื่อให้สูตรคณิตศาสตร์ทำงานถูก
             # =================================================================
-            # เนื่องจาก Monitor คาดหวังให้ข้อมูลเป็นแบบ Ascending (อดีต->อนาคต) 
-            # เราจึงทำการ "พลิก" Dataframe กลับด้าน เพื่อให้ action ที่ถูกยึดติดไว้แล้ว 
-            # พลิกกลับมาอยู่ในตำแหน่งที่ UI สามารถเข้าถึงด้วย 1+nex ได้เหมือนเดิมทุกประการ!
             df = combined_df.iloc[::-1].copy()
 
-            # จะได้ตารางที่มี .tail(7) เรียงจาก: Day-1, Day-0(ล่าสุด), '0', '+1', '+2', '+3', '+4' 
+            # ส่งออก .tail(7) ซึ่งพอดิบพอดีกับ 7 แถวล่าสุดที่จะโชว์ให้ User ดูด้วย
             return ticker, (df.tail(7), fx_js_str, last_data_date)
             
         except Exception as e:
@@ -1150,9 +1145,13 @@ with tab1:
         )
 
         with st.expander("Show Raw Data Action"):
-            # 🛡️ ผสม Data Sanitization แบบเดิมลงไป เพื่อการันตีไม่ให้ PyArrow ทำจอแดงพัง
+            # =================================================================
+            # 🪄 Frontend Layer: พลิกตารางโชว์ให้ User เห็นเป็นแบบ อนาคต->อดีต (+4 อยู่บน)
+            # =================================================================
             if df_data is not None and not df_data.empty:
-                df_display = df_data.copy()
+                df_display = df_data.iloc[::-1].copy()
+                
+                # 🛡️ Data Sanitization Layer ป้องกัน PyArrow แครช (จอแดง)
                 num_cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
                 for col in num_cols:
                     if col in df_display.columns:
@@ -1160,6 +1159,7 @@ with tab1:
                 for col in df_display.columns:
                     if col not in num_cols and df_display[col].dtype == 'object':
                         df_display[col] = df_display[col].astype(str)
+                        
                 st.dataframe(df_display, use_container_width=True)
             else:
                 st.info("No data available to show.")
