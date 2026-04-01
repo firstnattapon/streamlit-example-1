@@ -207,15 +207,6 @@ def rerun_keep_selection(ticker: str) -> None:
 # ---------------------------------------------------------------------------------
 @lru_cache(maxsize=1024)
 def _trade_math(asset: float, fix_c: float = 1500.0, Diff: float = 60.0, side: int = +1) -> Tuple[float, int, float]:
-    """
-    ฟิสิกส์เดียวกันสำหรับ buy/sell:
-      unit_price = round2( (fix_c + side*Diff) / max(|asset|, ε) )
-      Δqty       = round( |asset*unit_price - fix_c| / max(unit_price, ε) )
-      total      = round2( asset*unit_price - side*Δqty*unit_price )
-
-    side = +1 => BUY (เหมือนเดิม)
-    side = -1 => SELL (เหมือนเดิม)
-    """
     a = float(asset)
     if abs(a) <= _EPS:
         return 0.0, 0, 0.0
@@ -246,41 +237,30 @@ def buy(asset: float, fix_c: float = 1500, Diff: float = 60) -> Tuple[float, int
 @st.cache_data(ttl=300, show_spinner=False)
 @tenacity.retry(wait=tenacity.wait_fixed(2), stop=tenacity.stop_after_attempt(3))
 def get_cached_price(ticker: str) -> float:
-    """คืนราคาที่ดีที่สุดแบบมี fallback หลายชั้น  [SIMPLE/STABLE]"""
     try:
         tk = yf.Ticker(ticker)
-        # ชั้น 1: fast_info
         try:
             p = float(tk.fast_info.get('lastPrice', 0.0))
-            if p > 0:
-                return p
-        except Exception:
-            pass
-        # ชั้น 2: info
+            if p > 0: return p
+        except Exception: pass
         try:
             inf = getattr(tk, 'info', {}) or {}
             p = float(inf.get('regularMarketPrice', 0.0))
-            if p > 0:
-                return p
-        except Exception:
-            pass
-        # ชั้น 3: ปิดล่าสุด
+            if p > 0: return p
+        except Exception: pass
         try:
             df = tk.history(period='5d')
             if isinstance(df, pd.DataFrame) and not df.empty and 'Close' in df:
                 p = float(df['Close'].iloc[-1])
-                if p > 0:
-                    return p
-        except Exception:
-            pass
+                if p > 0: return p
+        except Exception: pass
         return 0.0
     except Exception:
         return 0.0
 
 @st.cache_data(ttl=120, show_spinner=False)
 def get_prices_map(tickers: List[str]) -> Dict[str, float]:
-    """Prefetch ราคาทั้งชุดแบบขนาน เพื่อเร่งตอนแสดงหลายตัวพร้อมกัน"""
-    tickers = list(dict.fromkeys([t for t in tickers if isinstance(t, str) and t]))  # unique & clean
+    tickers = list(dict.fromkeys([t for t in tickers if isinstance(t, str) and t])) 
     out: Dict[str, float] = {}
     if not tickers:
         return out
@@ -320,23 +300,19 @@ def _previous_weekday(d: datetime.date) -> datetime.date:
 def get_latest_us_premarket_open_bkk() -> datetime.datetime:
     now_ny = datetime.datetime.now(TZ_NY)
     date_ny = now_ny.date()
-
     def make_open(dt_date: datetime.date) -> datetime.datetime:
         dt_naive = datetime.datetime(dt_date.year, dt_date.month, dt_date.day, 4, 0, 0)
         return TZ_NY.localize(dt_naive)
-
     candidate = make_open(date_ny)
     while candidate.weekday() >= 5:
         date_ny = _previous_weekday(date_ny)
         candidate = make_open(date_ny)
-
     if now_ny < candidate:
         date_ny = _previous_weekday(date_ny)
         candidate = make_open(date_ny)
         while candidate.weekday() >= 5:
             date_ny = _previous_weekday(date_ny)
             candidate = make_open(date_ny)
-
     return candidate.astimezone(TZ_BKK)
 
 # ---------------------------------------------------------------------------------
@@ -358,7 +334,6 @@ def _http_get_json(url: str, params: Dict) -> Dict:
         return {}
 
 def ts_update_via_http(write_api_key: str, field_name: str, value, timeout_sec: float = 5.0) -> str:
-    """อัปเดต ThingSpeak ผ่าน HTTP GET; คืนค่า entry_id (string) หรือ '0' ถ้าล้มเหลว"""
     fnum = _field_number(field_name)
     if fnum is None:
         return "0"
@@ -374,12 +349,6 @@ def _now_ts() -> float:
     return time.time()
 
 def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.0, max_wait: float = 8.0) -> Tuple[bool, float]:
-    """
-    ตรวจคูลดาวน์ต่อช่อง:
-    - ถ้าเหลือเวลาน้อยกว่าหรือเท่ากับ max_wait → รอให้ครบและอนุญาตอัปเดต
-    - ถ้าเหลือเวลามากกว่า max_wait → ไม่อนุญาต (คิวไว้รอบถัดไป)
-    คืนค่า (allowed, remaining_seconds)
-    """
     try:
         last_map: Dict[int, float] = st.session_state.get('_ts_last_update_at', {})
         last = float(last_map.get(int(channel_id), 0.0))
@@ -390,7 +359,6 @@ def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.
     elapsed = now - last
     if elapsed >= min_interval:
         return True, 0.0
-
     remaining = max(0.0, min_interval - elapsed)
     if remaining <= max_wait:
         with st.spinner(f"Waiting {remaining:.1f}s for ThingSpeak cooldown..."):
@@ -400,10 +368,9 @@ def _ensure_rate_limit_and_maybe_wait(channel_id: int, min_interval: float = 16.
         return False, remaining
 
 # ---------------------------------------------------------------------------------
-# ✅ Optimistic queue: apply & process
+# Optimistic queue: apply & process
 # ---------------------------------------------------------------------------------
 def _optimistic_apply_asset(*, ticker: str, new_value: float, prev_value: float, asset_conf: Dict, op_label: str = "SET") -> None:
-    """เฟสที่ 1: อัปเดต UI ทันที + เข้าคิว API"""
     st.session_state.setdefault('_last_assets_overrides', {})[ticker] = float(new_value)
     st.session_state.setdefault('_pending_ts_update', []).append({
         'ticker': ticker,
@@ -421,7 +388,6 @@ def _optimistic_apply_asset(*, ticker: str, new_value: float, prev_value: float,
     st.rerun()
 
 def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -> None:
-    """เฟสที่ 2: ประมวลผลคิว → ยิง API; สำเร็จ=คง override, ล้มเหลว=rollback"""
     q = list(st.session_state.get('_pending_ts_update', []))
     if not q:
         return
@@ -463,46 +429,35 @@ def process_pending_updates(min_interval: float = 16.0, max_wait: float = 8.0) -
     st.session_state['_pending_ts_update'] = remaining
 
 # ---------------------------------------------------------------------------------
-# Net stats — เวกเตอร์ไรซ์ [SIMPLE/STABLE] + WINDOW-AWARE THINGSPEAK FETCH
+# Net stats
 # ---------------------------------------------------------------------------------
 EMPTY_STATS_RESULT = dict(buy_count=0, sell_count=0, net_count=0, buy_units=0.0, sell_units=0.0, net_units=0.0)
 
 @st.cache_data(ttl=180, show_spinner=False)
 def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int, window_start_bkk_iso: Optional[str] = None) -> List[Tuple[datetime.datetime, Optional[str]]]:
-    """
-    ดึงฟีดแบบ 'รู้หน้าต่างเวลา':
-      - ถ้าให้ window_start_bkk_iso → ขอด้วย 'start' เป็น UTC (บัฟเฟอร์ 36 ชม.) ลด payload มหาศาล
-      - ถ้าล้มเหลว/ได้น้อยเกิน → fallback mode (results=8000) เพื่อคงผลลัพธ์เดิม
-    """
     try:
         channel_id = int(asset_field_conf['channel_id'])
         fnum = _field_number(asset_field_conf['field'])
-        if fnum is None:
-            return []
+        if fnum is None: return []
         field_key = f"field{fnum}"
 
-        # --- primary: windowed fetch ---
         feeds: List[Dict] = []
         if window_start_bkk_iso:
             try:
                 start_local = datetime.datetime.fromisoformat(window_start_bkk_iso)
                 if start_local.tzinfo is None:
                     start_local = TZ_BKK.localize(start_local)
-                # บัฟเฟอร์ถอยหลัง 36 ชั่วโมง เพื่อให้มี baseline ก่อนเริ่ม window
                 start_with_buffer_utc = (start_local - datetime.timedelta(hours=36)).astimezone(pytz.UTC)
                 start_param = start_with_buffer_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
-
                 params = {'start': start_param}
                 if asset_field_conf.get('api_key'):
                     params['api_key'] = asset_field_conf.get('api_key')
-
                 url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
                 data = _http_get_json(url, params)
                 feeds = data.get('feeds', []) or []
             except Exception:
                 feeds = []
 
-        # --- fallback: wide fetch ---
         if not feeds:
             params = {'results': 8000}
             if asset_field_conf.get('api_key'):
@@ -511,8 +466,7 @@ def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int, window_sta
             data = _http_get_json(url, params)
             feeds = data.get('feeds', []) or []
 
-        if not feeds:
-            return []
+        if not feeds: return []
 
         def _parse_row(r):
             try:
@@ -536,37 +490,29 @@ def _calc_stats_vectorized(
     window_start_local: datetime.datetime,
     window_end_local: Optional[datetime.datetime] = None
 ) -> Dict[str, float]:
-    if not rows:
-        return EMPTY_STATS_RESULT.copy()
+    if not rows: return EMPTY_STATS_RESULT.copy()
 
     t = np.array([r[0] for r in rows], dtype='datetime64[ns]')
     v = np.array([safe_float(r[1], np.nan) for r in rows], dtype=float)
     mask_valid = ~np.isnan(v)
-    if not mask_valid.any():
-        return EMPTY_STATS_RESULT.copy()
+    if not mask_valid.any(): return EMPTY_STATS_RESULT.copy()
 
     t = t[mask_valid]
     v = v[mask_valid]
 
-    # baseline = ค่าสุดท้ายก่อนเริ่มหน้าต่าง
     before_mask = (t < np.datetime64(window_start_local))
     baseline = None
     if before_mask.any():
         baseline = float(v[before_mask][-1])
 
-    # หน้าต่าง
     inside_mask = (t >= np.datetime64(window_start_local))
     if window_end_local is not None:
         inside_mask &= (t <= np.datetime64(window_end_local))
 
     v_inside = v[inside_mask]
-    if v_inside.size == 0:
-        return EMPTY_STATS_RESULT.copy()
+    if v_inside.size == 0: return EMPTY_STATS_RESULT.copy()
 
-    # เริ่มจากค่า ref_prev = baseline หรือ ค่าตัวแรกในหน้าต่าง
     ref_prev = baseline if baseline is not None else float(v_inside[0])
-
-    # sequence สำหรับ diff = [ref_prev, v_inside...]
     seq = np.concatenate([[ref_prev], v_inside.astype(float)])
     steps = np.diff(seq)
 
@@ -593,32 +539,28 @@ def _calc_stats_vectorized(
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_since(asset_field_conf: Dict, window_start_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
     rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump, window_start_bkk_iso=window_start_bkk_iso)
-    if not rows:
-        return EMPTY_STATS_RESULT.copy()
+    if not rows: return EMPTY_STATS_RESULT.copy()
     start_dt = _get_tz_aware_datetime(window_start_bkk_iso, TZ_BKK)
     return _calc_stats_vectorized(rows, start_dt, None)
 
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_net_detailed_stats_between(asset_field_conf: Dict, window_start_bkk_iso: str, window_end_bkk_iso: str, cache_bump: int = 0) -> Dict[str, float]:
     rows = _fetch_and_parse_ts_feed(asset_field_conf, cache_bump, window_start_bkk_iso=window_start_bkk_iso)
-    if not rows:
-        return EMPTY_STATS_RESULT.copy()
+    if not rows: return EMPTY_STATS_RESULT.copy()
     start_dt = _get_tz_aware_datetime(window_start_bkk_iso, TZ_BKK)
     end_dt = _get_tz_aware_datetime(window_end_bkk_iso, TZ_BKK)
     return _calc_stats_vectorized(rows, start_dt, end_dt)
 
 def _get_tz_aware_datetime(iso_str: str, tz: datetime.tzinfo) -> datetime.datetime:
-    """แปลง ISO string เป็น datetime ที่มี timezone ถูกต้อง"""
     try:
         dt = datetime.datetime.fromisoformat(iso_str)
-        if dt.tzinfo is None:
-            return tz.localize(dt)
+        if dt.tzinfo is None: return tz.localize(dt)
         return dt.astimezone(tz)
     except Exception:
         return datetime.datetime.now(tz)
 
 # ---------------------------------------------------------------------------------
-# Fetch all data — รองรับ fast rerun
+# 🚀 FETCH ALL DATA (Modified for Calculator Logic)
 # ---------------------------------------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional[str],
@@ -635,12 +577,35 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             client = _clients_ref[int(monitor_field_config['channel_id'])]
             field_num = monitor_field_config['field']
 
-            tickerData = get_history_df_max_close_bkk(ticker)
+            # ดึงข้อมูลจาก yfinance
+            history = get_history_df_max_close_bkk(ticker)
             if start_date:
-                tickerData = tickerData[tickerData.index >= start_date]
+                history = history[history.index >= start_date]
 
-            last_data_date: Optional[datetime.date] = tickerData.index[-1].date() if not tickerData.empty else None
+            last_data_date: Optional[datetime.date] = history.index[-1].date() if not history.empty else None
 
+            # =================================================================
+            # 🐛 จุดแก้ไข: สวมลอจิกจาก Calculator.py ลงไป 100%
+            # =================================================================
+            # 1. จัดเรียงข้อมูลประวัติศาสตร์จากใหม่ไปเก่า (Descending)
+            filtered_data = history.copy()
+            history_desc = filtered_data.sort_index(ascending=False)
+
+            # 2. เตรียม Dummy อนาคตให้อยู่บนสุด (ตามต้นฉบับ Calculator)
+            future_index = ['+4', '+3', '+2', '+1', '0']
+            future_df = pd.DataFrame(index=future_index, columns=['Close'])
+
+            # 3. ต่อ Dataframe และเคลียร์ค่าว่าง ป้องกัน PyArrow Crash 
+            combined_df = pd.concat([future_df, history_desc])
+            combined_df.fillna("", inplace=True)
+            combined_df['index'] = ""
+            combined_df['action'] = ""
+            combined_df = combined_df[['index', 'Close', 'action']]
+            
+            # 4. ล็อกคอลัมน์ index จากมากสุดลงมาที่ 0 (Calculator Logic)
+            combined_df['index'] = range(len(combined_df) - 1, -1, -1)
+
+            # 5. ดึงค่า String Action จาก ThingSpeak
             fx_js_str = "0"
             try:
                 field_data = client.get_field_last(field=str(field_num))
@@ -650,24 +615,35 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             except Exception:
                 pass
 
-            tickerData = tickerData.copy()
-            tickerData['index'] = list(range(len(tickerData)))
-
-            dummy_df = pd.DataFrame(index=['+' + str(i) for i in range(5)])
-            df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
-            df['action'] = ""
-
+            # 6. ถอดรหัส DNA Action และผูกติดกับ 'index' ด้วย apply() 
             try:
                 tracer = SimulationTracer(encoded_string=fx_js_str)
                 final_actions = tracer.run()
-                num_to_assign = min(len(df), len(final_actions))
-                if num_to_assign > 0:
-                    action_col_idx = df.columns.get_loc('action')
-                    df.iloc[0:num_to_assign, action_col_idx] = final_actions[0:num_to_assign]
+
+                def get_action_for_row(row_index_val):
+                    if 0 <= row_index_val < len(final_actions):
+                        return final_actions[row_index_val]
+                    return ""
+
+                # วิธีนี้แม่นยำ 100% ต่อให้ Array ยาวไม่เท่า Dataframe ก็ไม่เลื่อน
+                combined_df['action'] = combined_df['index'].apply(get_action_for_row)
             except Exception as e:
                 st.warning(f"Tracer Error for {ticker}: {e}")
+                combined_df['action'] = ""
 
+            combined_df.index.name = '↓ index'
+            
+            # =================================================================
+            # 🪄 The Magic Flip: รักษา Goal_2 (คงหน้าตาและ UI ของ Monitor ไว้)
+            # =================================================================
+            # เนื่องจาก Monitor คาดหวังให้ข้อมูลเป็นแบบ Ascending (อดีต->อนาคต) 
+            # เราจึงทำการ "พลิก" Dataframe กลับด้าน เพื่อให้ action ที่ถูกยึดติดไว้แล้ว 
+            # พลิกกลับมาอยู่ในตำแหน่งที่ UI สามารถเข้าถึงด้วย 1+nex ได้เหมือนเดิมทุกประการ!
+            df = combined_df.iloc[::-1].copy()
+
+            # จะได้ตารางที่มี .tail(7) เรียงจาก: Day-1, Day-0(ล่าสุด), '0', '+1', '+2', '+3', '+4' 
             return ticker, (df.tail(7), fx_js_str, last_data_date)
+            
         except Exception as e:
             st.error(f"Error in Monitor for {ticker}: {str(e)}")
             return ticker, (pd.DataFrame(), "0", None)
@@ -825,7 +801,6 @@ def safe_ts_update(client: thingspeak.Channel, payload: Dict, timeout_sec: float
         return fut.result(timeout=timeout_sec)
 
 def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingspeak.Channel], last_assets: Dict[str, float]) -> None:
-    """ใช้เส้นทางเดียวกับ GO_SELL/GO_BUY: optimistic → queue"""
     with st.expander("Update Assets on ThingSpeak"):
         for config in configs:
             ticker = config['ticker']
@@ -870,7 +845,6 @@ def trading_section(
     asset_conf = config['asset_field']
 
     def get_action_val() -> Optional[int]:
-        """ใช้ XOR แทน if: final = (raw&1) ^ (flip&1)  [SIMPLE/STABLE]"""
         try:
             if df_data.empty or df_data.action.values[1 + nex] == "":
                 return None
@@ -889,7 +863,6 @@ def trading_section(
     sell_calc = calc['sell']
     buy_calc  = calc['buy']
 
-    # SELL — คง UI/สี/ตัวหนา ตามที่คุณตั้งไว้ (ใช้ buy_calc ตามพฤติกรรมเดิม)
     sell_html = (
         f"<span style='color:#ffffff;'>sell</span>&nbsp;&nbsp;"
         f"<span style='color:#ffffff;'>A</span>&nbsp;"
@@ -905,7 +878,7 @@ def trading_section(
     if col3.checkbox(f'sell_match_{ticker}'):
         if col3.button(f"GO_SELL_{ticker}"):
             try:
-                new_asset_val = float(asset_last) - float(buy_calc[1])  # ใช้ buy_calc ตามพฤติกรรมเดิม
+                new_asset_val = float(asset_last) - float(buy_calc[1]) 
                 _optimistic_apply_asset(
                     ticker=ticker,
                     new_value=float(new_asset_val),
@@ -916,7 +889,6 @@ def trading_section(
             except Exception as e:
                 st.error(f"SELL {ticker} error: {e}")
 
-    # Price & P/L (ใช้ price_hint ถ้ามี เพื่อไม่ต้องเรียกซ้ำ)
     try:
         current_price = float(price_hint) if (price_hint is not None and price_hint > 0) else get_cached_price(ticker)
         if current_price > 0:
@@ -925,7 +897,6 @@ def trading_section(
             pl_value = pv - fix_value
             pl_color = "#a8d5a2" if pl_value >= 0 else "#fbb"
 
-            # trade_only_when และ % แสดงผล
             trade_only_when = math.sqrt(float(fix_value) * float(min_rebalance))
             new_pct = (trade_only_when / fix_value) * 100.0 if fix_value > 0 else 0.0
             new_pct_str = f"{new_pct:.2f}%" if new_pct < 1 else f"{new_pct:.0f}%"
@@ -945,7 +916,6 @@ def trading_section(
     except Exception:
         st.warning(f"Could not retrieve price data for {ticker}.")
 
-    # BUY — คง UI เดิม (ใช้ sell_calc ตามพฤติกรรมเดิม)
     col4, col5, col6 = st.columns(3)
     st.write('buy', '    ', 'A', sell_calc[1], 'P', sell_calc[0], 'C', sell_calc[2])
     if col6.checkbox(f'buy_match_{ticker}'):
@@ -965,7 +935,6 @@ def trading_section(
 # ---------------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------------
-# Session State init
 if 'select_key' not in st.session_state:
     st.session_state.select_key = ""
 if 'nex' not in st.session_state:
@@ -989,14 +958,12 @@ if '_ts_entry_ids' not in st.session_state:
 if '_widget_shadow' not in st.session_state:
     st.session_state['_widget_shadow'] = {}
 if 'min_rebalance' not in st.session_state:
-    st.session_state['min_rebalance'] = 2.4  # คงสเปค
+    st.session_state['min_rebalance'] = 2.4
 
-# === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
 if 'diff_value' not in st.session_state:
     st.session_state.diff_value = ASSET_CONFIGS[0].get('diff', 60) if ASSET_CONFIGS else 60
 if '_last_selected_ticker' not in st.session_state:
     st.session_state._last_selected_ticker = ""
-# === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
 pending = st.session_state.pop("_pending_select_key", None)
 if pending:
@@ -1016,14 +983,12 @@ else:
 monitor_data_all = all_data['monitors']
 last_assets_all = all_data['assets']
 
-# optimistic overrides
 if st.session_state.get('_last_assets_overrides'):
     last_assets_all = {**last_assets_all, **st.session_state['_last_assets_overrides']}
 
 trade_nets_all = all_data['nets']
 trade_stats_all = all_data['trade_stats']
 
-# Tabs
 tab1, tab2 = st.tabs(["📈 Monitor", "⚙️ Controls"])
 
 with tab2:
@@ -1057,7 +1022,6 @@ with tab2:
 
     st.write("---")
 
-    # === 💡 GOAL_1: DYNAMIC DIFF LOGIC START ===
     selected_ticker = st.session_state.get('select_key', "")
     if selected_ticker != st.session_state.get('_last_selected_ticker'):
         new_diff = None
@@ -1071,7 +1035,6 @@ with tab2:
         st.session_state._last_selected_ticker = selected_ticker
 
     x_2_from_state = st.sidebar.number_input('Diff', step=1, key='diff_value')
-    # === 💡 GOAL_1: DYNAMIC DIFF LOGIC END ===
 
     asset_inputs = render_asset_inputs(ASSET_CONFIGS, last_assets_all, trade_nets_all)
 
@@ -1149,7 +1112,6 @@ with tab1:
     else:
         configs_to_display = [c for c in ASSET_CONFIGS if c['ticker'] == selected_option]
 
-    # ✅ Prefetch ราคาทั้งชุดในหน้า Monitor รอบเดียว
     display_tickers = [c['ticker'] for c in configs_to_display]
     prices_hint_map = get_prices_map(display_tickers)
 
@@ -1167,7 +1129,7 @@ with tab1:
         ticker = config['ticker']
         df_data, fx_js_str, _ = monitor_data_all.get(ticker, (pd.DataFrame(), "0", None))
         asset_last = float(last_assets_all.get(ticker, 0.0))
-        asset_val = float(asset_inputs.get(ticker, 0.0))  # delta-equivalent
+        asset_val = float(asset_inputs.get(ticker, 0.0)) 
         calc = calculations.get(ticker, {})
 
         title_label = selectbox_labels.get(ticker, ticker)
@@ -1187,29 +1149,21 @@ with tab1:
             price_hint=prices_hint_map.get(ticker)
         )
 
-        # =========================================================================
-        # 🐛 จุดที่ได้รับการแก้ไข (Data Sanitization Layer ก่อนส่งขึ้นหน้าจอ)
-        # =========================================================================
         with st.expander("Show Raw Data Action"):
+            # 🛡️ ผสม Data Sanitization แบบเดิมลงไป เพื่อการันตีไม่ให้ PyArrow ทำจอแดงพัง
             if df_data is not None and not df_data.empty:
                 df_display = df_data.copy()
-                
-                # 1. บังคับคอลัมน์ตัวเลขให้เป็น float เพื่อป้องกัน PyArrow ArrowTypeError
                 num_cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
                 for col in num_cols:
                     if col in df_display.columns:
                         df_display[col] = pd.to_numeric(df_display[col], errors='coerce')
-                
-                # 2. บังคับคอลัมน์อื่นๆ (เช่น action, index) ให้เป็น String แน่นอน
                 for col in df_display.columns:
                     if col not in num_cols and df_display[col].dtype == 'object':
                         df_display[col] = df_display[col].astype(str)
-                        
                 st.dataframe(df_display, use_container_width=True)
             else:
                 st.info("No data available to show.")
-        # =========================================================================
-        
+                
         st.write("_____")
 
 # === 🧭 Sidebar Ticker Navigator
