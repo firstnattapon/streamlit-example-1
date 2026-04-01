@@ -654,14 +654,8 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
             tickerData['index'] = list(range(len(tickerData)))
 
             dummy_df = pd.DataFrame(index=['+' + str(i) for i in range(5)])
-            
-            # 💡 FIX 1: หลีกเลี่ยงการใช้ .fillna("") กับทั้ง DataFrame เพื่อไม่ให้คอลัมน์ Close กลายเป็น String
-            df = pd.concat([tickerData, dummy_df], axis=0)
+            df = pd.concat([tickerData, dummy_df], axis=0).fillna("")
             df['action'] = ""
-            
-            # บังคับคอลัมน์ Close ให้เป็น numeric (หากไม่มีค่าจะเป็น NaN ซึ่ง Streamlit แสดงผลได้และ PyArrow ไม่พัง)
-            if 'Close' in df.columns:
-                df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
 
             try:
                 tracer = SimulationTracer(encoded_string=fx_js_str)
@@ -792,12 +786,12 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                         st.session_state[key_name] = float(last_val)
                         shadow[key_name] = float(last_val)
 
-                # 💡 FIX 2: เอาพารามิเตอร์ value= ออก เพื่อลดปัญหา State Warning ซ้อนทับ 
-                # (Streamlit จะดึงค่า default จาก st.session_state[key_name] ที่ผูกไว้แล้วแทน)
+                safe_val = safe_float(st.session_state.get(key_name, last_val), last_val)
                 real_val = st.number_input(
                     label=display_label,
                     help=help_text_final,
                     step=0.001,
+                    value=safe_val,
                     key=key_name,
                 )
                 asset_inputs[ticker] = float(effective_option + float(real_val))
@@ -813,11 +807,12 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                         st.session_state[key_name] = float(last_val)
                         shadow[key_name] = float(last_val)
 
-                # 💡 FIX 2: เอาพารามิเตอร์ value= ออกเช่นกัน
+                safe_val = safe_float(st.session_state.get(key_name, last_val), last_val)
                 val = st.number_input(
                     label=display_label,
                     help=help_text_final,
                     step=0.001,
+                    value=safe_val,
                     key=key_name,
                 )
                 asset_inputs[ticker] = float(val)
@@ -839,16 +834,11 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingsp
 
             if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
                 current_val = safe_float(last_assets.get(ticker, 0.0), 0.0)
-                
-                # 💡 FIX 2: เอา value= ออกและประกาศลง state ไปก่อน หากยังไม่เคยมี
-                key_name = f'input_{ticker}'
-                if key_name not in st.session_state:
-                    st.session_state[key_name] = float(current_val)
-                
                 add_val = st.number_input(
                     f"New Value for {ticker}",
                     step=0.001,
-                    key=key_name
+                    value=current_val,
+                    key=f'input_{ticker}'
                 )
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
                     write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
@@ -1197,8 +1187,29 @@ with tab1:
             price_hint=prices_hint_map.get(ticker)
         )
 
+        # =========================================================================
+        # 🐛 จุดที่ได้รับการแก้ไข (Data Sanitization Layer ก่อนส่งขึ้นหน้าจอ)
+        # =========================================================================
         with st.expander("Show Raw Data Action"):
-            st.dataframe(df_data, use_container_width=True)
+            if df_data is not None and not df_data.empty:
+                df_display = df_data.copy()
+                
+                # 1. บังคับคอลัมน์ตัวเลขให้เป็น float เพื่อป้องกัน PyArrow ArrowTypeError
+                num_cols = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+                for col in num_cols:
+                    if col in df_display.columns:
+                        df_display[col] = pd.to_numeric(df_display[col], errors='coerce')
+                
+                # 2. บังคับคอลัมน์อื่นๆ (เช่น action, index) ให้เป็น String แน่นอน
+                for col in df_display.columns:
+                    if col not in num_cols and df_display[col].dtype == 'object':
+                        df_display[col] = df_display[col].astype(str)
+                        
+                st.dataframe(df_display, use_container_width=True)
+            else:
+                st.info("No data available to show.")
+        # =========================================================================
+        
         st.write("_____")
 
 # === 🧭 Sidebar Ticker Navigator
