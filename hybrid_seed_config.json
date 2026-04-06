@@ -1,16 +1,16 @@
 {
   "assets": [
-    "FFWM", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" , "DJT"  , "IBRX" , "SG" , "CLSK" , "LUNR" 
+    "FSUN", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" , "DJT"  , "IBRX" , "SG" , "CLSK" , "LUNR" 
   ],
   "default_settings": {
-    "selected_ticker": "FFWM",
+    "selected_ticker": "FSUN",
     "start_date": "2024-01-01",
     "window_size": 30,
     "num_seeds": 1000,
     "max_workers": 1
   },
   "manual_seed_by_asset": {
-    "FFWM": [
+    "FSUN": [
       { "seed": 9999 , "size": 60, "tail": 30 }
     ],
     "NEGG": [
