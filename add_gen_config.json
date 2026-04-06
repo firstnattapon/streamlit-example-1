@@ -1,7 +1,7 @@
 [
     {
-        "ticker": "FFWM",
-        "tab_name": "FFWM",
+        "ticker": "FSUN",
+        "tab_name": "FSUN",
         "thingspeak_field": 2,
         "channel_id": 2385118,
         "write_api_key": "IPSG3MMMBJEB9DY8"
