@@ -343,10 +343,16 @@ def get_prices_map(tickers: List[str]) -> Dict[str, float]:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_history_df_max_close_bkk(ticker: str) -> pd.DataFrame:
-    # FIX P2: delisted/empty tickers return RangeIndex (not DatetimeIndex) → tz_convert crashes
     df = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-    if df.empty:
-        return df
+    
+    # ---------------------------------------------------------------------
+    # FIX P2 & Actionable Step 1: Defensive Index Type Checking
+    # กรณีหุ้น Delisted/ไม่มีข้อมูล DataFrame อาจว่าง หรือมีแค่ RangeIndex
+    # การพยายามทำ tz_convert กับ RangeIndex จะทำให้เกิด AttributeError
+    # ---------------------------------------------------------------------
+    if df.empty or not isinstance(df.index, pd.DatetimeIndex):
+        return pd.DataFrame() # ส่งคืน DataFrame ว่างอย่างปลอดภัย
+        
     try:
         df.index = df.index.tz_convert(TZ_BKK)
     except TypeError:
@@ -490,8 +496,11 @@ def _calc_stats_vectorized(
 ) -> Dict[str, float]:
     if not rows: return EMPTY_STATS_RESULT.copy()
 
-    # FIX P3: np.datetime64 does not support tz-aware datetimes (UserWarning + wrong comparison).
-    # Strip tz to UTC-naive on both sides so comparisons are consistent.
+    # ---------------------------------------------------------------------
+    # FIX P3 & Actionable Step 2: Timezone Stripping (TZ-Naive Conversion)
+    # ตัดโซนเวลา (tz) ทิ้งให้เป็น Naive UTC เสมอ ก่อนแปลงเป็น numpy.datetime64 
+    # เพื่อแก้ปัญหา Warning "no explicit representation of timezones available"
+    # ---------------------------------------------------------------------
     def _to_utc_naive(dt: datetime.datetime) -> datetime.datetime:
         return dt.astimezone(pytz.UTC).replace(tzinfo=None) if dt.tzinfo else dt
 
@@ -590,9 +599,7 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 
             filtered_data = history.copy()
             history_desc = filtered_data.sort_index(ascending=False)
-            # FIX P1: Convert DatetimeIndex → string BEFORE concat so the combined index
-            # is pure str (not mixed str+Timestamp). Mixed index causes PyArrow ArrowTypeError
-            # in st.dataframe() — seen ~10,000+ times per session in logs.
+            
             if not history_desc.empty and hasattr(history_desc.index, 'strftime'):
                 history_desc.index = history_desc.index.strftime('%Y-%m-%d')
 
@@ -679,8 +686,6 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 # UI helpers
 # ---------------------------------------------------------------------------------
 def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
-    # Simplified for decoupled worker: The UI updates immediately based on st.session_state['_last_assets_overrides'] 
-    # so pending delta visual cue is less needed, maintaining clean UI.
     return str(int(base_net))
 
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
@@ -1104,7 +1109,7 @@ with tab1:
                     if col not in num_cols and df_display[col].dtype == 'object':
                         df_display[col] = df_display[col].astype(str)
                         
-                st.dataframe(df_display, width='stretch')  # FIX P4: use_container_width deprecated
+                st.dataframe(df_display, use_container_width=True)
             else:
                 st.info("No data available to show.")
                 
