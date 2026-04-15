@@ -43,12 +43,16 @@ st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initia
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # ---------------------------------------------------------------------------------
-# Globals
+# Globals & Constants
 # ---------------------------------------------------------------------------------
 _EPS = 1e-12
 TZ_BKK = pytz.timezone('Asia/Bangkok')
 TZ_NY = pytz.timezone('America/New_York')
 _FIELD_NUM_RE = re.compile(r'(\d+)')
+_TS_RATE_LIMIT_SEC = 16.0          # ThingSpeak min interval between writes
+_TS_MAX_FEED_RESULTS = 8000        # Max feed results per request
+_TS_WINDOW_BUFFER_HOURS = 36       # Hours buffer before window_start
+_MAX_CONCURRENT_WORKERS = 8        # ThreadPoolExecutor max workers
 
 # ---------------------------------------------------------------------------------
 # Math utils [SIMPLE/STABLE]
@@ -227,12 +231,12 @@ def get_background_worker_queue():
             new_val = job.get('new_value')
             op = job.get('op', 'SET')
             
-            # Apply Rate Limit Delay (16s buffer)
+            # Apply Rate Limit Delay
             now = time.time()
             last = last_channel_update.get(channel_id, 0.0)
             elapsed = now - last
-            if elapsed < 16.0:
-                time.sleep(16.0 - elapsed)
+            if elapsed < _TS_RATE_LIMIT_SEC:
+                time.sleep(_TS_RATE_LIMIT_SEC - elapsed)
             
             try:
                 resp = ts_update_via_http(write_key, field_name, new_val, timeout_sec=5.0)
@@ -261,8 +265,12 @@ TS_QUEUE = get_background_worker_queue()
 # ---------------------------------------------------------------------------------
 def clear_all_caches() -> None:
     st.cache_data.clear()
-    sell.cache_clear()
-    buy.cache_clear()
+    for _fn in (sell, buy, _trade_math):
+        if hasattr(_fn, 'cache_clear'):
+            try:
+                _fn.cache_clear()
+            except Exception:
+                pass
     ui_state_keys_to_preserve = {
         'select_key', 'nex', 'Nex_day_sell',
         '_cache_bump', '_last_assets_overrides',
@@ -458,7 +466,7 @@ def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int, window_sta
                 start_local = datetime.datetime.fromisoformat(window_start_bkk_iso)
                 if start_local.tzinfo is None:
                     start_local = TZ_BKK.localize(start_local)
-                start_with_buffer_utc = (start_local - datetime.timedelta(hours=36)).astimezone(pytz.UTC)
+                start_with_buffer_utc = (start_local - datetime.timedelta(hours=_TS_WINDOW_BUFFER_HOURS)).astimezone(pytz.UTC)
                 start_param = start_with_buffer_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
                 params = {'start': start_param}
                 if asset_field_conf.get('api_key'):
@@ -470,7 +478,7 @@ def _fetch_and_parse_ts_feed(asset_field_conf: Dict, cache_bump: int, window_sta
                 feeds = []
 
         if not feeds:
-            params = {'results': 8000}
+            params = {'results': _TS_MAX_FEED_RESULTS}
             if asset_field_conf.get('api_key'):
                 params['api_key'] = asset_field_conf.get('api_key')
             url = f"https://api.thingspeak.com/channels/{channel_id}/fields/{fnum}.json"
@@ -671,18 +679,23 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
         except Exception:
             return ticker, EMPTY_STATS_RESULT.copy()
 
-    workers = max(1, min(len(configs), 8))
+    workers = max(1, min(len(configs), _MAX_CONCURRENT_WORKERS))
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        for future in concurrent.futures.as_completed([executor.submit(fetch_monitor, a) for a in configs]):
-            ticker, result = future.result()
+        # Submit ALL batches first (parallel), then collect results
+        monitor_futs = {executor.submit(fetch_monitor, a): a['ticker'] for a in configs}
+        asset_futs   = {executor.submit(fetch_asset, a): a['ticker'] for a in configs}
+        stats_futs   = {executor.submit(fetch_trade_stats, a): a['ticker'] for a in configs}
+
+        for f in concurrent.futures.as_completed(monitor_futs):
+            ticker, result = f.result()
             monitor_results[ticker] = result
 
-        for future in concurrent.futures.as_completed([executor.submit(fetch_asset, a) for a in configs]):
-            ticker, result = future.result()
+        for f in concurrent.futures.as_completed(asset_futs):
+            ticker, result = f.result()
             asset_results[ticker] = result
 
-        for future in concurrent.futures.as_completed([executor.submit(fetch_trade_stats, a) for a in configs]):
-            ticker, stats = future.result()
+        for f in concurrent.futures.as_completed(stats_futs):
+            ticker, stats = f.result()
             trade_stats_results[ticker] = stats
             nets_results[ticker] = int(stats.get('net_count', 0))
 
@@ -1160,7 +1173,7 @@ with st.sidebar:
             st.rerun()
 
     elif sel in ALL_TICKERS:
-        act = locals().get('ticker_actions', {}).get(sel, None)
+        act = ticker_actions.get(sel, None)
         if act == 1 and buy_list:
             nav_list = buy_list
             title = "Buy Navigator"
