@@ -24,6 +24,19 @@ import threading
 import queue
 
 # ---------------------------------------------------------------------------------
+# FIX #1: yfinance TZ Cache — redirect to a writable temp directory
+# Prevents "Cache dir /home/appuser/.cache/py-yfinance collides" error
+# ---------------------------------------------------------------------------------
+_YF_CACHE_DIR = os.path.join(os.environ.get('TMPDIR', os.environ.get('TEMP', '/tmp')), 'yfinance_cache')
+os.makedirs(_YF_CACHE_DIR, exist_ok=True)
+try:
+    from yfinance import set_tz_cache_location  # available since yfinance ≥ 0.2.18
+    set_tz_cache_location(_YF_CACHE_DIR)
+except ImportError:
+    # Fallback: monkey-patch the cache env if the helper is absent
+    os.environ['XDG_CACHE_HOME'] = os.path.dirname(_YF_CACHE_DIR)
+
+# ---------------------------------------------------------------------------------
 # App Setup & Logging (Commercial Grade)
 # ---------------------------------------------------------------------------------
 st.set_page_config(page_title="Monitor", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
@@ -343,16 +356,10 @@ def get_prices_map(tickers: List[str]) -> Dict[str, float]:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_history_df_max_close_bkk(ticker: str) -> pd.DataFrame:
+    # FIX P2: delisted/empty tickers return RangeIndex (not DatetimeIndex) → tz_convert crashes
     df = yf.Ticker(ticker).history(period='max')[['Close']].round(3)
-    
-    # ---------------------------------------------------------------------
-    # FIX P2 & Actionable Step 1: Defensive Index Type Checking
-    # กรณีหุ้น Delisted/ไม่มีข้อมูล DataFrame อาจว่าง หรือมีแค่ RangeIndex
-    # การพยายามทำ tz_convert กับ RangeIndex จะทำให้เกิด AttributeError
-    # ---------------------------------------------------------------------
-    if df.empty or not isinstance(df.index, pd.DatetimeIndex):
-        return pd.DataFrame() # ส่งคืน DataFrame ว่างอย่างปลอดภัย
-        
+    if df.empty:
+        return df
     try:
         df.index = df.index.tz_convert(TZ_BKK)
     except TypeError:
@@ -496,11 +503,8 @@ def _calc_stats_vectorized(
 ) -> Dict[str, float]:
     if not rows: return EMPTY_STATS_RESULT.copy()
 
-    # ---------------------------------------------------------------------
-    # FIX P3 & Actionable Step 2: Timezone Stripping (TZ-Naive Conversion)
-    # ตัดโซนเวลา (tz) ทิ้งให้เป็น Naive UTC เสมอ ก่อนแปลงเป็น numpy.datetime64 
-    # เพื่อแก้ปัญหา Warning "no explicit representation of timezones available"
-    # ---------------------------------------------------------------------
+    # FIX P3: np.datetime64 does not support tz-aware datetimes (UserWarning + wrong comparison).
+    # Strip tz to UTC-naive on both sides so comparisons are consistent.
     def _to_utc_naive(dt: datetime.datetime) -> datetime.datetime:
         return dt.astimezone(pytz.UTC).replace(tzinfo=None) if dt.tzinfo else dt
 
@@ -599,7 +603,9 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 
             filtered_data = history.copy()
             history_desc = filtered_data.sort_index(ascending=False)
-            
+            # FIX P1: Convert DatetimeIndex → string BEFORE concat so the combined index
+            # is pure str (not mixed str+Timestamp). Mixed index causes PyArrow ArrowTypeError
+            # in st.dataframe() — seen ~10,000+ times per session in logs.
             if not history_desc.empty and hasattr(history_desc.index, 'strftime'):
                 history_desc.index = history_desc.index.strftime('%Y-%m-%d')
 
@@ -686,6 +692,8 @@ def fetch_all_data(configs: List[Dict], _clients_ref: Dict, start_date: Optional
 # UI helpers
 # ---------------------------------------------------------------------------------
 def make_net_str_with_optimism(ticker: str, base_net: int) -> str:
+    # Simplified for decoupled worker: The UI updates immediately based on st.session_state['_last_assets_overrides'] 
+    # so pending delta visual cue is less needed, maintaining clean UI.
     return str(int(base_net))
 
 def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_since_open_map: Dict[str, int]) -> Dict[str, float]:
@@ -726,12 +734,12 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                         st.session_state[key_name] = float(last_val)
                         shadow[key_name] = float(last_val)
 
-                safe_val = safe_float(st.session_state.get(key_name, last_val), last_val)
+                # FIX #2a: Do NOT pass value= when key= is used — Streamlit will
+                # read the widget value from session_state[key_name] (seeded above).
                 real_val = st.number_input(
                     label=display_label,
                     help=help_text_final,
                     step=0.001,
-                    value=safe_val,
                     key=key_name,
                 )
                 asset_inputs[ticker] = float(effective_option + float(real_val))
@@ -747,12 +755,11 @@ def render_asset_inputs(configs: List[Dict], last_assets: Dict[str, float], net_
                         st.session_state[key_name] = float(last_val)
                         shadow[key_name] = float(last_val)
 
-                safe_val = safe_float(st.session_state.get(key_name, last_val), last_val)
+                # FIX #2b: Same pattern — rely on session_state seeded above.
                 val = st.number_input(
                     label=display_label,
                     help=help_text_final,
                     step=0.001,
-                    value=safe_val,
                     key=key_name,
                 )
                 asset_inputs[ticker] = float(val)
@@ -767,11 +774,13 @@ def render_asset_update_controls(configs: List[Dict], clients: Dict[int, thingsp
 
             if st.checkbox(f'@_{ticker}_ASSET', key=f'check_{ticker}'):
                 current_val = safe_float(last_assets.get(ticker, 0.0), 0.0)
+                update_key = f'input_{ticker}'
+                if update_key not in st.session_state:
+                    st.session_state[update_key] = float(current_val)
                 add_val = st.number_input(
                     f"New Value for {ticker}",
                     step=0.001,
-                    value=current_val,
-                    key=f'input_{ticker}'
+                    key=update_key
                 )
                 if st.button(f"GO_{ticker}", key=f'btn_{ticker}'):
                     write_key = asset_conf.get('write_api_key') or asset_conf.get('api_key')
@@ -963,11 +972,13 @@ with tab2:
         if Nex_day_:
             st.write(f"nex value = {nex}", f" | Nex_day_sell = {Nex_day_sell}" if Nex_day_sell else "")
     with right:
-        st.session_state['min_rebalance'] = st.number_input(
+        # FIX #2d: min_rebalance already seeded in session_state (line ~908).
+        # Using key= alone avoids the value ↔ session_state collision.
+        st.number_input(
             'Min_Rebalance',
             min_value=0.0,
             step=0.1,
-            value=float(st.session_state.get('min_rebalance', 2.4)),
+            key='min_rebalance',
             help="แฟกเตอร์สำหรับคำนวณ trade_only_when ด้วยสมการ sqrt(Min_Rebalance * fix_value)"
         )
 
@@ -1125,11 +1136,11 @@ with st.sidebar:
         current_preview = buy_list[idx]
         st.markdown(f"**Buy Navigator** \n{idx+1}/{len(buy_list)} · `{current_preview}`")
         c1, c2 = st.columns(2)
-        if c1.button("◀ Prev", use_container_width=True, key="__nav_prev_buy"):
+        if c1.button("◀ Prev", key="__nav_prev_buy"):
             st.session_state['_filter_nav_idx_buy'] = (idx - 1) % len(buy_list)
             st.session_state["_pending_select_key"] = buy_list[st.session_state['_filter_nav_idx_buy']]
             st.rerun()
-        if c2.button("Next ▶", use_container_width=True, key="__nav_next_buy"):
+        if c2.button("Next ▶", key="__nav_next_buy"):
             st.session_state['_filter_nav_idx_buy'] = (idx + 1) % len(buy_list)
             st.session_state["_pending_select_key"] = buy_list[st.session_state['_filter_nav_idx_buy']]
             st.rerun()
@@ -1139,11 +1150,11 @@ with st.sidebar:
         current_preview = sell_list[idx]
         st.markdown(f"**Sell Navigator** \n{idx+1}/{len(sell_list)} · `{current_preview}`")
         c1, c2 = st.columns(2)
-        if c1.button("◀ Prev", use_container_width=True, key="__nav_prev_sell"):
+        if c1.button("◀ Prev", key="__nav_prev_sell"):
             st.session_state['_filter_nav_idx_sell'] = (idx - 1) % len(sell_list)
             st.session_state["_pending_select_key"] = sell_list[st.session_state['_filter_nav_idx_sell']]
             st.rerun()
-        if c2.button("Next ▶", use_container_width=True, key="__nav_next_sell"):
+        if c2.button("Next ▶", key="__nav_next_sell"):
             st.session_state['_filter_nav_idx_sell'] = (idx + 1) % len(sell_list)
             st.session_state["_pending_select_key"] = sell_list[st.session_state['_filter_nav_idx_sell']]
             st.rerun()
@@ -1164,11 +1175,11 @@ with st.sidebar:
             idx = nav_list.index(sel) if sel in nav_list else 0
             st.markdown(f"**{title}** \n{idx+1}/{len(nav_list)} · `{sel}`")
             c1, c2 = st.columns(2)
-            if c1.button("◀ Prev", use_container_width=True, key="__nav_prev_single"):
+            if c1.button("◀ Prev", key="__nav_prev_single"):
                 new_idx = (idx - 1) % len(nav_list)
                 st.session_state["_pending_select_key"] = nav_list[new_idx]
                 st.rerun()
-            if c2.button("Next ▶", use_container_width=True, key="__nav_next_single"):
+            if c2.button("Next ▶", key="__nav_next_single"):
                 new_idx = (idx + 1) % len(nav_list)
                 st.session_state["_pending_select_key"] = nav_list[new_idx]
                 st.rerun()
