@@ -24,7 +24,7 @@
             "monitor_field": { "field": 7, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V" },
             "asset_field": { "field": "field7", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
             "fix_c": 3200,
-            "diff": 80,
+            "diff": 90,
             "option_config": { "base_value": 300, "delta_factor": 1.0 , "label": "CLSK(LV:300@20.0, Δ=1.0)" }
         },
         {
@@ -79,7 +79,7 @@
             "ticker": "LUNR",
             "monitor_field": { "field": 8, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V" },
             "asset_field": { "field": "field8", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
-            "fix_c": 2400,
+            "fix_c": 2800,
             "diff": 80,
             "option_config": { "base_value": 100, "delta_factor": 1, "label": "LUNR(LV:100@14.0, Δ=1.00)" }
         },
@@ -95,8 +95,8 @@
             "ticker": "NVTS",
             "monitor_field": { "field": 6, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" },
             "asset_field": { "field": "field5", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
-            "fix_c": 2200,
-            "diff": 70,
+            "fix_c": 3200,
+            "diff": 80,
             "option_config": { "base_value": 200, "delta_factor": 1.0, "label": "NVTS(LV:200@12.0, Δ=1.0)" }
         },
         {
@@ -119,7 +119,7 @@
             "ticker": "RXRX",
             "monitor_field": { "field": 8, "channel_id": 2385118, "api_key": "IPSG3MMMBJEB9DY8" },
             "asset_field": { "field": "field7", "channel_id": 2528199, "api_key": "2E65V8XEIPH9B2VV" },
-            "fix_c": 2300,
+            "fix_c": 2600,
             "diff": 80,
             "option_config": { "base_value": 700, "delta_factor": 1, "label": "RXRX(LV:500@5.0, Δ=1.00)" }
         },
@@ -127,7 +127,7 @@
             "ticker": "SG",
             "monitor_field": { "field": 6, "channel_id": 2988808, "api_key": "QBIPN1AIZ88QQW5V" },
             "asset_field": { "field": "field6", "channel_id": 2988802, "api_key": "85IOR3R3ZG643PBP" },
-            "fix_c": 2500,
+            "fix_c": 2700 ,
             "diff": 80,
             "option_config": { "base_value": 400, "delta_factor": 1, "label": "SG(LV:200@12.0, Δ=1.00)" }
         }
