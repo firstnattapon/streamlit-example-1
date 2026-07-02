@@ -112,14 +112,14 @@ def delta6(asset_config):
         df['Amount_Asset'] = 0.0
         df['re'] = 0.0
         df['Cash_Balan'] = asset_config['Cash_Balan']
-        df['Amount_Asset'].iloc[0] = df['Fixed_Asset_Value'].iloc[0] / df['Close'].iloc[0]
 
-        close_vals = df['Close'].values
-        pred_vals = df['pred'].values
-        amount_asset_vals = df['Amount_Asset'].values
-        re_vals = df['re'].values
-        cash_balan_sim_vals = df['Cash_Balan'].values
+        close_vals = df['Close'].to_numpy(copy=True)
+        pred_vals = df['pred'].to_numpy(copy=True)
+        amount_asset_vals = df['Amount_Asset'].to_numpy(copy=True)
+        re_vals = df['re'].to_numpy(copy=True)
+        cash_balan_sim_vals = df['Cash_Balan'].to_numpy(copy=True)
 
+        amount_asset_vals[0] = asset_config['Fixed_Asset_Value'] / close_vals[0]
         for idx in range(1, len(amount_asset_vals)):
             if pred_vals[idx] == 1:
                 amount_asset_vals[idx] = asset_config['Fixed_Asset_Value'] / close_vals[idx]
@@ -129,6 +129,10 @@ def delta6(asset_config):
                 re_vals[idx] = 0
             cash_balan_sim_vals[idx] = cash_balan_sim_vals[idx-1] + re_vals[idx]
 
+        df['Amount_Asset'] = amount_asset_vals
+        df['re'] = re_vals
+        df['Cash_Balan'] = cash_balan_sim_vals
+
         original_index = df.index
         df = df.merge(
             df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}),
@@ -136,9 +140,8 @@ def delta6(asset_config):
         ).drop('Asset_Price', axis=1)
         df.set_index(original_index, inplace=True)
 
-        df['refer_model'].interpolate(method='linear', inplace=True)
-        df.fillna(method='bfill', inplace=True)
-        df.fillna(method='ffill', inplace=True)
+        df['refer_model'] = df['refer_model'].interpolate(method='linear')
+        df = df.bfill().ffill()
 
         df['pv'] = df['Cash_Balan'] + (df['Amount_Asset'] * df['Close'])
         df['refer_pv'] = df['refer_model'] + asset_config['Fixed_Asset_Value']
