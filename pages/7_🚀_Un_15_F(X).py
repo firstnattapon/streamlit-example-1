@@ -422,19 +422,37 @@ if full_config or DEFAULT_CONFIG:
             df_plot = data.copy()
             for ticker in successful_tickers:
                 column = f"{ticker}_re"
+                floor_column = f"{ticker}_Running_Cash_Floor"
+
                 df_plot[column] = df_plot[column].cumsum()
+                ticker_cumulative_cash = df_plot[column].to_numpy(
+                    dtype=np.float64
+                )
+                df_plot[floor_column] = np.minimum.accumulate(
+                    np.minimum(ticker_cumulative_cash, 0.0)
+                )
+
+            df_plot["Portfolio_Running_Cash_Floor"] = running_cash_floor
 
             detail_columns = (
                 [f"{ticker}_re" for ticker in successful_tickers]
+                + [
+                    f"{ticker}_Running_Cash_Floor"
+                    for ticker in successful_tickers
+                ]
                 + [f"{ticker}_net_pv" for ticker in successful_tickers]
-                + ["cumulative_cash_flow", "portfolio_excess_profit"]
+                + [
+                    "cumulative_cash_flow",
+                    "Portfolio_Running_Cash_Floor",
+                    "portfolio_excess_profit",
+                ]
             )
             st.plotly_chart(
                 px.line(
                     df_plot[detail_columns],
                     title=(
-                        "Per-Ticker Cumulative Cash Flow and "
-                        "Log-Reference Excess Profit"
+                        "Per-Ticker and Portfolio Running Cash Floor, "
+                        "Cash Flow and Log-Reference Excess Profit"
                     ),
                 ),
                 use_container_width=True,
