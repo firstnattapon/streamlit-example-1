@@ -201,28 +201,41 @@ def generate_actions_rebalance_daily(num_days: int) -> np.ndarray:
     return np.ones(num_days, dtype=np.int32)
 
 def generate_actions_perfect_foresight(prices: List[float], fix: int = 1500) -> np.ndarray:
+    # หลักการ 1 ประโยค: คำตอบ optimal ซื้อ-ขายเฉพาะ "จุดกลับตัว" (local extrema) เท่านั้น
+    # จึง pre-filter เหลือแค่จุดกลับตัวก่อนแล้วรัน DP เดิม → ได้ net เท่าเดิมเป๊ะ แต่โหนดน้อยลง เร็วขึ้น
+    # พิสูจน์: แทรกโหนด b ระหว่าง a,c เปลี่ยนค่า = -(Pb/Pa-1)(Pc/Pb-1) → คุ้ม ⟺ b เป็นจุดกลับตัว
+    # (บนช่วง monotone ผลคูณ>0 ตัดทิ้งได้เสมอ) ดังนั้น optimal ⊆ turning points ∪ {จุดเริ่ม}
     price_arr = np.asarray(prices, dtype=np.float64)
     n = len(price_arr)
     if n < 2:
-        a = np.ones(n, dtype=np.int32)
-        if n > 0: a[0] = 1
-        return a
-    dp = np.full(n, -np.inf, dtype=np.float64)
-    path = np.zeros(n, dtype=np.int32)
-    dp[0] = float(fix * 2.0)
+        return np.ones(n, dtype=np.int32)
+    # Pre-filter O(n) แบบ plateau-safe: ยุบ run ราคาเท่ากัน แล้วเก็บดัชนีแรกของ run ที่เป็น
+    # จุดกลับทิศของลำดับราคาที่ต่างค่ากัน (strict > / < จะพังเมื่อราคาเท่ากัน จึงเทียบทิศล่าสุด)
+    cand = [0]
+    prev_price = price_arr[0]; prev_dir = 0; run_start = 0
     for i in range(1, n):
-        j_indices = np.arange(i)
-        profits = fix * ((price_arr[i] / price_arr[j_indices]) - 1.0)
-        cand = dp[j_indices] + profits
-        best_idx = int(np.argmax(cand))
-        dp[i] = cand[best_idx]
-        path[i] = j_indices[best_idx]
-    final_scores = dp + fix * ((price_arr[-1] / price_arr) - 1.0)
-    end_idx = int(np.argmax(final_scores))
+        p = price_arr[i]
+        if p == prev_price: continue
+        cur_dir = 1 if p > prev_price else -1
+        if prev_dir != 0 and cur_dir != prev_dir and run_start != 0: cand.append(run_start)
+        prev_dir = cur_dir; prev_price = p; run_start = i
+    # DP โครงเดิม แต่รันบน "เฉพาะโหนด turning point" → เลือก subset ที่ optimal จริง (exact)
+    cand_arr = np.asarray(cand, dtype=np.int64)
+    cp = price_arr[cand_arr]; m = len(cand_arr)
+    dp = np.full(m, -np.inf, dtype=np.float64)
+    parent = np.zeros(m, dtype=np.int64)
+    dp[0] = float(fix * 2.0)
+    for k in range(1, m):
+        profits = fix * ((cp[k] / cp[:k]) - 1.0)
+        c = dp[:k] + profits
+        b = int(np.argmax(c))
+        dp[k] = c[b]; parent[k] = b
+    final_scores = dp + fix * ((price_arr[-1] / cp) - 1.0)
+    end_k = int(np.argmax(final_scores))
     actions = np.zeros(n, dtype=np.int32)
-    while end_idx > 0:
-        actions[end_idx] = 1
-        end_idx = path[end_idx]
+    while end_k > 0:
+        actions[cand_arr[end_k]] = 1
+        end_k = parent[end_k]
     actions[0] = 1
     return actions
 
