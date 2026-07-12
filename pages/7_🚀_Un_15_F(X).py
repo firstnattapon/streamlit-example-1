@@ -421,9 +421,8 @@ if full_config or DEFAULT_CONFIG:
             st.divider()
             st.subheader("Detailed Simulation Data")
             st.caption(
-                "Use the View menu inside the chart to switch perspectives. "
-                "Click a legend item to hide/show a line; double-click it to "
-                "focus on one series."
+                "Choose a focused view above the chart. The controls stay "
+                "outside Plotly so titles, legends and data never overlap."
             )
 
             df_plot = data.copy()
@@ -441,332 +440,284 @@ if full_config or DEFAULT_CONFIG:
 
             df_plot["Portfolio_Running_Cash_Floor"] = running_cash_floor
 
-            detail_fig = go.Figure()
-            trace_views = []
+            view_col, period_col = st.columns([2, 1])
+            with view_col:
+                detail_view = st.selectbox(
+                    "View",
+                    options=[
+                        "Portfolio Overview",
+                        "Cash Flow by Ticker",
+                        "Cash Floor by Ticker",
+                        "Excess Profit by Ticker",
+                        "Portfolio Cash Floor Only",
+                        "All Series",
+                    ],
+                    key="detailed_view_control",
+                )
+            with period_col:
+                detail_period = st.selectbox(
+                    "Period",
+                    options=["ALL", "1Y", "6M", "3M", "1M"],
+                    key="detailed_period_control",
+                )
 
-            def add_detail_trace(
-                name,
-                values,
-                color,
-                dash,
-                width,
-                legend_group,
-                views,
-                visible=False,
-            ):
-                detail_fig.add_trace(go.Scatter(
-                    x=df_plot.index,
-                    y=values,
-                    mode="lines",
-                    name=name,
-                    legendgroup=legend_group,
-                    visible=visible,
-                    connectgaps=False,
-                    line={
-                        "color": color,
-                        "dash": dash,
-                        "width": width,
-                    },
-                    hovertemplate=(
-                        "%{x|%d %b %Y}<br>"
-                        f"<b>{name}</b><br>"
-                        "%{y:,.2f} USD<extra></extra>"
+            ticker_views = {
+                "Cash Flow by Ticker",
+                "Cash Floor by Ticker",
+                "Excess Profit by Ticker",
+                "All Series",
+            }
+            if detail_view in ticker_views:
+                default_tickers = successful_tickers[
+                    :min(6, len(successful_tickers))
+                ]
+                selected_detail_tickers = st.multiselect(
+                    "Tickers shown",
+                    options=successful_tickers,
+                    default=default_tickers,
+                    key="detailed_ticker_control",
+                    help=(
+                        "Keep the selection focused for a readable chart. "
+                        "The first six tickers are selected by default."
                     ),
-                ))
-                trace_views.append(set(views))
-
-            add_detail_trace(
-                name="Portfolio · Cumulative Cash Flow",
-                values=df_plot["cumulative_cash_flow"],
-                color="#2563EB",
-                dash="solid",
-                width=3.2,
-                legend_group="Portfolio",
-                views={"portfolio", "all"},
-                visible=True,
-            )
-            add_detail_trace(
-                name="Portfolio · Running Cash Floor",
-                values=df_plot["Portfolio_Running_Cash_Floor"],
-                color="#DC2626",
-                dash="dash",
-                width=3.2,
-                legend_group="Portfolio",
-                views={"portfolio", "portfolio_floor", "all"},
-                visible=True,
-            )
-            add_detail_trace(
-                name="Portfolio · Excess Profit",
-                values=df_plot["portfolio_excess_profit"],
-                color="#16A34A",
-                dash="dot",
-                width=3.2,
-                legend_group="Portfolio",
-                views={"portfolio", "all"},
-                visible=True,
-            )
-
-            ticker_colors = (
-                px.colors.qualitative.Plotly
-                + px.colors.qualitative.Safe
-                + px.colors.qualitative.Dark24
-            )
-
-            for ticker_index, ticker in enumerate(successful_tickers):
-                ticker_color = ticker_colors[
-                    ticker_index % len(ticker_colors)
-                ]
-                add_detail_trace(
-                    name=f"{ticker} · Cumulative Cash Flow",
-                    values=df_plot[f"{ticker}_re"],
-                    color=ticker_color,
-                    dash="solid",
-                    width=2.0,
-                    legend_group=ticker,
-                    views={"ticker_cash", "all"},
                 )
-                add_detail_trace(
-                    name=f"{ticker} · Running Cash Floor",
-                    values=df_plot[f"{ticker}_Running_Cash_Floor"],
-                    color=ticker_color,
-                    dash="dash",
-                    width=2.2,
-                    legend_group=ticker,
-                    views={"ticker_floor", "all"},
-                )
-                add_detail_trace(
-                    name=f"{ticker} · Excess Profit",
-                    values=df_plot[f"{ticker}_net_pv"],
-                    color=ticker_color,
-                    dash="dot",
-                    width=2.0,
-                    legend_group=ticker,
-                    views={"ticker_profit", "all"},
-                )
+            else:
+                selected_detail_tickers = successful_tickers
 
-            def detail_visibility(view_name):
-                return [
-                    view_name in trace_view
-                    for trace_view in trace_views
+            detail_period_offsets = {
+                "1M": pd.DateOffset(months=1),
+                "3M": pd.DateOffset(months=3),
+                "6M": pd.DateOffset(months=6),
+                "1Y": pd.DateOffset(years=1),
+            }
+            if detail_period == "ALL":
+                detail_plot_df = df_plot
+            else:
+                detail_cutoff = (
+                    df_plot.index.max()
+                    - detail_period_offsets[detail_period]
+                )
+                detail_plot_df = df_plot.loc[
+                    df_plot.index >= detail_cutoff
                 ]
 
-            view_buttons = [
-                {
-                    "label": "Portfolio Overview",
-                    "method": "update",
-                    "args": [
-                        {"visible": detail_visibility("portfolio")},
-                        {
-                            "title": {
-                                "text": (
-                                    "Detailed Simulation — "
-                                    "Portfolio Overview"
-                                ),
-                                "x": 0.01,
-                                "xanchor": "left",
-                            }
-                        },
-                    ],
-                },
-                {
-                    "label": "Cash Flow by Ticker",
-                    "method": "update",
-                    "args": [
-                        {"visible": detail_visibility("ticker_cash")},
-                        {
-                            "title": {
-                                "text": (
-                                    "Detailed Simulation — "
-                                    "Cumulative Cash Flow by Ticker"
-                                ),
-                                "x": 0.01,
-                                "xanchor": "left",
-                            }
-                        },
-                    ],
-                },
-                {
-                    "label": "Cash Floor by Ticker",
-                    "method": "update",
-                    "args": [
-                        {"visible": detail_visibility("ticker_floor")},
-                        {
-                            "title": {
-                                "text": (
-                                    "Detailed Simulation — "
-                                    "Running Cash Floor by Ticker"
-                                ),
-                                "x": 0.01,
-                                "xanchor": "left",
-                            }
-                        },
-                    ],
-                },
-                {
-                    "label": "Excess Profit by Ticker",
-                    "method": "update",
-                    "args": [
-                        {"visible": detail_visibility("ticker_profit")},
-                        {
-                            "title": {
-                                "text": (
-                                    "Detailed Simulation — "
-                                    "Log-Reference Excess Profit by Ticker"
-                                ),
-                                "x": 0.01,
-                                "xanchor": "left",
-                            }
-                        },
-                    ],
-                },
-                {
-                    "label": "Portfolio Cash Floor Only",
-                    "method": "update",
-                    "args": [
-                        {"visible": detail_visibility("portfolio_floor")},
-                        {
-                            "title": {
-                                "text": (
-                                    "Detailed Simulation — "
-                                    "Portfolio Running Cash Floor"
-                                ),
-                                "x": 0.01,
-                                "xanchor": "left",
-                            }
-                        },
-                    ],
-                },
-                {
-                    "label": "All Series",
-                    "method": "update",
-                    "args": [
-                        {"visible": detail_visibility("all")},
-                        {
-                            "title": {
-                                "text": (
-                                    "Detailed Simulation — All Series"
-                                ),
-                                "x": 0.01,
-                                "xanchor": "left",
-                            }
-                        },
-                    ],
-                },
-            ]
+            if detail_view in ticker_views and not selected_detail_tickers:
+                st.info("Select at least one ticker to display the chart.")
+            else:
+                detail_fig = go.Figure()
+                ticker_colors = (
+                    px.colors.qualitative.Plotly
+                    + px.colors.qualitative.Safe
+                    + px.colors.qualitative.Dark24
+                )
+                ticker_color_map = {
+                    ticker: ticker_colors[
+                        ticker_index % len(ticker_colors)
+                    ]
+                    for ticker_index, ticker in enumerate(
+                        successful_tickers
+                    )
+                }
 
-            detail_fig.update_layout(
-                title={
-                    "text": "Detailed Simulation — Portfolio Overview",
-                    "x": 0.01,
-                    "xanchor": "left",
-                },
-                height=680,
-                hovermode="x unified",
-                dragmode="pan",
-                margin={"l": 24, "r": 24, "t": 130, "b": 80},
-                legend={
-                    "orientation": "h",
-                    "yanchor": "bottom",
-                    "y": 1.02,
-                    "xanchor": "left",
-                    "x": 0.0,
-                    "title": {"text": ""},
-                    "groupclick": "togglegroup",
-                },
-                updatemenus=[{
-                    "type": "dropdown",
-                    "direction": "down",
-                    "active": 0,
-                    "x": 0.0,
-                    "xanchor": "left",
-                    "y": 1.20,
-                    "yanchor": "top",
-                    "showactive": True,
-                    "buttons": view_buttons,
-                    "pad": {"r": 8, "t": 4},
-                }],
-                annotations=[{
-                    "text": "<b>View</b>",
-                    "xref": "paper",
-                    "yref": "paper",
-                    "x": 0.0,
-                    "y": 1.245,
-                    "showarrow": False,
-                    "xanchor": "left",
-                    "font": {"size": 12},
-                }],
-                xaxis={
-                    "title": "",
-                    "showspikes": True,
-                    "spikemode": "across",
-                    "spikesnap": "cursor",
-                    "rangeslider": {"visible": False},
-                    "rangeselector": {
-                        "buttons": [
-                            {
-                                "count": 1,
-                                "label": "1M",
-                                "step": "month",
-                                "stepmode": "backward",
-                            },
-                            {
-                                "count": 3,
-                                "label": "3M",
-                                "step": "month",
-                                "stepmode": "backward",
-                            },
-                            {
-                                "count": 6,
-                                "label": "6M",
-                                "step": "month",
-                                "stepmode": "backward",
-                            },
-                            {
-                                "count": 1,
-                                "label": "1Y",
-                                "step": "year",
-                                "stepmode": "backward",
-                            },
-                            {
-                                "label": "ALL",
-                                "step": "all",
-                            },
-                        ]
+                def add_detail_trace(
+                    name,
+                    values,
+                    color,
+                    dash,
+                    width,
+                    legend_group,
+                ):
+                    detail_fig.add_trace(go.Scatter(
+                        x=detail_plot_df.index,
+                        y=values,
+                        mode="lines",
+                        name=name,
+                        legendgroup=legend_group,
+                        connectgaps=False,
+                        line={
+                            "color": color,
+                            "dash": dash,
+                            "width": width,
+                        },
+                        hovertemplate=(
+                            "%{x|%d %b %Y}<br>"
+                            f"<b>{name}</b><br>"
+                            "%{y:,.2f} USD<extra></extra>"
+                        ),
+                    ))
+
+                if detail_view in {"Portfolio Overview", "All Series"}:
+                    add_detail_trace(
+                        name="Portfolio · Cumulative Cash Flow",
+                        values=detail_plot_df["cumulative_cash_flow"],
+                        color="#2563EB",
+                        dash="solid",
+                        width=3.2,
+                        legend_group="Portfolio",
+                    )
+                    add_detail_trace(
+                        name="Portfolio · Running Cash Floor",
+                        values=detail_plot_df[
+                            "Portfolio_Running_Cash_Floor"
+                        ],
+                        color="#DC2626",
+                        dash="dash",
+                        width=3.2,
+                        legend_group="Portfolio",
+                    )
+                    add_detail_trace(
+                        name="Portfolio · Excess Profit",
+                        values=detail_plot_df[
+                            "portfolio_excess_profit"
+                        ],
+                        color="#16A34A",
+                        dash="dot",
+                        width=3.2,
+                        legend_group="Portfolio",
+                    )
+
+                if detail_view == "Portfolio Cash Floor Only":
+                    add_detail_trace(
+                        name="Portfolio · Running Cash Floor",
+                        values=detail_plot_df[
+                            "Portfolio_Running_Cash_Floor"
+                        ],
+                        color="#DC2626",
+                        dash="solid",
+                        width=3.4,
+                        legend_group="Portfolio",
+                    )
+
+                if detail_view in {"Cash Flow by Ticker", "All Series"}:
+                    for ticker in selected_detail_tickers:
+                        add_detail_trace(
+                            name=f"{ticker} · Cumulative Cash Flow",
+                            values=detail_plot_df[f"{ticker}_re"],
+                            color=ticker_color_map[ticker],
+                            dash="solid",
+                            width=2.1,
+                            legend_group=ticker,
+                        )
+
+                if detail_view in {"Cash Floor by Ticker", "All Series"}:
+                    for ticker in selected_detail_tickers:
+                        add_detail_trace(
+                            name=f"{ticker} · Running Cash Floor",
+                            values=detail_plot_df[
+                                f"{ticker}_Running_Cash_Floor"
+                            ],
+                            color=ticker_color_map[ticker],
+                            dash="dash",
+                            width=2.2,
+                            legend_group=ticker,
+                        )
+
+                if detail_view in {"Excess Profit by Ticker", "All Series"}:
+                    for ticker in selected_detail_tickers:
+                        add_detail_trace(
+                            name=f"{ticker} · Excess Profit",
+                            values=detail_plot_df[f"{ticker}_net_pv"],
+                            color=ticker_color_map[ticker],
+                            dash="dot",
+                            width=2.1,
+                            legend_group=ticker,
+                        )
+
+                detail_title_map = {
+                    "Portfolio Overview": "Portfolio Overview",
+                    "Cash Flow by Ticker": (
+                        "Cumulative Cash Flow by Ticker"
+                    ),
+                    "Cash Floor by Ticker": (
+                        "Running Cash Floor by Ticker"
+                    ),
+                    "Excess Profit by Ticker": (
+                        "Log-Reference Excess Profit by Ticker"
+                    ),
+                    "Portfolio Cash Floor Only": (
+                        "Portfolio Running Cash Floor"
+                    ),
+                    "All Series": "All Selected Series",
+                }
+                detail_title = (
+                    "Detailed Simulation — "
+                    + detail_title_map[detail_view]
+                )
+
+                detail_fig.update_layout(
+                    title={
+                        "text": detail_title,
+                        "x": 0.01,
+                        "xanchor": "left",
+                        "font": {"size": 20},
                     },
-                },
-                yaxis={
-                    "title": "USD",
-                    "tickformat": ",.2f",
-                    "zeroline": True,
-                    "zerolinewidth": 1.2,
-                    "fixedrange": False,
-                },
-            )
-
-            detail_fig.add_hline(
-                y=0,
-                line_width=1,
-                line_dash="dot",
-                line_color="rgba(128,128,128,0.55)",
-            )
-
-            st.plotly_chart(
-                detail_fig,
-                use_container_width=True,
-                config={
-                    "displaylogo": False,
-                    "scrollZoom": True,
-                    "modeBarButtonsToRemove": [
-                        "lasso2d",
-                        "select2d",
-                    ],
-                    "toImageButtonOptions": {
-                        "format": "png",
-                        "filename": "detailed_simulation",
-                        "scale": 2,
+                    height=680,
+                    hovermode="x unified",
+                    dragmode="pan",
+                    uirevision=(
+                        f"{detail_view}-{detail_period}-"
+                        + ",".join(selected_detail_tickers)
+                    ),
+                    margin={"l": 24, "r": 24, "t": 82, "b": 150},
+                    legend={
+                        "orientation": "h",
+                        "yanchor": "top",
+                        "y": -0.14,
+                        "xanchor": "left",
+                        "x": 0.0,
+                        "title": {"text": ""},
+                        "groupclick": "togglegroup",
                     },
-                },
-            )
+                    xaxis={
+                        "title": "",
+                        "showspikes": True,
+                        "spikemode": "across",
+                        "spikesnap": "cursor",
+                        "rangeslider": {"visible": False},
+                    },
+                    yaxis={
+                        "title": "USD",
+                        "tickformat": ",.2f",
+                        "zeroline": True,
+                        "zerolinewidth": 1.2,
+                        "fixedrange": False,
+                    },
+                )
+                detail_fig.add_hline(
+                    y=0,
+                    line_width=1,
+                    line_dash="dot",
+                    line_color="rgba(128,128,128,0.55)",
+                )
+
+                scope_text = (
+                    "Portfolio aggregate"
+                    if detail_view not in ticker_views
+                    else (
+                        f"{len(selected_detail_tickers)} of "
+                        f"{len(successful_tickers)} tickers"
+                    )
+                )
+                st.caption(
+                    f"Showing: {scope_text} · Period: {detail_period}"
+                )
+                st.plotly_chart(
+                    detail_fig,
+                    use_container_width=True,
+                    config={
+                        "displaylogo": False,
+                        "scrollZoom": True,
+                        "modeBarButtonsToRemove": [
+                            "lasso2d",
+                            "select2d",
+                        ],
+                        "toImageButtonOptions": {
+                            "format": "png",
+                            "filename": "detailed_simulation",
+                            "scale": 2,
+                        },
+                    },
+                )
 
 else:
     st.error("Could not load any configuration. Please check that 'un15_fx_config.json' exists and is correctly formatted.")
