@@ -314,7 +314,7 @@ if full_config or DEFAULT_CONFIG:
                 ))
                 exit_recovery_pct = float(m3.slider(
                     "Capital recovered at exit (%)",
-                    min_value=0.0, max_value=100.0, value=100.0, step=1.0
+                    min_value=0.0, max_value=100.0, value=50.0, step=1.0
                 ))
 
                 r1, r2 = st.columns(2)
