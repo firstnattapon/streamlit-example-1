@@ -36,140 +36,148 @@ def load_config(filename="un15_fx_config.json"):
 # --------------------------------
 # Core model
 # --------------------------------
-def calculate_cash_balance_model(entry, step, Fixed_Asset_Value, Cash_Balan):
-    if entry >= 10000 or entry <= 0:
+def simulate_constant_value_path(prices, actions, fixed_asset_value, starting_cash):
+    """Simulate constant-value rebalancing against the exact log reference.
+
+    re is realized cash flow at an executed rebalance. net_pv is portfolio
+    wealth above the continuous log reference used by Hybrid_Multi_Mutation.
+    """
+    prices = np.asarray(prices, dtype=np.float64)
+    actions = np.asarray(actions, dtype=np.int8)
+    fixed_asset_value = float(fixed_asset_value)
+    starting_cash = float(starting_cash)
+
+    if prices.ndim != 1 or actions.ndim != 1 or len(prices) != len(actions):
+        raise ValueError("prices and actions must be one-dimensional arrays of equal length")
+    if len(prices) == 0:
         return pd.DataFrame()
+    if not np.all(np.isfinite(prices)) or np.any(prices <= 0):
+        raise ValueError("all prices must be finite and greater than zero")
+    if not np.isfinite(fixed_asset_value) or fixed_asset_value < 0:
+        raise ValueError("Fixed_Asset_Value must be finite and non-negative")
+    if not np.isfinite(starting_cash):
+        raise ValueError("Cash_Balan must be finite")
 
-    samples = np.arange(0, np.around(entry, 2) * 3 + step, step)
-    df = pd.DataFrame({
-        'Asset_Price': np.around(samples, 2),
-        'Fixed_Asset_Value': Fixed_Asset_Value
+    n = len(prices)
+    actions = (actions != 0).astype(np.int8)
+    actions[0] = 0
+
+    amount = np.empty(n, dtype=np.float64)
+    realized_cash_flow = np.zeros(n, dtype=np.float64)
+    cash_balance = np.empty(n, dtype=np.float64)
+
+    amount[0] = fixed_asset_value / prices[0]
+    cash_balance[0] = starting_cash
+
+    for idx in range(1, n):
+        if actions[idx] == 1:
+            realized_cash_flow[idx] = (
+                amount[idx - 1] * prices[idx] - fixed_asset_value
+            )
+            amount[idx] = fixed_asset_value / prices[idx]
+        else:
+            amount[idx] = amount[idx - 1]
+        cash_balance[idx] = cash_balance[idx - 1] + realized_cash_flow[idx]
+
+    portfolio_value = cash_balance + (amount * prices)
+    reference_cash_flow = fixed_asset_value * np.log(prices / prices[0])
+    reference_portfolio_value = (
+        starting_cash + fixed_asset_value + reference_cash_flow
+    )
+    net_pv = portfolio_value - reference_portfolio_value
+
+    # Floating-point cancellation can create tiny values such as -1e-13 at P0.
+    net_pv[np.isclose(net_pv, 0.0, atol=1e-10, rtol=0.0)] = 0.0
+    if np.min(net_pv) < -1e-7:
+        raise ArithmeticError("log-reference invariant failed: net_pv must be >= 0")
+
+    return pd.DataFrame({
+        "re": realized_cash_flow,
+        "Cash_Balan": cash_balance,
+        "Amount_Asset": amount,
+        "pv": portfolio_value,
+        "refer_cash_flow": reference_cash_flow,
+        "refer_pv": reference_portfolio_value,
+        "net_pv": net_pv,
     })
-    df['Amount_Asset'] = df['Fixed_Asset_Value'] / df['Asset_Price']
 
-    df_top = df[df.Asset_Price >= np.around(entry, 2)].copy()
-    if not df_top.empty:
-        df_top['Cash_Balan_top'] = (df_top['Amount_Asset'].shift(1) - df_top['Amount_Asset']) * df_top['Asset_Price']
-        df_top.fillna(0, inplace=True)
-        np_Cash_Balan_top = df_top['Cash_Balan_top'].values
-        xx = np.zeros(len(np_Cash_Balan_top))
-        y_0 = Cash_Balan
-        for idx, v_0 in enumerate(np_Cash_Balan_top):
-            y_0 = y_0 + v_0
-            xx[idx] = y_0
-        df_top['Cash_Balan'] = xx
-        df_top = df_top.sort_values(by='Amount_Asset')[:-1]
-    else:
-        df_top = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
-
-    df_down = df[df.Asset_Price <= np.around(entry, 2)].copy()
-    if not df_down.empty:
-        df_down['Cash_Balan_down'] = (df_down['Amount_Asset'].shift(-1) - df_down['Amount_Asset']) * df_down['Asset_Price']
-        df_down.fillna(0, inplace=True)
-        df_down = df_down.sort_values(by='Asset_Price', ascending=False)
-        np_Cash_Balan_down = df_down['Cash_Balan_down'].values
-        xxx = np.zeros(len(np_Cash_Balan_down))
-        y_1 = Cash_Balan
-        for idx, v_1 in enumerate(np_Cash_Balan_down):
-            y_1 = y_1 + v_1
-            xxx[idx] = y_1
-        df_down['Cash_Balan'] = xxx
-    else:
-        df_down = pd.DataFrame(columns=['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan'])
-
-    combined_df = pd.concat([df_top, df_down], axis=0, ignore_index=True)
-    return combined_df[['Asset_Price', 'Fixed_Asset_Value', 'Amount_Asset', 'Cash_Balan']]
 
 # --------------------------------
 # Simulation per ticker
 # --------------------------------
 def delta6(asset_config):
+    ticker = asset_config.get("Ticker", "UNKNOWN")
     try:
-        hist = yf.Ticker(asset_config['Ticker']).history(period='max')
+        hist = yf.Ticker(ticker).history(period="max")
         if hist.empty:
             return None
 
-        # Robust timezone convert → Asia/Bangkok
         if hist.index.tz is None:
-            hist.index = hist.index.tz_localize('UTC').tz_convert('Asia/Bangkok')
+            hist.index = hist.index.tz_localize("UTC").tz_convert("Asia/Bangkok")
         else:
-            hist.index = hist.index.tz_convert('Asia/Bangkok')
+            hist.index = hist.index.tz_convert("Asia/Bangkok")
 
-        hist = hist[hist.index >= asset_config['filter_date']][['Close']]
+        filter_date = pd.Timestamp(asset_config["filter_date"])
+        if filter_date.tzinfo is None:
+            filter_date = filter_date.tz_localize("Asia/Bangkok")
+        else:
+            filter_date = filter_date.tz_convert("Asia/Bangkok")
+
+        hist = hist.loc[hist.index >= filter_date, ["Close"]].copy()
+        hist = hist[np.isfinite(hist["Close"]) & (hist["Close"] > 0)]
         if hist.empty:
             return None
 
-        entry = hist['Close'].iloc[0]
-        df_model = calculate_cash_balance_model(entry, asset_config['step'],
-                                                asset_config['Fixed_Asset_Value'], asset_config['Cash_Balan'])
-        if df_model.empty:
-            return None
+        prices = hist["Close"].to_numpy(dtype=np.float64, copy=True)
+        pred = asset_config.get("pred", 1)
+        if np.isscalar(pred):
+            actions = np.full(len(prices), int(pred), dtype=np.int8)
+        else:
+            actions = np.asarray(pred, dtype=np.int8)
+            if len(actions) != len(prices):
+                raise ValueError("pred action stream must have the same length as prices")
 
-        df = hist.copy()
-        df['Close'] = np.around(df['Close'].values, 2)
-        df['pred'] = asset_config['pred']
-        df['Fixed_Asset_Value'] = asset_config['Fixed_Asset_Value']
-        df['Amount_Asset'] = 0.0
-        df['re'] = 0.0
-        df['Cash_Balan'] = asset_config['Cash_Balan']
-
-        close_vals = df['Close'].to_numpy(copy=True)
-        pred_vals = df['pred'].to_numpy(copy=True)
-        amount_asset_vals = df['Amount_Asset'].to_numpy(copy=True)
-        re_vals = df['re'].to_numpy(copy=True)
-        cash_balan_sim_vals = df['Cash_Balan'].to_numpy(copy=True)
-
-        amount_asset_vals[0] = asset_config['Fixed_Asset_Value'] / close_vals[0]
-        for idx in range(1, len(amount_asset_vals)):
-            if pred_vals[idx] == 1:
-                amount_asset_vals[idx] = asset_config['Fixed_Asset_Value'] / close_vals[idx]
-                re_vals[idx] = (amount_asset_vals[idx-1] * close_vals[idx]) - asset_config['Fixed_Asset_Value']
-            else:
-                amount_asset_vals[idx] = amount_asset_vals[idx-1]
-                re_vals[idx] = 0
-            cash_balan_sim_vals[idx] = cash_balan_sim_vals[idx-1] + re_vals[idx]
-
-        df['Amount_Asset'] = amount_asset_vals
-        df['re'] = re_vals
-        df['Cash_Balan'] = cash_balan_sim_vals
-
-        original_index = df.index
-        df = df.merge(
-            df_model[['Asset_Price', 'Cash_Balan']].rename(columns={'Cash_Balan': 'refer_model'}),
-            left_on='Close', right_on='Asset_Price', how='left'
-        ).drop('Asset_Price', axis=1)
-        df.set_index(original_index, inplace=True)
-
-        df['refer_model'] = df['refer_model'].interpolate(method='linear')
-        df = df.bfill().ffill()
-
-        df['pv'] = df['Cash_Balan'] + (df['Amount_Asset'] * df['Close'])
-        df['refer_pv'] = df['refer_model'] + asset_config['Fixed_Asset_Value']
-        df['net_pv'] = df['pv'] - df['refer_pv']
-
-        return df[['net_pv', 're']]
-    except Exception:
+        simulation = simulate_constant_value_path(
+            prices=prices,
+            actions=actions,
+            fixed_asset_value=asset_config["Fixed_Asset_Value"],
+            starting_cash=asset_config["Cash_Balan"],
+        )
+        simulation.index = hist.index
+        return simulation[["net_pv", "re"]]
+    except Exception as exc:
+        st.warning(f"{ticker}: simulation skipped ({exc})")
         return None
+
 
 # --------------------------------
 # Aggregate portfolio
 # --------------------------------
 def un_16(active_configs):
     all_re, all_net = [], []
-    for tkr, cfg in active_configs.items():
-        out = delta6(cfg)
-        if out is not None and not out.empty:
-            all_re.append(out[['re']].rename(columns={'re': f'{tkr}_re'}))
-            all_net.append(out[['net_pv']].rename(columns={'net_pv': f'{tkr}_net_pv'}))
+    for ticker, config in active_configs.items():
+        result = delta6(config)
+        if result is not None and not result.empty:
+            all_re.append(result[["re"]].rename(columns={"re": f"{ticker}_re"}))
+            all_net.append(
+                result[["net_pv"]].rename(columns={"net_pv": f"{ticker}_net_pv"})
+            )
+
     if not all_re:
         return pd.DataFrame()
-    df_re = pd.concat(all_re, axis=1)
-    df_net = pd.concat(all_net, axis=1)
-    df_re.fillna(0, inplace=True)
-    df_net.fillna(0, inplace=True)
-    df_re['maxcash_dd'] = df_re.sum(axis=1).cumsum()
-    df_net['cf'] = df_net.sum(axis=1)
+
+    # re is a flow: no row means no cash flow at that timestamp.
+    df_re = pd.concat(all_re, axis=1).sort_index().fillna(0.0)
+
+    # net_pv is a cumulative state: carry the latest known value forward.
+    # Filling a missing state with zero would create a false drop in portfolio profit.
+    df_net = pd.concat(all_net, axis=1).sort_index().ffill().fillna(0.0)
+
+    df_re["portfolio_cash_flow"] = df_re.sum(axis=1)
+    df_re["cumulative_cash_flow"] = df_re["portfolio_cash_flow"].cumsum()
+    df_net["portfolio_excess_profit"] = df_net.sum(axis=1)
     return pd.concat([df_re, df_net], axis=1)
+
 
 # --------------------------------
 # UI
@@ -210,7 +218,7 @@ if full_config or DEFAULT_CONFIG:
     active_configs = {t: full_config.get(t, st.session_state.custom_tickers.get(t)).copy() for t in selected_tickers}
 
     # -------------------------------------------------------------
-    # NEW: Per-Ticker Fixed_Asset_Value sliders (range 1–5000)
+    # Per-Ticker Fixed_Asset_Value sliders (0 disables capital for that ticker)
     # -------------------------------------------------------------
     if active_configs:
         with st.expander("Per-Ticker Controls"):
@@ -222,7 +230,7 @@ if full_config or DEFAULT_CONFIG:
                     # ใช้ key แยกราย ticker เพื่อให้ state คงอยู่
                     new_val = st.slider(
                         f"Fixed_Asset_Value — {tkr}",
-                        min_value=1.0, max_value=5000.0, value=current_val, step=1.0,
+                        min_value=0.0, max_value=5000.0, value=current_val, step=1.0,
                         key=f"fav_{tkr}"
                     )
                     # อัปเดตค่าเข้าคอนฟิกที่ใช้รัน simulation
@@ -232,109 +240,205 @@ if full_config or DEFAULT_CONFIG:
     if not active_configs:
         st.warning("Please select at least one ticker to start the analysis.")
     else:
-        with st.spinner('Calculating... Please wait.'):
+        st.caption(
+            "This page audits the valuation engine. pred=1 means rebalance every bar; "
+            "a Hybrid DNA action stream must be supplied explicitly to reproduce a "
+            "Hybrid Multi-Mutation path."
+        )
+
+        with st.spinner("Calculating... Please wait."):
             data = un_16(active_configs)
 
         if data.empty:
-            st.error("Failed to generate data. This might happen if tickers have no historical data for the selected period or another error occurred.")
+            st.error(
+                "Failed to generate data. This might happen if tickers have no "
+                "historical data for the selected period or another error occurred."
+            )
         else:
-            df_new = data.copy()
+            successful_tickers = [
+                ticker for ticker in active_configs
+                if f"{ticker}_net_pv" in data.columns
+            ]
+            re_columns = [f"{ticker}_re" for ticker in successful_tickers]
+            sum_fixed_asset_value = float(sum(
+                active_configs[ticker].get("Fixed_Asset_Value", 0.0)
+                for ticker in successful_tickers
+            ))
 
-            # Drawdown path (buffer used)
-            roll_over = []
-            mvals = df_new.maxcash_dd.values
-            for i in range(len(mvals)):
-                roll = mvals[:i]
-                roll_min = np.min(roll) if len(roll) > 0 else 0
-                roll_over.append(roll_min)
+            cumulative_cash_flow = data["cumulative_cash_flow"].to_numpy(
+                dtype=np.float64
+            )
+            running_cash_floor = np.minimum.accumulate(
+                np.minimum(cumulative_cash_flow, 0.0)
+            )
+            excess_profit = data["portfolio_excess_profit"].to_numpy(
+                dtype=np.float64
+            )
 
-            cf_values = df_new.cf.values
-            df_all = pd.DataFrame({'Sum_Delta': cf_values, 'Max_Sum_Buffer': roll_over}, index=df_new.index)
+            df_all = pd.DataFrame({
+                "Portfolio_Excess_Profit": excess_profit,
+                "Running_Cash_Floor": running_cash_floor,
+            }, index=data.index)
 
-            # True Alpha (คงสูตรฐานเก่า: n×1500 + |buffer|)
-            n_tickers = len(selected_tickers)
-            initial_capital = n_tickers * 1500.0  # <— ตามข้อกำหนด Goal_2: ไม่เปลี่ยนสูตรฐาน
-            max_buffer_used = abs(np.min(roll_over))
-            total_capital_at_risk = initial_capital + max_buffer_used if (initial_capital + max_buffer_used) != 0 else 1.0
-            df_all_2 = pd.DataFrame({'True_Alpha': (df_new.cf.values / total_capital_at_risk) * 100}, index=df_new.index)
+            max_buffer_used = abs(float(np.min(running_cash_floor)))
+            total_capital_at_risk = sum_fixed_asset_value + max_buffer_used
+            if total_capital_at_risk > 0:
+                harvest_return = (excess_profit / total_capital_at_risk) * 100.0
+            else:
+                harvest_return = np.zeros(len(excess_profit), dtype=np.float64)
 
-            # KPIs
+            df_all_2 = pd.DataFrame({
+                "Harvest_Return_on_Capital_Pct": harvest_return
+            }, index=data.index)
+
+            final_excess_profit = float(df_all["Portfolio_Excess_Profit"].iloc[-1])
+            final_harvest_return = float(
+                df_all_2["Harvest_Return_on_Capital_Pct"].iloc[-1]
+            )
+            num_intervals = max(len(data) - 1, 1)
+            avg_daily_excess_profit = final_excess_profit / num_intervals
+
+            daily_portfolio_cash_flow = data[re_columns].sum(axis=1)
+            avg_daily_cash_outflow = float(
+                (-daily_portfolio_cash_flow.clip(upper=0.0)).mean()
+            )
+
+            with st.expander("Scenario MIRR assumptions", expanded=False):
+                m1, m2, m3 = st.columns(3)
+                mirr_years = int(m1.number_input(
+                    "Projection years", min_value=1, max_value=10, value=3, step=1
+                ))
+                annual_trading_days = int(m2.number_input(
+                    "Trading days/year", min_value=1, max_value=366,
+                    value=252, step=1
+                ))
+                exit_recovery_pct = float(m3.slider(
+                    "Capital recovered at exit (%)",
+                    min_value=0.0, max_value=100.0, value=100.0, step=1.0
+                ))
+
+                r1, r2 = st.columns(2)
+                finance_rate_pct = float(r1.number_input(
+                    "Finance rate (%)", min_value=0.0, value=0.0, step=0.25
+                ))
+                reinvest_rate_pct = float(r2.number_input(
+                    "Reinvestment rate (%)", min_value=0.0, value=0.0, step=0.25
+                ))
+
+            projected_annual_excess = (
+                avg_daily_excess_profit * annual_trading_days
+            )
+            exit_recovery = total_capital_at_risk * exit_recovery_pct / 100.0
+            finance_rate = finance_rate_pct / 100.0
+            reinvest_rate = reinvest_rate_pct / 100.0
+
+            cash_flows = (
+                [-total_capital_at_risk]
+                + [projected_annual_excess] * max(mirr_years - 1, 0)
+                + [projected_annual_excess + exit_recovery]
+            )
+            mirr_value = (
+                npf.mirr(cash_flows, finance_rate, reinvest_rate)
+                if total_capital_at_risk > 0 else np.nan
+            )
+
             st.subheader("Key Performance Indicators")
-            final_sum_delta = float(df_all.Sum_Delta.iloc[-1])
-            final_max_buffer = float(df_all.Max_Sum_Buffer.iloc[-1])
-            final_true_alpha = float(df_all_2.True_Alpha.iloc[-1])
-            num_days = len(df_new)
-            avg_cf = final_sum_delta / num_days if num_days > 0 else 0.0
-            avg_burn_cash = abs(final_max_buffer) / num_days if num_days > 0 else 0.0
-
-            # MIRR inputs
-            sum_fixed_asset_value = float(sum(cfg.get('Fixed_Asset_Value', 0.0) for cfg in active_configs.values()))
-            I = sum_fixed_asset_value + abs(final_max_buffer)                 # Initial Investment
-            A = avg_cf * 252                                                 # Annual CF
-            E = 0.5 * sum_fixed_asset_value                                  # Exit Multiple (JSON-only spec)
-            finance_rate = 0.0
-            reinvest_rate = 0.0
-
-            cash_flows = [-I, A, A, A + E]
-            mirr_value = npf.mirr(cash_flows, finance_rate, reinvest_rate) if I > 0 else 0.0
-
-            # KPI widgets
             k1, k2, k3, k4, k5, k6 = st.columns(6)
-            k1.metric("Total Net Profit (cf)", f"{final_sum_delta:,.2f}")
-            k2.metric("Max Cash Buffer Used", f"{final_max_buffer:,.2f}")
-            k3.metric("True Alpha (%)", f"{final_true_alpha:,.2f}%")
-            k4.metric("Avg. Daily Profit", f"{avg_cf:,.2f}")
-            k5.metric("Avg. Daily Buffer Used", f"{avg_burn_cash:,.2f}")
-            k6.metric("MIRR (3-Year)", f"{mirr_value:.2%}")
+            k1.metric(
+                "Excess Profit vs Log Reference",
+                f"{final_excess_profit:,.2f}",
+            )
+            k2.metric("Max Cash Buffer Required", f"{max_buffer_used:,.2f}")
+            k3.metric(
+                "Harvest Return on Capital",
+                f"{final_harvest_return:,.2f}%",
+            )
+            k4.metric(
+                "Avg. Daily Excess Profit",
+                f"{avg_daily_excess_profit:,.2f}",
+            )
+            k5.metric(
+                "Avg. Daily Cash Outflow",
+                f"{avg_daily_cash_outflow:,.2f}",
+            )
+            k6.metric(
+                f"Scenario MIRR ({mirr_years}-Year)",
+                f"{mirr_value:.2%}" if np.isfinite(mirr_value) else "N/A",
+            )
 
-            # ---------- JSON-only help block ----------
             help_payload = {
-                "definition": "MIRR (3-Year)",
-                "tickers_selected": int(n_tickers),
+                "reference_model": {
+                    "formula": "R_n = FAV × ln(P_n / P_0)",
+                    "anchor": "P_0 is the first valid Close in the selected window",
+                    "invariant": "net_pv >= 0 (within floating-point tolerance)",
+                },
+                "successful_tickers": successful_tickers,
                 "sum_fixed_asset_value": round(sum_fixed_asset_value, 2),
-                "max_cash_buffer_used_abs": round(abs(final_max_buffer), 2),
-                "I_initial_investment": round(I, 2),
-                "A_annual_cash_flow": round(A, 2),
-                "E_exit_multiple": {
-                    "formula": "0.5 × Σ(Fixed_Asset_Value)",
-                    "value": round(E, 2)
+                "max_cash_buffer_required": round(max_buffer_used, 2),
+                "capital_at_risk": {
+                    "formula": "Σ(FAV) + max cash buffer required",
+                    "value": round(total_capital_at_risk, 2),
                 },
-                "rates": {
+                "scenario_mirr": {
+                    "is_projection_not_observed_return": True,
+                    "years": mirr_years,
+                    "annual_trading_days": annual_trading_days,
+                    "projected_annual_excess": round(projected_annual_excess, 2),
+                    "exit_recovery_percent": exit_recovery_pct,
                     "finance_rate": finance_rate,
-                    "reinvest_rate": reinvest_rate
+                    "reinvest_rate": reinvest_rate,
+                    "cash_flows_vector": [round(value, 2) for value in cash_flows],
+                    "result": (
+                        round(float(mirr_value), 6)
+                        if np.isfinite(mirr_value) else None
+                    ),
                 },
-                "cash_flows_vector": [
-                    round(-I, 2),
-                    round(A, 2),
-                    round(A, 2),
-                    round(A + E, 2)
-                ],
-                "mirr_result": round(float(mirr_value), 6) if isinstance(mirr_value, (int, float, np.floating)) else None
             }
 
             st.json(help_payload, expanded=False)
             st.divider()
 
-            # Charts
             st.subheader("Performance Charts")
             g1, g2 = st.columns(2)
             g1.plotly_chart(
-                px.line(df_all.reset_index(drop=True), title="Cumulative Profit (Sum_Delta) vs. Max Buffer Used"),
-                use_container_width=True
+                px.line(
+                    df_all,
+                    y=["Portfolio_Excess_Profit", "Running_Cash_Floor"],
+                    title="Excess Profit vs. Running Cash Floor",
+                ),
+                use_container_width=True,
             )
             g2.plotly_chart(
-                px.line(df_all_2, title="True Alpha (%)"),
-                use_container_width=True
+                px.line(
+                    df_all_2,
+                    y=["Harvest_Return_on_Capital_Pct"],
+                    title="Harvest Return on Capital (%)",
+                ),
+                use_container_width=True,
             )
 
             st.divider()
             st.subheader("Detailed Simulation Data")
-            df_plot = df_new.copy()
-            for t in selected_tickers:
-                col = f"{t}_re"
-                if col in df_plot.columns:
-                    df_plot[col] = df_plot[col].cumsum()
-            st.plotly_chart(px.line(df_plot, title="Portfolio Simulation Details"), use_container_width=True)
+            df_plot = data.copy()
+            for ticker in successful_tickers:
+                column = f"{ticker}_re"
+                df_plot[column] = df_plot[column].cumsum()
+
+            detail_columns = (
+                [f"{ticker}_re" for ticker in successful_tickers]
+                + [f"{ticker}_net_pv" for ticker in successful_tickers]
+                + ["cumulative_cash_flow", "portfolio_excess_profit"]
+            )
+            st.plotly_chart(
+                px.line(
+                    df_plot[detail_columns],
+                    title=(
+                        "Per-Ticker Cumulative Cash Flow and "
+                        "Log-Reference Excess Profit"
+                    ),
+                ),
+                use_container_width=True,
+            )
 
 else:
     st.error("Could not load any configuration. Please check that 'un15_fx_config.json' exists and is correctly formatted.")
