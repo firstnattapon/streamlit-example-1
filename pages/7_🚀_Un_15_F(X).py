@@ -519,6 +519,55 @@ if full_config or DEFAULT_CONFIG:
                     )
                 }
 
+                ranked_detail_tickers = list(
+                    selected_detail_tickers
+                )
+                ranking_basis = None
+
+                if detail_view == "Cash Flow by Ticker":
+                    ranked_detail_tickers.sort(
+                        key=lambda ticker: float(
+                            df_plot[f"{ticker}_re"].iloc[-1]
+                        ),
+                        reverse=True,
+                    )
+                    ranking_basis = (
+                        "final cumulative cash flow, highest first"
+                    )
+                elif detail_view == "Cash Floor by Ticker":
+                    ranked_detail_tickers.sort(
+                        key=lambda ticker: abs(float(
+                            df_plot[
+                                f"{ticker}_Running_Cash_Floor"
+                            ].min()
+                        )),
+                        reverse=True,
+                    )
+                    ranking_basis = (
+                        "maximum cash DD, highest risk first"
+                    )
+                elif detail_view in {
+                    "Excess Profit by Ticker",
+                    "All Series",
+                }:
+                    ranked_detail_tickers.sort(
+                        key=lambda ticker: float(
+                            df_plot[f"{ticker}_net_pv"].iloc[-1]
+                        ),
+                        reverse=True,
+                    )
+                    ranking_basis = (
+                        "final excess profit, highest first"
+                    )
+
+                ticker_rank = {
+                    ticker: rank
+                    for rank, ticker in enumerate(
+                        ranked_detail_tickers,
+                        start=1,
+                    )
+                }
+
                 def add_detail_trace(
                     name,
                     values,
@@ -588,10 +637,14 @@ if full_config or DEFAULT_CONFIG:
                         legend_group="Portfolio",
                     )
 
-                if detail_view in {"Cash Flow by Ticker", "All Series"}:
-                    for ticker in selected_detail_tickers:
+                if detail_view == "Cash Flow by Ticker":
+                    for ticker in ranked_detail_tickers:
+                        rank = ticker_rank[ticker]
                         add_detail_trace(
-                            name=f"{ticker} · Cumulative Cash Flow",
+                            name=(
+                                f"#{rank} {ticker} · "
+                                "Cumulative Cash Flow"
+                            ),
                             values=detail_plot_df[f"{ticker}_re"],
                             color=ticker_color_map[ticker],
                             dash="solid",
@@ -599,10 +652,14 @@ if full_config or DEFAULT_CONFIG:
                             legend_group=ticker,
                         )
 
-                if detail_view in {"Cash Floor by Ticker", "All Series"}:
-                    for ticker in selected_detail_tickers:
+                if detail_view == "Cash Floor by Ticker":
+                    for ticker in ranked_detail_tickers:
+                        rank = ticker_rank[ticker]
                         add_detail_trace(
-                            name=f"{ticker} · Running Cash Floor",
+                            name=(
+                                f"#{rank} {ticker} · "
+                                "Running Cash Floor"
+                            ),
                             values=detail_plot_df[
                                 f"{ticker}_Running_Cash_Floor"
                             ],
@@ -612,10 +669,42 @@ if full_config or DEFAULT_CONFIG:
                             legend_group=ticker,
                         )
 
-                if detail_view in {"Excess Profit by Ticker", "All Series"}:
-                    for ticker in selected_detail_tickers:
+                if detail_view == "Excess Profit by Ticker":
+                    for ticker in ranked_detail_tickers:
+                        rank = ticker_rank[ticker]
                         add_detail_trace(
-                            name=f"{ticker} · Excess Profit",
+                            name=f"#{rank} {ticker} · Excess Profit",
+                            values=detail_plot_df[f"{ticker}_net_pv"],
+                            color=ticker_color_map[ticker],
+                            dash="dot",
+                            width=2.1,
+                            legend_group=ticker,
+                        )
+
+                if detail_view == "All Series":
+                    for ticker in ranked_detail_tickers:
+                        rank = ticker_rank[ticker]
+                        rank_name = f"#{rank} {ticker}"
+                        add_detail_trace(
+                            name=f"{rank_name} · Cumulative Cash Flow",
+                            values=detail_plot_df[f"{ticker}_re"],
+                            color=ticker_color_map[ticker],
+                            dash="solid",
+                            width=2.1,
+                            legend_group=ticker,
+                        )
+                        add_detail_trace(
+                            name=f"{rank_name} · Running Cash Floor",
+                            values=detail_plot_df[
+                                f"{ticker}_Running_Cash_Floor"
+                            ],
+                            color=ticker_color_map[ticker],
+                            dash="dash",
+                            width=2.2,
+                            legend_group=ticker,
+                        )
+                        add_detail_trace(
+                            name=f"{rank_name} · Excess Profit",
                             values=detail_plot_df[f"{ticker}_net_pv"],
                             color=ticker_color_map[ticker],
                             dash="dot",
@@ -698,8 +787,14 @@ if full_config or DEFAULT_CONFIG:
                         f"{len(successful_tickers)} tickers"
                     )
                 )
+                ranking_text = (
+                    f" · Ranking: {ranking_basis}"
+                    if ranking_basis
+                    else ""
+                )
                 st.caption(
                     f"Showing: {scope_text} · Period: {detail_period}"
+                    f"{ranking_text}"
                 )
                 st.plotly_chart(
                     detail_fig,
