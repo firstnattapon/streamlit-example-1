@@ -73,7 +73,7 @@ def format_timeline_value(value: Any, timeframe: str) -> str:
 
 def load_config() -> Dict[str, Any]:
     return {
-        "assets": ["FSUN", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" , "DJT", "IBRX" , "SG" , "CLSK" , "LUNR" ],
+        "assets": ["FSUN", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" , "DJT", "IBRX" , "SG" , "CLSK" , "LUNR" ,"SOUN" , "SMR" ],
         "default_settings": {
             "start_date": "2024-01-01",
             "window_size": 30, "num_seeds": 1000, "max_workers": 1,
