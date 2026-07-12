@@ -4,7 +4,7 @@ import yfinance as yf
 import streamlit as st
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 import json  # ! NEW: For Export Functionality
 
 # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
@@ -21,6 +21,55 @@ class Strategy:
     PERFECT_FORESIGHT = "Perfect Foresight (Max)"
     HYBRID_MULTI_MUTATION = "Hybrid (Multi-Mutation)"
     ORIGINAL_DNA = "Original DNA (Pre-Mutation)"
+
+# ! GOAL_1: Multi-Timeframe Support (30m, 1h, 4h, 1d) via Yahoo Finance
+ENCODED_DNA_MAGIC = 0
+ENCODED_DNA_VERSION = 1
+TIMEFRAME_OPTIONS = {
+    "1d": {"minutes": 1440, "yfinance_interval": "1d"},
+    "4h": {"minutes": 240, "yfinance_interval": "1h"},   # 4h = resample จาก 1h
+    "1h": {"minutes": 60, "yfinance_interval": "1h"},
+    "30m": {"minutes": 30, "yfinance_interval": "30m"},
+}
+
+# ! GOAL_1: ขีดจำกัดการดึงข้อมูลย้อนหลังของ yfinance ต่อ interval (วัน) เพื่อ clamp start_date
+YFINANCE_INTRADAY_MAX_LOOKBACK_DAYS = {
+    "30m": 59,   # yfinance รองรับ 30m ย้อนหลัง ~60 วัน
+    "1h": 729,   # 1h / 4h ย้อนหลัง ~730 วัน
+    "4h": 729,
+}
+
+def get_timeframe_minutes(timeframe: str) -> int:
+    if timeframe not in TIMEFRAME_OPTIONS:
+        raise ValueError(f"Unsupported timeframe: {timeframe}")
+    return int(TIMEFRAME_OPTIONS[timeframe]["minutes"])
+
+def get_timeframe_label_from_minutes(minutes: Optional[int]) -> str:
+    for label, meta in TIMEFRAME_OPTIONS.items():
+        if meta["minutes"] == minutes:
+            return label
+    return "legacy"
+
+def encode_number_stream(numbers: List[int]) -> str:
+    # ! GOAL_1/goal_2: เลข <=9 หลัก ใช้ length-prefix 1 หลักแบบเดิมเป๊ะ (legacy identical)
+    # เลข >=10 หลัก (เช่น Unix timestamp) ใช้ escape '0' + ความยาว 2 หลัก
+    # ('0' เป็น prefix ที่ legacy ไม่เคยสร้าง เพราะทุกเลขมีอย่างน้อย 1 หลัก)
+    parts = []
+    for num in numbers:
+        s = str(int(num))
+        length = len(s)
+        if length <= 9:
+            parts.append(f"{length}{s}")
+        else:
+            parts.append(f"0{length:02d}{s}")
+    return "".join(parts)
+
+def to_unix_timestamp(value: Any) -> int:
+    return int(pd.Timestamp(value).timestamp())
+
+def format_timeline_value(value: Any, timeframe: str) -> str:
+    fmt = "%Y-%m-%d" if timeframe == "1d" else "%Y-%m-%d %H:%M"
+    return pd.Timestamp(value).strftime(fmt)
 
 def load_config() -> Dict[str, Any]:
     return {
@@ -51,25 +100,49 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'max_workers' not in st.session_state: st.session_state.max_workers = defaults.get('max_workers', 8)
     if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 10.0)
     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
-    
+    if 'selected_timeframe' not in st.session_state: st.session_state.selected_timeframe = "1d"
+
     # ! GOAL Step 4: Global Encoding Settings
     if 'trace_target_window' not in st.session_state: st.session_state.trace_target_window = 1
     if 'trace_action_length' not in st.session_state: st.session_state.trace_action_length = 0 # 0 means Auto (Window Size)
+    if 'trace_start_timestamp' not in st.session_state: st.session_state.trace_start_timestamp = 0 # 0 means Auto (Window Start)
     
     if 'batch_results' not in st.session_state: st.session_state.batch_results = {}
 
 # ==============================================================================
 # 2. Core Calculation & Data Functions
 # ==============================================================================
+def clamp_intraday_start_date(start_date: str, end_date: str, timeframe: str) -> Tuple[str, bool]:
+    """
+    ! GOAL_1: yfinance ดึงข้อมูล intraday ย้อนหลังได้จำกัด (30m ~60 วัน, 1h/4h ~730 วัน)
+    ปรับ start_date ให้อยู่ในช่วงที่ดึงได้ เพื่อไม่ให้ได้ข้อมูลว่าง
+    Returns: (effective_start_date, was_clamped)
+    """
+    max_lookback = YFINANCE_INTRADAY_MAX_LOOKBACK_DAYS.get(timeframe)
+    if max_lookback is None:  # 1d ดึงย้อนหลังได้ไม่จำกัด
+        return start_date, False
+    end_ts = pd.Timestamp(end_date)
+    earliest_allowed = (end_ts - pd.Timedelta(days=max_lookback)).normalize()
+    requested_start = pd.Timestamp(start_date)
+    if requested_start < earliest_allowed:
+        return earliest_allowed.strftime('%Y-%m-%d'), True
+    return start_date, False
+
 @st.cache_data(ttl=3600)
-def get_ticker_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+def get_ticker_data(ticker: str, start_date: str, end_date: str, timeframe: str = "1d") -> pd.DataFrame:
     try:
-        data = yf.Ticker(ticker).history(start=start_date, end=end_date)[['Close']]
+        if timeframe not in TIMEFRAME_OPTIONS:
+            raise ValueError(f"Unsupported timeframe: {timeframe}")
+        interval = str(TIMEFRAME_OPTIONS[timeframe]["yfinance_interval"])
+        effective_start, _ = clamp_intraday_start_date(start_date, end_date, timeframe)
+        data = yf.Ticker(ticker).history(start=effective_start, end=end_date, interval=interval)[['Close']]
         if data.empty: return pd.DataFrame()
-        if data.index.tz is None: 
+        if data.index.tz is None:
             data = data.tz_localize('UTC').tz_convert('Asia/Bangkok')
-        else: 
+        else:
             data = data.tz_convert('Asia/Bangkok')
+        if timeframe == "4h":
+            data = data.resample("4h").last().dropna()
         return data
     except Exception as e:
         return pd.DataFrame()
@@ -221,7 +294,8 @@ def find_best_mutation_for_sequence(original_actions: np.ndarray, prices_window:
 
 def generate_actions_hybrid_multi_mutation(
     ticker_data: pd.DataFrame, window_size: int, num_seeds: int, max_workers: int, 
-    mutation_rate_pct: float, num_mutations: int, progress_bar=None, ticker_name:str=""
+    mutation_rate_pct: float, num_mutations: int, progress_bar=None, ticker_name:str="",
+    timeframe: str = "1d"
 ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame]:
 
     prices = ticker_data['Close'].to_numpy()
@@ -261,7 +335,11 @@ def generate_actions_hybrid_multi_mutation(
 
         start_date = ticker_data.index[start_index]; end_date = ticker_data.index[end_index-1]
         detail = {
-            'window': i + 1, 'timeline': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+            'window': i + 1,
+            'timeframe': timeframe,
+            'timeline': f"{format_timeline_value(start_date, timeframe)} to {format_timeline_value(end_date, timeframe)}",
+            'start_timestamp': to_unix_timestamp(start_date),
+            'end_timestamp': to_unix_timestamp(end_date),
             'dna_seed': dna_seed,
             'mutation_seeds': str(successful_mutation_seeds) if successful_mutation_seeds else "None",
             'improvements': len(successful_mutation_seeds),
@@ -280,24 +358,69 @@ class SimulationTracer:
         self.encoded_string: str = encoded_string
         self._decode_and_set_attributes()
 
-    def _decode_and_set_attributes(self):
-        encoded_string = self.encoded_string
+    @staticmethod
+    def decode_number_stream(encoded_string: str) -> List[int]:
         if not isinstance(encoded_string, str) or not encoded_string.isdigit():
             raise ValueError("Input ต้องเป็นสตริงที่ประกอบด้วยตัวเลขเท่านั้น")
         decoded_numbers = []
         idx = 0
         while idx < len(encoded_string):
             try:
-                length_of_number = int(encoded_string[idx]); idx += 1
+                first = encoded_string[idx]; idx += 1
+                if first == '0':
+                    # escape: อ่านความยาว 2 หลักถัดไป (สำหรับเลข >=10 หลัก)
+                    length_str = encoded_string[idx : idx + 2]; idx += 2
+                    if len(length_str) != 2:
+                        raise ValueError
+                    length_of_number = int(length_str)
+                    if length_of_number < 10:
+                        raise ValueError
+                else:
+                    length_of_number = int(first)
+                    if length_of_number <= 0:
+                        raise ValueError
                 number_str = encoded_string[idx : idx + length_of_number]; idx += length_of_number
+                if len(number_str) != length_of_number:
+                    raise ValueError
                 decoded_numbers.append(int(number_str))
             except (IndexError, ValueError):
                 raise ValueError(f"รูปแบบของสตริงไม่ถูกต้องที่ตำแหน่ง {idx}")
-        if len(decoded_numbers) < 3: raise ValueError("ข้อมูลในสตริงไม่ครบถ้วน")
-        self.action_length: int = decoded_numbers[0]
-        self.mutation_rate: int = decoded_numbers[1]
-        self.dna_seed: int = decoded_numbers[2]
-        self.mutation_seeds: List[int] = decoded_numbers[3:]
+        return decoded_numbers
+
+    def _decode_and_set_attributes(self):
+        # ! GOAL_1: รองรับ timeline metadata (timeframe + start_timestamp) แบบ backward-compatible
+        # ถ้าไม่มี magic prefix -> ถอดรหัสแบบ legacy เดิม (goal_2)
+        decoded_numbers = self.decode_number_stream(self.encoded_string)
+        self.raw_numbers: List[int] = decoded_numbers
+        self.has_timeline_metadata: bool = False
+        self.version: Optional[int] = None
+        self.timeframe_minutes: Optional[int] = None
+        self.start_timestamp: Optional[int] = None
+
+        dna_numbers = decoded_numbers
+        if decoded_numbers and decoded_numbers[0] == ENCODED_DNA_MAGIC:
+            if len(decoded_numbers) < 7:
+                raise ValueError("Timeline DNA string must include version, timeframe, timestamp, length, rate, and DNA seed")
+            self.version = int(decoded_numbers[1])
+            if self.version != ENCODED_DNA_VERSION:
+                raise ValueError(f"Unsupported timeline DNA version: {self.version}")
+            self.timeframe_minutes = int(decoded_numbers[2])
+            if self.timeframe_minutes not in [meta["minutes"] for meta in TIMEFRAME_OPTIONS.values()]:
+                raise ValueError(f"Unsupported timeframe minutes: {self.timeframe_minutes}")
+            self.start_timestamp = int(decoded_numbers[3])
+            if self.start_timestamp < 0:
+                raise ValueError("Start timestamp must be greater than or equal to 0")
+            self.has_timeline_metadata = True
+            dna_numbers = decoded_numbers[4:]
+
+        if len(dna_numbers) < 3:
+            raise ValueError("ข้อมูลในสตริงไม่ครบถ้วน")
+        self.action_length: int = int(dna_numbers[0])
+        if self.action_length <= 0:
+            raise ValueError("Action length must be greater than 0")
+        self.mutation_rate: int = int(dna_numbers[1])
+        self.dna_seed: int = int(dna_numbers[2])
+        self.mutation_seeds: List[int] = [int(seed) for seed in dna_numbers[3:]]
         self.mutation_rate_float: float = self.mutation_rate / 100.0
 
     def run(self) -> np.ndarray:
@@ -312,13 +435,36 @@ class SimulationTracer:
         return current_actions
 
     def __str__(self) -> str:
-        return (f"✅ Decoded: Len={self.action_length}, Rate={self.mutation_rate}%, DNA={self.dna_seed}, Mut={self.mutation_seeds}")
+        timeline = ""
+        if self.has_timeline_metadata:
+            timeline = f", TF={get_timeframe_label_from_minutes(self.timeframe_minutes)}, StartTS={self.start_timestamp}"
+        return (f"✅ Decoded: Len={self.action_length}, Rate={self.mutation_rate}%, DNA={self.dna_seed}, Mut={self.mutation_seeds}{timeline}")
 
     @staticmethod
-    def encode(action_length: int, mutation_rate: int, dna_seed: int, mutation_seeds: List[int]) -> str:
-        all_numbers = [action_length, mutation_rate, dna_seed] + mutation_seeds
-        encoded_parts = [f"{len(str(num))}{num}" for num in all_numbers]
-        return "".join(encoded_parts)
+    def encode(
+        action_length: int,
+        mutation_rate: int,
+        dna_seed: int,
+        mutation_seeds: List[int],
+        timeframe_minutes: Optional[int] = None,
+        start_timestamp: Optional[int] = None
+    ) -> str:
+        # ! GOAL_2: ไม่ส่ง timeline -> ได้ digit stream แบบเดิมเป๊ะทุกไบต์
+        all_numbers = [int(action_length), int(mutation_rate), int(dna_seed)] + [int(seed) for seed in mutation_seeds]
+        if timeframe_minutes is not None or start_timestamp is not None:
+            if timeframe_minutes is None or start_timestamp is None:
+                raise ValueError("timeframe_minutes and start_timestamp must be provided together")
+            if int(timeframe_minutes) not in [meta["minutes"] for meta in TIMEFRAME_OPTIONS.values()]:
+                raise ValueError(f"Unsupported timeframe minutes: {timeframe_minutes}")
+            if int(start_timestamp) < 0:
+                raise ValueError("start_timestamp must be greater than or equal to 0")
+            all_numbers = [
+                ENCODED_DNA_MAGIC,
+                ENCODED_DNA_VERSION,
+                int(timeframe_minutes),
+                int(start_timestamp),
+            ] + all_numbers
+        return encode_number_stream(all_numbers)
 
 # ==============================================================================
 # 5. UI Rendering & Logic Functions
@@ -331,39 +477,44 @@ def generate_encoded_dna_for_ticker(
     data_len: int, 
     target_win_num: int, 
     global_act_len: int, 
-    mutation_rate: float, 
-    window_size: int
-) -> Tuple[str, int, int]:
+    mutation_rate: float,
+    window_size: int,
+    timeframe: str,
+    start_timestamp: int
+) -> Tuple[str, int, int, int]:
     """
     Generate Encoded String logic extracted for reuse.
-    Returns: (Encoded String, Actual Window Used, Final Action Length)
+    Returns: (Encoded String, Actual Window Used, Final Action Length, Start Timestamp)
     """
     max_win = len(df_windows)
     use_win_num = target_win_num if target_win_num <= max_win else max_win
-    
+
     start_idx = (use_win_num - 1) * window_size
     remaining = data_len - start_idx
     real_len = min(window_size, remaining)
-    
+
     final_act_len = global_act_len if global_act_len > 0 else real_len
-    
+
     row = df_windows.iloc[use_win_num - 1]
     dna_seed = int(row['dna_seed'])
     mut_seeds_str = row['mutation_seeds']
-    
+    final_start_timestamp = int(start_timestamp) if int(start_timestamp) > 0 else int(row.get('start_timestamp', 0))
+
     mut_seeds = []
     if mut_seeds_str not in ["None", "[]"]:
         clean = mut_seeds_str.strip('[]')
         if clean: mut_seeds = [int(s.strip()) for s in clean.split(',')]
-            
+
     encoded_string = SimulationTracer.encode(
         action_length=int(final_act_len),
         mutation_rate=int(mutation_rate),
         dna_seed=dna_seed,
-        mutation_seeds=mut_seeds
+        mutation_seeds=mut_seeds,
+        timeframe_minutes=get_timeframe_minutes(timeframe),
+        start_timestamp=final_start_timestamp
     )
-    
-    return encoded_string, use_win_num, int(final_act_len)
+
+    return encoded_string, use_win_num, int(final_act_len), final_start_timestamp
 
 
 def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
@@ -385,11 +536,19 @@ def render_settings_tab():
     st.session_state.selected_tickers = st.multiselect(
         "เลือก Tickers ที่ต้องการทดสอบ (เลือกได้หลายตัว)", 
         options=asset_list, 
-        default=st.session_state.selected_tickers 
+        default=st.session_state.selected_tickers
+    )
+
+    timeframe_labels = list(TIMEFRAME_OPTIONS.keys())
+    st.session_state.selected_timeframe = st.selectbox(
+        "Timeframe",
+        options=timeframe_labels,
+        index=timeframe_labels.index(st.session_state.selected_timeframe) if st.session_state.selected_timeframe in timeframe_labels else 0,
+        help="เลือกใช้แท่ง 1d, 4h, 1h หรือ 30m สำหรับการจำลองและการเข้ารหัส timeline"
     )
 
     c1, c2 = st.columns(2)
-    st.session_state.window_size = c1.number_input("ขนาด Window (วัน)", min_value=2, value=st.session_state.window_size)
+    st.session_state.window_size = c1.number_input("ขนาด Window (แท่ง)", min_value=2, value=st.session_state.window_size, help="จำนวนแท่งราคาต่อ 1 Window ตาม Timeframe ที่เลือก")
     st.session_state.num_seeds = c2.number_input("จำนวน Seeds (DNA)", min_value=100, value=st.session_state.num_seeds, format="%d")
 
     c1, c2 = st.columns(2)
@@ -420,6 +579,13 @@ def render_settings_tab():
             value=st.session_state.trace_action_length,
             help="กำหนดความยาว Action Sequence สำหรับ Encode (ใส่ 0 เพื่อใช้ความยาวจริงของ Window นั้นๆ)"
         )
+        st.session_state.trace_start_timestamp = st.number_input(
+            "Unix Start Timestamp (0 = Auto/Selected Window Start)",
+            min_value=0,
+            value=st.session_state.trace_start_timestamp,
+            format="%d",
+            help="Cloud decode ใช้ Unix timestamp นี้ร่วมกับ timeframe เพื่อ map เวลาปัจจุบันไปยัง index ของ DNA action"
+        )
 
 def execute_batch_processing():
     tickers = st.session_state.selected_tickers
@@ -428,24 +594,34 @@ def execute_batch_processing():
 
     start_str = str(st.session_state.start_date)
     end_str = str(st.session_state.end_date)
-    
+    selected_timeframe = st.session_state.selected_timeframe
+
+    # ! GOAL_1: แจ้งเตือนเมื่อ start_date ถูก clamp เพราะข้อจำกัด intraday ของ yfinance
+    effective_start, was_clamped = clamp_intraday_start_date(start_str, end_str, selected_timeframe)
+    if was_clamped:
+        st.warning(
+            f"⚠️ Timeframe {selected_timeframe}: yfinance ดึงข้อมูลย้อนหลังได้จำกัด "
+            f"จึงปรับวันที่เริ่มต้นจาก {start_str} เป็น {effective_start} โดยอัตโนมัติ"
+        )
+
     st.session_state.batch_results = {}
-    
+
     overall_progress = st.progress(0, text="Starting Batch Process...")
     total_tickers = len(tickers)
-    
+
     for idx, ticker in enumerate(tickers):
-        ticker_data = get_ticker_data(ticker, start_str, end_str)
+        ticker_data = get_ticker_data(ticker, start_str, end_str, selected_timeframe)
         if ticker_data.empty:
             st.warning(f"Skipping {ticker}: No Data Found.")
             continue
-            
+
         original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
             ticker_data, st.session_state.window_size, st.session_state.num_seeds,
             st.session_state.max_workers, st.session_state.mutation_rate,
-            st.session_state.num_mutations, 
-            progress_bar=overall_progress, 
-            ticker_name=ticker
+            st.session_state.num_mutations,
+            progress_bar=overall_progress,
+            ticker_name=ticker,
+            timeframe=selected_timeframe
         )
         
         prices = ticker_data['Close'].to_numpy()
@@ -461,7 +637,8 @@ def execute_batch_processing():
         st.session_state.batch_results[ticker] = {
             "sim_results": sim_results,
             "df_windows": df_windows,
-            "data_len": len(ticker_data)
+            "data_len": len(ticker_data),
+            "timeframe": selected_timeframe
         }
         overall_progress.progress((idx + 1) / total_tickers, text=f"Completed {ticker} ({idx+1}/{total_tickers})")
         
@@ -472,7 +649,8 @@ def render_single_ticker_result(ticker: str, result_data: Dict[str, Any]):
     sim_results = result_data["sim_results"]
     df_windows = result_data["df_windows"]
     data_len = result_data["data_len"]
-    
+    timeframe = result_data.get("timeframe", st.session_state.selected_timeframe)
+
     chart_results = {k: v for k, v in sim_results.items() if k != Strategy.ORIGINAL_DNA}
     display_comparison_charts(chart_results, chart_title=f'📊 {ticker} - Net Profit Comparison')
     
@@ -497,14 +675,17 @@ def render_single_ticker_result(ticker: str, result_data: Dict[str, Any]):
     target_win_num = st.session_state.trace_target_window
     global_act_len = st.session_state.trace_action_length
     window_size = st.session_state.window_size
-    
+    trace_start_timestamp = st.session_state.trace_start_timestamp
+
     # Calculate display parameters first for UI (logic duplication minimalized for display only)
     max_win = len(df_windows)
     use_win_num_disp = target_win_num if target_win_num <= max_win else max_win
-    
+    auto_start_ts_disp = int(df_windows.iloc[use_win_num_disp - 1].get('start_timestamp', 0)) if max_win > 0 else 0
+    start_ts_disp = trace_start_timestamp if trace_start_timestamp > 0 else auto_start_ts_disp
+
     c_enc_1, c_enc_2 = st.columns([3, 1])
     with c_enc_1:
-        st.info(f"Using Global Settings: **Window {use_win_num_disp}**, **Len {global_act_len if global_act_len>0 else 'Auto'}** (Rate: {st.session_state.mutation_rate}%)")
+        st.info(f"Using Global Settings: **Window {use_win_num_disp}**, **Len {global_act_len if global_act_len>0 else 'Auto'}**, **TF {timeframe}**, **StartTS {start_ts_disp}** (Rate: {st.session_state.mutation_rate}%)")
         if target_win_num > max_win:
              st.caption(f"⚠️ Window {target_win_num} เกินจำนวนที่มี (Max {max_win}). ใช้ Window {max_win} แทน")
 
@@ -512,12 +693,12 @@ def render_single_ticker_result(ticker: str, result_data: Dict[str, Any]):
         if st.button(f"Encode ({ticker})", key=f"btn_enc_{ticker}", use_container_width=True):
             try:
                 # ! REFACTORED: Use helper function
-                encoded, final_win, final_len = generate_encoded_dna_for_ticker(
-                    df_windows, data_len, target_win_num, global_act_len, 
-                    st.session_state.mutation_rate, window_size
+                encoded, final_win, final_len, final_start_ts = generate_encoded_dna_for_ticker(
+                    df_windows, data_len, target_win_num, global_act_len,
+                    st.session_state.mutation_rate, window_size, timeframe, trace_start_timestamp
                 )
-                
-                st.success(f"Encoded String ({ticker} Win {final_win}):")
+
+                st.success(f"Encoded String ({ticker} Win {final_win}, TF {timeframe}, StartTS {final_start_ts}):")
                 st.code(encoded, language='text')
             except Exception as e:
                 st.error(f"Encoding Error: {e}")
@@ -698,32 +879,46 @@ def render_simulation_tabs():
         exp_c1, exp_c2 = st.columns([3, 1])
         with exp_c1:
             st.markdown("#### 💾 Export Encoded Strings")
-            st.caption(f"Settings: Window {st.session_state.trace_target_window}, Len {st.session_state.trace_action_length}, Rate {st.session_state.mutation_rate}%")
-        
+            st.caption(f"Settings: Window {st.session_state.trace_target_window}, Len {st.session_state.trace_action_length}, TF {st.session_state.selected_timeframe}, StartTS {st.session_state.trace_start_timestamp}, Rate {st.session_state.mutation_rate}%")
+
         with exp_c2:
             # Prepare data for JSON export
             export_payload = {
                 "metadata": {
                     "trace_target_window": st.session_state.trace_target_window,
                     "trace_action_length": st.session_state.trace_action_length,
+                    "timeframe": st.session_state.selected_timeframe,
+                    "timeframe_minutes": get_timeframe_minutes(st.session_state.selected_timeframe),
+                    "trace_start_timestamp": st.session_state.trace_start_timestamp,
                     "mutation_rate_percent": st.session_state.mutation_rate,
                     "exported_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 },
-                "tickers": {}
+                "tickers": {},
+                "ticker_metadata": {}
             }
-            
+
             # Loop through all results and generate strings
             for ticker, data in st.session_state.batch_results.items():
                 try:
-                    encoded, final_win, final_len = generate_encoded_dna_for_ticker(
-                        data["df_windows"], 
-                        data["data_len"], 
-                        st.session_state.trace_target_window, 
-                        st.session_state.trace_action_length, 
-                        st.session_state.mutation_rate, 
-                        st.session_state.window_size
+                    timeframe = data.get("timeframe", st.session_state.selected_timeframe)
+                    encoded, final_win, final_len, final_start_ts = generate_encoded_dna_for_ticker(
+                        data["df_windows"],
+                        data["data_len"],
+                        st.session_state.trace_target_window,
+                        st.session_state.trace_action_length,
+                        st.session_state.mutation_rate,
+                        st.session_state.window_size,
+                        timeframe,
+                        st.session_state.trace_start_timestamp
                     )
                     export_payload["tickers"][ticker] = encoded
+                    export_payload["ticker_metadata"][ticker] = {
+                        "window": final_win,
+                        "action_length": final_len,
+                        "timeframe": timeframe,
+                        "timeframe_minutes": get_timeframe_minutes(timeframe),
+                        "start_timestamp": final_start_ts,
+                    }
                 except Exception as e:
                     export_payload["tickers"][ticker] = f"Error: {str(e)}"
 
@@ -796,6 +991,24 @@ def render_tracer_tab():
             help="ชุดของ Seed สำหรับการกลายพันธุ์แต่ละรอบ คั่นด้วยเครื่องหมายจุลภาค"
         )
 
+    meta_col1, meta_col2 = st.columns(2)
+    with meta_col1:
+        manual_timeframe_input = st.selectbox(
+            "Encode Timeframe",
+            options=list(TIMEFRAME_OPTIONS.keys()),
+            index=list(TIMEFRAME_OPTIONS.keys()).index(st.session_state.selected_timeframe) if st.session_state.selected_timeframe in TIMEFRAME_OPTIONS else 0,
+            key="enc_timeframe",
+            help="ใช้เฉพาะเมื่อ Unix Start Timestamp มากกว่า 0 (ใส่ timeline metadata)"
+        )
+    with meta_col2:
+        manual_start_timestamp_input = st.number_input(
+            "Unix Start Timestamp (0 = legacy/ไม่มี timeline metadata)",
+            min_value=0,
+            value=0,
+            format="%d",
+            key="enc_start_ts"
+        )
+
     if st.button("Encode Parameters", key="encoder_button"):
         try:
             if mutation_seeds_str.strip():
@@ -807,7 +1020,9 @@ def render_tracer_tab():
                 action_length=int(action_length_input),
                 mutation_rate=int(mutation_rate_input),
                 dna_seed=int(dna_seed_input),
-                mutation_seeds=mutation_seeds_list
+                mutation_seeds=mutation_seeds_list,
+                timeframe_minutes=get_timeframe_minutes(manual_timeframe_input) if int(manual_start_timestamp_input) > 0 else None,
+                start_timestamp=int(manual_start_timestamp_input) if int(manual_start_timestamp_input) > 0 else None
             )
 
             st.success("เข้ารหัสสำเร็จ! สามารถคัดลอก String ด้านล่างไปใช้ได้")
