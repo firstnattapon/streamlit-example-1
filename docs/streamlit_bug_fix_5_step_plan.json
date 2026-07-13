@@ -1,0 +1,360 @@
+{
+  "framework": "5-step-process",
+  "language": "th",
+  "step_1_goals": {
+    "raw_goal": "แก้ bug ArrowTypeError ของคอลัมน์ ↓ index, ย้าย st.components.v1.iframe ไป st.iframe, ลด Yahoo no-data และหยุด Segmentation fault บน Streamlit production",
+    "refined_goal": "ทำให้แอป firstnattapon/streamlit-example-1 deploy และใช้งานได้โดยไม่มี ArrowTypeError, ไม่มี API iframe ที่เลิกใช้, ไม่ crash ด้วย Segmentation fault และจัดการ ticker ที่ไม่มีข้อมูลโดยไม่ทำให้แอปล่ม ภายใน 1 release cycle",
+    "target_metric": {
+      "name": "Production stability gates passed",
+      "current": 0,
+      "target": 4,
+      "unit": "gates",
+      "horizon": "ภายใน 1 release cycle (เป้าหมาย 13–14 กรกฎาคม 2026)"
+    },
+    "success_criteria": [
+      "Gate 1: เปิดหน้า Monitor, Calculator และ Test_F(Z) โดยไม่เกิด pyarrow.lib.ArrowTypeError จาก ↓ index",
+      "Gate 2: ค้นทั้ง repo แล้วพบ st.components.v1.iframe = 0 จุด และ iframe ทุกตัวแสดงผลด้วย st.iframe",
+      "Gate 3: cold start/rerun อย่างน้อย 20 รอบและใช้งาน 30 นาทีโดยไม่มี Segmentation fault",
+      "Gate 4: ticker ที่ no-data เช่น FFWM/APLS ถูกแสดงเป็นสถานะ unavailable/skip โดยไม่ retry รุนแรงและไม่ทำให้ process crash"
+    ]
+  },
+  "step_2_problems": [
+    {
+      "id": "P1",
+      "description": "DataFrame ผสม index ชนิดข้อความ (+4…0) กับ pandas Timestamp แล้วส่งตรงเข้า st.dataframe; PyArrow ต้องสร้างคอลัมน์ ↓ index ชนิดเดียวจึงแปลงไม่ได้",
+      "gap_value": 3,
+      "severity": 5
+    },
+    {
+      "id": "P2",
+      "description": "ยังมีการเรียก st.components.v1.iframe แบบเก่ากระจายอย่างน้อย 15 จุดใน 3 ไฟล์ ทำให้เกิด deprecation warning และมีความเสี่ยงพังหลัง API ถูกถอด",
+      "gap_value": 15,
+      "severity": 4
+    },
+    {
+      "id": "P3",
+      "description": "process Streamlit จบด้วย Segmentation fault ซึ่งเป็น native crash; traceback Python ปกติจับไม่ได้ และ dependency native สำคัญไม่ถูก pin",
+      "gap_value": 1,
+      "severity": 5
+    },
+    {
+      "id": "P4",
+      "description": "ticker no-data/delisted ถูกเรียกซ้ำผ่าน Yahoo หลาย fallback/หลาย thread ทำให้เกิด error noise, เพิ่มโหลด และทำให้การหาต้นเหตุ segfault ยากขึ้น",
+      "gap_value": 2,
+      "severity": 3
+    }
+  ],
+  "step_3_diagnosis": [
+    {
+      "problem_id": "P1",
+      "root_causes": [
+        {
+          "id": "RC1",
+          "cause": "pd.concat รวม Index[str] ของ future rows กับ DatetimeIndex ของ history rows",
+          "why_chain": [
+            "ต้องการให้ตารางมีแถวอนาคต +4 ถึง 0 อยู่เหนือข้อมูลราคาเก่า",
+            "จึงสร้าง future_df ด้วย index แบบ string แล้ว concat กับ history ที่ index เป็น Timestamp",
+            "index ที่ผสมชนิดถูกตั้งชื่อ ↓ index และ Streamlit/PyArrow พยายาม serialize เป็นคอลัมน์เดียว",
+            "Arrow เลือก representation แบบข้อความ/bytes แต่พบ Timestamp จึงโยน Expected bytes, got Timestamp"
+          ],
+          "impact_weight": 0.75,
+          "evidence": "ยืนยันจาก 📈_Monitor.py, pages/Calculator.py และ pages/3_🕹_Test_F(Z): future_index เป็น string, history เป็น DatetimeIndex, concat แล้วตั้ง combined_df.index.name='↓ index'"
+        },
+        {
+          "id": "RC2",
+          "cause": "ขั้นตอน sanitize ก่อน st.dataframe แปลงเฉพาะ data columns แต่ไม่ normalize DataFrame index",
+          "why_chain": [
+            "โค้ดวน astype(str) เฉพาะคอลัมน์ dtype object",
+            "↓ index ยังอยู่ใน Index ไม่ได้อยู่ใน df.columns",
+            "จึงยังคงมี string และ Timestamp ผสมกันตอนส่งเข้า st.dataframe"
+          ],
+          "impact_weight": 0.25,
+          "evidence": "ยืนยันใน expander Show Raw Data Action ของ 📈_Monitor.py และ st.dataframe(asset_df) ของ Calculator"
+        }
+      ]
+    },
+    {
+      "problem_id": "P2",
+      "root_causes": [
+        {
+          "id": "RC3",
+          "cause": "iframe legacy ถูกเรียกตรงหลายจุดใน CF_Graph",
+          "why_chain": [
+            "หน้าเดิมฝังหลาย artifact โดยเรียก st.components.v1.iframe ทุกครั้ง",
+            "ไม่มี helper กลางสำหรับ API ใหม่",
+            "เมื่อ Streamlit เปลี่ยน API ทุก call จึงเตือนซ้ำ"
+          ],
+          "impact_weight": 0.65,
+          "evidence": "pages/0_🔥_CF_Graph.py มี 11 source occurrences"
+        },
+        {
+          "id": "RC4",
+          "cause": "helper iframe ใน Principle_F(X) และ Book_F(X) ยังห่อ API เก่า และ Book ใช้ @st.cache_data ครอบฟังก์ชัน UI",
+          "why_chain": [
+            "สร้าง helper เพื่อเรียกซ้ำสะดวก",
+            "helper ไม่ได้ถูกอัปเดตเมื่อมี st.iframe",
+            "การ cache ฟังก์ชันที่วาด UI ไม่จำเป็นและเพิ่ม state/behavior ที่คาดเดายาก"
+          ],
+          "impact_weight": 0.35,
+          "evidence": "pages/8_📕_Principle_F(X).py และ pages/9_📑_Book_F(X).py"
+        }
+      ]
+    },
+    {
+      "problem_id": "P3",
+      "root_causes": [
+        {
+          "id": "RC5",
+          "cause": "requirements.txt เปิดช่วงเวอร์ชันกว้างและไม่ pin numpy/pandas/streamlit/yfinance/curl_cffi/pyarrow",
+          "why_chain": [
+            "ทุก deploy สามารถดึง wheel รุ่นใหม่ต่างจากรอบก่อน",
+            "ไลบรารีเหล่านี้มี native extension/ABI ที่ process สามารถ crash ได้โดยไม่มี Python exception",
+            "จึง reproduce และ rollback ยาก"
+          ],
+          "impact_weight": 0.45,
+          "evidence": "ยืนยันว่า requirements.txt ไม่ pin; ความเชื่อมโยงกับ segfault เป็นสมมติฐานที่ต้องทดสอบด้วย lockfile matrix"
+        },
+        {
+          "id": "RC6",
+          "cause": "Yahoo calls ทำงานพร้อมกันสูงสุด 8 threads และแต่ละ ticker มีหลาย fallback (fast_info → info → history)",
+          "why_chain": [
+            "ต้องการให้ราคาหลาย ticker โหลดเร็ว",
+            "จึงใช้ ThreadPoolExecutor(max_workers=min(8,len(tickers)))",
+            "network/native stack ของ yfinance/curl_cffi ถูกเรียกพร้อมกันจำนวนมาก",
+            "เมื่อมี ticker no-data จะเกิด fallback/retry เพิ่ม ทำให้ crash surface ใหญ่ขึ้น"
+          ],
+          "impact_weight": 0.35,
+          "evidence": "ยืนยัน concurrency/fallback จาก 📈_Monitor.py; เป็น probable cause ไม่ใช่ข้อสรุปจนกว่าจะ A/B test"
+        },
+        {
+          "id": "RC7",
+          "cause": "ไม่มี faulthandler, minimal reproduction และ cold-start stress gate สำหรับ native crash",
+          "why_chain": [
+            "log ปัจจุบันจบที่ shell รายงาน Segmentation fault",
+            "ไม่มี native-adjacent Python stack dump ก่อน process ตาย",
+            "จึงไม่รู้ว่า crash เกิดระหว่าง Arrow, curl_cffi, numpy หรือโมดูลอื่น"
+          ],
+          "impact_weight": 0.2,
+          "evidence": "ไม่พบ crash instrumentation ในไฟล์หลักที่ตรวจ; ต้องยืนยันเพิ่มเติมทั้ง repo"
+        }
+      ]
+    },
+    {
+      "problem_id": "P4",
+      "root_causes": [
+        {
+          "id": "RC8",
+          "cause": "ไม่มี ticker preflight/health status ที่แยก active, unavailable และ delisted ก่อนโหลดหน้าหลัก",
+          "why_chain": [
+            "ticker มาจาก config หลายไฟล์",
+            "ทุก ticker ถูกส่งเข้า Yahoo เหมือนกัน",
+            "symbol ที่ไม่มีข้อมูลจึงถูกลองซ้ำและส่ง error log ทุก rerun"
+          ],
+          "impact_weight": 0.7,
+          "evidence": "log ระบุ FFWM/APLS no price data; repo มี ticker เหล่านี้ใน config/หน้าอื่น"
+        },
+        {
+          "id": "RC9",
+          "cause": "ไม่มี negative cache/circuit breaker สำหรับผล no-data",
+          "why_chain": [
+            "cache ปัจจุบันเน้นค่าราคาที่สำเร็จ",
+            "ผลล้มเหลว 0.0 ไม่ได้มีสถานะเหตุผลและอายุ cache ที่ชัดเจน",
+            "ผู้ใช้ rerun แล้ว request เดิมเกิดซ้ำ"
+          ],
+          "impact_weight": 0.3,
+          "evidence": "get_cached_price คืน 0.0 หลัง fallback แต่ไม่ได้บันทึก unavailable reason หรือ cooldown"
+        }
+      ]
+    }
+  ],
+  "step_4_design": [
+    {
+      "id": "S1",
+      "targets_root_cause": "RC3,RC4",
+      "intervention": "แทนที่ st.components.v1.iframe ทั้ง 15 จุดด้วย st.iframe; ปรับ helper ให้เรียก st.iframe โดยตรง; ลบ import components ที่ไม่ใช้และเอา @st.cache_data ออกจากฟังก์ชันวาด iframe",
+      "expected_effect": 100,
+      "cost": 1.0,
+      "priority_score": 100.0,
+      "rank": 1
+    },
+    {
+      "id": "S2",
+      "targets_root_cause": "RC1,RC2",
+      "intervention": "สร้าง helper normalize_dataframe_for_streamlit(df): copy → reset_index(names='↓ index') → format Timestamp เป็น ISO/string → astype string เฉพาะ display labels; ห้ามส่ง mixed-type Index เข้า st.dataframe และใช้ helper เดียวกันทั้ง 3 หน้า",
+      "expected_effect": 100,
+      "cost": 1.5,
+      "priority_score": 66.67,
+      "rank": 2
+    },
+    {
+      "id": "S3",
+      "targets_root_cause": "RC7",
+      "intervention": "เพิ่ม faulthandler และ reproducible smoke/stress harness: import page, 20 cold starts, 10 reruns, page-switch loop; เก็บจุดสุดท้ายก่อน crash และแยก A/B เปิด-ปิด Arrow/Yahoo concurrency",
+      "expected_effect": 100,
+      "cost": 2.0,
+      "priority_score": 50.0,
+      "rank": 3
+    },
+    {
+      "id": "S4",
+      "targets_root_cause": "RC5",
+      "intervention": "สร้าง known-good dependency lock หลัง test ผ่าน โดย pin เวอร์ชันตรงของ streamlit, pandas, numpy, pyarrow, yfinance และ curl_cffi; บันทึก Python version และ rollback set",
+      "expected_effect": 60,
+      "cost": 2.0,
+      "priority_score": 30.0,
+      "rank": 4
+    },
+    {
+      "id": "S5",
+      "targets_root_cause": "RC6",
+      "intervention": "A/B test ลด Yahoo worker 8 → 2 หรือ sequential; แยก bulk price fetch ออกจาก page render; ห้ามซ้อน retry หลายชั้นและจำกัด timeout/fallback ต่อ ticker",
+      "expected_effect": 25,
+      "cost": 2.5,
+      "priority_score": 10.0,
+      "rank": 5
+    },
+    {
+      "id": "S6",
+      "targets_root_cause": "RC8,RC9",
+      "intervention": "เพิ่ม ticker health preflight + negative cache/circuit breaker (เช่น cooldown 6 ชั่วโมง); symbol no-data แสดง badge unavailable และ skip history/price request จนหมด cooldown",
+      "expected_effect": 15,
+      "cost": 1.5,
+      "priority_score": 10.0,
+      "rank": 6
+    }
+  ],
+  "step_5_do_it": {
+    "action_plan": [
+      {
+        "action": "สร้าง branch fix/streamlit-production-crash จาก master SHA 54279fa และเพิ่ม regression fixtures สำหรับ mixed index, iframe grep และ no-data ticker",
+        "owner": "Repository maintainer",
+        "start": "2026-07-13",
+        "end": "2026-07-13",
+        "depends_on": []
+      },
+      {
+        "action": "แก้ P1 ด้วย display-normalization helper และใช้ใน 📈_Monitor.py, pages/Calculator.py, pages/3_🕹_Test_F(Z); ทดสอบ timezone-aware Timestamp + future string rows",
+        "owner": "Repository maintainer",
+        "start": "2026-07-13",
+        "end": "2026-07-13",
+        "depends_on": ["regression fixtures"]
+      },
+      {
+        "action": "ย้าย iframe legacy ทั้ง repo ไป st.iframe และตรวจ grep ให้เหลือ 0",
+        "owner": "Repository maintainer",
+        "start": "2026-07-13",
+        "end": "2026-07-13",
+        "depends_on": []
+      },
+      {
+        "action": "เปิด faulthandler; รัน stress matrix: workers=8,2,1 × Arrow display on/off × no-data ticker on/off เพื่อระบุ trigger ของ segfault",
+        "owner": "Repository maintainer",
+        "start": "2026-07-13",
+        "end": "2026-07-14",
+        "depends_on": ["P1 fixed", "iframe migration"]
+      },
+      {
+        "action": "pin dependency set ที่ผ่าน stress test, เพิ่ม no-data circuit breaker และ deploy canary; ถ้า 20 cold starts ผ่านจึง merge/deploy production",
+        "owner": "Repository maintainer",
+        "start": "2026-07-14",
+        "end": "2026-07-14",
+        "depends_on": ["segfault trigger isolated"]
+      },
+      {
+        "action": "หลัง deploy ตรวจ log 30 นาที: ArrowTypeError=0, iframe deprecation=0, segfault=0, no-data request rateอยู่ในเพดาน; rollback dependency set ทันทีถ้า gate ใดล้มเหลว",
+        "owner": "Repository maintainer",
+        "start": "2026-07-14",
+        "end": "2026-07-14",
+        "depends_on": ["canary deployed"]
+      }
+    ],
+    "measurement": {
+      "kpis": [
+        {
+          "name": "Stability gate score",
+          "formula": "G_n = Arrow_gate + Iframe_gate + Segfault_gate + NoData_gate, แต่ละ gate ∈ {0,1}",
+          "target": 4,
+          "frequency": "ทุก commit และหลัง deploy"
+        },
+        {
+          "name": "Deprecated iframe occurrences",
+          "formula": "D = count(repo occurrences of 'st.components.v1.iframe')",
+          "target": 0,
+          "frequency": "ทุก commit"
+        },
+        {
+          "name": "Cold-start stability rate",
+          "formula": "R = successful_process_starts / 20",
+          "target": 1.0,
+          "frequency": "ก่อน merge และหลัง deploy"
+        },
+        {
+          "name": "Mixed index schema defects",
+          "formula": "M = displayed_dataframes_with_mixed_index_type / displayed_dataframes_tested",
+          "target": 0,
+          "frequency": "unit/regression test"
+        }
+      ],
+      "evaluation_equations": [
+        {
+          "name": "Goal attainment",
+          "formula": "A = G_n / 4",
+          "interpret": "A = 1.00 หมายถึงผ่านครบ 4 production gates"
+        },
+        {
+          "name": "Progress ratio",
+          "formula": "P = (G_n - G_0) / (4 - G_0), โดย G_0 = 0",
+          "interpret": "สัดส่วนงานแก้ bug ที่ผ่านจริงตั้งแต่ baseline"
+        },
+        {
+          "name": "Remaining gap",
+          "formula": "gap_n = 4 - G_n",
+          "interpret": "จำนวน gate ที่ยังไม่ผ่าน"
+        },
+        {
+          "name": "Intervention priority",
+          "formula": "pi_i = Delta_i / c_i",
+          "interpret": "ทำงานที่ปิด gap ได้มากต่อชั่วโมงก่อน แต่ห้ามข้าม root-cause diagnosis ของ segfault"
+        }
+      ],
+      "loop": {
+        "control_equation": "e_n = G_target - G_n",
+        "convergence_rate": "r_n = |e_n| / |e_{n-1}|",
+        "stop_condition": "|e_n| <= epsilon",
+        "epsilon": 0,
+        "gain_K": 1.0,
+        "correction": "u_{n+1} = K * e_n",
+        "n_max": 5,
+        "escalation_ladder": [
+          {
+            "if": "r_n < 1 (shrinking, not yet at epsilon)",
+            "loop_back_to": "step_5",
+            "action": "ทำ test/fix รอบถัดไปกับ gate ที่ยังไม่ผ่าน และเพิ่ม effort ตาม u_{n+1}=K*e_n"
+          },
+          {
+            "if": "r_n ~ 1 (stalled)",
+            "loop_back_to": "step_3",
+            "action": "ทบทวนสมมติฐาน segfault ด้วย A/B matrix และปรับ impact weights"
+          },
+          {
+            "if": "r_n > 1 (diverging)",
+            "loop_back_to": "step_2",
+            "action": "rollback ล่าสุด แยก problem ใหม่จาก crash signature และลด scope"
+          },
+          {
+            "if": "still far after n cycles",
+            "loop_back_to": "step_1",
+            "action": "แบ่ง release เป็น hotfix Arrow/iframe ก่อน แล้วแยก native-crash hardening เป็น release ถัดไป"
+          }
+        ]
+      }
+    }
+  },
+  "assumptions": [
+    "แผนนี้เป็น planning artifact ยังไม่แก้ source code ของแอป",
+    "นับ iframe legacy จาก source ที่ค้นพบ: CF_Graph 11 จุด, Principle_F(X) 2 จุด, Book_F(X) 2 จุด รวม 15 จุด",
+    "สาเหตุ ArrowTypeError ถือว่ายืนยันจากโครงสร้าง DataFrame; สาเหตุ Segmentation fault ยังเป็น hypothesis จนกว่าจะมี faulthandler/A-B reproduction",
+    "กำหนด horizon 1 release cycle เพราะผู้ใช้ไม่ได้ระบุเวลา",
+    "การ pin เวอร์ชันต้องเลือกจากชุดที่ทดสอบผ่านใน environment เดียวกับ Streamlit production ไม่ควรเดาเลขเวอร์ชันโดยไม่รัน test"
+  ]
+}
