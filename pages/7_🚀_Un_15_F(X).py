@@ -180,6 +180,14 @@ def un_16(active_configs):
     return pd.concat([df_re, df_net], axis=1)
 
 
+FIXED_ASSET_RESET_USD = 1500.0
+
+
+def reset_fixed_asset_value(slider_key):
+    """Reset one ticker's Fixed_Asset_Value widget state."""
+    st.session_state[slider_key] = FIXED_ASSET_RESET_USD
+
+
 # --------------------------------
 # UI
 # --------------------------------
@@ -223,20 +231,38 @@ if full_config or DEFAULT_CONFIG:
     # -------------------------------------------------------------
     if active_configs:
         with st.expander("Per-Ticker Controls"):
-            cols = st.columns(min(3, len(active_configs)))  # กระจายสไลเดอร์ให้ดูง่าย
-            i = 0
-            for tkr, cfg in active_configs.items():
+            cols = st.columns(min(3, len(active_configs)))
+            for i, (tkr, cfg) in enumerate(active_configs.items()):
                 with cols[i % len(cols)]:
-                    current_val = float(cfg.get('Fixed_Asset_Value', DEFAULT_CONFIG.get('Fixed_Asset_Value', 1500.0)))
-                    # ใช้ key แยกราย ticker เพื่อให้ state คงอยู่
+                    current_val = float(
+                        cfg.get(
+                            "Fixed_Asset_Value",
+                            DEFAULT_CONFIG.get(
+                                "Fixed_Asset_Value",
+                                FIXED_ASSET_RESET_USD,
+                            ),
+                        )
+                    )
+                    slider_key = f"fav_{tkr}"
+                    if slider_key not in st.session_state:
+                        st.session_state[slider_key] = current_val
+
+                    st.button(
+                        "Reset to $1,500",
+                        key=f"reset_fav_{tkr}",
+                        help="Reset Fixed_Asset_Value to 1,500 USD",
+                        use_container_width=True,
+                        on_click=reset_fixed_asset_value,
+                        args=(slider_key,),
+                    )
                     new_val = st.slider(
                         f"Fixed_Asset_Value — {tkr}",
-                        min_value=0.0, max_value=5000.0, value=current_val, step=1.0,
-                        key=f"fav_{tkr}"
+                        min_value=0.0,
+                        max_value=5000.0,
+                        step=1.0,
+                        key=slider_key,
                     )
-                    # อัปเดตค่าเข้าคอนฟิกที่ใช้รัน simulation
-                    active_configs[tkr]['Fixed_Asset_Value'] = float(new_val)
-                i += 1
+                    active_configs[tkr]["Fixed_Asset_Value"] = float(new_val)
 
     if not active_configs:
         st.warning("Please select at least one ticker to start the analysis.")
