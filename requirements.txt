@@ -1,13 +1,17 @@
-numpy
-pandas
-streamlit>=1.23.0   
-yfinance  
+# Reproducible native/data stack for Streamlit Community Cloud.
+# NumPy stays below 2.3 for the Numba-based pages in this repository.
+numpy==2.2.6
+pandas==2.3.3
+streamlit==1.59.2
+pyarrow==24.0.0
+yfinance==1.5.1
+curl_cffi==0.14.0
+numba==0.66.0
+
 thingspeak
 plotly
 stocksymbol
 telebot
-numba
-curl_cffi
 pytz
 alpha_vantage
 requests
