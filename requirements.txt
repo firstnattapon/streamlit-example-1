@@ -5,7 +5,8 @@ pandas==2.3.3
 streamlit==1.59.2
 pyarrow==24.0.0
 yfinance==1.5.1
-curl_cffi==0.14.0
+# yfinance 1.5.1 requires curl-cffi >=0.15; keeping 0.14.0 makes uv fail resolution.
+curl_cffi==0.15.0
 numba==0.66.0
 
 thingspeak
