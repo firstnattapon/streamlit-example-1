@@ -180,6 +180,94 @@ def un_16(active_configs):
     return pd.concat([df_re, df_net], axis=1)
 
 
+DETAIL_PERIOD_OFFSETS = {
+    "1M": pd.DateOffset(months=1),
+    "3M": pd.DateOffset(months=3),
+    "6M": pd.DateOffset(months=6),
+    "1Y": pd.DateOffset(years=1),
+}
+
+
+def build_detailed_simulation_frame(
+    data,
+    successful_tickers,
+    detail_period="ALL",
+):
+    """Slice simulation data to detail_period and rebase at 0 on period start.
+
+    Uses the same principles as the full-range calculation:
+    - Cumulative cash flow starts at 0 at the first bar of the selected period.
+    - Running cash floor is accumulated from the period-rebased cumulative cash
+      flow via np.minimum.accumulate(np.minimum(..., 0.0)).
+    - Log-reference excess profit (net_pv and portfolio_excess_profit) is
+      rebased to 0 at the first bar of the selected period.
+    """
+    if data.empty:
+        return data.copy()
+
+    if detail_period == "ALL":
+        detail_plot_df = data.copy()
+    else:
+        if detail_period not in DETAIL_PERIOD_OFFSETS:
+            raise ValueError(f"Unsupported detail_period: {detail_period}")
+        detail_cutoff = data.index.max() - DETAIL_PERIOD_OFFSETS[detail_period]
+        detail_plot_df = data.loc[data.index >= detail_cutoff].copy()
+
+    if detail_plot_df.empty:
+        return detail_plot_df
+
+    for ticker in successful_tickers:
+        re_col = f"{ticker}_re"
+        floor_col = f"{ticker}_Running_Cash_Floor"
+        net_col = f"{ticker}_net_pv"
+
+        if re_col in detail_plot_df.columns:
+            ticker_cum_cash = detail_plot_df[re_col].cumsum()
+            ticker_cum_cash = ticker_cum_cash - float(ticker_cum_cash.iloc[0])
+            detail_plot_df[re_col] = ticker_cum_cash
+            ticker_cum_cash_arr = ticker_cum_cash.to_numpy(dtype=np.float64)
+            detail_plot_df[floor_col] = np.minimum.accumulate(
+                np.minimum(ticker_cum_cash_arr, 0.0)
+            )
+
+        if net_col in detail_plot_df.columns:
+            rebased_net = (
+                detail_plot_df[net_col]
+                - float(detail_plot_df[net_col].iloc[0])
+            )
+            rebased_net_arr = rebased_net.to_numpy(dtype=np.float64, copy=True)
+            rebased_net_arr[
+                np.isclose(rebased_net_arr, 0.0, atol=1e-10, rtol=0.0)
+            ] = 0.0
+            detail_plot_df[net_col] = rebased_net_arr
+
+    if "cumulative_cash_flow" in detail_plot_df.columns:
+        portfolio_cum_cash = (
+            detail_plot_df["cumulative_cash_flow"]
+            - float(detail_plot_df["cumulative_cash_flow"].iloc[0])
+        )
+        detail_plot_df["cumulative_cash_flow"] = portfolio_cum_cash
+        portfolio_cum_cash_arr = portfolio_cum_cash.to_numpy(dtype=np.float64)
+        detail_plot_df["Portfolio_Running_Cash_Floor"] = np.minimum.accumulate(
+            np.minimum(portfolio_cum_cash_arr, 0.0)
+        )
+
+    if "portfolio_excess_profit" in detail_plot_df.columns:
+        rebased_portfolio_net = (
+            detail_plot_df["portfolio_excess_profit"]
+            - float(detail_plot_df["portfolio_excess_profit"].iloc[0])
+        )
+        rebased_portfolio_net_arr = rebased_portfolio_net.to_numpy(
+            dtype=np.float64, copy=True
+        )
+        rebased_portfolio_net_arr[
+            np.isclose(rebased_portfolio_net_arr, 0.0, atol=1e-10, rtol=0.0)
+        ] = 0.0
+        detail_plot_df["portfolio_excess_profit"] = rebased_portfolio_net_arr
+
+    return detail_plot_df
+
+
 FIXED_ASSET_RESET_USD = 1500.0
 
 
@@ -451,21 +539,6 @@ if full_config or DEFAULT_CONFIG:
                 "outside Plotly so titles, legends and data never overlap."
             )
 
-            df_plot = data.copy()
-            for ticker in successful_tickers:
-                column = f"{ticker}_re"
-                floor_column = f"{ticker}_Running_Cash_Floor"
-
-                df_plot[column] = df_plot[column].cumsum()
-                ticker_cumulative_cash = df_plot[column].to_numpy(
-                    dtype=np.float64
-                )
-                df_plot[floor_column] = np.minimum.accumulate(
-                    np.minimum(ticker_cumulative_cash, 0.0)
-                )
-
-            df_plot["Portfolio_Running_Cash_Floor"] = running_cash_floor
-
             view_col, period_col = st.columns([2, 1])
             with view_col:
                 detail_view = st.selectbox(
@@ -510,25 +583,16 @@ if full_config or DEFAULT_CONFIG:
             else:
                 selected_detail_tickers = successful_tickers
 
-            detail_period_offsets = {
-                "1M": pd.DateOffset(months=1),
-                "3M": pd.DateOffset(months=3),
-                "6M": pd.DateOffset(months=6),
-                "1Y": pd.DateOffset(years=1),
-            }
-            if detail_period == "ALL":
-                detail_plot_df = df_plot
-            else:
-                detail_cutoff = (
-                    df_plot.index.max()
-                    - detail_period_offsets[detail_period]
-                )
-                detail_plot_df = df_plot.loc[
-                    df_plot.index >= detail_cutoff
-                ]
+            detail_plot_df = build_detailed_simulation_frame(
+                data=data,
+                successful_tickers=successful_tickers,
+                detail_period=detail_period,
+            )
 
             if detail_view in ticker_views and not selected_detail_tickers:
                 st.info("Select at least one ticker to display the chart.")
+            elif detail_plot_df.empty:
+                st.info("No simulation data available for the selected period.")
             else:
                 detail_fig = go.Figure()
                 ticker_colors = (
@@ -553,7 +617,7 @@ if full_config or DEFAULT_CONFIG:
                 if detail_view == "Cash Flow by Ticker":
                     ranked_detail_tickers.sort(
                         key=lambda ticker: float(
-                            df_plot[f"{ticker}_re"].iloc[-1]
+                            detail_plot_df[f"{ticker}_re"].iloc[-1]
                         ),
                         reverse=True,
                     )
@@ -563,7 +627,7 @@ if full_config or DEFAULT_CONFIG:
                 elif detail_view == "Cash Floor by Ticker":
                     ranked_detail_tickers.sort(
                         key=lambda ticker: abs(float(
-                            df_plot[
+                            detail_plot_df[
                                 f"{ticker}_Running_Cash_Floor"
                             ].min()
                         )),
@@ -578,7 +642,7 @@ if full_config or DEFAULT_CONFIG:
                 }:
                     ranked_detail_tickers.sort(
                         key=lambda ticker: float(
-                            df_plot[f"{ticker}_net_pv"].iloc[-1]
+                            detail_plot_df[f"{ticker}_net_pv"].iloc[-1]
                         ),
                         reverse=True,
                     )
