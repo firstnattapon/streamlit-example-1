@@ -141,6 +141,7 @@ def initialize_session_state(config: Dict[str, Any]):
     
     if 'batch_results' not in st.session_state: st.session_state.batch_results = {}
     if 'spectrum_results' not in st.session_state: st.session_state.spectrum_results = {}
+    if 'classifier_result' not in st.session_state: st.session_state.classifier_result = None
     if 'spectrum_preset' not in st.session_state: st.session_state.spectrum_preset = next(iter(DNA_SPECTRUM_PRESETS))
 
 # ==============================================================================
@@ -570,6 +571,118 @@ def build_spectrum_table(spectrum_codes: List[Tuple[str, str]], window_size: int
             'decoded_100bit_dna': ''.join(map(str, actions)),
         })
     return pd.DataFrame(rows)
+
+# ==============================================================================
+# 4c. Spectrum Classifier: ดึงราคา -> วัดพฤติกรรมราคา -> หาย่านความถี่ DNA ที่ดีที่สุด
+# ==============================================================================
+# yfinance ดึงแท่ง intraday ย้อนหลังได้จำกัด (15m/30m ~60 วัน, 1h ~730 วัน)
+CLASSIFIER_INTERVALS: Dict[str, Dict[str, Any]] = {
+    "15m": {"yf": "15m", "max_days": 59},
+    "30m": {"yf": "30m", "max_days": 59},
+    "1h": {"yf": "1h", "max_days": 729},
+    "1d": {"yf": "1d", "max_days": 3650},
+}
+CLASSIFIER_FIX_C = 1500.0
+CLASSIFIER_VR_LAGS = [2, 4, 8, 16, 26, 52, 100]
+
+@st.cache_data(ttl=900)
+def get_classifier_prices(ticker: str, interval: str, days: int) -> pd.DataFrame:
+    """ราคาปิดย้อนหลัง days วัน (เฉพาะชั่วโมงปกติ) index เป็นเวลาตลาดของหุ้นนั้น"""
+    try:
+        end = pd.Timestamp.now(tz="UTC").normalize() + pd.Timedelta(days=1)
+        start = end - pd.Timedelta(days=int(days) + 1)
+        data = yf.Ticker(ticker).history(
+            start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d'),
+            interval=CLASSIFIER_INTERVALS[interval]["yf"]
+        )[['Close']].dropna()
+        return data
+    except Exception:
+        return pd.DataFrame()
+
+def gated_excess(prices: np.ndarray, gates: np.ndarray, fix_c: float = CLASSIFIER_FIX_C) -> float:
+    """E สุดท้ายของ gated ledger (สูตรเดียวกับ lego_dash_core.gated_rebalancing_cashflow_from_prices)
+    gates[i] = gate ของรอบ i+1 (รอบ 0 = anchor ที่ prices[0]) · E = Fix_c × Σ (x − 1 − ln x)
+    โดย x = ราคาตอน act ÷ ราคาตอน act ครั้งก่อน · ช่วง Gate 0 หลัง act สุดท้ายไม่ถูกนับ"""
+    acts = np.flatnonzero(gates) + 1
+    pa = prices[np.concatenate(([0], acts))]
+    x = pa[1:] / pa[:-1]
+    return float(fix_c * np.sum(x - 1.0 - np.log(x)))
+
+def cycled_gates(bits: np.ndarray, rounds: int, phase: int = 0) -> np.ndarray:
+    """วน DNA 100 บิตให้ยาวเท่าจำนวนรอบ (เหมือน build_gate_actions) · phase = เลื่อนจุดเริ่ม · รอบแรก act เสมอ"""
+    gates = np.resize(np.roll(bits, -phase), rounds).astype(np.int8)
+    if rounds > 0:
+        gates[0] = 1
+    return gates
+
+def phase_averaged_excess(prices: np.ndarray, bits: np.ndarray) -> float:
+    """เฉลี่ย E จากการเลื่อนจุดเริ่ม DNA ครบ 100 ตำแหน่ง -> ตัดโชคเรื่องจังหวะ gate ตรงกับแท่งใหญ่"""
+    rounds = len(prices) - 1
+    return float(np.mean([gated_excess(prices, cycled_gates(bits, rounds, ph)) for ph in range(len(bits))]))
+
+def variance_ratio(log_returns: np.ndarray, q: int) -> float:
+    """VR(q) > 1 = ราคาไหลต่อ (โมเมนตัม) · < 1 = ดึงกลับ · ≈ 1 = สุ่มเดิน"""
+    sums = np.convolve(log_returns, np.ones(q), mode='valid')
+    return float(sums.var(ddof=1) / (q * log_returns.var(ddof=1)))
+
+def classify_spectrum(closes: pd.Series, intraday: bool) -> Dict[str, Any]:
+    """วิเคราะห์ทั้ง 2 ชุด DNA บนราคาจริง แล้วตรวจซ้ำหลายแบบ (เต็ม / ตัด gap ข้ามคืน / ครึ่งแรก / ครึ่งหลัง)"""
+    prices = closes.to_numpy(dtype=np.float64)
+    log_r = np.diff(np.log(prices))
+    n = len(log_r)
+
+    # จุดเริ่มวันใหม่ (สำหรับ gap ข้ามคืน และแบ่งครึ่งตรงรอยต่อวัน)
+    if intraday:
+        session = np.array([ts.date() for ts in closes.index])
+        new_day = session[1:] != session[:-1]
+        day_starts = np.flatnonzero(new_day) + 1
+        split = int(day_starts[np.argmin(np.abs(day_starts - len(prices) / 2))]) if len(day_starts) else len(prices) // 2
+    else:
+        new_day = np.zeros(n, dtype=bool)
+        split = len(prices) // 2
+
+    checks: Dict[str, np.ndarray] = {"เต็มช่วง": prices}
+    if intraday and new_day.any():
+        checks["ตัด gap ข้ามคืน"] = prices[0] * np.exp(np.concatenate(([0.0], np.cumsum(np.where(new_day, 0.0, log_r)))))
+    checks["ครึ่งแรก"] = prices[:split]
+    checks["ครึ่งหลัง"] = prices[split:]
+
+    vr_rows = []
+    for q in CLASSIFIER_VR_LAGS:
+        if q * 4 > n:
+            continue
+        vr = variance_ratio(log_r, q)
+        se = float(np.sqrt(2 * (2 * q - 1) * (q - 1) / (3 * q * n)))
+        vr_rows.append({"q (แท่ง)": q, "VR": round(vr, 2), "±2SE": round(2 * se, 2),
+                        "พฤติกรรม": "ไหลต่อ (โมเมนตัม)" if vr > 1.1 else ("ดึงกลับ" if vr < 0.9 else "ใกล้สุ่มเดิน"),
+                        "มีนัยสำคัญ": "ใช่" if abs(vr - 1) > 2 * se else "ไม่"})
+
+    presets = {}
+    for preset_name, codes in DNA_SPECTRUM_PRESETS.items():
+        rows = []
+        for rank, (label, code) in enumerate(codes, start=1):
+            bits = spectrum_actions(code, SPECTRUM_LENGTH)[1]
+            row = {"rank": rank, "label": label, "dna_code": code,
+                   "gates": int(cycled_gates(bits, n).sum()),
+                   "E (phase 0)": gated_excess(prices, cycled_gates(bits, n))}
+            for check_name, series in checks.items():
+                base = gated_excess(series, np.ones(len(series) - 1, dtype=np.int8))
+                row[check_name] = phase_averaged_excess(series, bits) / base if base > 0 else np.nan
+            row["E เฉลี่ย"] = phase_averaged_excess(prices, bits)
+            rows.append(row)
+        df = pd.DataFrame(rows)
+        ratio_cols = list(checks.keys())
+        df["ต่ำสุดทุกการตรวจ"] = df[ratio_cols].min(axis=1)
+        presets[preset_name] = {
+            "table": df,
+            "best": int(df["เต็มช่วง"].idxmax()),
+            "robust": int(df["ต่ำสุดทุกการตรวจ"].idxmax()),
+        }
+
+    baseline = gated_excess(prices, np.ones(n, dtype=np.int8))
+    return {"prices": prices, "n_rounds": n, "checks": list(checks.keys()), "vr": pd.DataFrame(vr_rows),
+            "presets": presets, "baseline": baseline,
+            "sessions": int(new_day.sum()) + 1 if intraday else len(prices)}
 
 # ==============================================================================
 # 5. UI Rendering & Logic Functions
@@ -1132,6 +1245,81 @@ def render_spectrum_tab():
                 original=(Strategy.SPECTRUM_ORIGINAL, "Spectrum DNA")
             )
 
+def render_classifier_tab():
+    st.markdown("### 🔬 Spectrum Classifier")
+    st.info(
+        "ใส่หุ้น เลือก Timeframe กับจำนวนวัน แล้วกดวิเคราะห์ · เครื่องมือจะดึงราคา วัดว่าราคา **ไหลต่อ / ดึงกลับ / สุ่มเดิน** "
+        "แล้วรัน DNA Spectrum ทั้ง 20 ชุด (Density + Periodic) ผ่าน gated ledger เพื่อหาย่านความถี่ที่เก็บ Eₙ ได้ดีที่สุด"
+    )
+    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+    ticker = c1.text_input("หุ้น (Ticker)", value="QBTS", key="clf_ticker").strip().upper()
+    interval = c2.selectbox("Timeframe", list(CLASSIFIER_INTERVALS.keys()), index=0, key="clf_interval")
+    max_days = CLASSIFIER_INTERVALS[interval]["max_days"]
+    days = c3.number_input("ย้อนหลัง (วัน)", min_value=5, max_value=max_days, value=min(30, max_days), key="clf_days",
+                           help=f"yfinance ดึง {interval} ย้อนหลังได้ไม่เกิน {max_days} วัน")
+    c4.write(""); c4.write("")
+    if c4.button("🔬 วิเคราะห์", type="primary", width="stretch", key="clf_run"):
+        if not ticker:
+            st.error("กรุณาใส่ Ticker")
+        else:
+            with st.spinner(f"กำลังดึง {ticker} {interval} ย้อนหลัง {days} วัน..."):
+                data = get_classifier_prices(ticker, interval, int(days))
+            if len(data) < 30:
+                st.session_state.classifier_result = None
+                st.error(f"ดึงข้อมูล {ticker} ไม่ได้ หรือข้อมูลน้อยเกินไป ({len(data)} แท่ง)")
+            else:
+                result = classify_spectrum(data['Close'], intraday=interval != "1d")
+                result.update({"ticker": ticker, "interval": interval, "days": int(days), "closes": data['Close']})
+                st.session_state.classifier_result = result
+
+    result = st.session_state.get("classifier_result")
+    if not result:
+        st.caption("ยังไม่มีผลลัพธ์ · ตัวอย่าง: QBTS · 15m · 30 วัน")
+        return
+
+    closes = result["closes"]
+    st.divider()
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("ข้อมูล", f"{len(closes):,} แท่ง", f"{result['sessions']} วันทำการ", delta_color="off")
+    m2.metric("ราคา", f"${closes.iloc[-1]:,.2f}", f"{closes.iloc[-1] / closes.iloc[0] - 1:+.1%} จาก ${closes.iloc[0]:,.2f}")
+    m3.metric("Eₙ ถ้า act ทุกแท่ง", f"${result['baseline']:,.2f}", "เกณฑ์ (ratio = 1.00)", delta_color="off")
+    periodic_name, density_name = list(DNA_SPECTRUM_PRESETS.keys())[1], list(DNA_SPECTRUM_PRESETS.keys())[0]
+    best_row = result["presets"][periodic_name]["table"].iloc[result["presets"][periodic_name]["best"]]
+    m4.metric("ย่านที่ดีที่สุด (Periodic)", f"Rank {best_row['rank']} · {best_row['label'].split(' ·')[0]}",
+              f"{best_row['เต็มช่วง']:.2f}× ของ act ทุกแท่ง")
+    if result["n_rounds"] < 200:
+        st.warning("⚠️ ข้อมูลน้อยกว่า 200 แท่ง: DNA 100 บิตวนได้ไม่ถึง 2 รอบ ย่านความถี่ยาว (k ≥ 50) จะไม่น่าเชื่อถือ")
+    st.line_chart(closes.rename(f"{result['ticker']} {result['interval']}"), height=220)
+
+    st.markdown("#### 1) พฤติกรรมราคา (Variance Ratio)")
+    st.caption("VR(q) เทียบความแปรปรวนของผลตอบแทน q แท่งกับ q × 1 แท่ง · > 1 ราคาไหลต่อ → รอนานขึ้นได้เปรียบ · < 1 ราคาดึงกลับ → act ถี่ได้เปรียบ · ≈ 1 สุ่มเดิน → ความถี่ไม่มีผล")
+    st.dataframe(result["vr"], width="stretch", hide_index=True)
+
+    st.markdown("#### 2) ย่านความถี่ DNA ที่ดีที่สุด")
+    st.caption(
+        "ตัวเลข = Eₙ ÷ Eₙ ของการ act ทุกแท่ง ในข้อมูลชุดเดียวกัน (> 1 = ดีกว่า) · เฉลี่ยจากการเลื่อนจุดเริ่ม DNA ครบ 100 ตำแหน่ง "
+        "เพื่อตัดโชคเรื่องจังหวะ · 'ต่ำสุดทุกการตรวจ' = ค่าที่แย่ที่สุดในทุกแบบ ยิ่งสูงยิ่งเชื่อถือได้"
+    )
+    for preset_name in [periodic_name, density_name]:
+        info = result["presets"][preset_name]
+        df = info["table"]
+        best, robust = df.iloc[info["best"]], df.iloc[info["robust"]]
+        st.markdown(f"**{preset_name}** · ดีที่สุดเต็มช่วง: **Rank {best['rank']} ({best['label']})** "
+                    f"{best['เต็มช่วง']:.2f}× · เชื่อถือได้ที่สุด: **Rank {robust['rank']} ({robust['label']})** "
+                    f"ต่ำสุด {robust['ต่ำสุดทุกการตรวจ']:.2f}×")
+        show_cols = ["rank", "label", "gates"] + result["checks"] + ["ต่ำสุดทุกการตรวจ", "E เฉลี่ย", "E (phase 0)"]
+        styled = (df[show_cols].style
+                  .format({c: "{:.2f}" for c in result["checks"] + ["ต่ำสุดทุกการตรวจ"]} | {"E เฉลี่ย": "${:.2f}", "E (phase 0)": "${:.2f}"})
+                  .highlight_max(subset=["เต็มช่วง", "ต่ำสุดทุกการตรวจ"], color="rgba(16,185,129,0.35)"))
+        st.dataframe(styled, width="stretch", hide_index=True)
+        picks = [("ดีที่สุดเต็มช่วง", best)] + ([("เชื่อถือได้ที่สุด", robust)] if robust['rank'] != best['rank'] else [])
+        st.code("\n".join(f"{tag} · Rank {row['rank']} ({row['label']}): {row['dna_code']}" for tag, row in picks), language="text")
+
+    st.caption(
+        f"ข้อมูลจาก yfinance (เฉพาะชั่วโมงปกติ) · Fix_c = ${CLASSIFIER_FIX_C:,.0f} · E (phase 0) = รัน DNA จากบิตแรกตามปกติ "
+        "· ผลนี้มาจากข้อมูลย้อนหลัง ไม่รับประกันอนาคต และข้อมูลไม่กี่สัปดาห์มีความคลาดเคลื่อนสูง"
+    )
+
 # ! GOAL: Restore Full Tracer (Decode + Encode)
 def render_tracer_tab():
     st.markdown("### 🔍 Action Sequence Tracer & Encoder")
@@ -1230,7 +1418,7 @@ def main():
     config = load_config()
     initialize_session_state(config)
 
-    tab_list = ["⚙️ Settings", "🧬 Simulation Results", "🌈 DNA Spectrum (10)", "🔍 Tracer"]
+    tab_list = ["⚙️ Settings", "🧬 Simulation Results", "🌈 DNA Spectrum (10)", "🔬 Spectrum Classifier", "🔍 Tracer"]
     tabs = st.tabs(tab_list)
 
     with tabs[0]:
@@ -1240,6 +1428,8 @@ def main():
     with tabs[2]:
         render_spectrum_tab()
     with tabs[3]:
+        render_classifier_tab()
+    with tabs[4]:
         render_tracer_tab()
 
 if __name__ == "__main__":
