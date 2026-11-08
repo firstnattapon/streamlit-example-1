@@ -22,6 +22,8 @@ class Strategy:
     HYBRID_MULTI_MUTATION = "Hybrid (Multi-Mutation)"
     ORIGINAL_DNA = "Original DNA (Pre-Mutation)"
     SPECTRUM_BEST = "Spectrum-10 (Best of 10)"
+    SPECTRUM_TUNED = "Spectrum (Tuned k + phase)"
+    SPECTRUM_COMPILED = "Spectrum (Compiled Max-E)"
 
 # ! DNA Spectrum: 10 DNA (N=100) เรียงจากความถี่สั้น -> ความถี่ยาว ใช้แทนการสุ่ม num_seeds ใน Phase 1
 # ทุก code เป็น stream format เดิม [len][rate][dna_seed][mutation_seeds...] ถอดด้วย SimulationTracer ได้ตรงตามบิตที่ระบุ
@@ -141,6 +143,7 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'batch_results' not in st.session_state: st.session_state.batch_results = {}
     if 'spectrum_results' not in st.session_state: st.session_state.spectrum_results = {}
     if 'classifier_result' not in st.session_state: st.session_state.classifier_result = None
+    if 'spectrum_mode' not in st.session_state: st.session_state.spectrum_mode = "best10"
     if 'spectrum_preset' not in st.session_state: st.session_state.spectrum_preset = next(iter(DNA_SPECTRUM_PRESETS))
 
 # ==============================================================================
@@ -538,17 +541,117 @@ def find_best_spectrum_dna_for_window(
             best = (rank, tracer, net, actions)
     return best
 
+# ---- 3 โหมดของแท็บ DNA Spectrum -----------------------------------------------
+SPECTRUM_STRATEGY: Dict[str, str] = {
+    "best10": Strategy.SPECTRUM_BEST, "tuned": Strategy.SPECTRUM_TUNED, "compiled": Strategy.SPECTRUM_COMPILED,
+}
+SPECTRUM_MODES: Dict[str, str] = {
+    "best10": "1) Best of 10 · เลือก 1 ใน 10 preset",
+    "tuned": "2) จูนความถี่ k + จังหวะ (phase)",
+    "compiled": "3) คอมไพล์ E สูงสุด (Perfect Foresight → DNA)",
+}
+COMPILER_SEEDS = 100_000          # seed ที่คอมไพเลอร์ใช้ค้น (dna_seed และ mutation seeds)
+COMPILER_RATES = [3, 5, 8, 12]    # mutation rate (%) ที่ลอง · ≥ 2 เพื่อให้ตีความตรงกันทุก decoder
+
+def periodic_actions(length: int, k: int, phase: int) -> np.ndarray:
+    """act ทุก k แท่ง เริ่มที่แท่ง phase (0 ≤ phase < k) · แท่งแรก act เสมอ"""
+    actions = np.zeros(length, dtype=np.int32)
+    actions[phase::k] = 1
+    actions[0] = 1
+    return actions
+
+def find_best_period_for_window(prices_window: np.ndarray) -> Tuple[int, int, float, np.ndarray]:
+    """โหมด 2: ลองทุก k = 1..L−1 และทุก phase แล้วเก็บคู่ที่ net สูงสุด (เสมอกัน -> k และ phase น้อยกว่า)"""
+    length = len(prices_window)
+    best = (1, 0, -np.inf, periodic_actions(length, 1, 0))
+    for k in range(1, max(2, length)):
+        for phase in range(k):
+            actions = periodic_actions(length, k, phase)
+            net = _calculate_net_profit_numba(actions, prices_window)
+            if net > best[2]:
+                best = (k, phase, net, actions)
+    return best
+
+@st.cache_resource(show_spinner="กำลังสร้างตาราง seed สำหรับคอมไพเลอร์ (ครั้งแรกครั้งเดียว)...")
+def get_compiler_tables(length: int, n_seeds: int = COMPILER_SEEDS) -> Tuple[np.ndarray, np.ndarray]:
+    """ตาราง PCG64 ของทุก seed ที่ความยาว length (ใช้ prefix กับ window ที่สั้นกว่าได้)
+    base[s] = default_rng(s).integers(0, 2, length) · min_rate[s, i] = rate (%) ต่ำสุดที่บิต i ถูก flip
+    (เงื่อนไขเดียวกับ decoder: default_rng(s).random(length) < rate / 100)"""
+    base = np.empty((n_seeds, length), dtype=np.uint8)
+    uniform = np.empty((n_seeds, length), dtype=np.float64)
+    for seed in range(n_seeds):
+        base[seed] = np.random.default_rng(seed).integers(0, 2, size=length)
+        uniform[seed] = np.random.default_rng(seed).random(length)
+    min_rate = np.floor(uniform * 100).astype(np.int64) + 1
+    min_rate = np.where(uniform >= min_rate / 100.0, min_rate + 1, min_rate)              # กันปัดเศษ float
+    min_rate = np.where(uniform < (min_rate - 1) / 100.0, min_rate - 1, min_rate)
+    return base, np.clip(min_rate, 2, 255).astype(np.uint8)
+
+def compile_actions_to_dna(target: np.ndarray, tables: Tuple[np.ndarray, np.ndarray]) -> Tuple[int, int, List[int]]:
+    """โหมด 2/3: หา (rate, dna_seed, mutation_seeds) ที่ SimulationTracer ถอดออกมาได้ target พอดี
+    เริ่มจาก dna_seed ที่ใกล้ target ที่สุด แล้วเพิ่ม mutation seed ทีละตัวที่แก้บิตผิดได้มากที่สุด"""
+    base, min_rate = tables
+    length = len(target)
+    want = target.astype(np.uint8).copy(); want[0] = 1
+    start = base[:, :length].copy(); start[:, 0] = 1
+    candidates = np.argsort((start[:, 1:] != want[1:]).sum(axis=1), kind="stable")[:2]
+    best = None
+    for rate in COMPILER_RATES:
+        flips = (min_rate[:, 1:length] <= rate).astype(np.float32)
+        for dna_seed in candidates:
+            bits = start[dna_seed].copy(); seeds: List[int] = []
+            for _ in range(4 * length):
+                wrong = bits[1:] != want[1:]
+                if not wrong.any():
+                    break
+                gain = flips @ np.where(wrong, 1.0, -1.0).astype(np.float32)
+                seed = int(np.argmax(gain))
+                if gain[seed] <= 0:
+                    break
+                seeds.append(seed)
+                bits[1:] = np.where(flips[seed] > 0, 1 - bits[1:], bits[1:])
+            if (bits[1:] == want[1:]).all():
+                size = len(SimulationTracer.encode(length, rate, int(dna_seed), seeds))
+                if best is None or size < best[0]:
+                    best = (size, rate, int(dna_seed), seeds)
+    if best is None:
+        raise ValueError("คอมไพล์ DNA ไม่สำเร็จ")
+    _, rate, dna_seed, seeds = best
+    decoded = SimulationTracer(SimulationTracer.encode(length, rate, dna_seed, seeds)).run()
+    if not np.array_equal(decoded, want.astype(np.int32)):
+        raise ValueError("DNA ที่คอมไพล์ถอดกลับไม่ตรง target")
+    return rate, dna_seed, seeds
+
+def spectrum_curve(prices_window: np.ndarray, spectrum_codes: List[Tuple[str, str]]) -> Tuple[pd.DataFrame, pd.DataFrame, float]:
+    """กราฟ E-Spectrum ของ 1 window: net ที่ดีที่สุดของทุก k (เลือก phase แล้ว), จุดของ 10 preset และเพดาน max"""
+    length = len(prices_window)
+    curve = []
+    for k in range(1, max(2, length)):
+        nets = [_calculate_net_profit_numba(periodic_actions(length, k, ph), prices_window) for ph in range(k)]
+        curve.append({"k": float(k), "net": float(max(nets))})
+    points = []
+    for rank, (label, code) in enumerate(spectrum_codes, start=1):
+        actions = spectrum_actions(code, length)[1]
+        points.append({"k": length / max(1, int(actions.sum())), "net": float(_calculate_net_profit_numba(actions, prices_window)),
+                       "preset": f"R{rank} {label}"})
+    max_net = float(_calculate_net_profit_numba(generate_actions_perfect_foresight(prices_window.tolist()).astype(np.int32), prices_window))
+    return pd.DataFrame(curve), pd.DataFrame(points), max_net
+
 def generate_actions_spectrum(
     ticker_data: pd.DataFrame, window_size: int, spectrum_codes: List[Tuple[str, str]],
-    progress_bar=None, ticker_name: str = "", timeframe: str = "1d"
+    mode: str = "best10", progress_bar=None, ticker_name: str = "", timeframe: str = "1d"
 ) -> Tuple[np.ndarray, pd.DataFrame]:
-    """ทุก Window: เลือก DNA ที่ดีที่สุด 1 ใน 10 แล้วจบ
-    ไม่กลายพันธุ์ต่อ เพราะ 10 DNA ผ่านการปรับปรุง (mutation seeds) มาแล้ว"""
+    """ทุก Window เลือก actions ตามโหมด แล้วจบ (ไม่กลายพันธุ์ต่อ)
+    best10   = DNA ที่ net สูงสุด 1 ใน 10 preset (preset ผ่านการปรับปรุงมาแล้ว)
+    tuned    = act ทุก k แท่ง ที่ phase ที่ดีที่สุด แล้วคอมไพล์เป็น DNA
+    compiled = actions ที่ net สูงสุดจริง (Perfect Foresight) แล้วคอมไพล์เป็น DNA
+    max_net / efficiency = เพดานของ window และสัดส่วนที่ได้"""
     prices = ticker_data['Close'].to_numpy()
     n = len(prices)
     final_actions = np.array([], dtype=np.int32)
     window_details_list = []
     num_windows = (n + window_size - 1) // window_size
+    tables = get_compiler_tables(window_size) if mode in ("tuned", "compiled") else None
 
     for i, start_index in enumerate(range(0, n, window_size)):
         end_index = min(start_index + window_size, n)
@@ -558,7 +661,21 @@ def generate_actions_spectrum(
         if progress_bar:
             progress_bar.progress((i + 1) / num_windows, text=f"{ticker_name}: Window {i+1}/{num_windows}...")
 
-        rank, tracer, net, actions = find_best_spectrum_dna_for_window(prices_window, spectrum_codes)
+        max_actions = generate_actions_perfect_foresight(prices_window.tolist()).astype(np.int32)
+        max_net = float(_calculate_net_profit_numba(max_actions, prices_window))
+        detail_mode: Dict[str, Any] = {}
+        if mode == "tuned":
+            k, phase, net, actions = find_best_period_for_window(prices_window)
+            rate, dna_seed, seeds = compile_actions_to_dna(actions, tables)
+            detail_mode = {'spectrum_label': f"k={k} · phase {phase}", 'k': k, 'phase': phase}
+        elif mode == "compiled":
+            actions, net = max_actions, max_net
+            rate, dna_seed, seeds = compile_actions_to_dna(actions, tables)
+            detail_mode = {'spectrum_label': f"Max-E · act {int(actions.sum())} ครั้ง"}
+        else:
+            rank, tracer, net, actions = find_best_spectrum_dna_for_window(prices_window, spectrum_codes)
+            rate, dna_seed, seeds = tracer.mutation_rate, tracer.dna_seed, list(tracer.mutation_seeds)
+            detail_mode = {'spectrum_rank': rank, 'spectrum_label': spectrum_codes[rank - 1][0]}
         final_actions = np.concatenate((final_actions, actions.astype(np.int32)))
 
         start_date = ticker_data.index[start_index]; end_date = ticker_data.index[end_index-1]
@@ -568,12 +685,14 @@ def generate_actions_spectrum(
             'timeline': f"{format_timeline_value(start_date, timeframe)} to {format_timeline_value(end_date, timeframe)}",
             'start_timestamp': to_unix_timestamp(start_date),
             'end_timestamp': to_unix_timestamp(end_date),
-            'spectrum_rank': rank,
-            'spectrum_label': spectrum_codes[rank - 1][0],
-            'dna_seed': tracer.dna_seed,
-            'mutation_seeds': str(list(tracer.mutation_seeds)) if tracer.mutation_seeds else "None",
-            'mutation_rate': tracer.mutation_rate,
-            'net': round(net, 2),
+            **detail_mode,
+            'acts': int(actions.sum()),
+            'dna_seed': int(dna_seed),
+            'mutation_seeds': str([int(s) for s in seeds]) if seeds else "None",
+            'mutation_rate': int(rate),
+            'net': round(float(net), 2),
+            'max_net': round(max_net, 2),
+            'efficiency': round(float(net) / max_net, 3) if max_net > 0 else np.nan,
         })
 
     return final_actions, pd.DataFrame(window_details_list)
@@ -831,7 +950,7 @@ def render_settings_tab():
             help="Cloud decode ใช้ Unix timestamp นี้ร่วมกับ timeframe เพื่อ map เวลาปัจจุบันไปยัง index ของ DNA action"
         )
 
-def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = None):
+def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = None, spectrum_mode: str = "best10"):
     # spectrum_codes=None -> Hybrid เดิม (สุ่ม num_seeds) / ส่งมา -> DNA Spectrum (เก็บผลแยกใน spectrum_results)
     results_key = 'spectrum_results' if spectrum_codes else 'batch_results'
     tickers = st.session_state.selected_tickers
@@ -863,12 +982,12 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
 
         prices = ticker_data['Close'].to_numpy()
         if spectrum_codes:
-            # DNA Spectrum: เลือก 1 ใน 10 ต่อ Window ไม่มีขั้นกลายพันธุ์
+            # DNA Spectrum: เลือก actions ต่อ Window ตามโหมด ไม่มีขั้นกลายพันธุ์
             final_actions, df_windows = generate_actions_spectrum(
-                ticker_data, st.session_state.window_size, spectrum_codes,
+                ticker_data, st.session_state.window_size, spectrum_codes, mode=spectrum_mode,
                 progress_bar=overall_progress, ticker_name=ticker, timeframe=selected_timeframe
             )
-            sim_results = {Strategy.SPECTRUM_BEST: run_simulation(prices.tolist(), final_actions.tolist())}
+            sim_results = {SPECTRUM_STRATEGY[spectrum_mode]: run_simulation(prices.tolist(), final_actions.tolist())}
         else:
             original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
                 ticker_data, st.session_state.window_size, st.session_state.num_seeds,
@@ -893,7 +1012,10 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
             "sim_results": sim_results,
             "df_windows": df_windows,
             "data_len": len(ticker_data),
-            "timeframe": selected_timeframe
+            "timeframe": selected_timeframe,
+            "prices": prices,
+            "window_size": int(st.session_state.window_size),
+            "spectrum_mode": spectrum_mode if spectrum_codes else None,
         }
         overall_progress.progress((idx + 1) / total_tickers, text=f"Completed {ticker} ({idx+1}/{total_tickers})")
 
@@ -1178,10 +1300,13 @@ def render_export_section(
                 }
                 # ผล Spectrum: rate จริงของ string และ rank ที่ชนะใน window นั้น
                 row = data["df_windows"].iloc[final_win - 1]
-                if 'spectrum_rank' in row.index:
+                if 'spectrum_label' in row.index:
                     ticker_meta["mutation_rate_percent"] = int(row['mutation_rate'])
-                    ticker_meta["spectrum_rank"] = int(row['spectrum_rank'])
                     ticker_meta["spectrum_label"] = row['spectrum_label']
+                    if 'spectrum_rank' in row.index and pd.notna(row['spectrum_rank']):
+                        ticker_meta["spectrum_rank"] = int(row['spectrum_rank'])
+                    if 'efficiency' in row.index and pd.notna(row['efficiency']):
+                        ticker_meta["efficiency"] = float(row['efficiency'])
                 export_payload["ticker_metadata"][ticker] = ticker_meta
             except Exception as e:
                 export_payload["tickers"][ticker] = f"Error: {str(e)}"
@@ -1222,17 +1347,40 @@ def render_simulation_tabs():
     else:
         st.info("ยังไม่มีผลลัพธ์ กรุณากดปุ่ม Start")
 
+SPECTRUM_MODE_HELP: Dict[str, str] = {
+    "best10": "เลือก DNA ที่ net สูงสุด 1 ใน 10 preset ของชุดที่เลือก (preset ผ่านการปรับปรุงมาแล้ว ไม่กลายพันธุ์ต่อ)",
+    "tuned": "ลองทุกความถี่ k = 1 … ความยาว Window และทุกจังหวะ (phase) แล้วคอมไพล์ pattern ที่ net สูงสุดเป็น DNA",
+    "compiled": "คำนวณจุด act ที่ให้ net สูงสุดจริงของ Window (Perfect Foresight) แล้วคอมไพล์เป็น DNA = 100% ของเพดาน",
+}
+
+def render_spectrum_curve_chart(prices_window: np.ndarray, spectrum_codes: List[Tuple[str, str]], row: pd.Series):
+    """กราฟ E-Spectrum ของ 1 window: เส้นทุก k, จุด 10 preset, เพดาน และผลของโหมดที่รัน"""
+    import altair as alt
+    curve, points, max_net = spectrum_curve(prices_window, spectrum_codes)
+    chosen_k = float(row['k']) if 'k' in row.index and pd.notna(row.get('k')) else len(prices_window) / max(1, int(row['acts']))
+    chosen = pd.DataFrame({"k": [chosen_k], "net": [float(row['net'])], "label": [f"โหมดนี้: {row['spectrum_label']}"]})
+    x = alt.X("k:Q", title="k (act ทุก k แท่ง) · ซ้าย = ถี่ · ขวา = ห่าง")
+    y = alt.Y("net:Q", title="net ของ Window ($)")
+    line = alt.Chart(curve).mark_line(color="#38bdf8").encode(x=x, y=y, tooltip=[alt.Tooltip("k:Q"), alt.Tooltip("net:Q", format=",.2f")])
+    dots = alt.Chart(points).mark_circle(size=80, color="#f59e0b").encode(x=x, y=y, tooltip=["preset", alt.Tooltip("net:Q", format=",.2f")])
+    pick = alt.Chart(chosen).mark_point(shape="diamond", size=220, filled=True, color="#e11d48").encode(x=x, y=y, tooltip=["label", alt.Tooltip("net:Q", format=",.2f")])
+    ceiling = alt.Chart(pd.DataFrame({"net": [max_net]})).mark_rule(color="#10b981", strokeDash=[6, 4]).encode(y="net:Q")
+    st.altair_chart(line + dots + ceiling + pick, width="stretch")
+    st.caption(f"เส้นฟ้า = net ดีที่สุดของแต่ละ k (เลือกจังหวะแล้ว) · จุดส้ม = 10 preset (วางที่ k เทียบเท่า = ความยาว ÷ จำนวน act) "
+               f"· เส้นประเขียว = เพดาน \\${max_net:,.2f} (Perfect Foresight) · ◆ แดง = ผลของโหมดนี้ \\${float(row['net']):,.2f}")
+
 def render_spectrum_tab():
-    st.markdown("### 🌈 DNA Spectrum (10 DNA แทนการสุ่ม Seeds)")
+    st.markdown("### 🌈 DNA Spectrum")
     st.info(
-        f"ทุก Window: ไม่สุ่ม {st.session_state.num_seeds:,} Seeds แต่**เลือก DNA ที่ net สูงสุด 1 ใน 10 ชุด** "
-        "เรียงจากความถี่สั้น (เปิด gate ถี่) ไปความถี่ยาว (เปิด gate ห่าง) แล้วจบ · **ไม่กลายพันธุ์ต่อ** "
-        "เพราะ 10 DNA ผ่านการปรับปรุง (mutation seeds) มาแล้ว · Mutation Rounds ใน Settings ใช้กับแท็บ Hybrid เท่านั้น"
+        f"ไม่สุ่ม {st.session_state.num_seeds:,} Seeds · ทุก Window เลือก actions ตาม**โหมด** แล้วจบ (ไม่กลายพันธุ์ต่อ) "
+        "· ทุกโหมดได้ DNA code รูปแบบเดิมที่ Tracer / bot ถอดได้ · Mutation Rounds ใน Settings ใช้กับแท็บ Hybrid เท่านั้น"
     )
+    mode = st.radio("โหมด", list(SPECTRUM_MODES.keys()), format_func=lambda m: SPECTRUM_MODES[m], horizontal=True, key="spectrum_mode")
+    st.caption(SPECTRUM_MODE_HELP[mode])
 
     preset_names = list(DNA_SPECTRUM_PRESETS.keys())
     st.session_state.spectrum_preset = st.selectbox(
-        "ชุด DNA Spectrum",
+        "ชุด DNA Spectrum" + (" (ใช้เลือก DNA)" if mode == "best10" else " (ใช้เป็นจุดเทียบบนกราฟ)"),
         options=preset_names,
         index=preset_names.index(st.session_state.spectrum_preset) if st.session_state.spectrum_preset in preset_names else 0,
         help="Density = จำนวน gate ลดหลั่น (rate 10%, 5 mutations) · Periodic = 1 ทุก k แท่งเป๊ะ"
@@ -1240,41 +1388,62 @@ def render_spectrum_tab():
     spectrum_codes = DNA_SPECTRUM_PRESETS[st.session_state.spectrum_preset]
     window_size = int(st.session_state.window_size)
 
-    with st.expander(f"🧬 10 DNA ({SPECTRUM_LENGTH} บิต) · เรียงความถี่สั้น → ยาว", expanded=True):
+    with st.expander(f"🧬 10 DNA ({SPECTRUM_LENGTH} บิต) · เรียงความถี่สั้น → ยาว", expanded=False):
         st.dataframe(build_spectrum_table(spectrum_codes, window_size), width="stretch", hide_index=True)
         st.caption(f"Window ยาว {window_size} แท่ง ใช้ {min(window_size, SPECTRUM_LENGTH)} บิตแรกของแต่ละ DNA (คอลัมน์ active_first_{window_size})")
-    if window_size > SPECTRUM_LENGTH:
+    if mode == "best10" and window_size > SPECTRUM_LENGTH:
         st.warning(f"⚠️ Window {window_size} แท่ง ยาวกว่า {SPECTRUM_LENGTH}: บิตหลังตำแหน่ง {SPECTRUM_LENGTH} เป็นค่าสุ่มต่อจาก seed ไม่อยู่ในสเปกตรัม")
 
     c1, c2 = st.columns([3, 1])
     with c1:
-        st.caption("เลือก Tickers / Timeframe / Window ในหน้า Settings แล้วกดปุ่มด้านขวา")
+        st.caption("เลือก Tickers / Timeframe / Window ในหน้า Settings แล้วกดปุ่มด้านขวา · โหมด 2–3 ครั้งแรกต้องสร้างตาราง seed (~3 วินาที)")
     with c2:
-        if st.button("🌈 Run Spectrum (10 DNA)", type="primary", width="stretch", key="btn_run_spectrum"):
-            execute_batch_processing(spectrum_codes=spectrum_codes)
+        if st.button("🌈 Run Spectrum", type="primary", width="stretch", key="btn_run_spectrum"):
+            execute_batch_processing(spectrum_codes=spectrum_codes, spectrum_mode=mode)
 
     results = st.session_state.spectrum_results
     if not results:
         st.info("ยังไม่มีผลลัพธ์ กรุณากดปุ่ม Run Spectrum")
         return
 
+    run_mode = next(iter(results.values())).get("spectrum_mode") or "best10"
+    if run_mode != mode:
+        st.caption(f"ผลด้านล่างมาจากโหมด {SPECTRUM_MODES[run_mode]} · กด Run Spectrum เพื่อรันโหมดที่เลือกใหม่")
     render_export_section(
         results, key="export_spectrum", file_name="encoded_strings_spectrum.json",
-        extra_metadata={"source": "dna_spectrum", "spectrum_preset": st.session_state.spectrum_preset}
+        extra_metadata={"source": "dna_spectrum", "spectrum_mode": run_mode, "spectrum_preset": st.session_state.spectrum_preset}
     )
     tickers = list(results.keys())
     st.write(f"✅ Results available for: {', '.join(tickers)}")
     tabs = st.tabs([f"🌈 {t}" for t in tickers])
     for tab, ticker in zip(tabs, tickers):
         with tab:
-            df_windows = results[ticker]["df_windows"]
+            data = results[ticker]
+            df_windows = data["df_windows"]
+            if df_windows.empty:
+                st.warning("ไม่มี Window ที่คำนวณได้"); continue
+            total_net, total_max = df_windows['net'].sum(), df_windows['max_net'].sum()
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Σ net ของทุก Window", f"${total_net:,.2f}")
+            m2.metric("Σ เพดาน (Perfect Foresight)", f"${total_max:,.2f}")
+            m3.metric("ได้กี่ % ของเพดาน", f"{total_net / total_max:.1%}" if total_max > 0 else "–")
             if 'spectrum_rank' in df_windows.columns:
                 wins = df_windows.groupby(['spectrum_rank', 'spectrum_label']).size().reset_index(name='windows_won')
                 st.write("🏆 **DNA ที่ชนะในแต่ละ Window (นับตาม rank)**")
                 st.dataframe(wins, width="stretch", hide_index=True)
+
+            st.write("📈 **E-Spectrum ของ Window** (net ของทุกความถี่ เทียบ 10 preset และเพดาน)")
+            win_no = st.selectbox("Window", df_windows['window'].tolist(), key=f"spectrum_curve_win_{ticker}",
+                                  format_func=lambda w, d=df_windows: f"Window {w} · {d.loc[d['window'] == w, 'timeline'].iloc[0]}")
+            row = df_windows.loc[df_windows['window'] == win_no].iloc[0]
+            ws = data.get("window_size", window_size)
+            prices_all = data.get("prices")
+            if prices_all is not None:
+                render_spectrum_curve_chart(prices_all[(win_no - 1) * ws: win_no * ws], spectrum_codes, row)
+
             render_single_ticker_result(
-                ticker, results[ticker], key_prefix="spectrum_",
-                hybrid=(Strategy.SPECTRUM_BEST, "Spectrum (Best of 10)"),
+                ticker, data, key_prefix="spectrum_",
+                hybrid=(SPECTRUM_STRATEGY[run_mode], SPECTRUM_STRATEGY[run_mode]),
                 original=None
             )
 
@@ -1451,7 +1620,7 @@ def main():
     config = load_config()
     initialize_session_state(config)
 
-    tab_list = ["⚙️ Settings", "🧬 Simulation Results", "🌈 DNA Spectrum (10)", "🔬 Spectrum Classifier", "🔍 Tracer"]
+    tab_list = ["⚙️ Settings", "🧬 Simulation Results", "🌈 DNA Spectrum", "🔬 Spectrum Classifier", "🔍 Tracer"]
     tabs = st.tabs(tab_list)
 
     with tabs[0]:
