@@ -21,6 +21,38 @@ class Strategy:
     PERFECT_FORESIGHT = "Perfect Foresight (Max)"
     HYBRID_MULTI_MUTATION = "Hybrid (Multi-Mutation)"
     ORIGINAL_DNA = "Original DNA (Pre-Mutation)"
+    SPECTRUM_HYBRID = "Spectrum-10 (Multi-Mutation)"
+    SPECTRUM_ORIGINAL = "Spectrum-10 DNA (Pre-Mutation)"
+
+# ! DNA Spectrum: 10 DNA (N=100) เรียงจากความถี่สั้น -> ความถี่ยาว ใช้แทนการสุ่ม num_seeds ใน Phase 1
+# ทุก code เป็น stream format เดิม [len][rate][dna_seed][mutation_seeds...] ถอดด้วย SimulationTracer ได้ตรงตามบิตที่ระบุ
+SPECTRUM_LENGTH = 100
+DNA_SPECTRUM_PRESETS: Dict[str, List[Tuple[str, str]]] = {
+    "Density · 5-Mutation @10%": [
+        ("Shortest · 86/100", "310021034383314338137273717223"),
+        ("Very Short · 75/100", "3100210383239523933314231763694"),
+        ("Short · 64/100", "310021025332403434355336363126"),
+        ("Mid-Short · 55/100", "310021033523645340934272903968"),
+        ("Medium-High · 50/100", "310021032792943597359537383270"),
+        ("Medium · 45/100", "310021034252903219354832053493"),
+        ("Mid-Long · 35/100", "310021033333811262316534903164"),
+        ("Long · 25/100", "310021037623642310923532793996"),
+        ("Very Long · 20/100", "3100210367735743415368234163493"),
+        ("Longest · 19/100", "3100210314632243647314733413408"),
+    ],
+    "Periodic · คาบ k เป๊ะ": [
+        ("k=1 · 100/100", "310014662249828936126265908610845464227193735"),
+        ("k=2 · 50/100", "310014619777534456167586663299563079266129653"),
+        ("k=4 · 25/100", "3100136229050471706429512625001049825310647393"),
+        ("k=5 · 20/100", "31001466524681221762004304522121064966753186"),
+        ("k=10 · 10/100", "3100165307424851854459563846975224236629094"),
+        ("k=20 · 5/100", "310018569334611592862085356595944635764643444"),
+        ("k=25 · 4/100", "31001654309425539694183256894762901446352202"),
+        ("k=50 · 2/100", "31001654309425539694183261507126200183531310"),
+        ("[0,99] · 2/100", "31001861938565821735250155469095120886754620"),
+        ("k=100 · 1/100", "3100155430943235599950615535466957056396248"),
+    ],
+}
 
 # ! GOAL_1: Multi-Timeframe Support (30m, 1h, 4h, 1d) via Yahoo Finance
 ENCODED_DNA_MAGIC = 0
@@ -108,6 +140,8 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'trace_start_timestamp' not in st.session_state: st.session_state.trace_start_timestamp = 0 # 0 means Auto (Window Start)
     
     if 'batch_results' not in st.session_state: st.session_state.batch_results = {}
+    if 'spectrum_results' not in st.session_state: st.session_state.spectrum_results = {}
+    if 'spectrum_preset' not in st.session_state: st.session_state.spectrum_preset = next(iter(DNA_SPECTRUM_PRESETS))
 
 # ==============================================================================
 # 2. Core Calculation & Data Functions
@@ -308,8 +342,10 @@ def find_best_mutation_for_sequence(original_actions: np.ndarray, prices_window:
 def generate_actions_hybrid_multi_mutation(
     ticker_data: pd.DataFrame, window_size: int, num_seeds: int, max_workers: int, 
     mutation_rate_pct: float, num_mutations: int, progress_bar=None, ticker_name:str="",
-    timeframe: str = "1d"
+    timeframe: str = "1d", spectrum_codes: Optional[List[Tuple[str, str]]] = None
 ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    # spectrum_codes: ถ้าส่งมา Phase 1 เลือกจาก DNA ชุดนี้แทนการสุ่ม num_seeds
+    # และ mutation ใช้ rate ของ DNA แชมป์ เพื่อให้ต่อ mutation seeds แล้ว encode เป็น string เดียวได้
 
     prices = ticker_data['Close'].to_numpy()
     n = len(prices)
@@ -329,14 +365,23 @@ def generate_actions_hybrid_multi_mutation(
             progress_text = f"{ticker_name}: Window {i+1}/{num_windows}..."
             progress_bar.progress((i + 1) / num_windows, text=progress_text)
 
-        dna_seed, current_best_net, current_best_actions = find_best_seed_for_window(prices_window, num_seeds, max_workers)
+        champion = None
+        base_mutation_seeds: List[int] = []
+        window_mutation_rate = mutation_rate
+        if spectrum_codes:
+            spectrum_rank, champion, current_best_net, current_best_actions = find_best_spectrum_dna_for_window(prices_window, spectrum_codes)
+            dna_seed = champion.dna_seed
+            base_mutation_seeds = list(champion.mutation_seeds)
+            window_mutation_rate = champion.mutation_rate_float
+        else:
+            dna_seed, current_best_net, current_best_actions = find_best_seed_for_window(prices_window, num_seeds, max_workers)
         original_actions_window = current_best_actions.copy()
         original_net_for_display = current_best_net
         successful_mutation_seeds = []
 
         for mutation_round in range(num_mutations):
             mutation_seed, mutated_net, mutated_actions = find_best_mutation_for_sequence(
-                current_best_actions, prices_window, num_seeds, mutation_rate, max_workers
+                current_best_actions, prices_window, num_seeds, window_mutation_rate, max_workers
             )
             if mutated_net > current_best_net:
                 current_best_net = mutated_net
@@ -347,6 +392,7 @@ def generate_actions_hybrid_multi_mutation(
         original_actions_full = np.concatenate((original_actions_full, original_actions_window.astype(np.int32)))
 
         start_date = ticker_data.index[start_index]; end_date = ticker_data.index[end_index-1]
+        all_mutation_seeds = base_mutation_seeds + successful_mutation_seeds
         detail = {
             'window': i + 1,
             'timeframe': timeframe,
@@ -354,11 +400,15 @@ def generate_actions_hybrid_multi_mutation(
             'start_timestamp': to_unix_timestamp(start_date),
             'end_timestamp': to_unix_timestamp(end_date),
             'dna_seed': dna_seed,
-            'mutation_seeds': str(successful_mutation_seeds) if successful_mutation_seeds else "None",
+            'mutation_seeds': str(all_mutation_seeds) if all_mutation_seeds else "None",
             'improvements': len(successful_mutation_seeds),
             'original_net': round(original_net_for_display, 2),
             'final_net': round(current_best_net, 2)
         }
+        if champion is not None:
+            detail['spectrum_rank'] = spectrum_rank
+            detail['spectrum_label'] = spectrum_codes[spectrum_rank - 1][0]
+            detail['mutation_rate'] = champion.mutation_rate
         window_details_list.append(detail)
 
     return original_actions_full, final_actions, pd.DataFrame(window_details_list)
@@ -480,6 +530,48 @@ class SimulationTracer:
         return encode_number_stream(all_numbers)
 
 # ==============================================================================
+# 4b. DNA Spectrum (10 DNA แทนการสุ่ม num_seeds)
+# ==============================================================================
+def spectrum_actions(code: str, length: int) -> Tuple[SimulationTracer, np.ndarray]:
+    """ถอด preset code ที่ความยาว length ด้วย SimulationTracer เดิม
+    PCG64 สร้างบิตเรียงตามลำดับ จึงได้ prefix ของ 100 บิตเดิมเสมอเมื่อ length <= 100"""
+    preset = SimulationTracer(code)
+    tracer = SimulationTracer(SimulationTracer.encode(
+        action_length=length, mutation_rate=preset.mutation_rate,
+        dna_seed=preset.dna_seed, mutation_seeds=preset.mutation_seeds
+    ))
+    return tracer, tracer.run()
+
+def find_best_spectrum_dna_for_window(
+    prices_window: np.ndarray, spectrum_codes: List[Tuple[str, str]]
+) -> Tuple[int, SimulationTracer, float, np.ndarray]:
+    """Phase 1 แบบ Spectrum: ลอง DNA ทั้ง 10 ชุด แล้วเลือกตัวที่ net สูงสุด (เสมอกัน -> ความถี่สั้นกว่าชนะ)"""
+    best = None
+    for rank, (_, code) in enumerate(spectrum_codes, start=1):
+        tracer, actions = spectrum_actions(code, len(prices_window))
+        net = _calculate_net_profit_numba(actions, prices_window)
+        if best is None or net > best[2]:
+            best = (rank, tracer, net, actions)
+    return best
+
+def build_spectrum_table(spectrum_codes: List[Tuple[str, str]], window_size: int) -> pd.DataFrame:
+    rows = []
+    for rank, (label, code) in enumerate(spectrum_codes, start=1):
+        tracer, actions = spectrum_actions(code, SPECTRUM_LENGTH)
+        rows.append({
+            'rank': rank,
+            'label': label,
+            'dna_code': code,
+            'rate_%': tracer.mutation_rate,
+            'dna_seed': tracer.dna_seed,
+            'mutation_seeds': str(tracer.mutation_seeds),
+            f'active_{SPECTRUM_LENGTH}': int(actions.sum()),
+            f'active_first_{window_size}': int(actions[:window_size].sum()),
+            'decoded_100bit_dna': ''.join(map(str, actions)),
+        })
+    return pd.DataFrame(rows)
+
+# ==============================================================================
 # 5. UI Rendering & Logic Functions
 # ==============================================================================
 
@@ -509,6 +601,9 @@ def generate_encoded_dna_for_ticker(
     final_act_len = global_act_len if global_act_len > 0 else real_len
 
     row = df_windows.iloc[use_win_num - 1]
+    # ผล Spectrum เก็บ rate ของ DNA แชมป์ไว้ต่อ window -> ใช้ค่านั้นแทน rate ใน Settings
+    if 'mutation_rate' in row.index:
+        mutation_rate = row['mutation_rate']
     dna_seed = int(row['dna_seed'])
     mut_seeds_str = row['mutation_seeds']
     final_start_timestamp = int(start_timestamp) if int(start_timestamp) > 0 else int(row.get('start_timestamp', 0))
@@ -600,7 +695,11 @@ def render_settings_tab():
             help="Cloud decode ใช้ Unix timestamp นี้ร่วมกับ timeframe เพื่อ map เวลาปัจจุบันไปยัง index ของ DNA action"
         )
 
-def execute_batch_processing():
+def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = None):
+    # spectrum_codes=None -> Hybrid เดิม (สุ่ม num_seeds) / ส่งมา -> DNA Spectrum (เก็บผลแยกใน spectrum_results)
+    results_key = 'spectrum_results' if spectrum_codes else 'batch_results'
+    hybrid_name = Strategy.SPECTRUM_HYBRID if spectrum_codes else Strategy.HYBRID_MULTI_MUTATION
+    original_name = Strategy.SPECTRUM_ORIGINAL if spectrum_codes else Strategy.ORIGINAL_DNA
     tickers = st.session_state.selected_tickers
     if not tickers:
         st.error("กรุณาเลือก Ticker อย่างน้อย 1 ตัว"); return
@@ -617,7 +716,7 @@ def execute_batch_processing():
             f"จึงปรับวันที่เริ่มต้นจาก {start_str} เป็น {effective_start} โดยอัตโนมัติ"
         )
 
-    st.session_state.batch_results = {}
+    st.session_state[results_key] = {}
 
     overall_progress = st.progress(0, text="Starting Batch Process...")
     total_tickers = len(tickers)
@@ -634,47 +733,53 @@ def execute_batch_processing():
             st.session_state.num_mutations,
             progress_bar=overall_progress,
             ticker_name=ticker,
-            timeframe=selected_timeframe
+            timeframe=selected_timeframe,
+            spectrum_codes=spectrum_codes
         )
-        
+
         prices = ticker_data['Close'].to_numpy()
         sim_results = {
-            Strategy.HYBRID_MULTI_MUTATION: run_simulation(prices.tolist(), final_actions.tolist()),
-            Strategy.ORIGINAL_DNA: run_simulation(prices.tolist(), original_actions.tolist()),
+            hybrid_name: run_simulation(prices.tolist(), final_actions.tolist()),
+            original_name: run_simulation(prices.tolist(), original_actions.tolist()),
             Strategy.REBALANCE_DAILY: run_simulation(prices.tolist(), generate_actions_rebalance_daily(len(prices)).tolist()),
             Strategy.PERFECT_FORESIGHT: run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
         }
         for name, df in sim_results.items():
             if not df.empty: df.index = ticker_data.index[:len(df)]
             
-        st.session_state.batch_results[ticker] = {
+        st.session_state[results_key][ticker] = {
             "sim_results": sim_results,
             "df_windows": df_windows,
             "data_len": len(ticker_data),
             "timeframe": selected_timeframe
         }
         overall_progress.progress((idx + 1) / total_tickers, text=f"Completed {ticker} ({idx+1}/{total_tickers})")
-        
-    overall_progress.empty()
-    st.success(f"✅ Processed {len(st.session_state.batch_results)} tickers successfully!")
 
-def render_single_ticker_result(ticker: str, result_data: Dict[str, Any]):
+    overall_progress.empty()
+    st.success(f"✅ Processed {len(st.session_state[results_key])} tickers successfully!")
+
+def render_single_ticker_result(
+    ticker: str, result_data: Dict[str, Any], key_prefix: str = "",
+    hybrid: Tuple[str, str] = (Strategy.HYBRID_MULTI_MUTATION, "Hybrid Strategy"),
+    original: Tuple[str, str] = (Strategy.ORIGINAL_DNA, "Original DNA")
+):
+    # hybrid / original = (ชื่อ strategy ใน sim_results, ป้าย metric)
     sim_results = result_data["sim_results"]
     df_windows = result_data["df_windows"]
     data_len = result_data["data_len"]
     timeframe = result_data.get("timeframe", st.session_state.selected_timeframe)
 
-    chart_results = {k: v for k, v in sim_results.items() if k != Strategy.ORIGINAL_DNA}
+    chart_results = {k: v for k, v in sim_results.items() if k != original[0]}
     display_comparison_charts(chart_results, chart_title=f'📊 {ticker} - Net Profit Comparison')
-    
+
     c1, c2, c3, c4 = st.columns(4)
     def get_final_net(strategy_name):
         df = sim_results.get(strategy_name)
         return df['net'].iloc[-1] if df is not None and not df.empty else 0.0
 
     c1.metric("Perfect Foresight", f"${get_final_net(Strategy.PERFECT_FORESIGHT):,.0f}")
-    c2.metric("Hybrid Strategy", f"${get_final_net(Strategy.HYBRID_MULTI_MUTATION):,.0f}", delta_color="normal")
-    c3.metric("Original DNA", f"${get_final_net(Strategy.ORIGINAL_DNA):,.0f}")
+    c2.metric(hybrid[1], f"${get_final_net(hybrid[0]):,.0f}", delta_color="normal")
+    c3.metric(original[1], f"${get_final_net(original[0]):,.0f}")
     c4.metric("Rebalance Daily", f"${get_final_net(Strategy.REBALANCE_DAILY):,.0f}")
     
     st.divider()
@@ -695,15 +800,18 @@ def render_single_ticker_result(ticker: str, result_data: Dict[str, Any]):
     use_win_num_disp = target_win_num if target_win_num <= max_win else max_win
     auto_start_ts_disp = int(df_windows.iloc[use_win_num_disp - 1].get('start_timestamp', 0)) if max_win > 0 else 0
     start_ts_disp = trace_start_timestamp if trace_start_timestamp > 0 else auto_start_ts_disp
+    rate_disp = st.session_state.mutation_rate
+    if max_win > 0 and 'mutation_rate' in df_windows.columns:
+        rate_disp = df_windows.iloc[use_win_num_disp - 1]['mutation_rate']
 
     c_enc_1, c_enc_2 = st.columns([3, 1])
     with c_enc_1:
-        st.info(f"Using Global Settings: **Window {use_win_num_disp}**, **Len {global_act_len if global_act_len>0 else 'Auto'}**, **TF {timeframe}**, **StartTS {start_ts_disp}** (Rate: {st.session_state.mutation_rate}%)")
+        st.info(f"Using Global Settings: **Window {use_win_num_disp}**, **Len {global_act_len if global_act_len>0 else 'Auto'}**, **TF {timeframe}**, **StartTS {start_ts_disp}** (Rate: {rate_disp}%)")
         if target_win_num > max_win:
              st.caption(f"⚠️ Window {target_win_num} เกินจำนวนที่มี (Max {max_win}). ใช้ Window {max_win} แทน")
 
     with c_enc_2:
-        if st.button(f"Encode ({ticker})", key=f"btn_enc_{ticker}", use_container_width=True):
+        if st.button(f"Encode ({ticker})", key=f"btn_enc_{key_prefix}{ticker}", use_container_width=True):
             try:
                 # ! REFACTORED: Use helper function
                 encoded, final_win, final_len, final_start_ts = generate_encoded_dna_for_ticker(
@@ -873,6 +981,75 @@ def render_methodology_expander():
         """
         st.code(code, language="python")
 
+def render_export_section(
+    batch_results: Dict[str, Any], key: str, file_name: str,
+    extra_metadata: Optional[Dict[str, Any]] = None
+):
+    st.write("---")
+    exp_c1, exp_c2 = st.columns([3, 1])
+    with exp_c1:
+        st.markdown("#### 💾 Export Encoded Strings")
+        st.caption(f"Settings: Window {st.session_state.trace_target_window}, Len {st.session_state.trace_action_length}, TF {st.session_state.selected_timeframe}, StartTS {st.session_state.trace_start_timestamp}, Rate {st.session_state.mutation_rate}%")
+
+    with exp_c2:
+        # Prepare data for JSON export
+        export_payload = {
+            "metadata": {
+                "trace_target_window": st.session_state.trace_target_window,
+                "trace_action_length": st.session_state.trace_action_length,
+                "timeframe": st.session_state.selected_timeframe,
+                "timeframe_minutes": get_timeframe_minutes(st.session_state.selected_timeframe),
+                "trace_start_timestamp": st.session_state.trace_start_timestamp,
+                "mutation_rate_percent": st.session_state.mutation_rate,
+                "exported_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                **(extra_metadata or {})
+            },
+            "tickers": {},
+            "ticker_metadata": {}
+        }
+
+        # Loop through all results and generate strings
+        for ticker, data in batch_results.items():
+            try:
+                timeframe = data.get("timeframe", st.session_state.selected_timeframe)
+                encoded, final_win, final_len, final_start_ts = generate_encoded_dna_for_ticker(
+                    data["df_windows"],
+                    data["data_len"],
+                    st.session_state.trace_target_window,
+                    st.session_state.trace_action_length,
+                    st.session_state.mutation_rate,
+                    st.session_state.window_size,
+                    timeframe,
+                    st.session_state.trace_start_timestamp
+                )
+                export_payload["tickers"][ticker] = encoded
+                ticker_meta = {
+                    "window": final_win,
+                    "action_length": final_len,
+                    "timeframe": timeframe,
+                    "timeframe_minutes": get_timeframe_minutes(timeframe),
+                    "start_timestamp": final_start_ts,
+                }
+                # ผล Spectrum: rate จริงของ string และ rank ที่ชนะใน window นั้น
+                row = data["df_windows"].iloc[final_win - 1]
+                if 'spectrum_rank' in row.index:
+                    ticker_meta["mutation_rate_percent"] = int(row['mutation_rate'])
+                    ticker_meta["spectrum_rank"] = int(row['spectrum_rank'])
+                    ticker_meta["spectrum_label"] = row['spectrum_label']
+                export_payload["ticker_metadata"][ticker] = ticker_meta
+            except Exception as e:
+                export_payload["tickers"][ticker] = f"Error: {str(e)}"
+
+        json_str = json.dumps(export_payload, indent=4, ensure_ascii=False)
+        st.download_button(
+            label="💾 Download JSON (All Tickers)",
+            data=json_str,
+            file_name=file_name,
+            mime="application/json",
+            use_container_width=True,
+            key=key
+        )
+
 def render_simulation_tabs():
     st.write("---")
     render_methodology_expander()
@@ -888,61 +1065,7 @@ def render_simulation_tabs():
             
     # ! GOAL Step 1: Export JSON Feature
     if st.session_state.batch_results:
-        st.write("---")
-        exp_c1, exp_c2 = st.columns([3, 1])
-        with exp_c1:
-            st.markdown("#### 💾 Export Encoded Strings")
-            st.caption(f"Settings: Window {st.session_state.trace_target_window}, Len {st.session_state.trace_action_length}, TF {st.session_state.selected_timeframe}, StartTS {st.session_state.trace_start_timestamp}, Rate {st.session_state.mutation_rate}%")
-
-        with exp_c2:
-            # Prepare data for JSON export
-            export_payload = {
-                "metadata": {
-                    "trace_target_window": st.session_state.trace_target_window,
-                    "trace_action_length": st.session_state.trace_action_length,
-                    "timeframe": st.session_state.selected_timeframe,
-                    "timeframe_minutes": get_timeframe_minutes(st.session_state.selected_timeframe),
-                    "trace_start_timestamp": st.session_state.trace_start_timestamp,
-                    "mutation_rate_percent": st.session_state.mutation_rate,
-                    "exported_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                },
-                "tickers": {},
-                "ticker_metadata": {}
-            }
-
-            # Loop through all results and generate strings
-            for ticker, data in st.session_state.batch_results.items():
-                try:
-                    timeframe = data.get("timeframe", st.session_state.selected_timeframe)
-                    encoded, final_win, final_len, final_start_ts = generate_encoded_dna_for_ticker(
-                        data["df_windows"],
-                        data["data_len"],
-                        st.session_state.trace_target_window,
-                        st.session_state.trace_action_length,
-                        st.session_state.mutation_rate,
-                        st.session_state.window_size,
-                        timeframe,
-                        st.session_state.trace_start_timestamp
-                    )
-                    export_payload["tickers"][ticker] = encoded
-                    export_payload["ticker_metadata"][ticker] = {
-                        "window": final_win,
-                        "action_length": final_len,
-                        "timeframe": timeframe,
-                        "timeframe_minutes": get_timeframe_minutes(timeframe),
-                        "start_timestamp": final_start_ts,
-                    }
-                except Exception as e:
-                    export_payload["tickers"][ticker] = f"Error: {str(e)}"
-
-            json_str = json.dumps(export_payload, indent=4)
-            st.download_button(
-                label="💾 Download JSON (All Tickers)",
-                data=json_str,
-                file_name="encoded_strings.json",
-                mime="application/json",
-                use_container_width=True
-            )
+        render_export_section(st.session_state.batch_results, key="export_hybrid", file_name="encoded_strings.json")
 
         tickers = list(st.session_state.batch_results.keys())
         st.write(f"✅ Results available for: {', '.join(tickers)}")
@@ -952,6 +1075,62 @@ def render_simulation_tabs():
                 render_single_ticker_result(ticker, st.session_state.batch_results[ticker])
     else:
         st.info("ยังไม่มีผลลัพธ์ กรุณากดปุ่ม Start")
+
+def render_spectrum_tab():
+    st.markdown("### 🌈 DNA Spectrum (10 DNA แทนการสุ่ม Seeds)")
+    st.info(
+        f"Phase 1 ไม่สุ่ม {st.session_state.num_seeds:,} Seeds แต่เลือก DNA ที่ net สูงสุดจาก **10 ชุดตายตัว** "
+        "เรียงจากความถี่สั้น (เปิด gate ถี่) ไปความถี่ยาว (เปิด gate ห่าง) · Phase 2 กลายพันธุ์ต่อตาม Mutation Rounds ใน Settings "
+        "(0 = ใช้ 10 DNA ล้วน) โดยใช้ rate ของ DNA แชมป์ เพื่อให้ encode เป็น string เดียวได้"
+    )
+
+    preset_names = list(DNA_SPECTRUM_PRESETS.keys())
+    st.session_state.spectrum_preset = st.selectbox(
+        "ชุด DNA Spectrum",
+        options=preset_names,
+        index=preset_names.index(st.session_state.spectrum_preset) if st.session_state.spectrum_preset in preset_names else 0,
+        help="Density = จำนวน gate ลดหลั่น (rate 10%, 5 mutations) · Periodic = 1 ทุก k แท่งเป๊ะ"
+    )
+    spectrum_codes = DNA_SPECTRUM_PRESETS[st.session_state.spectrum_preset]
+    window_size = int(st.session_state.window_size)
+
+    with st.expander(f"🧬 10 DNA ({SPECTRUM_LENGTH} บิต) · เรียงความถี่สั้น → ยาว", expanded=True):
+        st.dataframe(build_spectrum_table(spectrum_codes, window_size), width="stretch", hide_index=True)
+        st.caption(f"Window ยาว {window_size} แท่ง ใช้ {min(window_size, SPECTRUM_LENGTH)} บิตแรกของแต่ละ DNA (คอลัมน์ active_first_{window_size})")
+    if window_size > SPECTRUM_LENGTH:
+        st.warning(f"⚠️ Window {window_size} แท่ง ยาวกว่า {SPECTRUM_LENGTH}: บิตหลังตำแหน่ง {SPECTRUM_LENGTH} เป็นค่าสุ่มต่อจาก seed ไม่อยู่ในสเปกตรัม")
+
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        st.caption("เลือก Tickers / Timeframe / Window ในหน้า Settings แล้วกดปุ่มด้านขวา")
+    with c2:
+        if st.button("🌈 Run Spectrum (10 DNA)", type="primary", width="stretch", key="btn_run_spectrum"):
+            execute_batch_processing(spectrum_codes=spectrum_codes)
+
+    results = st.session_state.spectrum_results
+    if not results:
+        st.info("ยังไม่มีผลลัพธ์ กรุณากดปุ่ม Run Spectrum")
+        return
+
+    render_export_section(
+        results, key="export_spectrum", file_name="encoded_strings_spectrum.json",
+        extra_metadata={"source": "dna_spectrum", "spectrum_preset": st.session_state.spectrum_preset}
+    )
+    tickers = list(results.keys())
+    st.write(f"✅ Results available for: {', '.join(tickers)}")
+    tabs = st.tabs([f"🌈 {t}" for t in tickers])
+    for tab, ticker in zip(tabs, tickers):
+        with tab:
+            df_windows = results[ticker]["df_windows"]
+            if 'spectrum_rank' in df_windows.columns:
+                wins = df_windows.groupby(['spectrum_rank', 'spectrum_label']).size().reset_index(name='windows_won')
+                st.write("🏆 **DNA ที่ชนะในแต่ละ Window (นับตาม rank)**")
+                st.dataframe(wins, width="stretch", hide_index=True)
+            render_single_ticker_result(
+                ticker, results[ticker], key_prefix="spectrum_",
+                hybrid=(Strategy.SPECTRUM_HYBRID, "Spectrum + Mutation"),
+                original=(Strategy.SPECTRUM_ORIGINAL, "Spectrum DNA")
+            )
 
 # ! GOAL: Restore Full Tracer (Decode + Encode)
 def render_tracer_tab():
@@ -1051,7 +1230,7 @@ def main():
     config = load_config()
     initialize_session_state(config)
 
-    tab_list = ["⚙️ Settings", "🧬 Simulation Results", "🔍 Tracer"]
+    tab_list = ["⚙️ Settings", "🧬 Simulation Results", "🌈 DNA Spectrum (10)", "🔍 Tracer"]
     tabs = st.tabs(tab_list)
 
     with tabs[0]:
@@ -1059,6 +1238,8 @@ def main():
     with tabs[1]:
         render_simulation_tabs()
     with tabs[2]:
+        render_spectrum_tab()
+    with tabs[3]:
         render_tracer_tab()
 
 if __name__ == "__main__":
