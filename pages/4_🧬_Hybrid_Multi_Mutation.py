@@ -701,6 +701,18 @@ def generate_actions_spectrum(
 
     return final_actions, pd.DataFrame(window_details_list), ceiling_actions
 
+def perfect_window_actions(prices: np.ndarray, window_size: int) -> Tuple[np.ndarray, List[float]]:
+    """Perfect Foresight ภายในแต่ละ Window ต่อกันจนจบ + net สูงสุดของแต่ละ Window
+    แบ่ง Window แบบเดียวกับ generator อื่น (ข้าม Window ที่สั้นกว่า 2 แท่ง)"""
+    actions, max_nets = [], []
+    for start in range(0, len(prices), window_size):
+        prices_window = prices[start:start + window_size]
+        if len(prices_window) < 2: continue
+        best = generate_actions_perfect_foresight(prices_window.tolist()).astype(np.int32)
+        actions.append(best)
+        max_nets.append(float(_calculate_net_profit_numba(best, prices_window)))
+    return (np.concatenate(actions) if actions else np.array([], dtype=np.int32)), max_nets
+
 def build_spectrum_table(spectrum_codes: List[Tuple[str, str]], window_size: int) -> pd.DataFrame:
     rows = []
     for rank, (label, code) in enumerate(spectrum_codes, start=1):
@@ -1005,13 +1017,16 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
                 ticker_name=ticker,
                 timeframe=selected_timeframe
             )
+            # เพดาน = Perfect Window ทุก window ต่อกันจนจบ (กติกาเดียวกับ Hybrid: act ที่ต้นทุก window)
+            ceiling_actions, window_max = perfect_window_actions(prices, st.session_state.window_size)
+            df_windows = df_windows.assign(max_net=np.round(window_max, 2))
+            df_windows['efficiency'] = np.where(df_windows['max_net'] > 0, (df_windows['final_net'] / df_windows['max_net']).round(3), np.nan)
             sim_results = {
                 Strategy.HYBRID_MULTI_MUTATION: run_simulation(prices.tolist(), final_actions.tolist()),
                 Strategy.ORIGINAL_DNA: run_simulation(prices.tolist(), original_actions.tolist()),
+                Strategy.PERFECT_WINDOW: run_simulation(prices.tolist(), ceiling_actions.tolist()),
             }
         sim_results[Strategy.REBALANCE_DAILY] = run_simulation(prices.tolist(), generate_actions_rebalance_daily(len(prices)).tolist())
-        if not spectrum_codes:
-            sim_results[Strategy.PERFECT_FORESIGHT] = run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
         for name, df in sim_results.items():
             if not df.empty: df.index = ticker_data.index[:len(df)]
             
@@ -1331,6 +1346,52 @@ def render_export_section(
             key=key
         )
 
+def render_chained_vs_perfect_window(
+    data: Dict[str, Any], strategy: str, who: str, net_col: str,
+    extra_cols: Optional[Dict[str, str]] = None, secondary: Optional[Tuple[str, str]] = None
+):
+    """Perfect Window vs กลยุทธ์ ทีละ Window แล้วต่อกันจนจบ (ทั้งคู่ act ที่แท่งแรกของทุก Window)
+    strategy = ชื่อใน sim_results · net_col = คอลัมน์ net ของกลยุทธ์ใน df_windows · extra_cols = คอลัมน์อื่นที่โชว์ {เดิม: ป้าย}
+    secondary = (ชื่อใน sim_results, ป้าย) ของอีกเส้นที่สรุปไว้ใต้ตัวเลข"""
+    sims, df_windows = data["sim_results"], data["df_windows"]
+    def chained(name: str) -> float:
+        df = sims.get(name)
+        return float(df['net'].iloc[-1]) if df is not None and not df.empty else 0.0
+    pw_total, main_total = chained(Strategy.PERFECT_WINDOW), chained(strategy)
+    pct = (lambda v: f"{v / pw_total:.1%}" if pw_total > 0 else "–")
+
+    st.write(f"🔗 **ต่อกันจนจบ: Perfect Window vs {who}** (ทุก Window เล่นกติกาเดียวกัน: act ที่แท่งแรกของ Window)")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Perfect Window · ต่อกันจนจบ", f"${pw_total:,.2f}")
+    m2.metric(f"{who} · ต่อกันจนจบ", f"${main_total:,.2f}")
+    m3.metric(f"{who} ได้กี่ % ของเพดาน", pct(main_total))
+    notes = [f"เส้น {strategy}"]
+    if secondary is not None:
+        notes.append(f"{secondary[1]} ต่อกัน \\${chained(secondary[0]):,.2f} ({pct(chained(secondary[0]))})")
+    notes.append(f"Rebalance Daily \\${chained(Strategy.REBALANCE_DAILY):,.2f} ({pct(chained(Strategy.REBALANCE_DAILY))})")
+    st.caption(" · ".join(notes))
+
+    extra_cols = extra_cols or {}
+    cols = ['window', 'timeline'] + list(extra_cols) + ['max_net', net_col]
+    per_window = df_windows[cols].rename(columns={**extra_cols, 'max_net': 'Perfect Window', net_col: f'{who} net'})
+    main_col = f'{who} net'
+    per_window['% ของเพดาน'] = np.where(per_window['Perfect Window'] > 0, per_window[main_col] / per_window['Perfect Window'], np.nan)
+    total_pw, total_main = per_window['Perfect Window'].sum(), per_window[main_col].sum()
+    total_row = {c: '' for c in per_window.columns}
+    total_row.update({'window': 'รวม', 'Perfect Window': total_pw, main_col: total_main,
+                      '% ของเพดาน': total_main / total_pw if total_pw > 0 else np.nan})
+    money_cols = ['Perfect Window', main_col] + [label for col, label in extra_cols.items() if col.endswith('_net')]
+    for c in money_cols:
+        if c not in ('Perfect Window', main_col):
+            total_row[c] = per_window[c].sum()
+    per_window['window'] = per_window['window'].astype(str)
+    per_window = pd.concat([per_window, pd.DataFrame([total_row])], ignore_index=True)
+    with st.expander(f"📋 ราย Window: Perfect Window vs {who}", expanded=True):
+        st.dataframe(per_window.style.format({**{c: '${:,.2f}' for c in money_cols}, '% ของเพดาน': '{:.1%}'}, na_rep='–'),
+                     width="stretch", hide_index=True)
+        st.caption("ตารางคิดทีละ Window (เริ่มใหม่ทุก Window) · ตัวเลขด้านบนเป็นแบบต่อกันจนจบเป็นเส้นเดียว "
+                   "จึงต่างกันเล็กน้อยตรงรอยต่อระหว่าง Window")
+
 def render_simulation_tabs():
     st.write("---")
     render_methodology_expander()
@@ -1353,7 +1414,18 @@ def render_simulation_tabs():
         tabs = st.tabs([f"📈 {t}" for t in tickers])
         for tab, ticker in zip(tabs, tickers):
             with tab:
-                render_single_ticker_result(ticker, st.session_state.batch_results[ticker])
+                data = st.session_state.batch_results[ticker]
+                if Strategy.PERFECT_WINDOW in data["sim_results"]:
+                    render_chained_vs_perfect_window(
+                        data, Strategy.HYBRID_MULTI_MUTATION, "Hybrid", "final_net",
+                        extra_cols={'original_net': 'Original DNA net'},
+                        secondary=(Strategy.ORIGINAL_DNA, "Original DNA (ก่อนกลายพันธุ์)")
+                    )
+                render_single_ticker_result(
+                    ticker, data,
+                    ceiling=(Strategy.PERFECT_WINDOW, "Perfect Window (ต่อกัน)"),
+                    show_metrics=Strategy.PERFECT_WINDOW not in data["sim_results"]
+                )
     else:
         st.info("ยังไม่มีผลลัพธ์ กรุณากดปุ่ม Start")
 
@@ -1377,7 +1449,7 @@ def render_spectrum_curve_chart(prices_window: np.ndarray, spectrum_codes: List[
     ceiling = alt.Chart(pd.DataFrame({"net": [max_net]})).mark_rule(color="#10b981", strokeDash=[6, 4]).encode(y="net:Q")
     st.altair_chart(line + dots + ceiling + pick, width="stretch")
     st.caption(f"เส้นฟ้า = net ดีที่สุดของแต่ละ k (เลือกจังหวะแล้ว) · จุดส้ม = 10 preset (วางที่ k เทียบเท่า = ความยาว ÷ จำนวน act) "
-               f"· เส้นประเขียว = เพดาน \\${max_net:,.2f} (Perfect Foresight) · ◆ แดง = ผลของโหมดนี้ \\${float(row['net']):,.2f}")
+               f"· เส้นประเขียว = เพดาน \\${max_net:,.2f} (Perfect Window) · ◆ แดง = ผลของโหมดนี้ \\${float(row['net']):,.2f}")
 
 def render_spectrum_tab():
     st.markdown("### 🌈 DNA Spectrum")
@@ -1433,28 +1505,7 @@ def render_spectrum_tab():
             if df_windows.empty:
                 st.warning("ไม่มี Window ที่คำนวณได้"); continue
             strategy = SPECTRUM_STRATEGY[run_mode]
-            sims = data["sim_results"]
-            def chained(name: str) -> float:
-                df = sims.get(name)
-                return float(df['net'].iloc[-1]) if df is not None and not df.empty else 0.0
-            pw_total, dna_total = chained(Strategy.PERFECT_WINDOW), chained(strategy)
-            st.write("🔗 **ต่อกันจนจบ: Perfect Window vs DNA** (ทุก Window เล่นกติกาเดียวกัน: act ที่แท่งแรกของ Window)")
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Perfect Window · ต่อกันจนจบ", f"${pw_total:,.2f}")
-            m2.metric(f"DNA · {strategy}", f"${dna_total:,.2f}")
-            m3.metric("DNA ได้กี่ % ของเพดาน", f"{dna_total / pw_total:.1%}" if pw_total > 0 else "–")
-
-            per_window = df_windows[['window', 'timeline', 'spectrum_label', 'max_net', 'net']].rename(
-                columns={'spectrum_label': 'DNA', 'max_net': 'Perfect Window', 'net': 'DNA net'})
-            per_window['% ของเพดาน'] = np.where(per_window['Perfect Window'] > 0, per_window['DNA net'] / per_window['Perfect Window'], np.nan)
-            total_pw, total_dna = per_window['Perfect Window'].sum(), per_window['DNA net'].sum()
-            per_window['window'] = per_window['window'].astype(str)
-            per_window.loc[len(per_window)] = ['รวม', '', '', total_pw, total_dna, total_dna / total_pw if total_pw > 0 else np.nan]
-            with st.expander("📋 ราย Window: Perfect Window vs DNA", expanded=True):
-                st.dataframe(per_window.style.format({'Perfect Window': '${:,.2f}', 'DNA net': '${:,.2f}', '% ของเพดาน': '{:.1%}'}, na_rep='–'),
-                             width="stretch", hide_index=True)
-                st.caption("ตารางคิดทีละ Window (เริ่มใหม่ทุก Window) · ตัวเลขด้านบนเป็นแบบต่อกันจนจบเป็นเส้นเดียว "
-                           "จึงต่างกันเล็กน้อยตรงรอยต่อระหว่าง Window")
+            render_chained_vs_perfect_window(data, strategy, "DNA", "net", extra_cols={'spectrum_label': 'DNA'})
             if 'spectrum_rank' in df_windows.columns:
                 wins = df_windows.groupby(['spectrum_rank', 'spectrum_label']).size().reset_index(name='windows_won')
                 st.write("🏆 **DNA ที่ชนะในแต่ละ Window (นับตาม rank)**")
