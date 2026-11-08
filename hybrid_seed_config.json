@@ -1,6 +1,6 @@
 {
   "assets": [
-    "FSUN", "NEGG", "RIVN", "APLS", "NVTS", "QXO", "RXRX", "AGL" ,"FLNC" , "GERN" , "DYN" , "DJT"  , "IBRX" , "SG" , "CLSK" , "LUNR" , "SMR" , "SOUN"
+    "RGTI", "QBTS" , "USAR"
   ],
   "default_settings": {
     "selected_ticker": "FSUN",
