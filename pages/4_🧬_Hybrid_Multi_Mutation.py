@@ -1462,21 +1462,63 @@ SPECTRUM_MODE_HELP: Dict[str, str] = {
     "compiled": "คำนวณจุด act ที่ให้ net สูงสุดจริงของ Window (Perfect Foresight) แล้วคอมไพล์เป็น DNA = 100% ของเพดาน",
 }
 
+def window_options_table(prices_window: np.ndarray, spectrum_codes: List[Tuple[str, str]], row: pd.Series) -> Tuple[pd.DataFrame, float]:
+    """ทุกตัวเลือกของ 1 window: 10 preset, ความถี่ที่จูนแล้ว และเพดาน พร้อม % ของเพดาน
+    chosen = ตัวที่โหมดที่รันเลือก (best10 = rank ที่ชนะ, tuned = ตัวจูน, compiled = เพดาน)"""
+    length = len(prices_window)
+    max_actions = generate_actions_perfect_foresight(prices_window.tolist()).astype(np.int32)
+    max_net = float(_calculate_net_profit_numba(max_actions, prices_window))
+    chosen_rank = int(row['spectrum_rank']) if 'spectrum_rank' in row.index and pd.notna(row.get('spectrum_rank')) else None
+    tuned_mode = chosen_rank is None and 'k' in row.index and pd.notna(row.get('k'))
+    rows = []
+    for rank, (label, code) in enumerate(spectrum_codes, start=1):
+        actions = spectrum_actions(code, length)[1]
+        rows.append({"ตัวเลือก": f"R{rank} · {label.split(' ·')[0]}", "net": float(_calculate_net_profit_numba(actions, prices_window)),
+                     "act": int(actions.sum()), "กลุ่ม": "10 preset", "chosen": rank == chosen_rank})
+    k, phase, net, actions = find_best_period_for_window(prices_window)
+    rows.append({"ตัวเลือก": f"จูนแล้ว · act ทุก {k} แท่ง", "net": float(net), "act": int(actions.sum()),
+                 "กลุ่ม": "ความถี่ที่จูนแล้ว", "chosen": tuned_mode})
+    rows.append({"ตัวเลือก": "เพดาน · Perfect Window", "net": max_net, "act": int(max_actions.sum()),
+                 "กลุ่ม": "เพดาน", "chosen": chosen_rank is None and not tuned_mode})
+    df = pd.DataFrame(rows)
+    df["pct"] = df["net"] / max_net if max_net > 0 else 0.0
+    df.loc[df["chosen"], "กลุ่ม"] = "โหมดนี้เลือก"
+    df["ป้าย"] = [f"{p:.0%} · ${n:,.0f} · act {a} ครั้ง" for p, n, a in zip(df["pct"], df["net"], df["act"])]
+    return df, max_net
+
 def render_spectrum_curve_chart(prices_window: np.ndarray, spectrum_codes: List[Tuple[str, str]], row: pd.Series):
-    """กราฟ E-Spectrum ของ 1 window: เส้นทุก k, จุด 10 preset, เพดาน และผลของโหมดที่รัน"""
+    """กราฟแท่งของ 1 window: แต่ละตัวเลือกได้กี่ % ของเพดาน (แท่งยาว = ดี)"""
     import altair as alt
-    curve, points, max_net = spectrum_curve(prices_window, spectrum_codes)
-    chosen_k = float(row['k']) if 'k' in row.index and pd.notna(row.get('k')) else len(prices_window) / max(1, int(row['acts']))
-    chosen = pd.DataFrame({"k": [chosen_k], "net": [float(row['net'])], "label": [f"โหมดนี้: {row['spectrum_label']}"]})
-    x = alt.X("k:Q", title="k (act ทุก k แท่ง) · ซ้าย = ถี่ · ขวา = ห่าง")
-    y = alt.Y("net:Q", title="net ของ Window ($)")
-    line = alt.Chart(curve).mark_line(color="#38bdf8").encode(x=x, y=y, tooltip=[alt.Tooltip("k:Q"), alt.Tooltip("net:Q", format=",.2f")])
-    dots = alt.Chart(points).mark_circle(size=80, color="#f59e0b").encode(x=x, y=y, tooltip=["preset", alt.Tooltip("net:Q", format=",.2f")])
-    pick = alt.Chart(chosen).mark_point(shape="diamond", size=220, filled=True, color="#e11d48").encode(x=x, y=y, tooltip=["label", alt.Tooltip("net:Q", format=",.2f")])
-    ceiling = alt.Chart(pd.DataFrame({"net": [max_net]})).mark_rule(color="#10b981", strokeDash=[6, 4]).encode(y="net:Q")
-    st.altair_chart(line + dots + ceiling + pick, width="stretch")
-    st.caption(f"เส้นฟ้า = net ดีที่สุดของแต่ละ k (เลือกจังหวะแล้ว) · จุดส้ม = 10 preset (วางที่ k เทียบเท่า = ความยาว ÷ จำนวน act) "
-               f"· เส้นประเขียว = เพดาน \\${max_net:,.2f} (Perfect Window) · ◆ แดง = ผลของโหมดนี้ \\${float(row['net']):,.2f}")
+    df, max_net = window_options_table(prices_window, spectrum_codes, row)
+    colors = alt.Scale(domain=["10 preset", "ความถี่ที่จูนแล้ว", "เพดาน", "โหมดนี้เลือก"],
+                       range=["#94a3b8", "#38bdf8", "#a78bfa", "#10b981"])
+    base = alt.Chart(df).encode(
+        y=alt.Y("ตัวเลือก:N", sort=list(df["ตัวเลือก"]), title=None, axis=alt.Axis(labelLimit=220)),
+        x=alt.X("pct:Q", title="ได้กี่ % ของเพดาน (แท่งยาว = ดี · 100% = เพดาน)",
+                axis=alt.Axis(format="%", values=[0, 0.2, 0.4, 0.6, 0.8, 1.0]), scale=alt.Scale(domain=[0, 1.45], nice=False)),
+    )
+    bars = base.mark_bar(cornerRadiusEnd=3).encode(
+        color=alt.Color("กลุ่ม:N", scale=colors, legend=alt.Legend(title=None, orient="bottom")),
+        tooltip=["ตัวเลือก", alt.Tooltip("pct:Q", format=".1%", title="% ของเพดาน"),
+                 alt.Tooltip("net:Q", format=",.2f", title="net ($)"), alt.Tooltip("act:Q", title="act (ครั้ง)")],
+    )
+    labels = base.mark_text(align="left", dx=5, fontSize=12).encode(text="ป้าย:N")
+    full = alt.Chart(pd.DataFrame({"pct": [1.0]})).mark_rule(color="#a78bfa", strokeDash=[4, 4]).encode(x="pct:Q")
+    st.altair_chart((bars + labels + full).properties(height=34 * len(df)), width="stretch")
+    st.caption(f"R1 = เปิดถี่สุด → R10 = เปิดห่างสุด · เพดาน = จุด act ที่ดีที่สุดของ window นี้ (\\${max_net:,.2f}) "
+               "· ป้าย = % ของเพดาน · net · จำนวนครั้งที่ act · แท่งสีเขียว = ตัวที่โหมดนี้เลือก")
+
+    with st.expander("🔬 ขั้นสูง: ลองทุกความถี่ (act ทุก k แท่ง)"):
+        curve, _, _ = spectrum_curve(prices_window, spectrum_codes)
+        curve["pct"] = curve["net"] / max_net if max_net > 0 else 0.0
+        best = curve.loc[curve["pct"].idxmax()]
+        line = alt.Chart(curve).mark_line(point=True, color="#38bdf8").encode(
+            x=alt.X("k:Q", title="act ทุก k แท่ง  (ซ้าย = ถี่ · ขวา = ห่าง)"),
+            y=alt.Y("pct:Q", title="% ของเพดาน", axis=alt.Axis(format="%")),
+            tooltip=[alt.Tooltip("k:Q", title="act ทุก k แท่ง"), alt.Tooltip("pct:Q", format=".1%", title="% ของเพดาน")])
+        top = alt.Chart(pd.DataFrame([best])).mark_point(size=160, filled=True, color="#10b981").encode(x="k:Q", y="pct:Q")
+        st.altair_chart((line + top).properties(height=240), width="stretch")
+        st.caption(f"ความถี่ที่ดีที่สุดของ window นี้: act ทุก {int(best['k'])} แท่ง ได้ {best['pct']:.0%} ของเพดาน (เลือกจังหวะเริ่มที่ดีที่สุดแล้ว)")
 
 def render_spectrum_tab():
     st.markdown("### 🌈 DNA Spectrum")
@@ -1538,7 +1580,7 @@ def render_spectrum_tab():
                 st.write("🏆 **DNA ที่ชนะในแต่ละ Window (นับตาม rank)**")
                 st.dataframe(wins, width="stretch", hide_index=True)
 
-            st.write("📈 **E-Spectrum ของ Window** (net ของทุกความถี่ เทียบ 10 preset และเพดาน)")
+            st.write("📊 **เทียบทีละ Window: แต่ละตัวเลือกได้กี่ % ของเพดาน**")
             win_no = st.selectbox("Window", df_windows['window'].tolist(), key=f"spectrum_curve_win_{ticker}",
                                   format_func=lambda w, d=df_windows: f"Window {w} · {d.loc[d['window'] == w, 'timeline'].iloc[0]}")
             row = df_windows.loc[df_windows['window'] == win_no].iloc[0]
