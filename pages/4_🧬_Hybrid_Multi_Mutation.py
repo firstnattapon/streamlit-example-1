@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Tuple, Dict, Any, Optional
 import json  # ! NEW: For Export Functionality
+from pathlib import Path
 
 # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
 from numba import njit
@@ -24,6 +25,7 @@ class Strategy:
     SPECTRUM_BEST = "Spectrum-10 (Best of 10)"
     SPECTRUM_TUNED = "Spectrum (Tuned k + phase)"
     SPECTRUM_COMPILED = "Spectrum (Compiled Max-E)"
+    SPECTRUM_FAST = "Spectrum (Fast k + phase)"
     PERFECT_WINDOW = "Perfect Window (ต่อกัน)"
 
 # ! DNA Spectrum: 10 DNA (N=100) เรียงจากความถี่สั้น -> ความถี่ยาว ใช้แทนการสุ่ม num_seeds ใน Phase 1
@@ -545,11 +547,13 @@ def find_best_spectrum_dna_for_window(
 # ---- 3 โหมดของแท็บ DNA Spectrum -----------------------------------------------
 SPECTRUM_STRATEGY: Dict[str, str] = {
     "best10": Strategy.SPECTRUM_BEST, "tuned": Strategy.SPECTRUM_TUNED, "compiled": Strategy.SPECTRUM_COMPILED,
+    "fast": Strategy.SPECTRUM_FAST,
 }
 SPECTRUM_MODES: Dict[str, str] = {
     "best10": "1) Best of 10 · เลือก 1 ใน 10 preset",
     "tuned": "2) จูนความถี่ k + จังหวะ (phase)",
     "compiled": "3) คอมไพล์ E สูงสุด (Perfect Foresight → DNA)",
+    "fast": "4) จูน k + phase · Fast (Codebook)",
 }
 COMPILER_SEEDS = 100_000          # seed ที่คอมไพเลอร์ใช้ค้น (dna_seed และ mutation seeds)
 COMPILER_RATES = [3, 5, 8, 12]    # mutation rate (%) ที่ลอง · ≥ 2 เพื่อให้ตีความตรงกันทุก decoder
@@ -579,14 +583,20 @@ def get_compiler_tables(length: int, n_seeds: int = COMPILER_SEEDS) -> Tuple[np.
     base[s] = default_rng(s).integers(0, 2, length) · min_rate[s, i] = rate (%) ต่ำสุดที่บิต i ถูก flip
     (เงื่อนไขเดียวกับ decoder: default_rng(s).random(length) < rate / 100)"""
     base = np.empty((n_seeds, length), dtype=np.uint8)
-    uniform = np.empty((n_seeds, length), dtype=np.float64)
-    for seed in range(n_seeds):
-        base[seed] = np.random.default_rng(seed).integers(0, 2, size=length)
-        uniform[seed] = np.random.default_rng(seed).random(length)
-    min_rate = np.floor(uniform * 100).astype(np.int64) + 1
-    min_rate = np.where(uniform >= min_rate / 100.0, min_rate + 1, min_rate)              # กันปัดเศษ float
-    min_rate = np.where(uniform < (min_rate - 1) / 100.0, min_rate - 1, min_rate)
-    return base, np.clip(min_rate, 2, 255).astype(np.uint8)
+    min_rate = np.empty((n_seeds, length), dtype=np.uint8)
+    chunk = 5_000                                    # ทำทีละก้อน: หน่วยความจำชั่วคราวไม่โตตามจำนวน seed
+    uniform = np.empty((min(chunk, n_seeds), length), dtype=np.float64)
+    for start in range(0, n_seeds, chunk):
+        stop = min(start + chunk, n_seeds)
+        for seed in range(start, stop):
+            base[seed] = np.random.default_rng(seed).integers(0, 2, size=length)
+            uniform[seed - start] = np.random.default_rng(seed).random(length)
+        u = uniform[:stop - start]
+        rate = np.floor(u * 100).astype(np.int64) + 1
+        rate = np.where(u >= rate / 100.0, rate + 1, rate)                     # กันปัดเศษ float
+        rate = np.where(u < (rate - 1) / 100.0, rate - 1, rate)
+        min_rate[start:stop] = np.clip(rate, 2, 255)
+    return base, min_rate
 
 def compile_actions_to_dna(target: np.ndarray, tables: Tuple[np.ndarray, np.ndarray]) -> Tuple[int, int, List[int]]:
     """โหมด 2/3: หา (rate, dna_seed, mutation_seeds) ที่ SimulationTracer ถอดออกมาได้ target พอดี
@@ -623,6 +633,75 @@ def compile_actions_to_dna(target: np.ndarray, tables: Tuple[np.ndarray, np.ndar
         raise ValueError("DNA ที่คอมไพล์ถอดกลับไม่ตรง target")
     return rate, dna_seed, seeds
 
+# ---- โหมด 4: จูน k + phase แบบเร็ว (numba grid + สมุด code + preset ร่วมแข่ง) ------------
+CODEBOOK_PATH = Path(__file__).resolve().parent.parent / "periodic_codebook.json"
+
+@njit(cache=True)
+def _periodic_net_grid(prices: np.ndarray, fix: int = 1500) -> np.ndarray:
+    """net ของทุก (k, phase) ในรอบเดียว · grid[k, phase] (ช่องที่ไม่ใช้ = -inf)
+    สูตรและลำดับการคำนวณเดียวกับ _calculate_net_profit_numba(periodic_actions(L, k, phase))"""
+    n = len(prices)
+    size = max(2, n)
+    grid = np.full((size, size), -np.inf)
+    initial_price = prices[0]
+    refer_net = -fix * np.log(initial_price / prices[n - 1])
+    for k in range(1, size):
+        for phase in range(k):
+            cash = float(fix); amount = float(fix) / initial_price
+            for i in range(1, n):
+                if i >= phase and (i - phase) % k == 0:
+                    cash += amount * prices[i] - fix; amount = fix / prices[i]
+            grid[k, phase] = cash + (amount * prices[n - 1]) - refer_net - fix * 2.0
+    return grid
+
+def find_best_period_fast(prices_window: np.ndarray) -> Tuple[int, int, float, np.ndarray, np.ndarray]:
+    """ผลเดียวกับ find_best_period_for_window (เสมอกัน -> k และ phase น้อยกว่า) แต่คำนวณทั้งตารางใน numba"""
+    grid = _periodic_net_grid(prices_window)
+    k, phase = (int(v) for v in np.unravel_index(int(np.argmax(grid)), grid.shape))
+    actions = periodic_actions(len(prices_window), k, phase)
+    return k, phase, float(_calculate_net_profit_numba(actions, prices_window)), actions, grid
+
+def find_best_preset_any(prices_window: np.ndarray) -> Tuple[str, SimulationTracer, float, np.ndarray]:
+    """preset ที่ net สูงสุดจากทุกชุด (Density + Periodic = 20 ตัว)"""
+    best = None
+    for preset_name, codes in DNA_SPECTRUM_PRESETS.items():
+        for label, code in codes:
+            tracer, actions = spectrum_actions(code, len(prices_window))
+            net = float(_calculate_net_profit_numba(actions, prices_window))
+            if best is None or net > best[2]:
+                best = (f"{preset_name.split(' ·')[0]} · {label}", tracer, net, actions)
+    return best
+
+@st.cache_resource
+def load_periodic_codebook() -> Tuple[int, Dict[Tuple[int, int], Tuple[int, int, List[int]]]]:
+    """สมุด code สำเร็จรูป (สร้างด้วย scripts/build_periodic_codebook.py): (k, phase) -> (rate, dna_seed, mutation_seeds)
+    ของ window ยาว length · ใช้กับ window ที่สั้นกว่าได้ (PCG64 ให้บิตเดิมเป็น prefix) · ไม่มีไฟล์ -> คอมไพล์แทน"""
+    try:
+        data = json.loads(CODEBOOK_PATH.read_text(encoding="utf-8"))
+        book = {}
+        for key, code in data["codes"].items():
+            k, phase = (int(v) for v in key.split(":"))
+            tracer = SimulationTracer(code)
+            book[(k, phase)] = (tracer.mutation_rate, tracer.dna_seed, list(tracer.mutation_seeds))
+        return int(data["length"]), book
+    except Exception:
+        return 0, {}
+
+@st.cache_data(show_spinner=False)
+def compile_periodic_cached(length: int, k: int, phase: int, table_length: int) -> Tuple[int, int, List[int]]:
+    return compile_actions_to_dna(periodic_actions(length, k, phase), get_compiler_tables(table_length))
+
+def periodic_dna(length: int, k: int, phase: int, table_length: int) -> Tuple[int, int, List[int], str]:
+    """DNA ของ 'act ทุก k แท่ง เริ่มที่ phase' · หยิบจากสมุด code ถ้ามี (ตรวจถอดกลับทุกครั้ง) ไม่งั้นคอมไพล์ + cache"""
+    book_length, book = load_periodic_codebook()
+    if length <= book_length and (k, phase) in book:
+        rate, dna_seed, seeds = book[(k, phase)]
+        decoded = SimulationTracer(SimulationTracer.encode(length, rate, dna_seed, seeds)).run()
+        if np.array_equal(decoded, periodic_actions(length, k, phase)):
+            return rate, dna_seed, list(seeds), "codebook"
+    rate, dna_seed, seeds = compile_periodic_cached(length, k, phase, max(length, table_length))
+    return rate, dna_seed, list(seeds), "compiled"
+
 def spectrum_curve(prices_window: np.ndarray, spectrum_codes: List[Tuple[str, str]]) -> Tuple[pd.DataFrame, pd.DataFrame, float]:
     """กราฟ E-Spectrum ของ 1 window: net ที่ดีที่สุดของทุก k (เลือก phase แล้ว), จุดของ 10 preset และเพดาน max"""
     length = len(prices_window)
@@ -646,6 +725,7 @@ def generate_actions_spectrum(
     best10   = DNA ที่ net สูงสุด 1 ใน 10 preset (preset ผ่านการปรับปรุงมาแล้ว)
     tuned    = act ทุก k แท่ง ที่ phase ที่ดีที่สุด แล้วคอมไพล์เป็น DNA
     compiled = actions ที่ net สูงสุดจริง (Perfect Foresight) แล้วคอมไพล์เป็น DNA
+    fast     = เหมือน tuned แต่ค้นหาด้วย numba + สมุด code + ให้ 20 preset ร่วมแข่ง (ไม่น้อยกว่า tuned)
     max_net / efficiency = เพดานของ window และสัดส่วนที่ได้
     คืน (actions ของ DNA, ตาราง window, actions ของ Perfect Window ทุก window ต่อกัน)"""
     prices = ticker_data['Close'].to_numpy()
@@ -675,6 +755,19 @@ def generate_actions_spectrum(
             actions, net = max_actions, max_net
             rate, dna_seed, seeds = compile_actions_to_dna(actions, tables)
             detail_mode = {'spectrum_label': f"Max-E · act {int(actions.sum())} ครั้ง"}
+        elif mode == "fast":
+            # โหมด 4: k + phase ที่ดีที่สุด (เท่าโหมด 2) แข่งกับ 20 preset -> ไม่มีทางได้น้อยกว่าโหมด 2
+            k, phase, net, actions, grid = find_best_period_fast(prices_window)
+            preset_label, tracer, preset_net, preset_actions = find_best_preset_any(prices_window)
+            if preset_net > net:
+                net, actions = preset_net, preset_actions
+                rate, dna_seed, seeds = tracer.mutation_rate, tracer.dna_seed, list(tracer.mutation_seeds)
+                detail_mode = {'spectrum_label': f"preset · {preset_label}", 'source': 'preset', 'phase_dependence': np.nan}
+            else:
+                rate, dna_seed, seeds, source = periodic_dna(len(prices_window), k, phase, window_size)
+                dependence = float(grid[k, :k].mean() / net) if net > 0 else np.nan
+                detail_mode = {'spectrum_label': f"k={k} · phase {phase}", 'k': k, 'phase': phase,
+                               'source': source, 'phase_dependence': round(dependence, 3)}
         else:
             rank, tracer, net, actions = find_best_spectrum_dna_for_window(prices_window, spectrum_codes)
             rate, dna_seed, seeds = tracer.mutation_rate, tracer.dna_seed, list(tracer.mutation_seeds)
@@ -1460,16 +1553,20 @@ SPECTRUM_MODE_HELP: Dict[str, str] = {
     "best10": "เลือก DNA ที่ net สูงสุด 1 ใน 10 preset ของชุดที่เลือก (preset ผ่านการปรับปรุงมาแล้ว ไม่กลายพันธุ์ต่อ)",
     "tuned": "ลองทุกความถี่ k = 1 … ความยาว Window และทุกจังหวะ (phase) แล้วคอมไพล์ pattern ที่ net สูงสุดเป็น DNA",
     "compiled": "คำนวณจุด act ที่ให้ net สูงสุดจริงของ Window (Perfect Foresight) แล้วคอมไพล์เป็น DNA = 100% ของเพดาน",
+    "fast": "เหมือนโหมด 2 (ลองทุก k และ phase) แต่เร็วกว่า: ค้นหาด้วย numba รอบเดียว · หยิบ DNA จากสมุด code สำเร็จรูป "
+            "(Window ≤ 30 แท่ง ไม่ต้องคอมไพล์) · ให้ 20 preset ร่วมแข่ง -> ได้ไม่น้อยกว่าโหมด 2 ทุก Window "
+            "· phase_dependence = เฉลี่ยทุก phase ÷ ค่าที่เลือก (ต่ำ = ได้เพราะจังหวะดี)",
 }
 
 def window_options_table(prices_window: np.ndarray, spectrum_codes: List[Tuple[str, str]], row: pd.Series) -> Tuple[pd.DataFrame, float]:
     """ทุกตัวเลือกของ 1 window: 10 preset, ความถี่ที่จูนแล้ว และเพดาน พร้อม % ของเพดาน
-    chosen = ตัวที่โหมดที่รันเลือก (best10 = rank ที่ชนะ, tuned = ตัวจูน, compiled = เพดาน)"""
+    chosen = ตัวที่โหมดที่รันเลือก (best10 = rank ที่ชนะ, tuned/fast = ตัวจูน, fast ที่ preset ชนะ = แถว preset, compiled = เพดาน)"""
     length = len(prices_window)
     max_actions = generate_actions_perfect_foresight(prices_window.tolist()).astype(np.int32)
     max_net = float(_calculate_net_profit_numba(max_actions, prices_window))
     chosen_rank = int(row['spectrum_rank']) if 'spectrum_rank' in row.index and pd.notna(row.get('spectrum_rank')) else None
-    tuned_mode = chosen_rank is None and 'k' in row.index and pd.notna(row.get('k'))
+    preset_pick = 'source' in row.index and row.get('source') == 'preset'
+    tuned_mode = chosen_rank is None and not preset_pick and 'k' in row.index and pd.notna(row.get('k'))
     rows = []
     for rank, (label, code) in enumerate(spectrum_codes, start=1):
         actions = spectrum_actions(code, length)[1]
@@ -1478,8 +1575,11 @@ def window_options_table(prices_window: np.ndarray, spectrum_codes: List[Tuple[s
     k, phase, net, actions = find_best_period_for_window(prices_window)
     rows.append({"ตัวเลือก": f"จูนแล้ว · act ทุก {k} แท่ง", "net": float(net), "act": int(actions.sum()),
                  "กลุ่ม": "ความถี่ที่จูนแล้ว", "chosen": tuned_mode})
+    if preset_pick:
+        rows.append({"ตัวเลือก": f"โหมดนี้ · {row['spectrum_label']}", "net": float(row['net']), "act": int(row['acts']),
+                     "กลุ่ม": "โหมดนี้เลือก", "chosen": True})
     rows.append({"ตัวเลือก": "เพดาน · Perfect Window", "net": max_net, "act": int(max_actions.sum()),
-                 "กลุ่ม": "เพดาน", "chosen": chosen_rank is None and not tuned_mode})
+                 "กลุ่ม": "เพดาน", "chosen": chosen_rank is None and not tuned_mode and not preset_pick})
     df = pd.DataFrame(rows)
     df["pct"] = df["net"] / max_net if max_net > 0 else 0.0
     df.loc[df["chosen"], "กลุ่ม"] = "โหมดนี้เลือก"
@@ -1547,7 +1647,7 @@ def render_spectrum_tab():
 
     c1, c2 = st.columns([3, 1])
     with c1:
-        st.caption("เลือก Tickers / Timeframe / Window ในหน้า Settings แล้วกดปุ่มด้านขวา · โหมด 2–3 ครั้งแรกต้องสร้างตาราง seed (~3 วินาที)")
+        st.caption("เลือก Tickers / Timeframe / Window ในหน้า Settings แล้วกดปุ่มด้านขวา · โหมด 2–3 (และโหมด 4 ที่ Window ยาวกว่า 30 แท่ง) ครั้งแรกต้องสร้างตาราง seed (~3 วินาที)")
     with c2:
         if st.button("🌈 Run Spectrum", type="primary", width="stretch", key="btn_run_spectrum"):
             execute_batch_processing(spectrum_codes=spectrum_codes, spectrum_mode=mode)
@@ -1575,6 +1675,12 @@ def render_spectrum_tab():
                 st.warning("ไม่มี Window ที่คำนวณได้"); continue
             strategy = SPECTRUM_STRATEGY[run_mode]
             render_chained_vs_perfect_window(data, strategy, "DNA", "net", extra_cols={'spectrum_label': 'DNA'})
+            if 'source' in df_windows.columns:
+                where = df_windows['source'].value_counts()
+                names = {"codebook": "สมุด code", "compiled": "คอมไพล์", "preset": "preset ชนะ"}
+                dep = df_windows['phase_dependence'].median() if 'phase_dependence' in df_windows.columns else np.nan
+                st.caption("ที่มาของ DNA: " + " · ".join(f"{names.get(s, s)} {n} Window" for s, n in where.items())
+                           + (f" · phase_dependence มัธยฐาน {dep:.2f}" if pd.notna(dep) else ""))
             if 'spectrum_rank' in df_windows.columns:
                 wins = df_windows.groupby(['spectrum_rank', 'spectrum_label']).size().reset_index(name='windows_won')
                 st.write("🏆 **DNA ที่ชนะในแต่ละ Window (นับตาม rank)**")
