@@ -21,8 +21,7 @@ class Strategy:
     PERFECT_FORESIGHT = "Perfect Foresight (Max)"
     HYBRID_MULTI_MUTATION = "Hybrid (Multi-Mutation)"
     ORIGINAL_DNA = "Original DNA (Pre-Mutation)"
-    SPECTRUM_HYBRID = "Spectrum-10 (Multi-Mutation)"
-    SPECTRUM_ORIGINAL = "Spectrum-10 DNA (Pre-Mutation)"
+    SPECTRUM_BEST = "Spectrum-10 (Best of 10)"
 
 # ! DNA Spectrum: 10 DNA (N=100) เรียงจากความถี่สั้น -> ความถี่ยาว ใช้แทนการสุ่ม num_seeds ใน Phase 1
 # ทุก code เป็น stream format เดิม [len][rate][dna_seed][mutation_seeds...] ถอดด้วย SimulationTracer ได้ตรงตามบิตที่ระบุ
@@ -343,10 +342,8 @@ def find_best_mutation_for_sequence(original_actions: np.ndarray, prices_window:
 def generate_actions_hybrid_multi_mutation(
     ticker_data: pd.DataFrame, window_size: int, num_seeds: int, max_workers: int, 
     mutation_rate_pct: float, num_mutations: int, progress_bar=None, ticker_name:str="",
-    timeframe: str = "1d", spectrum_codes: Optional[List[Tuple[str, str]]] = None
+    timeframe: str = "1d"
 ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame]:
-    # spectrum_codes: ถ้าส่งมา Phase 1 เลือกจาก DNA ชุดนี้แทนการสุ่ม num_seeds
-    # และ mutation ใช้ rate ของ DNA แชมป์ เพื่อให้ต่อ mutation seeds แล้ว encode เป็น string เดียวได้
 
     prices = ticker_data['Close'].to_numpy()
     n = len(prices)
@@ -366,23 +363,14 @@ def generate_actions_hybrid_multi_mutation(
             progress_text = f"{ticker_name}: Window {i+1}/{num_windows}..."
             progress_bar.progress((i + 1) / num_windows, text=progress_text)
 
-        champion = None
-        base_mutation_seeds: List[int] = []
-        window_mutation_rate = mutation_rate
-        if spectrum_codes:
-            spectrum_rank, champion, current_best_net, current_best_actions = find_best_spectrum_dna_for_window(prices_window, spectrum_codes)
-            dna_seed = champion.dna_seed
-            base_mutation_seeds = list(champion.mutation_seeds)
-            window_mutation_rate = champion.mutation_rate_float
-        else:
-            dna_seed, current_best_net, current_best_actions = find_best_seed_for_window(prices_window, num_seeds, max_workers)
+        dna_seed, current_best_net, current_best_actions = find_best_seed_for_window(prices_window, num_seeds, max_workers)
         original_actions_window = current_best_actions.copy()
         original_net_for_display = current_best_net
         successful_mutation_seeds = []
 
         for mutation_round in range(num_mutations):
             mutation_seed, mutated_net, mutated_actions = find_best_mutation_for_sequence(
-                current_best_actions, prices_window, num_seeds, window_mutation_rate, max_workers
+                current_best_actions, prices_window, num_seeds, mutation_rate, max_workers
             )
             if mutated_net > current_best_net:
                 current_best_net = mutated_net
@@ -393,7 +381,6 @@ def generate_actions_hybrid_multi_mutation(
         original_actions_full = np.concatenate((original_actions_full, original_actions_window.astype(np.int32)))
 
         start_date = ticker_data.index[start_index]; end_date = ticker_data.index[end_index-1]
-        all_mutation_seeds = base_mutation_seeds + successful_mutation_seeds
         detail = {
             'window': i + 1,
             'timeframe': timeframe,
@@ -401,15 +388,11 @@ def generate_actions_hybrid_multi_mutation(
             'start_timestamp': to_unix_timestamp(start_date),
             'end_timestamp': to_unix_timestamp(end_date),
             'dna_seed': dna_seed,
-            'mutation_seeds': str(all_mutation_seeds) if all_mutation_seeds else "None",
+            'mutation_seeds': str(successful_mutation_seeds) if successful_mutation_seeds else "None",
             'improvements': len(successful_mutation_seeds),
             'original_net': round(original_net_for_display, 2),
             'final_net': round(current_best_net, 2)
         }
-        if champion is not None:
-            detail['spectrum_rank'] = spectrum_rank
-            detail['spectrum_label'] = spectrum_codes[spectrum_rank - 1][0]
-            detail['mutation_rate'] = champion.mutation_rate
         window_details_list.append(detail)
 
     return original_actions_full, final_actions, pd.DataFrame(window_details_list)
@@ -554,6 +537,46 @@ def find_best_spectrum_dna_for_window(
         if best is None or net > best[2]:
             best = (rank, tracer, net, actions)
     return best
+
+def generate_actions_spectrum(
+    ticker_data: pd.DataFrame, window_size: int, spectrum_codes: List[Tuple[str, str]],
+    progress_bar=None, ticker_name: str = "", timeframe: str = "1d"
+) -> Tuple[np.ndarray, pd.DataFrame]:
+    """ทุก Window: เลือก DNA ที่ดีที่สุด 1 ใน 10 แล้วจบ
+    ไม่กลายพันธุ์ต่อ เพราะ 10 DNA ผ่านการปรับปรุง (mutation seeds) มาแล้ว"""
+    prices = ticker_data['Close'].to_numpy()
+    n = len(prices)
+    final_actions = np.array([], dtype=np.int32)
+    window_details_list = []
+    num_windows = (n + window_size - 1) // window_size
+
+    for i, start_index in enumerate(range(0, n, window_size)):
+        end_index = min(start_index + window_size, n)
+        prices_window = prices[start_index:end_index]
+        if len(prices_window) < 2: continue
+
+        if progress_bar:
+            progress_bar.progress((i + 1) / num_windows, text=f"{ticker_name}: Window {i+1}/{num_windows}...")
+
+        rank, tracer, net, actions = find_best_spectrum_dna_for_window(prices_window, spectrum_codes)
+        final_actions = np.concatenate((final_actions, actions.astype(np.int32)))
+
+        start_date = ticker_data.index[start_index]; end_date = ticker_data.index[end_index-1]
+        window_details_list.append({
+            'window': i + 1,
+            'timeframe': timeframe,
+            'timeline': f"{format_timeline_value(start_date, timeframe)} to {format_timeline_value(end_date, timeframe)}",
+            'start_timestamp': to_unix_timestamp(start_date),
+            'end_timestamp': to_unix_timestamp(end_date),
+            'spectrum_rank': rank,
+            'spectrum_label': spectrum_codes[rank - 1][0],
+            'dna_seed': tracer.dna_seed,
+            'mutation_seeds': str(list(tracer.mutation_seeds)) if tracer.mutation_seeds else "None",
+            'mutation_rate': tracer.mutation_rate,
+            'net': round(net, 2),
+        })
+
+    return final_actions, pd.DataFrame(window_details_list)
 
 def build_spectrum_table(spectrum_codes: List[Tuple[str, str]], window_size: int) -> pd.DataFrame:
     rows = []
@@ -811,8 +834,6 @@ def render_settings_tab():
 def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = None):
     # spectrum_codes=None -> Hybrid เดิม (สุ่ม num_seeds) / ส่งมา -> DNA Spectrum (เก็บผลแยกใน spectrum_results)
     results_key = 'spectrum_results' if spectrum_codes else 'batch_results'
-    hybrid_name = Strategy.SPECTRUM_HYBRID if spectrum_codes else Strategy.HYBRID_MULTI_MUTATION
-    original_name = Strategy.SPECTRUM_ORIGINAL if spectrum_codes else Strategy.ORIGINAL_DNA
     tickers = st.session_state.selected_tickers
     if not tickers:
         st.error("กรุณาเลือก Ticker อย่างน้อย 1 ตัว"); return
@@ -840,23 +861,31 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
             st.warning(f"Skipping {ticker}: No Data Found.")
             continue
 
-        original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
-            ticker_data, st.session_state.window_size, st.session_state.num_seeds,
-            st.session_state.max_workers, st.session_state.mutation_rate,
-            st.session_state.num_mutations,
-            progress_bar=overall_progress,
-            ticker_name=ticker,
-            timeframe=selected_timeframe,
-            spectrum_codes=spectrum_codes
-        )
-
         prices = ticker_data['Close'].to_numpy()
-        sim_results = {
-            hybrid_name: run_simulation(prices.tolist(), final_actions.tolist()),
-            original_name: run_simulation(prices.tolist(), original_actions.tolist()),
+        if spectrum_codes:
+            # DNA Spectrum: เลือก 1 ใน 10 ต่อ Window ไม่มีขั้นกลายพันธุ์
+            final_actions, df_windows = generate_actions_spectrum(
+                ticker_data, st.session_state.window_size, spectrum_codes,
+                progress_bar=overall_progress, ticker_name=ticker, timeframe=selected_timeframe
+            )
+            sim_results = {Strategy.SPECTRUM_BEST: run_simulation(prices.tolist(), final_actions.tolist())}
+        else:
+            original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
+                ticker_data, st.session_state.window_size, st.session_state.num_seeds,
+                st.session_state.max_workers, st.session_state.mutation_rate,
+                st.session_state.num_mutations,
+                progress_bar=overall_progress,
+                ticker_name=ticker,
+                timeframe=selected_timeframe
+            )
+            sim_results = {
+                Strategy.HYBRID_MULTI_MUTATION: run_simulation(prices.tolist(), final_actions.tolist()),
+                Strategy.ORIGINAL_DNA: run_simulation(prices.tolist(), original_actions.tolist()),
+            }
+        sim_results.update({
             Strategy.REBALANCE_DAILY: run_simulation(prices.tolist(), generate_actions_rebalance_daily(len(prices)).tolist()),
             Strategy.PERFECT_FORESIGHT: run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
-        }
+        })
         for name, df in sim_results.items():
             if not df.empty: df.index = ticker_data.index[:len(df)]
             
@@ -874,25 +903,29 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
 def render_single_ticker_result(
     ticker: str, result_data: Dict[str, Any], key_prefix: str = "",
     hybrid: Tuple[str, str] = (Strategy.HYBRID_MULTI_MUTATION, "Hybrid Strategy"),
-    original: Tuple[str, str] = (Strategy.ORIGINAL_DNA, "Original DNA")
+    original: Optional[Tuple[str, str]] = (Strategy.ORIGINAL_DNA, "Original DNA")
 ):
-    # hybrid / original = (ชื่อ strategy ใน sim_results, ป้าย metric)
+    # hybrid / original = (ชื่อ strategy ใน sim_results, ป้าย metric) · original=None -> ไม่แสดง
     sim_results = result_data["sim_results"]
     df_windows = result_data["df_windows"]
     data_len = result_data["data_len"]
     timeframe = result_data.get("timeframe", st.session_state.selected_timeframe)
 
-    chart_results = {k: v for k, v in sim_results.items() if k != original[0]}
+    chart_results = {k: v for k, v in sim_results.items() if original is None or k != original[0]}
     display_comparison_charts(chart_results, chart_title=f'📊 {ticker} - Net Profit Comparison')
 
-    c1, c2, c3, c4 = st.columns(4)
+    if original is None:
+        c1, c2, c4 = st.columns(3)
+    else:
+        c1, c2, c3, c4 = st.columns(4)
     def get_final_net(strategy_name):
         df = sim_results.get(strategy_name)
         return df['net'].iloc[-1] if df is not None and not df.empty else 0.0
 
     c1.metric("Perfect Foresight", f"${get_final_net(Strategy.PERFECT_FORESIGHT):,.0f}")
     c2.metric(hybrid[1], f"${get_final_net(hybrid[0]):,.0f}", delta_color="normal")
-    c3.metric(original[1], f"${get_final_net(original[0]):,.0f}")
+    if original is not None:
+        c3.metric(original[1], f"${get_final_net(original[0]):,.0f}")
     c4.metric("Rebalance Daily", f"${get_final_net(Strategy.REBALANCE_DAILY):,.0f}")
     
     st.divider()
@@ -1192,9 +1225,9 @@ def render_simulation_tabs():
 def render_spectrum_tab():
     st.markdown("### 🌈 DNA Spectrum (10 DNA แทนการสุ่ม Seeds)")
     st.info(
-        f"Phase 1 ไม่สุ่ม {st.session_state.num_seeds:,} Seeds แต่เลือก DNA ที่ net สูงสุดจาก **10 ชุดตายตัว** "
-        "เรียงจากความถี่สั้น (เปิด gate ถี่) ไปความถี่ยาว (เปิด gate ห่าง) · Phase 2 กลายพันธุ์ต่อตาม Mutation Rounds ใน Settings "
-        "(0 = ใช้ 10 DNA ล้วน) โดยใช้ rate ของ DNA แชมป์ เพื่อให้ encode เป็น string เดียวได้"
+        f"ทุก Window: ไม่สุ่ม {st.session_state.num_seeds:,} Seeds แต่**เลือก DNA ที่ net สูงสุด 1 ใน 10 ชุด** "
+        "เรียงจากความถี่สั้น (เปิด gate ถี่) ไปความถี่ยาว (เปิด gate ห่าง) แล้วจบ · **ไม่กลายพันธุ์ต่อ** "
+        "เพราะ 10 DNA ผ่านการปรับปรุง (mutation seeds) มาแล้ว · Mutation Rounds ใน Settings ใช้กับแท็บ Hybrid เท่านั้น"
     )
 
     preset_names = list(DNA_SPECTRUM_PRESETS.keys())
@@ -1241,8 +1274,8 @@ def render_spectrum_tab():
                 st.dataframe(wins, width="stretch", hide_index=True)
             render_single_ticker_result(
                 ticker, results[ticker], key_prefix="spectrum_",
-                hybrid=(Strategy.SPECTRUM_HYBRID, "Spectrum + Mutation"),
-                original=(Strategy.SPECTRUM_ORIGINAL, "Spectrum DNA")
+                hybrid=(Strategy.SPECTRUM_BEST, "Spectrum (Best of 10)"),
+                original=None
             )
 
 def render_classifier_tab():
