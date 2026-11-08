@@ -856,10 +856,12 @@ def generate_encoded_dna_for_ticker(
     mutation_rate: float,
     window_size: int,
     timeframe: str,
-    start_timestamp: int
+    start_timestamp: int,
+    with_timeline: bool = True
 ) -> Tuple[str, int, int, int]:
     """
     Generate Encoded String logic extracted for reuse.
+    with_timeline=False -> DNA ล้วน [len][rate][dna_seed][mutation_seeds] ที่ dna_engine ของบอทถอดได้
     Returns: (Encoded String, Actual Window Used, Final Action Length, Start Timestamp)
     """
     max_win = len(df_windows)
@@ -889,11 +891,21 @@ def generate_encoded_dna_for_ticker(
         mutation_rate=int(mutation_rate),
         dna_seed=dna_seed,
         mutation_seeds=mut_seeds,
-        timeframe_minutes=get_timeframe_minutes(timeframe),
-        start_timestamp=final_start_timestamp
+        timeframe_minutes=get_timeframe_minutes(timeframe) if with_timeline else None,
+        start_timestamp=final_start_timestamp if with_timeline else None
     )
 
     return encoded_string, use_win_num, int(final_act_len), final_start_timestamp
+
+def bot_rate_warning(mutation_rate: float) -> Optional[str]:
+    """dna_engine ของบอทอ่าน rate เป็นจำนวนเต็ม และตีความ 1 = 100% (≤ 1 คือความน่าจะเป็น)
+    ส่วนหน้านี้อ่าน 1 = 1% -> rate 1 หรือมีทศนิยม จะถอดไม่ตรงกับที่จำลอง"""
+    rate = float(mutation_rate)
+    if rate != int(rate):
+        return f"Mutation Rate {rate:g}% มีทศนิยม: DNA เก็บได้แค่จำนวนเต็ม ({int(rate)}%) บอทจะถอดไม่ตรงกับที่จำลอง · ตั้งเป็นจำนวนเต็ม ≥ 2"
+    if int(rate) == 1:
+        return "Mutation Rate 1%: dna_engine ของบอทตีความ rate 1 เป็น 100% จะถอดไม่ตรงกับที่จำลอง · ตั้ง ≥ 2"
+    return None
 
 
 def display_comparison_charts(results: Dict[str, pd.DataFrame], chart_title: str = '📊 เปรียบเทียบกำไรสุทธิ (Net Profit)'):
@@ -1104,18 +1116,25 @@ def render_single_ticker_result(
              st.caption(f"⚠️ Window {target_win_num} เกินจำนวนที่มี (Max {max_win}). ใช้ Window {max_win} แทน")
 
     with c_enc_2:
-        if st.button(f"Encode ({ticker})", key=f"btn_enc_{key_prefix}{ticker}", use_container_width=True):
-            try:
-                # ! REFACTORED: Use helper function
-                encoded, final_win, final_len, final_start_ts = generate_encoded_dna_for_ticker(
-                    df_windows, data_len, target_win_num, global_act_len,
-                    st.session_state.mutation_rate, window_size, timeframe, trace_start_timestamp
-                )
+        clicked = st.button(f"Encode ({ticker})", key=f"btn_enc_{key_prefix}{ticker}", use_container_width=True)
+    if clicked:
+        try:
+            # ! REFACTORED: Use helper function
+            args = (df_windows, data_len, target_win_num, global_act_len,
+                    st.session_state.mutation_rate, window_size, timeframe, trace_start_timestamp)
+            dna_code, final_win, final_len, _ = generate_encoded_dna_for_ticker(*args, with_timeline=False)
+            encoded, _, _, final_start_ts = generate_encoded_dna_for_ticker(*args)
 
-                st.success(f"Encoded String ({ticker} Win {final_win}, TF {timeframe}, StartTS {final_start_ts}):")
-                st.code(encoded, language='text')
-            except Exception as e:
-                st.error(f"Encoding Error: {e}")
+            st.success(f"🧬 DNA สำหรับบอท ({ticker} Win {final_win}, Len {final_len}) · ใส่ใน dna_engine ได้เลย:")
+            st.code(dna_code, language='text')
+            warning = bot_rate_warning(rate_disp)
+            if warning:
+                st.warning(f"⚠️ {warning}")
+            st.caption(f"Timeline string (รูปแบบเดิม มี TF {timeframe} + StartTS {final_start_ts}) · ใช้กับ Tracer ในหน้านี้ "
+                       "· dna_engine ของบอทยังถอดรูปแบบนี้ไม่ได้")
+            st.code(encoded, language='text')
+        except Exception as e:
+            st.error(f"Encoding Error: {e}")
 
 def render_methodology_expander():
     st.markdown(f"### 🧬 {Strategy.HYBRID_MULTI_MUTATION}")
@@ -1295,9 +1314,11 @@ def render_export_section(
                 "trace_start_timestamp": st.session_state.trace_start_timestamp,
                 "mutation_rate_percent": st.session_state.mutation_rate,
                 "exported_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "dna_codes_format": "dna_codes = DNA ล้วน [len][rate][dna_seed][mutation_seeds] ถอดด้วย dna_engine.decode_dna ได้ · tickers = timeline string รูปแบบเดิม",
                 **(extra_metadata or {})
             },
             "tickers": {},
+            "dna_codes": {},
             "ticker_metadata": {}
         }
 
@@ -1316,6 +1337,12 @@ def render_export_section(
                     st.session_state.trace_start_timestamp
                 )
                 export_payload["tickers"][ticker] = encoded
+                export_payload["dna_codes"][ticker] = generate_encoded_dna_for_ticker(
+                    data["df_windows"], data["data_len"], st.session_state.trace_target_window,
+                    st.session_state.trace_action_length, st.session_state.mutation_rate,
+                    st.session_state.window_size, timeframe, st.session_state.trace_start_timestamp,
+                    with_timeline=False
+                )[0]
                 ticker_meta = {
                     "window": final_win,
                     "action_length": final_len,
