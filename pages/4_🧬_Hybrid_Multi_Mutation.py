@@ -24,6 +24,7 @@ class Strategy:
     SPECTRUM_BEST = "Spectrum-10 (Best of 10)"
     SPECTRUM_TUNED = "Spectrum (Tuned k + phase)"
     SPECTRUM_COMPILED = "Spectrum (Compiled Max-E)"
+    PERFECT_WINDOW = "Perfect Window (ต่อกัน)"
 
 # ! DNA Spectrum: 10 DNA (N=100) เรียงจากความถี่สั้น -> ความถี่ยาว ใช้แทนการสุ่ม num_seeds ใน Phase 1
 # ทุก code เป็น stream format เดิม [len][rate][dna_seed][mutation_seeds...] ถอดด้วย SimulationTracer ได้ตรงตามบิตที่ระบุ
@@ -640,15 +641,17 @@ def spectrum_curve(prices_window: np.ndarray, spectrum_codes: List[Tuple[str, st
 def generate_actions_spectrum(
     ticker_data: pd.DataFrame, window_size: int, spectrum_codes: List[Tuple[str, str]],
     mode: str = "best10", progress_bar=None, ticker_name: str = "", timeframe: str = "1d"
-) -> Tuple[np.ndarray, pd.DataFrame]:
+) -> Tuple[np.ndarray, pd.DataFrame, np.ndarray]:
     """ทุก Window เลือก actions ตามโหมด แล้วจบ (ไม่กลายพันธุ์ต่อ)
     best10   = DNA ที่ net สูงสุด 1 ใน 10 preset (preset ผ่านการปรับปรุงมาแล้ว)
     tuned    = act ทุก k แท่ง ที่ phase ที่ดีที่สุด แล้วคอมไพล์เป็น DNA
     compiled = actions ที่ net สูงสุดจริง (Perfect Foresight) แล้วคอมไพล์เป็น DNA
-    max_net / efficiency = เพดานของ window และสัดส่วนที่ได้"""
+    max_net / efficiency = เพดานของ window และสัดส่วนที่ได้
+    คืน (actions ของ DNA, ตาราง window, actions ของ Perfect Window ทุก window ต่อกัน)"""
     prices = ticker_data['Close'].to_numpy()
     n = len(prices)
     final_actions = np.array([], dtype=np.int32)
+    ceiling_actions = np.array([], dtype=np.int32)
     window_details_list = []
     num_windows = (n + window_size - 1) // window_size
     tables = get_compiler_tables(window_size) if mode in ("tuned", "compiled") else None
@@ -677,6 +680,7 @@ def generate_actions_spectrum(
             rate, dna_seed, seeds = tracer.mutation_rate, tracer.dna_seed, list(tracer.mutation_seeds)
             detail_mode = {'spectrum_rank': rank, 'spectrum_label': spectrum_codes[rank - 1][0]}
         final_actions = np.concatenate((final_actions, actions.astype(np.int32)))
+        ceiling_actions = np.concatenate((ceiling_actions, max_actions))
 
         start_date = ticker_data.index[start_index]; end_date = ticker_data.index[end_index-1]
         window_details_list.append({
@@ -695,7 +699,7 @@ def generate_actions_spectrum(
             'efficiency': round(float(net) / max_net, 3) if max_net > 0 else np.nan,
         })
 
-    return final_actions, pd.DataFrame(window_details_list)
+    return final_actions, pd.DataFrame(window_details_list), ceiling_actions
 
 def build_spectrum_table(spectrum_codes: List[Tuple[str, str]], window_size: int) -> pd.DataFrame:
     rows = []
@@ -983,11 +987,15 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
         prices = ticker_data['Close'].to_numpy()
         if spectrum_codes:
             # DNA Spectrum: เลือก actions ต่อ Window ตามโหมด ไม่มีขั้นกลายพันธุ์
-            final_actions, df_windows = generate_actions_spectrum(
+            final_actions, df_windows, ceiling_actions = generate_actions_spectrum(
                 ticker_data, st.session_state.window_size, spectrum_codes, mode=spectrum_mode,
                 progress_bar=overall_progress, ticker_name=ticker, timeframe=selected_timeframe
             )
-            sim_results = {SPECTRUM_STRATEGY[spectrum_mode]: run_simulation(prices.tolist(), final_actions.tolist())}
+            # เพดาน = Perfect Window ทุก window ต่อกันจนจบ (กติกาเดียวกับ DNA: act ที่ต้นทุก window)
+            sim_results = {
+                SPECTRUM_STRATEGY[spectrum_mode]: run_simulation(prices.tolist(), final_actions.tolist()),
+                Strategy.PERFECT_WINDOW: run_simulation(prices.tolist(), ceiling_actions.tolist()),
+            }
         else:
             original_actions, final_actions, df_windows = generate_actions_hybrid_multi_mutation(
                 ticker_data, st.session_state.window_size, st.session_state.num_seeds,
@@ -1001,10 +1009,9 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
                 Strategy.HYBRID_MULTI_MUTATION: run_simulation(prices.tolist(), final_actions.tolist()),
                 Strategy.ORIGINAL_DNA: run_simulation(prices.tolist(), original_actions.tolist()),
             }
-        sim_results.update({
-            Strategy.REBALANCE_DAILY: run_simulation(prices.tolist(), generate_actions_rebalance_daily(len(prices)).tolist()),
-            Strategy.PERFECT_FORESIGHT: run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
-        })
+        sim_results[Strategy.REBALANCE_DAILY] = run_simulation(prices.tolist(), generate_actions_rebalance_daily(len(prices)).tolist())
+        if not spectrum_codes:
+            sim_results[Strategy.PERFECT_FORESIGHT] = run_simulation(prices.tolist(), generate_actions_perfect_foresight(prices.tolist()).tolist())
         for name, df in sim_results.items():
             if not df.empty: df.index = ticker_data.index[:len(df)]
             
@@ -1025,9 +1032,11 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
 def render_single_ticker_result(
     ticker: str, result_data: Dict[str, Any], key_prefix: str = "",
     hybrid: Tuple[str, str] = (Strategy.HYBRID_MULTI_MUTATION, "Hybrid Strategy"),
-    original: Optional[Tuple[str, str]] = (Strategy.ORIGINAL_DNA, "Original DNA")
+    original: Optional[Tuple[str, str]] = (Strategy.ORIGINAL_DNA, "Original DNA"),
+    ceiling: Tuple[str, str] = (Strategy.PERFECT_FORESIGHT, "Perfect Foresight"),
+    show_metrics: bool = True
 ):
-    # hybrid / original = (ชื่อ strategy ใน sim_results, ป้าย metric) · original=None -> ไม่แสดง
+    # hybrid / original / ceiling = (ชื่อ strategy ใน sim_results, ป้าย metric) · original=None -> ไม่แสดง
     sim_results = result_data["sim_results"]
     df_windows = result_data["df_windows"]
     data_len = result_data["data_len"]
@@ -1036,19 +1045,20 @@ def render_single_ticker_result(
     chart_results = {k: v for k, v in sim_results.items() if original is None or k != original[0]}
     display_comparison_charts(chart_results, chart_title=f'📊 {ticker} - Net Profit Comparison')
 
-    if original is None:
-        c1, c2, c4 = st.columns(3)
-    else:
-        c1, c2, c3, c4 = st.columns(4)
     def get_final_net(strategy_name):
         df = sim_results.get(strategy_name)
         return df['net'].iloc[-1] if df is not None and not df.empty else 0.0
 
-    c1.metric("Perfect Foresight", f"${get_final_net(Strategy.PERFECT_FORESIGHT):,.0f}")
-    c2.metric(hybrid[1], f"${get_final_net(hybrid[0]):,.0f}", delta_color="normal")
-    if original is not None:
-        c3.metric(original[1], f"${get_final_net(original[0]):,.0f}")
-    c4.metric("Rebalance Daily", f"${get_final_net(Strategy.REBALANCE_DAILY):,.0f}")
+    if show_metrics:
+        if original is None:
+            c1, c2, c4 = st.columns(3)
+        else:
+            c1, c2, c3, c4 = st.columns(4)
+        c1.metric(ceiling[1], f"${get_final_net(ceiling[0]):,.0f}")
+        c2.metric(hybrid[1], f"${get_final_net(hybrid[0]):,.0f}", delta_color="normal")
+        if original is not None:
+            c3.metric(original[1], f"${get_final_net(original[0]):,.0f}")
+        c4.metric("Rebalance Daily", f"${get_final_net(Strategy.REBALANCE_DAILY):,.0f}")
     
     st.divider()
     st.write(f"📝 **Detailed Window Results ({ticker})**")
@@ -1422,11 +1432,29 @@ def render_spectrum_tab():
             df_windows = data["df_windows"]
             if df_windows.empty:
                 st.warning("ไม่มี Window ที่คำนวณได้"); continue
-            total_net, total_max = df_windows['net'].sum(), df_windows['max_net'].sum()
+            strategy = SPECTRUM_STRATEGY[run_mode]
+            sims = data["sim_results"]
+            def chained(name: str) -> float:
+                df = sims.get(name)
+                return float(df['net'].iloc[-1]) if df is not None and not df.empty else 0.0
+            pw_total, dna_total = chained(Strategy.PERFECT_WINDOW), chained(strategy)
+            st.write("🔗 **ต่อกันจนจบ: Perfect Window vs DNA** (ทุก Window เล่นกติกาเดียวกัน: act ที่แท่งแรกของ Window)")
             m1, m2, m3 = st.columns(3)
-            m1.metric("Σ net ของทุก Window", f"${total_net:,.2f}")
-            m2.metric("Σ เพดาน (Perfect Foresight)", f"${total_max:,.2f}")
-            m3.metric("ได้กี่ % ของเพดาน", f"{total_net / total_max:.1%}" if total_max > 0 else "–")
+            m1.metric("Perfect Window · ต่อกันจนจบ", f"${pw_total:,.2f}")
+            m2.metric(f"DNA · {strategy}", f"${dna_total:,.2f}")
+            m3.metric("DNA ได้กี่ % ของเพดาน", f"{dna_total / pw_total:.1%}" if pw_total > 0 else "–")
+
+            per_window = df_windows[['window', 'timeline', 'spectrum_label', 'max_net', 'net']].rename(
+                columns={'spectrum_label': 'DNA', 'max_net': 'Perfect Window', 'net': 'DNA net'})
+            per_window['% ของเพดาน'] = np.where(per_window['Perfect Window'] > 0, per_window['DNA net'] / per_window['Perfect Window'], np.nan)
+            total_pw, total_dna = per_window['Perfect Window'].sum(), per_window['DNA net'].sum()
+            per_window['window'] = per_window['window'].astype(str)
+            per_window.loc[len(per_window)] = ['รวม', '', '', total_pw, total_dna, total_dna / total_pw if total_pw > 0 else np.nan]
+            with st.expander("📋 ราย Window: Perfect Window vs DNA", expanded=True):
+                st.dataframe(per_window.style.format({'Perfect Window': '${:,.2f}', 'DNA net': '${:,.2f}', '% ของเพดาน': '{:.1%}'}, na_rep='–'),
+                             width="stretch", hide_index=True)
+                st.caption("ตารางคิดทีละ Window (เริ่มใหม่ทุก Window) · ตัวเลขด้านบนเป็นแบบต่อกันจนจบเป็นเส้นเดียว "
+                           "จึงต่างกันเล็กน้อยตรงรอยต่อระหว่าง Window")
             if 'spectrum_rank' in df_windows.columns:
                 wins = df_windows.groupby(['spectrum_rank', 'spectrum_label']).size().reset_index(name='windows_won')
                 st.write("🏆 **DNA ที่ชนะในแต่ละ Window (นับตาม rank)**")
@@ -1443,8 +1471,10 @@ def render_spectrum_tab():
 
             render_single_ticker_result(
                 ticker, data, key_prefix="spectrum_",
-                hybrid=(SPECTRUM_STRATEGY[run_mode], SPECTRUM_STRATEGY[run_mode]),
-                original=None
+                hybrid=(strategy, strategy),
+                original=None,
+                ceiling=(Strategy.PERFECT_WINDOW, "Perfect Window (ต่อกัน)"),
+                show_metrics=False
             )
 
 def render_classifier_tab():
