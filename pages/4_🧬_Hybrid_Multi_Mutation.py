@@ -119,24 +119,54 @@ def load_config() -> Dict[str, Any]:
         }
     }
 
+def _as_ticker_list(val: Any) -> List[str]:
+    """แปลงค่าจาก session_state หรือ config (ไม่ว่าจะเป็น list, dict, set, tuple หรือ str) ให้เป็น List[str] เสมอ
+    เพื่อป้องกัน TypeError เมื่อสลับไปมาระหว่างหน้าอื่นที่ใช้ key เดียวกันแต่คนละชนิดข้อมูล (เช่น custom_tickers เป็น dict ในหน้า 7)"""
+    if not val:
+        return []
+    if isinstance(val, dict):
+        return [str(k).strip().upper() for k in val.keys() if str(k).strip()]
+    if isinstance(val, (list, tuple, set)):
+        return [str(x).strip().upper() for x in val if str(x).strip()]
+    if isinstance(val, str):
+        return [s.strip().upper() for s in val.replace(",", " ").replace(";", " ").split() if s.strip()]
+    return []
+
+
 def initialize_session_state(config: Dict[str, Any]):
     defaults = config.get('default_settings', {})
-    asset_list = config.get('assets', [])
+    asset_list = _as_ticker_list(config.get('assets', []))
     
     # ! GOAL: Default Select ALL Tickers + Dynamic Tickers Support
-    if 'custom_tickers' not in st.session_state:
-        st.session_state.custom_tickers = [
-            "AAPL", "RGTI", "QBTS", "USAR", "NVDA", "TSLA", "IONQ", "QUBT",
-            "FFWM", "NEGG", "RIVN", "APLS", "QXO", "RXRX", "AGL", "NVTS",
-            "FLNC", "GERN", "DYN", "DJT", "CLSK", "LUNR", "IBRX", "SG"
-        ]
-    if 'selected_tickers' not in st.session_state: 
-        st.session_state.selected_tickers = list(asset_list)
-    if 'explorer_tickers' not in st.session_state:
-        st.session_state.explorer_tickers = ["AAPL", "RGTI"]
-    if 'template_tickers' not in st.session_state:
-        st.session_state.template_tickers = ["RGTI", "QBTS", "USAR"]
-    if 'explorer_custom_data' not in st.session_state:
+    # ใช้ key 'hybrid_custom_tickers' (list) แยกจาก 'custom_tickers' (dict ของหน้า 7_Un_15_F(X))
+    default_custom_tickers = [
+        "AAPL", "RGTI", "QBTS", "USAR", "NVDA", "TSLA", "IONQ", "QUBT",
+        "FFWM", "NEGG", "RIVN", "APLS", "QXO", "RXRX", "AGL", "NVTS",
+        "FLNC", "GERN", "DYN", "DJT", "CLSK", "LUNR", "IBRX", "SG"
+    ]
+    if 'hybrid_custom_tickers' not in st.session_state or not isinstance(st.session_state.get('hybrid_custom_tickers'), list):
+        migrated = _as_ticker_list(st.session_state.get('hybrid_custom_tickers'))
+        if isinstance(st.session_state.get('custom_tickers'), (list, tuple, set)):
+            migrated.extend(_as_ticker_list(st.session_state.get('custom_tickers')))
+            # คืนค่า custom_tickers เป็น dict เพื่อไม่ให้หน้า 7_Un_15_F(X) พังเมื่อสลับหน้า
+            st.session_state.custom_tickers = {}
+        st.session_state.hybrid_custom_tickers = list(dict.fromkeys(default_custom_tickers + migrated))
+    elif isinstance(st.session_state.get('custom_tickers'), (list, tuple, set)):
+        for sym in _as_ticker_list(st.session_state.get('custom_tickers')):
+            if sym not in st.session_state.hybrid_custom_tickers:
+                st.session_state.hybrid_custom_tickers.append(sym)
+        st.session_state.custom_tickers = {}
+
+    if 'selected_tickers' not in st.session_state or not isinstance(st.session_state.get('selected_tickers'), list):
+        existing_sel = _as_ticker_list(st.session_state.get('selected_tickers'))
+        st.session_state.selected_tickers = existing_sel if existing_sel else list(asset_list)
+    if 'explorer_tickers' not in st.session_state or not isinstance(st.session_state.get('explorer_tickers'), list):
+        existing_exp = _as_ticker_list(st.session_state.get('explorer_tickers'))
+        st.session_state.explorer_tickers = existing_exp if existing_exp else ["AAPL", "RGTI"]
+    if 'template_tickers' not in st.session_state or not isinstance(st.session_state.get('template_tickers'), list):
+        existing_tpl = _as_ticker_list(st.session_state.get('template_tickers'))
+        st.session_state.template_tickers = existing_tpl if existing_tpl else ["RGTI", "QBTS", "USAR"]
+    if 'explorer_custom_data' not in st.session_state or not isinstance(st.session_state.get('explorer_custom_data'), dict):
         st.session_state.explorer_custom_data = {}
     
     if 'start_date' not in st.session_state:
@@ -1032,9 +1062,10 @@ def render_settings_tab():
 
     # Dynamic Tickers Support in Settings
     all_ticker_options = list(dict.fromkeys(
-        list(asset_list)
-        + st.session_state.get("custom_tickers", [])
-        + st.session_state.get("selected_tickers", [])
+        _as_ticker_list(asset_list)
+        + _as_ticker_list(st.session_state.get("hybrid_custom_tickers"))
+        + _as_ticker_list(st.session_state.get("custom_tickers"))
+        + _as_ticker_list(st.session_state.get("selected_tickers"))
     ))
     dc1, dc2 = st.columns([3, 2])
     with dc2:
@@ -1055,15 +1086,15 @@ def render_settings_tab():
             for sym in parsed_new:
                 if sym not in all_ticker_options:
                     all_ticker_options.append(sym)
-                if sym not in st.session_state.custom_tickers:
-                    st.session_state.custom_tickers.append(sym)
+                if sym not in st.session_state.hybrid_custom_tickers:
+                    st.session_state.hybrid_custom_tickers.append(sym)
                 if sym not in st.session_state.selected_tickers:
                     st.session_state.selected_tickers.append(sym)
                     added_any = True
             if added_any:
                 st.toast(f"เพิ่ม Tickers: {', '.join(parsed_new)}")
     with dc1:
-        valid_defaults = [t for t in st.session_state.selected_tickers if t in all_ticker_options]
+        valid_defaults = [t for t in _as_ticker_list(st.session_state.get("selected_tickers")) if t in all_ticker_options]
         st.session_state.selected_tickers = st.multiselect(
             "เลือก Tickers ที่ต้องการทดสอบ (Dynamic Tickers · เลือกได้หลายตัว)",
             options=all_ticker_options,
@@ -2363,11 +2394,12 @@ def render_dna_spectrum_explorer_tab():
     base_assets = config.get("assets", ["RGTI", "QBTS", "USAR"])
 
     all_known_tickers = list(dict.fromkeys(
-        list(default_data.keys())
-        + list(base_assets)
-        + st.session_state.get("custom_tickers", [])
-        + st.session_state.get("selected_tickers", [])
-        + st.session_state.get("explorer_tickers", [])
+        _as_ticker_list(list(default_data.keys()))
+        + _as_ticker_list(base_assets)
+        + _as_ticker_list(st.session_state.get("hybrid_custom_tickers"))
+        + _as_ticker_list(st.session_state.get("custom_tickers"))
+        + _as_ticker_list(st.session_state.get("selected_tickers"))
+        + _as_ticker_list(st.session_state.get("explorer_tickers"))
     ))
 
     with st.expander("🎛️ **ตั้งค่า Dynamic Tickers & พารามิเตอร์ของ DNA Spectrum Explorer**", expanded=True):
@@ -2386,8 +2418,8 @@ def render_dna_spectrum_explorer_tab():
                 for s in new_syms:
                     if s not in all_known_tickers:
                         all_known_tickers.append(s)
-                    if s not in st.session_state.custom_tickers:
-                        st.session_state.custom_tickers.append(s)
+                    if s not in st.session_state.hybrid_custom_tickers:
+                        st.session_state.hybrid_custom_tickers.append(s)
                     if s not in st.session_state.explorer_tickers:
                         st.session_state.explorer_tickers.append(s)
                         added.append(s)
@@ -2398,15 +2430,16 @@ def render_dna_spectrum_explorer_tab():
             st.write("")
             btn_col1, btn_col2 = st.columns(2)
             if btn_col1.button("📌 ใช้จาก Settings", use_container_width=True, help="ดึงรายชื่อ Tickers ที่เลือกไว้ในแท็บ Settings มาแสดง"):
-                if st.session_state.get("selected_tickers"):
-                    st.session_state.explorer_tickers = list(st.session_state.selected_tickers)
+                sel_from_settings = _as_ticker_list(st.session_state.get("selected_tickers"))
+                if sel_from_settings:
+                    st.session_state.explorer_tickers = list(sel_from_settings)
                     st.rerun()
             if btn_col2.button("📄 ค่าตั้งต้น", use_container_width=True, help="รีเซ็ตกลับเป็น AAPL · RGTI ตาม template.html ต้นฉบับ"):
                 st.session_state.explorer_tickers = ["AAPL", "RGTI"]
                 st.rerun()
 
         with r1c1:
-            valid_current = [t for t in st.session_state.explorer_tickers if t in all_known_tickers]
+            valid_current = [t for t in _as_ticker_list(st.session_state.get("explorer_tickers")) if t in all_known_tickers]
             if not valid_current:
                 valid_current = ["AAPL", "RGTI"]
             selected_explorer_tickers = st.multiselect(
@@ -2521,15 +2554,16 @@ def render_template_html_100_tab():
     config = load_config()
     base_assets = config.get("assets", ["RGTI", "QBTS", "USAR"])
 
-    if "template_tickers" not in st.session_state:
+    if "template_tickers" not in st.session_state or not isinstance(st.session_state.get("template_tickers"), list):
         st.session_state.template_tickers = ["RGTI", "QBTS", "USAR"]
 
     all_known_tickers = list(dict.fromkeys(
-        list(base_assets)
-        + list(default_data.keys())
-        + st.session_state.get("custom_tickers", [])
-        + st.session_state.get("selected_tickers", [])
-        + st.session_state.get("template_tickers", [])
+        _as_ticker_list(base_assets)
+        + _as_ticker_list(list(default_data.keys()))
+        + _as_ticker_list(st.session_state.get("hybrid_custom_tickers"))
+        + _as_ticker_list(st.session_state.get("custom_tickers"))
+        + _as_ticker_list(st.session_state.get("selected_tickers"))
+        + _as_ticker_list(st.session_state.get("template_tickers"))
     ))
 
     with st.expander("🎛️ **Tickers ที่ต้องการวิเคราะห์ (Dynamic Tickers) & ตั้งค่า Template.html 100%**", expanded=True):
@@ -2548,8 +2582,8 @@ def render_template_html_100_tab():
                 for s in new_syms:
                     if s not in all_known_tickers:
                         all_known_tickers.append(s)
-                    if s not in st.session_state.custom_tickers:
-                        st.session_state.custom_tickers.append(s)
+                    if s not in st.session_state.hybrid_custom_tickers:
+                        st.session_state.hybrid_custom_tickers.append(s)
                     if s not in st.session_state.template_tickers:
                         st.session_state.template_tickers.append(s)
                         added.append(s)
@@ -2560,8 +2594,9 @@ def render_template_html_100_tab():
             st.write("")
             b1, b2, b3 = st.columns(3)
             if b1.button("📌 Settings", use_container_width=True, key="t7_btn_settings", help="ดึงรายชื่อ Tickers ที่เลือกไว้ในแท็บ Settings มาวิเคราะห์"):
-                if st.session_state.get("selected_tickers"):
-                    st.session_state.template_tickers = list(st.session_state.selected_tickers)
+                sel_from_settings = _as_ticker_list(st.session_state.get("selected_tickers"))
+                if sel_from_settings:
+                    st.session_state.template_tickers = list(sel_from_settings)
                     st.rerun()
             if b2.button("🧬 3 หุ้นหลัก", use_container_width=True, key="t7_btn_3t", help="รีเซ็ตเป็น RGTI · QBTS · USAR"):
                 st.session_state.template_tickers = ["RGTI", "QBTS", "USAR"]
@@ -2571,7 +2606,7 @@ def render_template_html_100_tab():
                 st.rerun()
 
         with r1c1:
-            valid_current_t7 = [t for t in st.session_state.template_tickers if t in all_known_tickers]
+            valid_current_t7 = [t for t in _as_ticker_list(st.session_state.get("template_tickers")) if t in all_known_tickers]
             if not valid_current_t7:
                 valid_current_t7 = ["RGTI", "QBTS", "USAR"]
             selected_t7_tickers = st.multiselect(
