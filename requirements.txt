@@ -20,3 +20,4 @@ numpy-financial
 matplotlib
 requests_cache
 altair<5
+webull-openapi-python-sdk>=3.0.4
