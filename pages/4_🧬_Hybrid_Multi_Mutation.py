@@ -4080,8 +4080,8 @@ def main():
         "🔬 Spectrum Classifier",
         "🔍 Tracer",
         "🧪 DNA Spectrum Explorer",
-        "📈 Template.html 100% (Dynamic Tickers)",
-        "⚡ Hybrid_Multi_Mutation (Dynamic Solver & E-Curve)",
+        "📈 (Dynamic Tickers)",
+        "⚡ (Dynamic Solver & E-Curve)",
     ]
     tabs = st.tabs(tab_list)
 
