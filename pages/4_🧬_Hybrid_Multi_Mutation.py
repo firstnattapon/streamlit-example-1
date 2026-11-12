@@ -1,3 +1,7 @@
+import os
+import sys
+import logging
+import hashlib
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -9,6 +13,28 @@ from typing import List, Tuple, Dict, Any, Optional, Union
 import json  # ! NEW: For Export Functionality
 from pathlib import Path
 import streamlit.components.v1 as components
+
+try:
+    from dotenv import load_dotenv as _dotenv_load
+except ImportError:
+    _dotenv_load = None
+
+try:
+    from webull.core.client import ApiClient as _WebullApiClient
+    from webull.core.common.api_type import (
+        DEFAULT as _WEBULL_API_DEFAULT,
+        QUOTES as _WEBULL_API_QUOTES,
+        EVENTS as _WEBULL_API_EVENTS,
+    )
+    from webull.data.data_client import DataClient as _WebullDataClient
+    WEBULL_SDK_AVAILABLE = True
+except ImportError:
+    _WebullApiClient = None
+    _WEBULL_API_DEFAULT = None
+    _WEBULL_API_QUOTES = None
+    _WEBULL_API_EVENTS = None
+    _WebullDataClient = None
+    WEBULL_SDK_AVAILABLE = False
 
 # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
 from numba import njit
@@ -60,21 +86,48 @@ DNA_SPECTRUM_PRESETS: Dict[str, List[Tuple[str, str]]] = {
     ],
 }
 
-# ! GOAL_1: Multi-Timeframe Support (30m, 1h, 4h, 1d) via Yahoo Finance
+# ! GOAL_1: Multi-Timeframe Support (15m, 30m, 1h, 4h, 1d) via Yahoo Finance & Webull OpenAPI SDK
 ENCODED_DNA_MAGIC = 0
 ENCODED_DNA_VERSION = 1
 TIMEFRAME_OPTIONS = {
-    "1d": {"minutes": 1440, "yfinance_interval": "1d"},
-    "4h": {"minutes": 240, "yfinance_interval": "1h"},   # 4h = resample จาก 1h
-    "1h": {"minutes": 60, "yfinance_interval": "1h"},
-    "30m": {"minutes": 30, "yfinance_interval": "30m"},
+    "1d": {"minutes": 1440, "yfinance_interval": "1d", "webull_timespan": "D"},
+    "4h": {"minutes": 240, "yfinance_interval": "1h", "webull_timespan": "M240"},   # yfinance: resample 1h, Webull: M240
+    "1h": {"minutes": 60, "yfinance_interval": "1h", "webull_timespan": "M60"},
+    "30m": {"minutes": 30, "yfinance_interval": "30m", "webull_timespan": "M30"},
+    "15m": {"minutes": 15, "yfinance_interval": "15m", "webull_timespan": "M15"},
 }
 
-# ! GOAL_1: ขีดจำกัดการดึงข้อมูลย้อนหลังของ yfinance ต่อ interval (วัน) เพื่อ clamp start_date
+# ! GOAL_1: ขีดจำกัดการดึงข้อมูลย้อนหลังต่อ interval (วัน) เพื่อ clamp start_date
 YFINANCE_INTRADAY_MAX_LOOKBACK_DAYS = {
-    "30m": 59,   # yfinance รองรับ 30m ย้อนหลัง ~60 วัน
+    "15m": 59,   # yfinance รองรับ 15m/30m ย้อนหลัง ~60 วัน
+    "30m": 59,
     "1h": 729,   # 1h / 4h ย้อนหลัง ~730 วัน
     "4h": 729,
+}
+
+WEBULL_INTRADAY_UI_MAX_DAYS = 180
+WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS = 179  # Webull ปฏิเสธ minute bars เกิน 180 วัน -> clamp 179 วันอย่างปลอดภัย
+WEBULL_MAX_BARS_PER_CALL = 1200           # Webull /market-data/stocks/bars/list คืนสูงสุด 1,200 แท่ง/ครั้ง
+WEBULL_INTRADAY_MAX_LOOKBACK_DAYS = {
+    "15m": WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS,
+    "30m": WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS,
+    "1h": WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS,
+    "4h": WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS,
+}
+
+WEBULL_SUPPORTED_REGIONS = ["us", "hk", "jp", "sg", "th", "my", "uk", "mx", "br", "za"]
+WEBULL_SUPPORTED_CATEGORIES = ["US_STOCK", "US_ETF", "HK_STOCK", "JP_STOCK", "CN_STOCK"]
+WEBULL_UAT_ENDPOINTS: Dict[str, Dict[str, str]] = {
+    "us": {"api": "api.sandbox.webull.com", "quotes-api": "api.sandbox.webull.com", "events-api": "events-api.sandbox.webull.com"},
+    "hk": {"api": "api.sandbox.webull.hk", "quotes-api": "data-api.sandbox.webull.hk", "events-api": "events-api.sandbox.webull.hk"},
+    "jp": {"api": "jp-openapi-alb.uat.webullbroker.com", "quotes-api": "data-api.uat.webullbroker.com", "events-api": "jp-openapi-events.uat.webullbroker.com"},
+    "sg": {"api": "sg-api.uat.webullbroker.com", "quotes-api": "data-api.uat.webullbroker.com", "events-api": "sg-events-api.uat.webullbroker.com"},
+    "th": {"api": "th-api.uat.webullbroker.com", "quotes-api": "data-api.uat.webullbroker.com", "events-api": "th-events-api.uat.webullbroker.com"},
+    "my": {"api": "my-api.uat.webullbroker.com", "quotes-api": "data-api.uat.webullbroker.com", "events-api": "my-events-api.uat.webullbroker.com"},
+    "uk": {"api": "uk-api.uat.webullbroker.com", "quotes-api": "data-api.uat.webullbroker.com", "events-api": "uk-events-api.uat.webullbroker.com"},
+    "mx": {"api": "us-openapi-alb.uat.webullbroker.com", "quotes-api": "us-openapi-quotes-api.uat.webullbroker.com", "events-api": "us-openapi-events.uat.webullbroker.com"},
+    "br": {"api": "us-openapi-alb.uat.webullbroker.com", "quotes-api": "us-openapi-quotes-api.uat.webullbroker.com", "events-api": "us-openapi-events.uat.webullbroker.com"},
+    "za": {"api": "au-api.uat.webullbroker.com", "quotes-api": "au-api.uat.webullbroker.com", "events-api": "au-events-api.uat.webullbroker.com"},
 }
 
 def get_timeframe_minutes(timeframe: str) -> int:
@@ -181,6 +234,7 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'mutation_rate' not in st.session_state: st.session_state.mutation_rate = defaults.get('mutation_rate', 10.0)
     if 'num_mutations' not in st.session_state: st.session_state.num_mutations = defaults.get('num_mutations', 5)
     if 'selected_timeframe' not in st.session_state: st.session_state.selected_timeframe = "1d"
+    if 'selected_data_source' not in st.session_state: st.session_state.selected_data_source = "yfinance"
 
     # ! GOAL Step 4: Global Encoding Settings
     if 'trace_target_window' not in st.session_state: st.session_state.trace_target_window = 1
@@ -192,17 +246,436 @@ def initialize_session_state(config: Dict[str, Any]):
     if 'classifier_result' not in st.session_state: st.session_state.classifier_result = None
     if 'spectrum_mode' not in st.session_state: st.session_state.spectrum_mode = "best10"
     if 'spectrum_preset' not in st.session_state: st.session_state.spectrum_preset = next(iter(DNA_SPECTRUM_PRESETS))
+    if '_webull_last_errors' not in st.session_state: st.session_state._webull_last_errors = {}
+
+# ==============================================================================
+# 1b. Webull OpenAPI SDK Client & Paginated OHLCV Fetcher (15m/30m สูงสุด 180 วัน)
+# ==============================================================================
+_DOTENV_LOADED = False
+
+
+def _load_dotenv_once() -> None:
+    global _DOTENV_LOADED
+    if _DOTENV_LOADED:
+        return
+    _DOTENV_LOADED = True
+    if _dotenv_load is not None:
+        try:
+            _dotenv_load(override=False)
+        except Exception:
+            pass
+
+
+def _read_env_or_secret(key: str, default: str = "") -> str:
+    _load_dotenv_once()
+    val = os.environ.get(key)
+    if val is not None and str(val).strip():
+        return str(val).strip()
+    try:
+        if key in st.secrets:
+            sec_val = st.secrets[key]
+            if sec_val is not None and str(sec_val).strip():
+                return str(sec_val).strip()
+    except Exception:
+        pass
+    return default
+
+
+def get_webull_credentials() -> Dict[str, str]:
+    """รวมค่า Webull OpenAPI credentials จาก Session UI > Env/.env > st.secrets"""
+    def _pick(state_key: str, env_key: str, default: str = "") -> str:
+        try:
+            ui_val = st.session_state.get(state_key, "")
+        except Exception:
+            ui_val = ""
+        if ui_val is not None and str(ui_val).strip():
+            return str(ui_val).strip()
+        return _read_env_or_secret(env_key, default)
+
+    region = _pick("webull_region_id", "WEBULL_REGION_ID", "us").lower()
+    if region not in WEBULL_SUPPORTED_REGIONS:
+        region = "us"
+    env_mode = _pick("webull_environment", "WEBULL_ENVIRONMENT", "prod").lower()
+    if env_mode not in ("prod", "uat"):
+        env_mode = "prod"
+    category = _pick("webull_category", "WEBULL_CATEGORY", "US_STOCK").upper()
+    if category not in WEBULL_SUPPORTED_CATEGORIES:
+        category = "US_STOCK"
+
+    return {
+        "app_key": _pick("webull_app_key", "WEBULL_APP_KEY", ""),
+        "app_secret": _pick("webull_app_secret", "WEBULL_APP_SECRET", ""),
+        "region_id": region,
+        "environment": env_mode,
+        "category": category,
+        "token_dir": _pick("webull_token_dir", "WEBULL_TOKEN_DIR", ""),
+    }
+
+
+def webull_config_signature(cfg: Dict[str, str]) -> str:
+    raw = "|".join([
+        cfg.get("app_key", ""),
+        cfg.get("app_secret", ""),
+        cfg.get("region_id", "us"),
+        cfg.get("environment", "prod"),
+        cfg.get("category", "US_STOCK"),
+        cfg.get("token_dir", ""),
+    ])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+@st.cache_resource(show_spinner=False)
+def _get_cached_webull_data_client(
+    cred_sig: str,
+    _app_key: str,
+    _app_secret: str,
+    region_id: str,
+    environment: str,
+    token_dir: str,
+):
+    if not WEBULL_SDK_AVAILABLE or _WebullApiClient is None or _WebullDataClient is None:
+        raise RuntimeError("ไม่พบแพ็กเกจ webull-openapi-python-sdk ในสภาพแวดล้อม Python")
+    if not _app_key or not _app_secret:
+        raise RuntimeError("กรุณาระบุ Webull App Key และ App Secret ก่อนใช้งาน")
+
+    api_client = _WebullApiClient(
+        _app_key,
+        _app_secret,
+        region_id,
+        token_check_duration_seconds=10,
+        token_check_interval_seconds=2,
+    )
+    if token_dir:
+        api_client.set_token_dir(token_dir)
+
+    if environment == "uat":
+        region_cfg = WEBULL_UAT_ENDPOINTS.get(region_id, {})
+        endpoint_map = {
+            "api": _WEBULL_API_DEFAULT,
+            "quotes-api": _WEBULL_API_QUOTES,
+            "events-api": _WEBULL_API_EVENTS,
+        }
+        for key, api_type in endpoint_map.items():
+            ep = region_cfg.get(key)
+            if ep and api_type is not None:
+                api_client.add_endpoint(region_id, ep, api_type)
+
+    api_client.set_stream_logger(log_level=logging.WARNING, stream=sys.stderr)
+    return _WebullDataClient(api_client)
+
+
+def _format_webull_exception(exc: Exception, environment: str) -> str:
+    msg = str(exc)
+    if "ERROR_INIT_TOKEN" in msg or "ERROR_CHECK_TOKEN" in msg:
+        return (
+            f"ต้องยืนยัน 2FA ก่อนใช้งาน Webull ({environment.upper()}): "
+            "กรุณาอนุมัติคำขอในแอป Webull หรือรัน `webull-openapi-mcp auth` แล้วลองใหม่"
+        )
+    if "NO_AVAILABLE_DEVICE" in msg:
+        return "ไม่พบอุปกรณ์ที่ลงทะเบียน 2FA กับบัญชี Webull (NO_AVAILABLE_DEVICE)"
+    return f"Webull SDK error ({environment.upper()}): {msg}"
+
+
+def _parse_webull_response_json(resp: Any) -> Any:
+    if resp is None:
+        return None
+    status_code = getattr(resp, "status_code", None)
+    if status_code is not None and int(status_code) >= 400:
+        body_txt = ""
+        try:
+            body_txt = resp.text[:300]
+        except Exception:
+            pass
+        raise RuntimeError(f"Webull HTTP {status_code}: {body_txt}")
+    if hasattr(resp, "json") and callable(resp.json):
+        return resp.json()
+    return resp
+
+
+def _extract_webull_bar_list(payload: Any, target_symbol: str) -> List[Dict[str, Any]]:
+    if payload is None:
+        return []
+    if isinstance(payload, dict):
+        if "result" in payload:
+            payload = payload["result"]
+        elif any(k in payload for k in ("error_code", "message", "msg")) and "close" not in payload:
+            raise RuntimeError(f"Webull API error: {payload}")
+    if not isinstance(payload, list) or not payload:
+        return []
+    first = payload[0]
+    if isinstance(first, dict) and "result" in first:
+        sym_upper = target_symbol.upper()
+        matched: List[Dict[str, Any]] = []
+        for group in payload:
+            if not isinstance(group, dict):
+                continue
+            grp_sym = str(group.get("symbol") or "").upper()
+            if not grp_sym or grp_sym == sym_upper:
+                matched.extend(group.get("result") or [])
+        return matched
+    return [b for b in payload if isinstance(b, dict)]
+
+
+def _parse_webull_bar_time_ms(raw_time: Any) -> Optional[int]:
+    if raw_time is None:
+        return None
+    if isinstance(raw_time, (int, float)):
+        val = int(raw_time)
+        return val * 1000 if val < 10_000_000_000 else val
+    s = str(raw_time).strip()
+    if not s:
+        return None
+    if s.isdigit():
+        val = int(s)
+        return val * 1000 if val < 10_000_000_000 else val
+    ts = pd.Timestamp(s)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("UTC")
+    else:
+        ts = ts.tz_convert("UTC")
+    return int(ts.timestamp() * 1000)
+
+
+def _is_webull_intraday_timespan(timespan: str) -> bool:
+    """ตรวจว่าเป็น timespan ระดับนาที/วินาที (เช่น M15, M30, M60, M240) ไม่ใช่รายเดือน M."""
+    ts = str(timespan or "").strip().upper()
+    return len(ts) > 1 and ts[0] in ("M", "S") and ts[1:].isdigit()
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _fetch_webull_bars_cached(
+    symbol: str,
+    timespan: str,
+    start_ms: int,
+    end_ms: int,
+    category: str,
+    target_tz: str,
+    real_time_required: bool,
+    cred_sig: str,
+    _app_key: str,
+    _app_secret: str,
+    region_id: str,
+    environment: str,
+    token_dir: str,
+) -> pd.DataFrame:
+    data_client = _get_cached_webull_data_client(
+        cred_sig=cred_sig,
+        _app_key=_app_key,
+        _app_secret=_app_secret,
+        region_id=region_id,
+        environment=environment,
+        token_dir=token_dir,
+    )
+
+    is_intraday = _is_webull_intraday_timespan(timespan)
+    trading_sessions = "RTH" if (is_intraday and category in ("US_STOCK", "US_ETF")) else None
+
+    effective_start_ms = int(start_ms)
+    if is_intraday:
+        now_utc = pd.Timestamp.now(tz="UTC")
+        min_allowed_ms = int((now_utc - pd.Timedelta(days=WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS)).timestamp() * 1000)
+        if effective_start_ms < min_allowed_ms:
+            effective_start_ms = min_allowed_ms
+
+    cursor_end_ms = int(end_ms)
+    if cursor_end_ms <= effective_start_ms:
+        return pd.DataFrame(columns=["Close"])
+
+    bars_by_ms: Dict[int, float] = {}
+    max_pages = 25
+
+    for _ in range(max_pages):
+        resp = data_client.market_data.get_history_bar(
+            symbol=symbol.strip().upper(),
+            category=category,
+            timespan=timespan,
+            count=str(WEBULL_MAX_BARS_PER_CALL),
+            real_time_required=real_time_required,
+            trading_sessions=trading_sessions,
+            start_time=effective_start_ms,
+            end_time=cursor_end_ms,
+        )
+        payload = _parse_webull_response_json(resp)
+        page_bars = _extract_webull_bar_list(payload, symbol)
+        if not page_bars:
+            break
+
+        oldest_ms: Optional[int] = None
+        for bar in page_bars:
+            ts_ms = _parse_webull_bar_time_ms(bar.get("time"))
+            close_raw = bar.get("close")
+            if ts_ms is None or close_raw is None:
+                continue
+            if oldest_ms is None or ts_ms < oldest_ms:
+                oldest_ms = ts_ms
+            if effective_start_ms <= ts_ms <= end_ms:
+                bars_by_ms[ts_ms] = float(close_raw)
+
+        if len(page_bars) < WEBULL_MAX_BARS_PER_CALL or oldest_ms is None:
+            break
+        next_end_ms = oldest_ms - 1
+        if next_end_ms < effective_start_ms or next_end_ms >= cursor_end_ms:
+            break
+        cursor_end_ms = next_end_ms
+
+    if not bars_by_ms:
+        return pd.DataFrame(columns=["Close"])
+
+    sorted_ms = sorted(bars_by_ms.keys())
+    dt_index = pd.to_datetime(sorted_ms, unit="ms", utc=True).tz_convert(target_tz)
+    return pd.DataFrame({"Close": [bars_by_ms[t] for t in sorted_ms]}, index=dt_index)
+
+
+def fetch_webull_bars_df(
+    symbol: str,
+    timespan: str,
+    start_dt_utc: pd.Timestamp,
+    end_dt_utc: pd.Timestamp,
+    target_tz: str = "America/New_York",
+    real_time_required: bool = False,
+    cfg: Optional[Dict[str, str]] = None,
+) -> Tuple[pd.DataFrame, Optional[str], bool]:
+    """ดึงแท่งราคาจาก Webull OpenAPI SDK แบบ paginated ทีละสูงสุด 1,200 แท่ง (intraday สูงสุด 180 วัน)"""
+    if not WEBULL_SDK_AVAILABLE:
+        return pd.DataFrame(), "ไม่พบแพ็กเกจ webull-openapi-python-sdk ใน Python environment นี้", False
+
+    cfg = cfg or get_webull_credentials()
+    if not cfg.get("app_key") or not cfg.get("app_secret"):
+        return (
+            pd.DataFrame(),
+            "ยังไม่ได้ตั้งค่า Webull App Key / App Secret (ใส่ได้ที่แถบด้านซ้าย Sidebar หรือตั้งค่า WEBULL_APP_KEY / WEBULL_APP_SECRET)",
+            False,
+        )
+
+    start_utc = pd.Timestamp(start_dt_utc)
+    start_utc = start_utc.tz_localize("UTC") if start_utc.tzinfo is None else start_utc.tz_convert("UTC")
+    end_utc = pd.Timestamp(end_dt_utc)
+    end_utc = end_utc.tz_localize("UTC") if end_utc.tzinfo is None else end_utc.tz_convert("UTC")
+
+    start_ms = int(start_utc.timestamp() * 1000)
+    end_ms = int(end_utc.timestamp() * 1000)
+    is_intraday = _is_webull_intraday_timespan(timespan)
+    was_clamped = False
+    if is_intraday:
+        now_utc = pd.Timestamp.now(tz="UTC")
+        min_allowed_ms = int((now_utc - pd.Timedelta(days=WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS)).timestamp() * 1000)
+        if start_ms < min_allowed_ms:
+            start_ms = min_allowed_ms
+            was_clamped = True
+
+    cred_sig = webull_config_signature(cfg)
+    try:
+        df = _fetch_webull_bars_cached(
+            symbol=symbol.strip().upper(),
+            timespan=timespan,
+            start_ms=start_ms,
+            end_ms=end_ms,
+            category=cfg.get("category", "US_STOCK"),
+            target_tz=target_tz,
+            real_time_required=real_time_required,
+            cred_sig=cred_sig,
+            _app_key=cfg["app_key"],
+            _app_secret=cfg["app_secret"],
+            region_id=cfg.get("region_id", "us"),
+            environment=cfg.get("environment", "prod"),
+            token_dir=cfg.get("token_dir", ""),
+        )
+        if df.empty:
+            hint = " (หมายเหตุ: UAT อาจไม่มีแท่งล่าสุดของหุ้นขนาดเล็ก ลองสลับเป็น prod)" if cfg.get("environment") == "uat" else ""
+            return pd.DataFrame(), f"Webull คืนค่า 0 แท่งสำหรับ {symbol} ({timespan}){hint}", was_clamped
+        return df, None, was_clamped
+    except Exception as exc:
+        return pd.DataFrame(), _format_webull_exception(exc, cfg.get("environment", "prod")), was_clamped
+
+
+def render_webull_sidebar_config() -> None:
+    """แถบตั้งค่า Webull OpenAPI SDK ใน Sidebar (ใช้ร่วมกันทุกแท็บ)"""
+    with st.sidebar:
+        st.markdown("### 🔌 Webull OpenAPI SDK")
+        if not WEBULL_SDK_AVAILABLE:
+            st.error("ไม่พบ `webull-openapi-python-sdk`")
+            return
+
+        env_has_key = bool(_read_env_or_secret("WEBULL_APP_KEY", ""))
+        env_has_sec = bool(_read_env_or_secret("WEBULL_APP_SECRET", ""))
+        cfg_now = get_webull_credentials()
+        if cfg_now["app_key"] and cfg_now["app_secret"]:
+            st.success(f"พร้อมใช้งาน · `{cfg_now['environment'].upper()}` · `{cfg_now['region_id'].upper()}`")
+        else:
+            st.warning("ยังไม่พบ App Key / App Secret (ใส่ด้านล่างหรือตั้งใน Env / `.env`)")
+
+        with st.expander("ตั้งค่า Credentials & Endpoint", expanded=not (cfg_now["app_key"] and cfg_now["app_secret"])):
+            st.text_input(
+                "Webull App Key",
+                type="password",
+                placeholder="ใช้จาก Env/Secrets แล้ว (พิมพ์เพื่อแทนที่)" if env_has_key else "ใส่ WEBULL_APP_KEY",
+                key="webull_app_key",
+            )
+            st.text_input(
+                "Webull App Secret",
+                type="password",
+                placeholder="ใช้จาก Env/Secrets แล้ว (พิมพ์เพื่อแทนที่)" if env_has_sec else "ใส่ WEBULL_APP_SECRET",
+                key="webull_app_secret",
+            )
+            def_env = _read_env_or_secret("WEBULL_ENVIRONMENT", "prod").lower()
+            env_opts = ["prod", "uat"]
+            st.selectbox(
+                "Environment",
+                options=env_opts,
+                index=env_opts.index(def_env) if def_env in env_opts else 0,
+                key="webull_environment",
+                help="prod = ข้อมูลตลาดจริงครบทุกหุ้น | uat = เซิร์ฟเวอร์ทดสอบ (หุ้นเล็กอาจไม่มีข้อมูลล่าสุด)",
+            )
+            c1, c2 = st.columns(2)
+            def_reg = _read_env_or_secret("WEBULL_REGION_ID", "us").lower()
+            c1.selectbox(
+                "Region",
+                options=WEBULL_SUPPORTED_REGIONS,
+                index=WEBULL_SUPPORTED_REGIONS.index(def_reg) if def_reg in WEBULL_SUPPORTED_REGIONS else 0,
+                key="webull_region_id",
+            )
+            def_cat = _read_env_or_secret("WEBULL_CATEGORY", "US_STOCK").upper()
+            c2.selectbox(
+                "Category",
+                options=WEBULL_SUPPORTED_CATEGORIES,
+                index=WEBULL_SUPPORTED_CATEGORIES.index(def_cat) if def_cat in WEBULL_SUPPORTED_CATEGORIES else 0,
+                key="webull_category",
+            )
+            st.caption("รองรับแท่งนาที (15m/30m/1h/4h) สูงสุด **180 วัน** (paginated 1,200 แท่ง/ครั้ง) และรายวัน (1d) หลายปี")
+
+            test_sym = st.text_input("ทดสอบด้วย Ticker", value="AAPL", key="webull_test_symbol").strip().upper() or "AAPL"
+            if st.button("🧪 ทดสอบเชื่อมต่อ Webull SDK", use_container_width=True, key="btn_test_webull_sdk"):
+                now_utc = pd.Timestamp.now(tz="UTC").floor("min")
+                df_test, err_test, _ = fetch_webull_bars_df(
+                    symbol=test_sym,
+                    timespan="M15",
+                    start_dt_utc=now_utc - pd.Timedelta(days=10),
+                    end_dt_utc=now_utc + pd.Timedelta(days=1),
+                    target_tz="America/New_York",
+                    cfg=get_webull_credentials(),
+                )
+                if err_test:
+                    st.error(err_test)
+                else:
+                    st.success(f"ดึง {test_sym} M15 สำเร็จ {len(df_test):,} แท่ง ({df_test.index[0].strftime('%Y-%m-%d')} .. {df_test.index[-1].strftime('%Y-%m-%d')})")
+
 
 # ==============================================================================
 # 2. Core Calculation & Data Functions
 # ==============================================================================
-def clamp_intraday_start_date(start_date: str, end_date: str, timeframe: str) -> Tuple[str, bool]:
+def clamp_intraday_start_date(
+    start_date: str,
+    end_date: str,
+    timeframe: str,
+    data_source: str = "yfinance",
+) -> Tuple[str, bool]:
     """
-    ! GOAL_1: yfinance ดึงข้อมูล intraday ย้อนหลังได้จำกัด (30m ~60 วัน, 1h/4h ~730 วัน)
-    ปรับ start_date ให้อยู่ในช่วงที่ดึงได้ เพื่อไม่ให้ได้ข้อมูลว่าง
+    ปรับ start_date ให้อยู่ในช่วงที่แหล่งข้อมูลดึงได้:
+    - yfinance: 15m/30m ~59 วัน, 1h/4h ~729 วัน
+    - webull: minute-level (15m/30m/1h/4h) สูงสุด 180 วัน (clamp 179 วันอย่างปลอดภัย)
     Returns: (effective_start_date, was_clamped)
     """
-    max_lookback = YFINANCE_INTRADAY_MAX_LOOKBACK_DAYS.get(timeframe)
+    limits = WEBULL_INTRADAY_MAX_LOOKBACK_DAYS if data_source == "webull" else YFINANCE_INTRADAY_MAX_LOOKBACK_DAYS
+    max_lookback = limits.get(timeframe)
     if max_lookback is None:  # 1d ดึงย้อนหลังได้ไม่จำกัด
         return start_date, False
     end_ts = pd.Timestamp(end_date)
@@ -212,15 +685,17 @@ def clamp_intraday_start_date(start_date: str, end_date: str, timeframe: str) ->
         return earliest_allowed.strftime('%Y-%m-%d'), True
     return start_date, False
 
+
 @st.cache_data(ttl=3600)
-def get_ticker_data(ticker: str, start_date: str, end_date: str, timeframe: str = "1d") -> pd.DataFrame:
+def _get_yfinance_ticker_data(ticker: str, start_date: str, end_date: str, timeframe: str = "1d") -> pd.DataFrame:
     try:
         if timeframe not in TIMEFRAME_OPTIONS:
             raise ValueError(f"Unsupported timeframe: {timeframe}")
         interval = str(TIMEFRAME_OPTIONS[timeframe]["yfinance_interval"])
-        effective_start, _ = clamp_intraday_start_date(start_date, end_date, timeframe)
+        effective_start, _ = clamp_intraday_start_date(start_date, end_date, timeframe, data_source="yfinance")
         data = yf.Ticker(ticker).history(start=effective_start, end=end_date, interval=interval)[['Close']]
-        if data.empty: return pd.DataFrame()
+        if data.empty:
+            return pd.DataFrame()
         if data.index.tz is None:
             data = data.tz_localize('UTC').tz_convert('Asia/Bangkok')
         else:
@@ -228,8 +703,54 @@ def get_ticker_data(ticker: str, start_date: str, end_date: str, timeframe: str 
         if timeframe == "4h":
             data = data.resample("4h").last().dropna()
         return data
-    except Exception as e:
+    except Exception:
         return pd.DataFrame()
+
+
+def get_ticker_data_with_status(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    timeframe: str = "1d",
+    data_source: str = "yfinance",
+    webull_cfg: Optional[Dict[str, str]] = None,
+) -> Tuple[pd.DataFrame, Optional[str]]:
+    if timeframe not in TIMEFRAME_OPTIONS:
+        return pd.DataFrame(), f"Unsupported timeframe: {timeframe}"
+    if data_source == "webull":
+        effective_start, _ = clamp_intraday_start_date(start_date, end_date, timeframe, data_source="webull")
+        start_utc = pd.Timestamp(effective_start).tz_localize("UTC")
+        end_utc = pd.Timestamp(end_date).tz_localize("UTC") + pd.Timedelta(days=1)
+        df, err, _ = fetch_webull_bars_df(
+            symbol=ticker,
+            timespan=str(TIMEFRAME_OPTIONS[timeframe]["webull_timespan"]),
+            start_dt_utc=start_utc,
+            end_dt_utc=end_utc,
+            target_tz="Asia/Bangkok",
+            cfg=webull_cfg,
+        )
+        return df, err
+    df = _get_yfinance_ticker_data(ticker, start_date, end_date, timeframe)
+    return df, None
+
+
+def get_ticker_data(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    timeframe: str = "1d",
+    data_source: str = "yfinance",
+    webull_cfg: Optional[Dict[str, str]] = None,
+) -> pd.DataFrame:
+    df, _ = get_ticker_data_with_status(
+        ticker=ticker,
+        start_date=start_date,
+        end_date=end_date,
+        timeframe=timeframe,
+        data_source=data_source,
+        webull_cfg=webull_cfg,
+    )
+    return df
 
 @njit(cache=True)
 def _calculate_net_profit_numba(action_array: np.ndarray, price_array: np.ndarray, fix: int = 1500) -> float:
@@ -947,29 +1468,101 @@ def build_spectrum_table(spectrum_codes: List[Tuple[str, str]], window_size: int
 # ==============================================================================
 # 4c. Spectrum Classifier: ดึงราคา -> วัดพฤติกรรมราคา -> หาย่านความถี่ DNA ที่ดีที่สุด
 # ==============================================================================
-# yfinance ดึงแท่ง intraday ย้อนหลังได้จำกัด (15m/30m ~60 วัน, 1h ~730 วัน)
+# yfinance ดึงแท่ง intraday ย้อนหลังได้จำกัด (15m/30m ~59 วัน, 1h ~729 วัน)
+# ส่วน Webull OpenAPI SDK ดึงแท่ง intraday (15m/30m/1h) แบบ paginated 1,200 แท่ง/ครั้ง ได้สูงสุด 180 วัน
 CLASSIFIER_INTERVALS: Dict[str, Dict[str, Any]] = {
-    "15m": {"yf": "15m", "max_days": 59},
-    "30m": {"yf": "30m", "max_days": 59},
-    "1h": {"yf": "1h", "max_days": 729},
-    "1d": {"yf": "1d", "max_days": 3650},
+    "15m": {"yf": "15m", "webull": "M15", "max_days": 59, "wb_max_days": WEBULL_INTRADAY_UI_MAX_DAYS, "yf_default_days": 30, "wb_default_days": WEBULL_INTRADAY_UI_MAX_DAYS},
+    "30m": {"yf": "30m", "webull": "M30", "max_days": 59, "wb_max_days": WEBULL_INTRADAY_UI_MAX_DAYS, "yf_default_days": 30, "wb_default_days": WEBULL_INTRADAY_UI_MAX_DAYS},
+    "1h": {"yf": "1h", "webull": "M60", "max_days": 729, "wb_max_days": WEBULL_INTRADAY_UI_MAX_DAYS, "yf_default_days": 120, "wb_default_days": WEBULL_INTRADAY_UI_MAX_DAYS},
+    "1d": {"yf": "1d", "webull": "D", "max_days": 3650, "wb_max_days": 3650, "yf_default_days": 365, "wb_default_days": 365},
 }
 CLASSIFIER_FIX_C = 1500.0
 CLASSIFIER_VR_LAGS = [2, 4, 8, 16, 26, 52, 100]
 
-@st.cache_data(ttl=900)
-def get_classifier_prices(ticker: str, interval: str, days: int) -> pd.DataFrame:
-    """ราคาปิดย้อนหลัง days วัน (เฉพาะชั่วโมงปกติ) index เป็นเวลาตลาดของหุ้นนั้น"""
+def sync_lookback_days_state(
+    days_key: str,
+    context_token: Any,
+    min_days: int,
+    max_days: int,
+    default_days: int,
+) -> int:
+    """รักษาค่า lookback days ใน st.session_state ให้เปลี่ยนตาม source/timeframe และไม่เกินขอบเขต."""
+    tracker_key = f"{days_key}__ctx"
+    target_default = int(min(max(int(default_days), int(min_days)), int(max_days)))
+    if days_key not in st.session_state or st.session_state.get(tracker_key) != context_token:
+        st.session_state[days_key] = target_default
+        st.session_state[tracker_key] = context_token
+    else:
+        cur = int(st.session_state.get(days_key, target_default))
+        st.session_state[days_key] = int(min(max(cur, int(min_days)), int(max_days)))
+    return int(st.session_state[days_key])
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _get_yfinance_classifier_prices(ticker: str, yf_interval: str, days: int) -> pd.DataFrame:
+    """ดึงราคาปิดย้อนหลังจาก yfinance (เฉพาะชั่วโมงปกติ) และแคชแยกต่างหาก."""
     try:
         end = pd.Timestamp.now(tz="UTC").normalize() + pd.Timedelta(days=1)
         start = end - pd.Timedelta(days=int(days) + 1)
         data = yf.Ticker(ticker).history(
             start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d'),
-            interval=CLASSIFIER_INTERVALS[interval]["yf"]
+            interval=yf_interval,
         )[['Close']].dropna()
         return data
     except Exception:
         return pd.DataFrame()
+
+def get_classifier_prices_with_status(
+    ticker: str,
+    interval: str,
+    days: int,
+    data_source: str = "yfinance",
+    webull_cfg: Optional[Dict[str, str]] = None,
+) -> Tuple[pd.DataFrame, Optional[str], bool]:
+    """ราคาปิดย้อนหลัง days วัน พร้อม error message และสถานะการ clamp."""
+    spec = CLASSIFIER_INTERVALS.get(interval, CLASSIFIER_INTERVALS["1d"])
+    source_norm = str(data_source or "yfinance").strip().lower()
+    if source_norm == "webull":
+        end_dt = pd.Timestamp.now(tz="UTC")
+        req_days = max(1, int(days))
+        if spec["webull"] != "D" and req_days > WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS:
+            start_dt = end_dt - pd.Timedelta(days=WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS)
+            was_clamped = True
+        else:
+            start_dt = end_dt - pd.Timedelta(days=req_days + (1 if spec["webull"] == "D" else 0))
+            was_clamped = False
+        df, err_msg, wb_clamped = fetch_webull_bars_df(
+            symbol=ticker,
+            timespan=spec["webull"],
+            start_dt_utc=start_dt,
+            end_dt_utc=end_dt,
+            target_tz="America/New_York",
+            cfg=webull_cfg,
+        )
+        if df.empty or "Close" not in df.columns:
+            return pd.DataFrame(), err_msg, bool(was_clamped or wb_clamped)
+        close_df = df[["Close"]].dropna()
+        return close_df, err_msg, bool(was_clamped or wb_clamped)
+
+    max_yf = int(spec["max_days"])
+    eff_days = min(max(1, int(days)), max_yf)
+    return _get_yfinance_classifier_prices(ticker, spec["yf"], eff_days), None, eff_days < int(days)
+
+def get_classifier_prices(
+    ticker: str,
+    interval: str,
+    days: int,
+    data_source: str = "yfinance",
+    webull_cfg: Optional[Dict[str, str]] = None,
+) -> pd.DataFrame:
+    """ราคาปิดย้อนหลัง days วัน (เฉพาะชั่วโมงปกติ) index เป็นเวลาตลาดของหุ้นนั้น."""
+    data, _, _ = get_classifier_prices_with_status(
+        ticker=ticker,
+        interval=interval,
+        days=days,
+        data_source=data_source,
+        webull_cfg=webull_cfg,
+    )
+    return data
 
 def gated_excess(prices: np.ndarray, gates: np.ndarray, fix_c: float = CLASSIFIER_FIX_C) -> float:
     """E สุดท้ายของ gated ledger (สูตรเดียวกับ lego_dash_core.gated_rebalancing_cashflow_from_prices)
@@ -1183,8 +1776,27 @@ def render_settings_tab():
         "Timeframe",
         options=timeframe_labels,
         index=timeframe_labels.index(st.session_state.selected_timeframe) if st.session_state.selected_timeframe in timeframe_labels else 0,
-        help="เลือกใช้แท่ง 1d, 4h, 1h หรือ 30m สำหรับการจำลองและการเข้ารหัส timeline"
+        help="เลือกใช้แท่ง 1d, 4h, 1h, 30m หรือ 15m สำหรับการจำลองและการเข้ารหัส timeline",
     )
+    data_source_options = ["yfinance", "webull"]
+    cur_source = st.session_state.get("selected_data_source", "yfinance")
+    st.session_state.selected_data_source = st.selectbox(
+        "Data Source (Batch / Simulation)",
+        options=data_source_options,
+        index=data_source_options.index(cur_source) if cur_source in data_source_options else 0,
+        format_func=lambda s: (
+            "Webull OpenAPI SDK (15m/30m/1h/4h สูงสุด 180d, paginated 1,200 แท่ง)"
+            if s == "webull"
+            else "yfinance (15m/30m สูงสุด ~59d)"
+        ),
+        help="เลือกแหล่งข้อมูลสำหรับ Tab 0–5: ใช้ Webull OpenAPI SDK เพื่อดึงแท่ง intraday (15m/30m/1h/4h) ย้อนหลังได้ถึง 180 วัน",
+    )
+    if st.session_state.selected_data_source == "webull":
+        wb_cfg_check = get_webull_credentials()
+        if not wb_cfg_check["app_key"] or not wb_cfg_check["app_secret"]:
+            st.warning(
+                "⚠️ เลือก Webull SDK แล้ว แต่ยังไม่ได้ตั้งค่า `App Key` / `App Secret` — กรุณากรอกที่แถบ Sidebar ด้านซ้าย (หรือ `.env`)"
+            )
 
     c1, c2 = st.columns(2)
     st.session_state.window_size = c1.number_input("ขนาด Window (แท่ง)", min_value=2, value=st.session_state.window_size, help="จำนวนแท่งราคาต่อ 1 Window ตาม Timeframe ที่เลือก")
@@ -1236,12 +1848,20 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
     start_str = str(st.session_state.start_date)
     end_str = str(st.session_state.end_date)
     selected_timeframe = st.session_state.selected_timeframe
+    selected_source = st.session_state.get("selected_data_source", "yfinance")
 
-    # ! GOAL_1: แจ้งเตือนเมื่อ start_date ถูก clamp เพราะข้อจำกัด intraday ของ yfinance
-    effective_start, was_clamped = clamp_intraday_start_date(start_str, end_str, selected_timeframe)
+    # ! GOAL_1: แจ้งเตือนเมื่อ start_date ถูก clamp เพราะข้อจำกัด intraday ของแหล่งข้อมูล
+    effective_start, was_clamped = clamp_intraday_start_date(
+        start_str, end_str, selected_timeframe, data_source=selected_source
+    )
     if was_clamped:
+        src_hint = (
+            f"Webull OpenAPI SDK (clamp ปลอดภัยที่ {WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS} วัน / API จำกัด 180 วัน)"
+            if selected_source == "webull"
+            else "yfinance ดึงข้อมูลย้อนหลังได้จำกัด"
+        )
         st.warning(
-            f"⚠️ Timeframe {selected_timeframe}: yfinance ดึงข้อมูลย้อนหลังได้จำกัด "
+            f"⚠️ Timeframe {selected_timeframe}: {src_hint} "
             f"จึงปรับวันที่เริ่มต้นจาก {start_str} เป็น {effective_start} โดยอัตโนมัติ"
         )
 
@@ -1251,7 +1871,12 @@ def execute_batch_processing(spectrum_codes: Optional[List[Tuple[str, str]]] = N
     total_tickers = len(tickers)
 
     for idx, ticker in enumerate(tickers):
-        ticker_data = get_ticker_data(ticker, start_str, end_str, selected_timeframe)
+        ticker_data, fetch_err = get_ticker_data_with_status(
+            ticker, start_str, end_str, selected_timeframe, data_source=selected_source
+        )
+        if fetch_err:
+            st.warning(f"Skipping {ticker}: {fetch_err}")
+            continue
         if ticker_data.empty:
             st.warning(f"Skipping {ticker}: No Data Found.")
             continue
@@ -1864,33 +2489,76 @@ def render_spectrum_tab():
 def render_classifier_tab():
     st.markdown("### 🔬 Spectrum Classifier")
     st.info(
-        "ใส่หุ้น เลือก Timeframe กับจำนวนวัน แล้วกดวิเคราะห์ · เครื่องมือจะดึงราคา วัดว่าราคา **ไหลต่อ / ดึงกลับ / สุ่มเดิน** "
+        "ใส่หุ้น เลือก Timeframe, แหล่งข้อมูล (`yfinance` หรือ `Webull SDK` สำหรับแท่ง 15m/30m สูงสุด 180 วัน) กับจำนวนวัน แล้วกดวิเคราะห์ · "
+        "เครื่องมือจะดึงราคา วัดว่าราคา **ไหลต่อ / ดึงกลับ / สุ่มเดิน** "
         "แล้วรัน DNA Spectrum ทั้ง 20 ชุด (Density + Periodic) ผ่าน gated ledger เพื่อหาย่านความถี่ที่เก็บ Eₙ ได้ดีที่สุด"
     )
-    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+    c1, c2, c3, c4, c5 = st.columns([1.7, 0.9, 1.35, 1.0, 1.0])
     ticker = c1.text_input("หุ้น (Ticker)", value="QBTS", key="clf_ticker").strip().upper()
     interval = c2.selectbox("Timeframe", list(CLASSIFIER_INTERVALS.keys()), index=0, key="clf_interval")
-    max_days = CLASSIFIER_INTERVALS[interval]["max_days"]
-    days = c3.number_input("ย้อนหลัง (วัน)", min_value=5, max_value=max_days, value=min(30, max_days), key="clf_days",
-                           help=f"yfinance ดึง {interval} ย้อนหลังได้ไม่เกิน {max_days} วัน")
-    c4.write(""); c4.write("")
-    if c4.button("🔬 วิเคราะห์", type="primary", width="stretch", key="clf_run"):
+    clf_source = c3.selectbox(
+        "แหล่งข้อมูล",
+        ["yfinance", "webull"],
+        index=0,
+        format_func=lambda s: "Webull SDK (สูงสุด 180d)" if s == "webull" else "yfinance (59d intraday)",
+        key="clf_source",
+    )
+    spec = CLASSIFIER_INTERVALS[interval]
+    is_wb_clf = clf_source == "webull"
+    max_days = int(spec["wb_max_days"] if is_wb_clf else spec["max_days"])
+    default_days = int(spec["wb_default_days"] if is_wb_clf else spec["yf_default_days"])
+    sync_lookback_days_state(
+        days_key="clf_days",
+        context_token=(interval, clf_source),
+        min_days=5,
+        max_days=max_days,
+        default_days=default_days,
+    )
+    days = c4.number_input(
+        "ย้อนหลัง (วัน)",
+        min_value=5,
+        max_value=max_days,
+        key="clf_days",
+        help=(
+            f"Webull OpenAPI SDK ดึง {interval} ย้อนหลังได้สูงสุด {max_days} วัน (clamp ปลอดภัยที่ {WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS} วัน)"
+            if is_wb_clf
+            else f"yfinance ดึง {interval} ย้อนหลังได้ไม่เกิน {max_days} วัน"
+        ),
+    )
+    c5.write(""); c5.write("")
+    if c5.button("🔬 วิเคราะห์", type="primary", width="stretch", key="clf_run"):
         if not ticker:
             st.error("กรุณาใส่ Ticker")
         else:
-            with st.spinner(f"กำลังดึง {ticker} {interval} ย้อนหลัง {days} วัน..."):
-                data = get_classifier_prices(ticker, interval, int(days))
-            if len(data) < 30:
+            src_label = "Webull OpenAPI SDK" if is_wb_clf else "yfinance"
+            with st.spinner(f"กำลังดึง {ticker} {interval} ({src_label}) ย้อนหลัง {days} วัน..."):
+                data, err_msg, was_clamped = get_classifier_prices_with_status(
+                    ticker, interval, int(days), data_source=clf_source
+                )
+            if was_clamped and is_wb_clf:
+                st.caption(
+                    f"ℹ️ Webull API ปฏิเสธช่วงที่เกิน 180 วัน ระบบ clamp หน้าต่าง intraday ให้อยู่ภายใน {WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS} วันล่าสุดอัตโนมัติ"
+                )
+            if err_msg:
                 st.session_state.classifier_result = None
-                st.error(f"ดึงข้อมูล {ticker} ไม่ได้ หรือข้อมูลน้อยเกินไป ({len(data)} แท่ง)")
+                st.error(err_msg)
+            elif len(data) < 30:
+                st.session_state.classifier_result = None
+                st.error(f"ดึงข้อมูล {ticker} ({src_label}) ไม่ได้ หรือข้อมูลน้อยเกินไป ({len(data)} แท่ง)")
             else:
                 result = classify_spectrum(data['Close'], intraday=interval != "1d")
-                result.update({"ticker": ticker, "interval": interval, "days": int(days), "closes": data['Close']})
+                result.update({
+                    "ticker": ticker,
+                    "interval": interval,
+                    "days": int(days),
+                    "source": clf_source,
+                    "closes": data['Close'],
+                })
                 st.session_state.classifier_result = result
 
     result = st.session_state.get("classifier_result")
     if not result:
-        st.caption("ยังไม่มีผลลัพธ์ · ตัวอย่าง: QBTS · 15m · 30 วัน")
+        st.caption("ยังไม่มีผลลัพธ์ · ตัวอย่าง: QBTS · 15m · 30 วัน (yfinance) หรือสูงสุด 180 วัน (Webull SDK)")
         return
 
     closes = result["closes"]
@@ -1931,8 +2599,9 @@ def render_classifier_tab():
         picks = [("ดีที่สุดเต็มช่วง", best)] + ([("เชื่อถือได้ที่สุด", robust)] if robust['rank'] != best['rank'] else [])
         st.code("\n".join(f"{tag} · Rank {row['rank']} ({row['label']}): {row['dna_code']}" for tag, row in picks), language="text")
 
+    res_src_label = "Webull OpenAPI SDK (RTH)" if result.get("source") == "webull" else "yfinance (เฉพาะชั่วโมงปกติ)"
     st.caption(
-        f"ข้อมูลจาก yfinance (เฉพาะชั่วโมงปกติ) · Fix_c = ${CLASSIFIER_FIX_C:,.0f} · E (phase 0) = รัน DNA จากบิตแรกตามปกติ "
+        f"ข้อมูลจาก {res_src_label} · Fix_c = ${CLASSIFIER_FIX_C:,.0f} · E (phase 0) = รัน DNA จากบิตแรกตามปกติ "
         "· ผลนี้มาจากข้อมูลย้อนหลัง ไม่รับประกันอนาคต และข้อมูลไม่กี่สัปดาห์มีความคลาดเคลื่อนสูง"
     )
 
@@ -2045,11 +2714,98 @@ DNA_SPECTRUM_EXPLORER_M15_META_JSON: str = '{"tf": "M15", "tfLabel": "15 นา�
 DNA_SPECTRUM_EXPLORER_M15_DATA_JSON: str = '{"RGTI":[{"wa":"2026-09-15","wb":"2026-09-30","a":"2026-09-15","b":"2026-09-30","days":[[0,"09/15"],[26,"09/16"],[52,"09/17"],[78,"09/18"],[104,"09/21"],[130,"09/22"],[156,"09/23"],[182,"09/24"],[208,"09/25"],[234,"09/28"],[260,"09/29"],[286,"09/30"]],"c":[15.43,15.42,15.33,15.36,15.23,15.07,15.03,15.08,15.05,15.1,15.02,15.15,15.26,15.35,15.3,15.29,15.24,15.25,15.32,15.31,15.16,15.16,15.16,15.1,15.15,15.11,15.19,15.14,14.99,15.02,15.06,14.97,15.0,15.07,15.05,14.93,14.95,14.94,14.89,14.89,14.95,14.95,14.9,14.97,14.9,14.86,14.87,14.61,14.57,14.5,14.64,14.82,15.74,15.69,15.7,15.78,15.77,15.9,15.81,15.82,15.96,16.09,16.05,15.98,16.06,16.11,16.12,16.09,16.1,16.15,16.13,16.08,16.04,16.04,16.06,16.03,16.01,15.99,15.69,15.45,15.22,15.19,15.22,15.17,15.16,15.15,15.22,15.29,15.18,15.12,15.14,15.2,15.2,15.22,15.27,15.31,15.35,15.36,15.34,15.36,15.38,15.45,15.52,15.79,16.28,16.27,16.36,16.36,16.28,16.21,16.24,16.27,16.22,16.27,16.23,16.24,16.12,16.15,16.21,16.27,16.31,16.41,16.4,16.37,16.43,16.4,16.42,16.4,16.42,16.55,16.22,16.16,16.2,16.23,16.2,16.25,16.33,16.33,16.31,16.31,16.3,16.31,16.33,16.31,16.33,16.26,16.28,16.37,16.36,16.41,16.43,16.47,16.42,16.39,16.44,16.52,16.61,16.49,16.36,16.31,16.26,16.35,16.53,16.3,16.25,16.19,16.21,16.17,16.14,16.15,16.13,16.17,16.22,16.16,16.13,16.18,16.17,16.18,16.23,16.17,16.04,16.0,15.89,15.77,15.94,16.11,16.09,16.09,16.04,16.0,15.95,16.02,16.02,16.47,16.34,16.46,16.3,16.38,16.36,16.55,16.47,16.48,16.47,16.35,16.28,16.27,16.4,16.5,16.58,16.6,16.6,16.57,16.53,16.58,16.95,17.04,16.91,17.04,17.19,17.05,16.97,17.0,17.07,16.95,16.83,16.85,16.83,16.81,16.85,16.94,16.95,16.85,16.77,16.64,16.57,16.58,16.37,16.43,16.2,16.14,16.12,16.24,16.33,16.49,16.41,16.67,16.5,16.3,16.45,16.34,16.29,16.35,16.33,16.3,16.31,16.26,16.17,16.16,16.06,15.96,16.09,16.01,15.88,16.01,15.97,15.9,15.91,15.87,16.02,15.95,15.92,15.91,15.9,15.87,15.89,15.85,15.9,15.85,15.9,15.85,15.92,15.87,15.91,15.85,15.82,15.78,16.11,16.29,16.33,16.25,16.09,16.15,16.08,15.94,15.91,15.88,15.89,15.88,15.93,15.89,15.82,15.76,15.85,15.83,15.77,15.77,15.76,15.77,15.86,15.74,15.76,15.73],"partial":false,"headPartial":false},{"wa":"2026-10-01","wb":"2026-10-14","a":"2026-10-01","b":"2026-10-14","days":[[0,"10/01"],[26,"10/02"],[52,"10/05"],[78,"10/06"],[104,"10/07"],[130,"10/08"],[156,"10/09"],[182,"10/12"],[208,"10/13"],[234,"10/14"]],"c":[15.72,15.81,15.84,15.8,15.86,15.81,15.69,15.66,15.55,15.7,15.61,15.6,15.66,15.65,15.66,15.86,15.81,15.78,15.65,15.64,15.63,15.63,15.63,15.62,15.57,15.61,15.91,15.99,16.01,15.95,16.03,15.92,15.69,15.62,15.64,15.63,15.71,15.64,15.59,15.57,15.52,15.48,15.53,15.62,15.5,15.35,15.39,15.31,15.27,15.24,15.19,15.26,15.13,14.89,15.03,14.93,14.88,14.9,14.88,14.89,14.94,15.12,15.16,15.15,15.13,15.05,15.03,14.99,15.03,15.02,15.03,15.05,15.02,15.14,15.1,15.03,15.09,15.17,15.65,15.42,15.43,15.35,15.23,15.35,15.27,15.23,15.2,15.16,15.15,15.06,15.1,15.06,15.03,15.05,15.18,15.17,15.24,15.18,15.16,15.25,15.16,15.16,15.15,15.18,14.62,14.57,14.56,14.51,14.53,14.58,14.52,14.47,14.5,14.48,14.52,14.55,14.53,14.51,14.56,14.52,14.55,14.53,14.6,14.61,14.62,14.57,14.56,14.56,14.62,14.6,14.34,14.19,14.27,14.3,14.26,14.21,14.1,14.05,13.98,14.01,14.0,14.06,13.99,13.89,13.94,13.81,13.82,13.82,13.85,13.93,13.88,13.86,13.89,14.02,14.05,14.16,14.0,13.9,13.99,13.92,13.88,13.95,13.87,13.81,13.82,13.79,13.88,13.9,13.89,13.89,13.88,13.87,13.9,14.01,14.0,13.97,13.97,14.01,14.05,14.01,14.03,14.03,13.67,13.44,13.45,13.36,13.39,13.36,13.35,13.31,13.34,13.34,13.34,13.31,13.3,13.26,13.27,13.27,13.27,13.27,13.31,13.31,13.27,13.27,13.26,13.31,13.26,13.26,13.02,12.9,12.85,12.84,12.86,12.77,12.84,12.83,12.78,12.8,12.85,12.88,12.97,12.89,12.87,12.82,12.85,12.8,12.87,12.85,12.81,12.8,12.82,12.87,12.87,12.79,12.29,12.12,12.1,12.07,12.11,12.05,11.96,11.98,11.93,11.9,11.78,11.81,11.84,11.85,11.81,11.84,11.91,11.86,11.91,11.83,11.77,11.67,11.56,11.69,11.69,11.67],"partial":false,"headPartial":false},{"wa":"2026-10-15","wb":"2026-10-31","a":"2026-10-15","b":"2026-10-30","days":[[0,"10/15"],[26,"10/16"],[52,"10/19"],[78,"10/20"],[104,"10/21"],[130,"10/22"],[156,"10/23"],[182,"10/26"],[208,"10/27"],[234,"10/28"],[260,"10/29"],[286,"10/30"]],"c":[11.44,11.19,11.5,11.52,11.72,11.84,12.04,12.03,12.1,12.1,12.05,12.07,12.07,12.09,12.13,12.09,12.14,12.14,12.02,12.03,12.14,12.18,12.36,12.43,12.52,12.62,12.59,12.4,12.48,12.52,12.5,12.36,12.21,12.12,12.1,12.03,12.1,12.1,12.1,12.07,11.96,12.0,12.06,12.02,12.02,12.0,11.97,11.93,11.96,12.0,11.85,11.79,11.91,11.79,11.76,11.78,11.83,11.81,11.85,11.91,11.92,12.01,11.94,11.95,11.93,11.87,11.87,11.86,11.84,11.82,11.79,11.73,11.85,11.81,11.76,11.8,11.85,11.66,11.41,11.55,11.73,11.9,11.97,11.94,11.77,11.77,11.74,11.73,11.76,11.77,11.77,11.73,11.73,11.73,11.72,11.78,11.74,11.7,11.69,11.74,11.72,11.73,11.69,11.66,11.78,11.85,11.83,11.91,11.94,11.91,11.93,11.91,11.97,11.97,11.93,11.91,12.01,12.06,12.07,12.07,12.08,12.09,12.14,12.07,12.14,12.08,12.05,12.04,12.06,12.05,11.82,11.7,11.68,11.65,11.62,11.59,11.44,11.6,11.62,11.68,11.69,11.65,11.52,11.52,11.44,11.41,11.44,11.36,11.34,11.31,11.39,11.32,11.4,11.48,11.39,11.5,11.32,11.32,11.28,11.27,11.4,11.4,11.34,11.35,11.35,11.4,11.35,11.33,11.39,11.43,11.43,11.4,11.41,11.44,11.47,11.52,11.53,11.58,11.57,11.56,11.51,11.52,11.16,11.15,11.28,11.28,11.33,11.45,11.58,11.64,11.61,11.59,11.57,11.57,11.46,11.51,11.53,11.52,11.52,11.56,11.55,11.51,11.54,11.51,11.53,11.49,11.45,11.44,11.95,11.8,11.81,11.87,11.94,11.99,12.12,12.1,12.22,12.19,12.34,12.36,12.28,12.43,12.44,12.41,12.35,12.33,12.32,12.31,12.31,12.41,12.38,12.35,12.44,12.41,12.28,12.3,12.23,12.2,12.25,12.16,12.21,12.18,12.18,12.2,12.19,12.19,12.13,12.23,12.19,12.18,12.19,12.19,12.12,12.23,12.32,12.28,12.17,12.19,12.28,12.41,12.14,12.18,12.23,12.23,12.21,12.21,12.28,12.3,12.32,12.33,12.19,12.21,12.23,12.24,12.14,12.14,12.09,12.06,12.05,11.97,11.91,11.93,11.89,11.97,11.93,12.07,11.31,11.27,11.14,11.17,11.22,11.2,11.17,11.16,11.12,11.15,11.03,11.08,11.03,10.99,10.91,10.91,10.94,10.9,10.85,10.85,10.86,10.89,10.97,11.11,11.09,11.24],"partial":false,"headPartial":false},{"wa":"2026-11-01","wb":"2026-11-14","a":"2026-11-02","b":"2026-11-06","days":[[0,"11/02"],[26,"11/03"],[52,"11/04"],[78,"11/05"],[104,"11/06"]],"c":[11.26,11.31,11.52,11.6,11.61,11.44,11.37,11.39,11.37,11.3,11.3,11.2,11.11,11.12,11.05,11.05,10.94,10.86,10.85,10.8,10.73,10.77,10.72,10.8,10.62,10.65,11.28,11.23,11.23,11.12,11.15,11.11,11.11,11.04,10.95,10.99,11.07,11.08,11.01,11.01,11.07,11.03,11.06,11.02,10.94,10.95,10.99,10.96,10.98,11.05,11.11,11.08,11.45,11.22,11.51,11.32,11.15,10.98,11.05,10.97,11.14,11.24,11.19,11.35,11.32,11.36,11.3,11.3,11.27,11.2,11.24,11.24,11.19,11.15,11.13,11.14,11.15,11.23,10.32,9.99,9.59,9.5,9.51,9.32,9.49,9.86,9.74,9.75,9.72,9.62,9.62,9.61,9.65,9.74,9.7,9.71,9.79,9.73,9.95,10.01,9.83,9.85,9.86,9.78,10.57,10.63,10.84,10.78,10.72,10.93,10.84,11.02,11.19,11.36,11.43,11.64,11.34,11.42,11.47,11.48,11.52,11.61,11.68,11.72,11.7,11.8,11.84,11.82,11.81,11.74],"partial":true,"headPartial":false}],"QBTS":[{"wa":"2026-09-15","wb":"2026-09-30","a":"2026-09-15","b":"2026-09-30","days":[[0,"09/15"],[26,"09/16"],[52,"09/17"],[78,"09/18"],[104,"09/21"],[130,"09/22"],[156,"09/23"],[182,"09/24"],[208,"09/25"],[234,"09/28"],[260,"09/29"],[286,"09/30"]],"c":[16.79,16.71,16.59,16.59,16.49,16.32,16.33,16.33,16.31,16.34,16.28,16.46,16.55,16.65,16.58,16.57,16.52,16.5,16.58,16.58,16.49,16.5,16.56,16.45,16.4,16.42,16.39,16.36,16.31,16.33,16.39,16.27,16.31,16.41,16.34,16.24,16.25,16.27,16.21,16.24,16.28,16.31,16.25,16.33,16.29,16.27,16.28,16.05,15.98,15.9,16.05,16.28,17.07,17.11,17.21,17.36,17.47,17.58,17.44,17.46,17.56,17.7,17.66,17.55,17.67,17.73,17.73,17.7,17.7,17.82,17.82,17.78,17.78,17.83,17.84,17.81,17.79,17.68,17.26,16.9,16.67,16.61,16.67,16.63,16.57,16.6,16.7,16.76,16.62,16.59,16.64,16.72,16.66,16.68,16.7,16.76,16.75,16.76,16.74,16.76,16.76,16.88,16.93,17.12,17.52,17.56,17.74,17.76,17.67,17.66,17.7,17.68,17.65,17.69,17.62,17.6,17.5,17.6,17.62,17.64,17.67,17.79,17.75,17.74,17.78,17.72,17.75,17.75,17.77,17.69,17.29,17.33,17.36,17.33,17.3,17.32,17.41,17.36,17.34,17.31,17.29,17.33,17.37,17.33,17.35,17.31,17.3,17.38,17.41,17.43,17.48,17.51,17.45,17.44,17.49,17.54,17.7,17.48,17.42,17.4,17.32,17.39,17.42,17.17,17.17,17.11,17.14,17.08,17.05,17.05,17.05,17.05,17.09,17.07,17.03,17.09,17.08,17.05,17.13,17.04,16.9,16.82,16.72,16.58,16.73,16.95,16.95,16.92,16.82,16.8,16.78,16.86,16.92,17.33,17.19,17.27,17.2,17.27,17.33,17.52,17.48,17.46,17.44,17.28,17.24,17.22,17.42,17.48,17.49,17.42,17.38,17.37,17.37,17.42,17.73,17.73,17.6,17.73,17.9,17.68,17.65,17.63,17.71,17.61,17.5,17.51,17.48,17.49,17.5,17.54,17.56,17.5,17.46,17.4,17.32,17.27,17.14,17.17,16.95,16.91,16.91,17.01,17.17,17.29,17.28,17.51,17.3,17.19,17.33,17.23,17.18,17.22,17.17,17.16,17.16,17.11,17.0,16.99,16.92,16.78,16.91,16.83,16.68,16.7,16.7,16.6,16.59,16.49,16.55,16.5,16.49,16.47,16.44,16.41,16.42,16.42,16.43,16.4,16.44,16.41,16.48,16.45,16.47,16.41,16.4,16.45,16.77,16.94,17.04,16.93,16.82,16.94,16.89,16.72,16.73,16.65,16.74,16.73,16.81,16.78,16.74,16.62,16.75,16.69,16.64,16.62,16.64,16.66,16.76,16.64,16.65,16.56],"partial":false,"headPartial":false},{"wa":"2026-10-01","wb":"2026-10-14","a":"2026-10-01","b":"2026-10-14","days":[[0,"10/01"],[26,"10/02"],[52,"10/05"],[78,"10/06"],[104,"10/07"],[130,"10/08"],[156,"10/09"],[182,"10/12"],[208,"10/13"],[234,"10/14"]],"c":[16.61,16.74,16.69,16.66,16.7,16.65,16.52,16.52,16.43,16.57,16.5,16.51,16.61,16.59,16.6,16.76,16.75,16.68,16.57,16.56,16.58,16.58,16.56,16.57,16.5,16.57,16.76,16.81,16.83,16.78,16.82,16.68,16.48,16.43,16.42,16.39,16.47,16.41,16.36,16.37,16.35,16.28,16.33,16.4,16.27,16.13,16.17,16.05,15.98,15.91,15.84,15.77,15.66,15.33,15.52,15.41,15.39,15.43,15.38,15.39,15.41,15.58,15.62,15.66,15.65,15.51,15.49,15.44,15.45,15.42,15.44,15.44,15.43,15.56,15.52,15.47,15.51,15.64,16.15,15.98,16.05,15.94,15.86,15.98,15.89,15.82,15.8,15.76,15.77,15.68,15.74,15.7,15.7,15.69,15.78,15.79,15.85,15.81,15.8,15.86,15.79,15.8,15.77,15.79,15.15,15.12,15.11,15.07,15.1,15.11,15.04,15.01,14.99,15.01,15.06,15.06,15.06,15.03,15.12,15.1,15.13,15.1,15.19,15.22,15.23,15.17,15.18,15.17,15.22,15.21,14.85,14.74,14.79,14.8,14.72,14.7,14.55,14.53,14.51,14.52,14.53,14.57,14.49,14.41,14.45,14.38,14.39,14.35,14.38,14.45,14.39,14.38,14.35,14.52,14.53,14.6,14.45,14.37,14.49,14.44,14.43,14.41,14.37,14.32,14.38,14.35,14.4,14.44,14.41,14.36,14.35,14.35,14.39,14.49,14.55,14.52,14.52,14.56,14.56,14.51,14.55,14.55,14.2,13.98,13.99,13.9,13.91,13.9,13.89,13.81,13.79,13.81,13.8,13.78,13.78,13.77,13.76,13.8,13.8,13.8,13.79,13.81,13.77,13.77,13.74,13.8,13.75,13.74,13.6,13.51,13.44,13.47,13.47,13.39,13.46,13.43,13.38,13.39,13.41,13.43,13.57,13.52,13.48,13.45,13.49,13.44,13.51,13.48,13.43,13.45,13.47,13.48,13.49,13.38,12.82,12.68,12.64,12.66,12.69,12.64,12.52,12.56,12.48,12.44,12.32,12.33,12.35,12.32,12.31,12.26,12.28,12.26,12.28,12.18,12.13,12.07,12.03,12.06,12.05,12.03],"partial":false,"headPartial":false},{"wa":"2026-10-15","wb":"2026-10-31","a":"2026-10-15","b":"2026-10-30","days":[[0,"10/15"],[26,"10/16"],[52,"10/19"],[78,"10/20"],[104,"10/21"],[130,"10/22"],[156,"10/23"],[182,"10/26"],[208,"10/27"],[234,"10/28"],[260,"10/29"],[286,"10/30"]],"c":[11.73,11.4,11.75,11.78,11.98,12.13,12.32,12.3,12.32,12.36,12.28,12.31,12.32,12.32,12.35,12.34,12.41,12.45,12.33,12.32,12.4,12.43,12.59,12.67,12.73,12.81,12.62,12.44,12.48,12.5,12.4,12.24,12.11,12.07,12.03,11.95,12.01,12.04,12.03,11.99,11.89,11.91,11.98,11.86,11.9,11.88,11.86,11.84,11.89,11.93,11.8,11.79,11.9,11.84,11.87,11.89,11.9,11.89,11.93,11.98,11.98,12.07,12.04,12.03,11.98,11.9,11.9,11.91,11.89,11.86,11.84,11.8,11.88,11.82,11.81,11.86,11.93,11.83,11.57,11.73,11.9,12.12,12.14,12.1,11.91,11.91,11.88,11.87,11.89,11.87,11.87,11.82,11.82,11.82,11.81,11.86,11.84,11.8,11.77,11.81,11.81,11.81,11.81,11.77,11.85,11.86,11.88,11.96,11.98,11.98,12.01,11.96,12.04,12.02,11.99,11.98,12.1,12.15,12.15,12.15,12.17,12.18,12.19,12.1,12.19,12.14,12.06,12.09,12.07,12.11,11.93,11.86,11.86,11.85,11.82,11.83,11.72,11.84,11.83,11.85,11.83,11.76,11.66,11.69,11.59,11.57,11.56,11.47,11.44,11.44,11.49,11.45,11.53,11.61,11.52,11.65,11.43,11.41,11.37,11.32,11.51,11.48,11.38,11.43,11.39,11.43,11.38,11.34,11.43,11.48,11.48,11.44,11.45,11.51,11.56,11.62,11.62,11.66,11.64,11.64,11.57,11.65,11.38,11.35,11.51,11.56,11.56,11.68,11.77,11.81,11.78,11.74,11.73,11.74,11.6,11.65,11.65,11.65,11.66,11.7,11.7,11.65,11.68,11.61,11.65,11.6,11.56,11.53,11.95,11.73,11.7,11.75,11.82,11.91,12.05,11.98,12.06,11.99,12.1,12.11,12.06,12.16,12.14,12.12,12.06,12.01,12.0,12.02,12.02,12.1,12.06,12.05,12.15,12.14,11.85,11.75,11.72,11.65,11.7,11.62,11.71,11.66,11.66,11.65,11.65,11.66,11.59,11.69,11.64,11.6,11.62,11.6,11.55,11.65,11.73,11.65,11.57,11.57,11.65,11.77,11.4,11.57,11.66,11.65,11.59,11.56,11.67,11.73,11.8,11.81,11.69,11.72,11.71,11.73,11.59,11.64,11.59,11.53,11.51,11.44,11.48,11.45,11.4,11.48,11.46,11.56,10.85,10.86,10.73,10.7,10.73,10.72,10.66,10.65,10.57,10.6,10.48,10.51,10.47,10.44,10.35,10.35,10.37,10.31,10.31,10.27,10.26,10.31,10.4,10.6,10.52,10.64],"partial":false,"headPartial":false},{"wa":"2026-11-01","wb":"2026-11-14","a":"2026-11-02","b":"2026-11-06","days":[[0,"11/02"],[26,"11/03"],[52,"11/04"],[78,"11/05"],[104,"11/06"]],"c":[10.67,10.66,10.79,10.9,10.91,10.71,10.66,10.69,10.69,10.63,10.65,10.56,10.49,10.52,10.44,10.44,10.34,10.27,10.25,10.2,10.15,10.22,10.17,10.21,10.07,10.09,10.45,10.38,10.43,10.32,10.35,10.35,10.38,10.3,10.25,10.31,10.36,10.38,10.33,10.35,10.39,10.36,10.35,10.31,10.23,10.23,10.27,10.24,10.24,10.28,10.35,10.37,10.61,10.41,10.67,10.55,10.44,10.24,10.33,10.22,10.32,10.4,10.35,10.49,10.43,10.48,10.41,10.4,10.4,10.35,10.39,10.39,10.37,10.34,10.35,10.35,10.35,10.4,9.55,9.22,8.82,8.78,8.81,8.64,8.74,9.02,8.95,8.96,8.94,8.88,8.85,8.84,8.9,8.95,8.95,8.94,9.03,8.95,9.21,9.2,9.1,9.12,9.12,9.04,9.68,9.65,9.81,9.73,9.72,9.98,9.88,10.06,10.19,10.31,10.34,10.56,10.35,10.45,10.47,10.49,10.52,10.56,10.59,10.6,10.66,10.72,10.77,10.72,10.72,10.66],"partial":true,"headPartial":false}],"USAR":[{"wa":"2026-09-15","wb":"2026-09-30","a":"2026-09-15","b":"2026-09-30","days":[[0,"09/15"],[26,"09/16"],[52,"09/17"],[78,"09/18"],[104,"09/21"],[130,"09/22"],[156,"09/23"],[182,"09/24"],[208,"09/25"],[234,"09/28"],[260,"09/29"],[286,"09/30"]],"c":[15.59,15.52,15.42,15.41,15.38,15.34,15.34,15.35,15.32,15.38,15.34,15.43,15.4,15.49,15.45,15.39,15.39,15.41,15.45,15.41,15.4,15.4,15.35,15.36,15.39,15.41,15.26,15.27,15.23,15.24,15.27,15.27,15.31,15.31,15.31,15.27,15.24,15.23,15.26,15.26,15.27,15.26,15.22,15.28,15.2,15.2,15.2,15.03,15.04,14.97,15.02,15.1,15.78,15.74,15.6,15.48,15.52,15.57,15.48,15.52,15.52,15.72,15.74,15.79,15.9,15.88,15.82,15.81,15.77,15.73,15.77,15.77,15.76,15.73,15.77,15.73,15.66,15.62,15.45,15.38,15.25,15.4,15.39,15.24,15.17,15.19,15.23,15.23,15.23,15.24,15.27,15.26,15.24,15.26,15.31,15.31,15.35,15.33,15.29,15.31,15.41,15.44,15.39,15.39,16.42,16.45,16.67,16.59,16.59,16.6,16.66,16.68,16.65,16.68,16.74,16.88,16.84,16.84,16.97,16.91,16.89,16.91,16.98,16.94,16.91,16.86,16.91,16.94,16.87,16.78,16.52,16.35,16.49,16.34,16.31,16.41,16.67,16.63,16.61,16.65,16.75,16.69,16.69,16.74,16.67,16.65,16.67,16.8,16.78,16.76,16.77,16.89,16.91,16.85,16.94,16.99,16.44,16.33,16.14,16.0,16.11,16.14,16.2,16.17,16.17,16.08,16.09,16.09,16.07,16.01,15.98,16.05,16.07,16.1,16.07,16.08,16.07,16.09,16.08,16.07,15.98,15.84,15.26,15.16,15.34,15.49,15.4,15.33,15.31,15.27,15.32,15.35,15.37,15.44,15.38,15.44,15.48,15.47,15.35,15.37,15.36,15.38,15.29,15.31,15.34,15.27,15.32,15.39,15.23,15.18,15.12,15.15,15.12,15.12,15.24,15.22,15.19,15.32,15.47,15.44,15.42,15.38,15.39,15.35,15.38,15.35,15.31,15.3,15.29,15.28,15.34,15.27,15.22,15.17,14.91,14.84,14.87,14.9,14.8,14.66,14.6,14.64,14.65,14.62,14.53,14.8,14.62,14.52,14.67,14.56,14.59,14.65,14.68,14.62,14.58,14.59,14.52,14.52,14.49,14.41,14.23,14.17,14.23,14.21,14.18,14.07,14.03,14.01,14.05,14.02,14.02,14.11,14.02,14.11,14.09,14.02,14.09,14.09,14.1,14.06,14.06,14.06,14.02,14.06,14.06,14.07,14.41,14.47,14.69,14.63,14.61,14.66,14.49,14.41,14.43,14.38,14.38,14.45,14.48,14.54,14.47,14.4,14.43,14.41,14.4,14.4,14.36,14.4,14.37,14.27,14.23,14.09],"partial":false,"headPartial":false},{"wa":"2026-10-01","wb":"2026-10-14","a":"2026-10-01","b":"2026-10-14","days":[[0,"10/01"],[26,"10/02"],[52,"10/05"],[78,"10/06"],[104,"10/07"],[130,"10/08"],[156,"10/09"],[182,"10/12"],[208,"10/13"],[234,"10/14"]],"c":[13.73,13.75,13.69,13.65,13.69,13.6,13.57,13.55,13.52,13.58,13.57,13.63,13.71,13.76,13.77,13.94,13.9,13.81,13.79,13.76,13.77,13.77,13.76,13.77,13.8,13.82,13.78,13.73,13.73,13.8,13.85,13.77,13.67,13.66,13.62,13.69,13.7,13.67,13.73,13.75,13.68,13.66,13.65,13.71,13.66,13.6,13.61,13.61,13.6,13.6,13.57,13.59,13.53,13.34,13.69,13.57,13.55,13.65,13.53,13.52,13.56,13.56,13.51,13.52,13.51,13.56,13.51,13.52,13.55,13.55,13.51,13.51,13.48,13.59,13.59,13.52,13.6,13.65,13.9,13.86,13.94,14.03,13.9,13.94,13.95,13.97,13.92,13.92,13.93,13.88,13.93,13.93,13.9,13.98,13.98,13.97,13.98,13.91,13.86,13.91,13.84,13.73,13.81,13.74,13.18,13.18,13.19,13.15,13.1,13.06,13.06,13.06,13.09,13.13,13.1,13.15,13.15,13.12,13.22,13.16,13.15,13.14,13.2,13.2,13.2,13.22,13.19,13.23,13.26,13.23,13.2,13.06,13.01,13.01,12.94,12.82,12.73,12.77,12.7,12.68,12.64,12.68,12.66,12.65,12.62,12.47,12.53,12.48,12.49,12.56,12.51,12.43,12.45,12.53,12.61,12.61,12.53,12.48,12.48,12.58,12.55,12.56,12.52,12.48,12.48,12.46,12.45,12.45,12.45,12.41,12.42,12.46,12.56,12.74,12.68,12.6,12.59,12.61,12.61,12.57,12.6,12.57,12.2,12.11,12.09,11.95,11.95,12.01,12.02,12.04,11.96,11.93,11.91,11.9,11.9,11.85,11.88,11.85,11.85,11.88,11.85,11.89,11.85,11.85,11.85,11.83,11.85,11.82,11.59,11.46,11.45,11.39,11.39,11.35,11.38,11.34,11.31,11.31,11.31,11.28,11.35,11.35,11.31,11.32,11.35,11.3,11.38,11.35,11.34,11.35,11.34,11.38,11.31,11.27,10.94,10.76,10.65,10.57,10.63,10.62,10.52,10.56,10.49,10.51,10.4,10.39,10.36,10.39,10.33,10.3,10.3,10.18,10.2,10.24,10.21,10.16,10.19,10.25,10.23,10.31],"partial":false,"headPartial":false},{"wa":"2026-10-15","wb":"2026-10-31","a":"2026-10-15","b":"2026-10-30","days":[[0,"10/15"],[26,"10/16"],[52,"10/19"],[78,"10/20"],[104,"10/21"],[130,"10/22"],[156,"10/23"],[182,"10/26"],[208,"10/27"],[234,"10/28"],[260,"10/29"],[286,"10/30"]],"c":[10.04,9.88,10.09,10.11,10.45,10.56,10.84,10.73,10.68,10.69,10.67,10.68,10.73,10.68,10.72,10.76,10.85,10.89,10.86,10.88,10.88,10.95,11.0,10.99,11.07,11.09,11.09,11.01,11.04,11.08,11.15,11.05,10.93,10.81,10.81,10.68,10.8,10.77,10.8,10.76,10.61,10.68,10.71,10.63,10.6,10.55,10.49,10.47,10.52,10.56,10.45,10.55,10.41,10.3,10.26,10.15,10.21,10.2,10.21,10.31,10.29,10.31,10.26,10.24,10.25,10.19,10.17,10.18,10.13,10.15,10.11,10.08,10.13,10.13,10.09,10.17,10.16,10.08,9.73,9.9,10.12,10.35,10.34,10.31,10.18,10.16,10.15,10.14,10.13,10.14,10.15,10.12,10.1,10.14,10.1,10.14,10.13,10.11,10.03,10.07,10.05,10.06,10.05,10.05,10.11,10.18,10.15,10.18,10.2,10.16,10.15,10.12,10.19,10.22,10.18,10.16,10.21,10.2,10.19,10.22,10.2,10.23,10.22,10.16,10.2,10.14,10.12,10.19,10.21,10.23,9.88,9.9,9.83,9.83,9.81,9.77,9.7,9.77,9.77,9.83,9.77,9.73,9.69,9.66,9.6,9.56,9.55,9.48,9.46,9.46,9.48,9.44,9.49,9.57,9.51,9.63,9.45,9.48,9.39,9.35,9.51,9.4,9.36,9.45,9.4,9.43,9.41,9.37,9.38,9.37,9.35,9.34,9.34,9.39,9.39,9.44,9.44,9.49,9.44,9.46,9.35,9.32,9.03,9.05,9.06,9.06,9.07,9.16,9.24,9.24,9.23,9.18,9.16,9.18,9.11,9.16,9.16,9.12,9.15,9.2,9.16,9.1,9.15,9.1,9.06,9.05,9.02,8.9,9.53,9.55,9.6,9.73,9.72,9.83,9.82,9.91,10.03,9.99,10.06,10.14,10.02,10.07,10.14,10.12,10.11,10.03,10.03,10.02,10.03,10.06,10.1,10.09,10.22,10.39,10.05,10.05,10.01,10.07,10.19,10.1,10.18,10.19,10.17,10.21,10.22,10.24,10.26,10.31,10.26,10.22,10.26,10.27,10.19,10.27,10.38,10.34,10.28,10.34,10.43,10.48,10.23,10.4,10.44,10.52,10.53,10.58,10.66,10.76,10.82,10.86,10.78,10.78,10.81,10.84,10.73,10.76,10.69,10.61,10.63,10.55,10.51,10.56,10.55,10.59,10.53,10.53,9.98,9.85,9.85,9.7,9.77,9.81,9.81,9.73,9.65,9.7,9.66,9.69,9.65,9.56,9.51,9.52,9.52,9.45,9.4,9.34,9.26,9.27,9.4,9.41,9.38,9.62],"partial":false,"headPartial":false},{"wa":"2026-11-01","wb":"2026-11-14","a":"2026-11-02","b":"2026-11-06","days":[[0,"11/02"],[26,"11/03"],[52,"11/04"],[78,"11/05"],[104,"11/06"]],"c":[9.64,9.73,9.77,9.77,9.84,9.64,9.56,9.52,9.47,9.45,9.43,9.36,9.27,9.27,9.22,9.21,9.15,9.09,9.04,8.98,8.94,8.93,8.86,8.98,8.88,8.85,8.95,8.94,8.94,8.88,8.93,8.92,8.91,8.83,8.74,8.81,8.85,8.86,8.82,8.82,8.87,8.82,8.79,8.77,8.71,8.66,8.69,8.66,8.6,8.65,8.66,8.72,9.01,8.58,8.72,8.55,8.47,8.15,8.27,8.19,8.25,8.31,8.26,8.35,8.3,8.32,8.24,8.27,8.23,8.18,8.16,8.15,8.17,8.15,8.15,8.16,8.11,8.18,7.64,7.41,7.24,7.23,7.14,6.94,7.13,7.38,7.38,7.42,7.4,7.34,7.29,7.28,7.32,7.35,7.33,7.38,7.42,7.38,7.53,7.51,7.39,7.41,7.38,7.4,7.72,7.89,7.99,7.88,7.76,7.88,7.8,7.92,7.91,7.97,8.06,8.23,7.97,8.02,8.06,8.07,8.16,8.15,8.22,8.23,8.21,8.25,8.24,8.23,8.21,8.23],"partial":true,"headPartial":false}]}'
 
 EXPLORER_TIMEFRAMES: Dict[str, Dict[str, Any]] = {
-    "1d": {"tf": "D", "tfLabel": "รายวัน", "tfShort": "1D", "yf": "1d", "max_days": 3650, "default_days": 365, "min_bars": 5},
-    "15m": {"tf": "M15", "tfLabel": "15 นาที", "tfShort": "15m", "yf": "15m", "max_days": 59, "default_days": 59, "min_bars": 20},
-    "30m": {"tf": "M30", "tfLabel": "30 นาที", "tfShort": "30m", "yf": "30m", "max_days": 59, "default_days": 59, "min_bars": 15},
-    "1h": {"tf": "H1", "tfLabel": "1 ชั่วโมง", "tfShort": "1H", "yf": "1h", "max_days": 729, "default_days": 365, "min_bars": 15},
+    "1d": {"tf": "D", "tfLabel": "รายวัน", "tfShort": "1D", "yf": "1d", "wb": "D", "max_days": 3650, "wb_max_days": 3650, "default_days": 365, "wb_default_days": 365, "min_bars": 5},
+    "15m": {"tf": "M15", "tfLabel": "15 นาที", "tfShort": "15m", "yf": "15m", "wb": "M15", "max_days": 59, "wb_max_days": WEBULL_INTRADAY_UI_MAX_DAYS, "default_days": 59, "wb_default_days": WEBULL_INTRADAY_UI_MAX_DAYS, "min_bars": 20},
+    "30m": {"tf": "M30", "tfLabel": "30 นาที", "tfShort": "30m", "yf": "30m", "wb": "M30", "max_days": 59, "wb_max_days": WEBULL_INTRADAY_UI_MAX_DAYS, "default_days": 59, "wb_default_days": WEBULL_INTRADAY_UI_MAX_DAYS, "min_bars": 15},
+    "1h": {"tf": "H1", "tfLabel": "1 ชั่วโมง", "tfShort": "1H", "yf": "1h", "wb": "M60", "max_days": 729, "wb_max_days": WEBULL_INTRADAY_UI_MAX_DAYS, "default_days": 365, "wb_default_days": WEBULL_INTRADAY_UI_MAX_DAYS, "min_bars": 15},
 }
+
+EXPLORER_SOURCE_OPTIONS: List[str] = [
+    "template_first",
+    "live_yfinance",
+    "live_webull",
+    "template_first_webull",
+]
+
+def format_explorer_source_label(mode: str) -> str:
+    """แสดงชื่อแหล่งข้อมูลสำหรับ Tabs 6–8 (yfinance vs Webull OpenAPI SDK)."""
+    return {
+        "template_first": "Template ต้นฉบับ 100% + ดึงสด yfinance หุ้นอื่น",
+        "live_yfinance": "ดึงข้อมูลสดจาก yfinance ทุกตัว (59d intraday)",
+        "live_webull": "ดึงข้อมูลสด Webull SDK ทุกตัว (สูงสุด 180d intraday)",
+        "template_first_webull": "Template ก่อน + ดึงสด Webull SDK หุ้นอื่น (สูงสุด 180d)",
+    }.get(mode, mode)
+
+def explorer_source_uses_webull(source_mode: Optional[str]) -> bool:
+    """ตรวจว่าโหมดแหล่งข้อมูลของ Explorer ใช้ Webull OpenAPI SDK หรือไม่."""
+    return str(source_mode or "") in ("live_webull", "template_first_webull")
+
+def explorer_source_prefers_template(source_mode: Optional[str]) -> bool:
+    """ตรวจว่าโหมดแหล่งข้อมูลของ Explorer ใช้ข้อมูล Template ก่อนหรือไม่."""
+    return str(source_mode or "") in ("template_first", "template_first_webull")
+
+def get_explorer_lookback_bounds(tf_choice: str, source_mode: str = "template_first") -> Tuple[int, int, bool]:
+    """คืนค่า (max_days, default_days, uses_webull) ตาม Timeframe และ Source Mode."""
+    tf_meta = EXPLORER_TIMEFRAMES.get(tf_choice, EXPLORER_TIMEFRAMES["1d"])
+    uses_webull = explorer_source_uses_webull(source_mode)
+    if uses_webull:
+        return int(tf_meta["wb_max_days"]), int(tf_meta["wb_default_days"]), True
+    return int(tf_meta["max_days"]), int(tf_meta["default_days"]), False
+
+def render_explorer_lookback_and_source(
+    col_days: Any,
+    col_source: Any,
+    tf_choice: str,
+    days_key: str,
+    source_key: str,
+    source_label: str = "แหล่งข้อมูลตั้งต้น",
+) -> Tuple[int, str]:
+    """ตัวควบคุมร่วมสำหรับจำนวนวันย้อนหลัง + แหล่งข้อมูล (yfinance / Webull SDK) ใน Tabs 6–8."""
+    current_source = str(st.session_state.get(source_key, EXPLORER_SOURCE_OPTIONS[0]))
+    if current_source not in EXPLORER_SOURCE_OPTIONS:
+        current_source = EXPLORER_SOURCE_OPTIONS[0]
+    max_days, def_days, uses_wb = get_explorer_lookback_bounds(tf_choice, current_source)
+    sync_lookback_days_state(
+        days_key=days_key,
+        context_token=(tf_choice, uses_wb),
+        min_days=15,
+        max_days=max_days,
+        default_days=def_days,
+    )
+    src_note = (
+        f"Webull OpenAPI SDK (สูงสุด {max_days} วันสำหรับ {tf_choice}; intraday clamp ปลอดภัยที่ {WEBULL_INTRADAY_SAFE_LOOKBACK_DAYS} วัน)"
+        if uses_wb
+        else f"yfinance (สูงสุด {max_days} วันสำหรับ {tf_choice})"
+    )
+    with col_days:
+        lookback_days = st.number_input(
+            "ย้อนหลัง (วัน)",
+            min_value=15,
+            max_value=max_days,
+            step=15,
+            key=days_key,
+            help=f"จำนวนวันย้อนหลังจาก {src_note}",
+        )
+    with col_source:
+        source_mode = st.selectbox(
+            source_label,
+            options=EXPLORER_SOURCE_OPTIONS,
+            index=EXPLORER_SOURCE_OPTIONS.index(current_source),
+            format_func=format_explorer_source_label,
+            key=source_key,
+        )
+    return int(lookback_days), str(source_mode)
+
+def render_explorer_missing_warning(missing_tickers: List[str], suffix_note: str = "") -> None:
+    """แสดงคำเตือนเมื่อดึงราคาไม่ได้ พร้อมรายละเอียด error จาก Webull (ถ้ามี)."""
+    fetch_errs = st.session_state.get("_explorer_fetch_errors", {}) or {}
+    if missing_tickers:
+        note = f" {suffix_note}" if suffix_note else ""
+        st.warning(f"⚠️ ไม่พบข้อมูลราคาสำหรับ: {', '.join(missing_tickers)}{note}")
+    for sym in missing_tickers:
+        err_detail = fetch_errs.get(sym)
+        if err_detail:
+            st.error(f"Webull ({sym}): {err_detail}")
 
 
 @st.cache_resource
@@ -2198,38 +2954,104 @@ def build_explorer_windows_from_series(
 
 
 @st.cache_data(ttl=900, show_spinner=False)
+def _fetch_yfinance_explorer_closes(
+    ticker: str,
+    start_date_str: str,
+    end_date_str: str,
+    yf_interval: str,
+) -> pd.Series:
+    """ดึง Series ราคา Close จาก yfinance สำหรับ Explorer (แคชเฉพาะ yfinance)."""
+    try:
+        hist = yf.Ticker(ticker).history(
+            start=start_date_str,
+            end=end_date_str,
+            interval=yf_interval,
+        )
+        if hist.empty or "Close" not in hist.columns:
+            return pd.Series(dtype=float)
+        return hist["Close"].dropna()
+    except Exception:
+        return pd.Series(dtype=float)
+
+def _fetch_explorer_ticker_windows_with_status(
+    ticker: str,
+    timeframe: str = "1d",
+    lookback_days: int = 365,
+    window_mode: str = "half_month",
+    fixed_window_size: int = 30,
+    data_source: str = "yfinance",
+    webull_cfg: Optional[Dict[str, str]] = None,
+) -> Tuple[List[Dict[str, Any]], Optional[str], Optional[str]]:
+    """ดึงข้อมูลราคาจาก yfinance หรือ Webull SDK แล้วตัดแบ่งเป็น Windows พร้อม error message."""
+    tf_meta = EXPLORER_TIMEFRAMES.get(timeframe, EXPLORER_TIMEFRAMES["1d"])
+    source_norm = str(data_source or "yfinance").strip().lower()
+    uses_webull = source_norm == "webull"
+    max_days = int(tf_meta["wb_max_days"] if uses_webull else tf_meta["max_days"])
+    eff_days = min(max(10, int(lookback_days)), max_days)
+
+    try:
+        now_ny = pd.Timestamp.now(tz="America/New_York")
+        end_date = now_ny.date() + timedelta(days=1)
+        raw_start = now_ny.date() - timedelta(days=eff_days)
+        start_date = align_to_half_month_boundary(raw_start) if window_mode == "half_month" and eff_days >= 35 else raw_start
+
+        if uses_webull:
+            start_dt_utc = pd.Timestamp(start_date).tz_localize("America/New_York").tz_convert("UTC")
+            end_dt_utc = pd.Timestamp.now(tz="UTC")
+            df, err_msg, _ = fetch_webull_bars_df(
+                symbol=ticker,
+                timespan=tf_meta["wb"],
+                start_dt_utc=start_dt_utc,
+                end_dt_utc=end_dt_utc,
+                target_tz="America/New_York",
+                cfg=webull_cfg,
+            )
+            if err_msg:
+                return [], None, err_msg
+            if df.empty or "Close" not in df.columns:
+                return [], None, None
+            closes = df["Close"].dropna()
+        else:
+            closes = _fetch_yfinance_explorer_closes(
+                ticker=ticker,
+                start_date_str=start_date.strftime("%Y-%m-%d"),
+                end_date_str=end_date.strftime("%Y-%m-%d"),
+                yf_interval=tf_meta["yf"],
+            )
+            if closes.empty:
+                return [], None, None
+
+        wins, last_bar = build_explorer_windows_from_series(
+            closes,
+            window_mode=window_mode,
+            fixed_window_size=fixed_window_size,
+            asof_date=now_ny.date(),
+            min_bars_finished=int(tf_meta["min_bars"]),
+        )
+        return wins, last_bar, None
+    except Exception as exc:
+        return [], None, str(exc) if uses_webull else None
+
 def fetch_explorer_ticker_windows(
     ticker: str,
     timeframe: str = "1d",
     lookback_days: int = 365,
     window_mode: str = "half_month",
     fixed_window_size: int = 30,
+    data_source: str = "yfinance",
+    webull_cfg: Optional[Dict[str, str]] = None,
 ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """ดึงข้อมูลราคาจาก yfinance แล้วตัดแบ่งเป็น Windows สำหรับ DNA Spectrum Explorer"""
-    tf_meta = EXPLORER_TIMEFRAMES.get(timeframe, EXPLORER_TIMEFRAMES["1d"])
-    max_days = int(tf_meta["max_days"])
-    eff_days = min(max(10, int(lookback_days)), max_days)
-    try:
-        now_ny = pd.Timestamp.now(tz="America/New_York")
-        end_date = now_ny.date() + timedelta(days=1)
-        raw_start = now_ny.date() - timedelta(days=eff_days)
-        start_date = align_to_half_month_boundary(raw_start) if window_mode == "half_month" and eff_days >= 35 else raw_start
-        hist = yf.Ticker(ticker).history(
-            start=start_date.strftime("%Y-%m-%d"),
-            end=end_date.strftime("%Y-%m-%d"),
-            interval=tf_meta["yf"],
-        )
-        if hist.empty or "Close" not in hist.columns:
-            return [], None
-        return build_explorer_windows_from_series(
-            hist["Close"],
-            window_mode=window_mode,
-            fixed_window_size=fixed_window_size,
-            asof_date=now_ny.date(),
-            min_bars_finished=int(tf_meta["min_bars"]),
-        )
-    except Exception:
-        return [], None
+    """ดึงข้อมูลราคาจาก yfinance หรือ Webull SDK แล้วตัดแบ่งเป็น Windows สำหรับ DNA Spectrum Explorer"""
+    wins, last_bar, _ = _fetch_explorer_ticker_windows_with_status(
+        ticker=ticker,
+        timeframe=timeframe,
+        lookback_days=lookback_days,
+        window_mode=window_mode,
+        fixed_window_size=fixed_window_size,
+        data_source=data_source,
+        webull_cfg=webull_cfg,
+    )
+    return wins, last_bar
 
 
 def render_ticker_buttons_html(tickers: List[str]) -> str:
@@ -2387,19 +3209,35 @@ def resolve_explorer_data_for_tickers(
     window_mode: str = "half_month",
     fixed_window_size: int = 30,
     prefer_template_default: bool = True,
+    data_source_mode: Optional[str] = None,
+    webull_cfg: Optional[Dict[str, str]] = None,
 ) -> Tuple[Dict[str, List[Dict[str, Any]]], Dict[str, Any], bool, List[str]]:
     """เตรียม DATA และ META สำหรับรายการ Dynamic Tickers ที่ผู้ใช้เลือก
     - หากเลือกใช้ข้อมูล Template สำหรับ AAPL/RGTI/QBTS/USAR (โหมด 1d หรือ 15m + half_month) จะใช้ข้อมูลจาก Template ต้นฉบับเป๊ะ 100%
-    - สำหรับหุ้นตัวอื่น หรือเมื่อกดดึงข้อมูลสด จะดึงจาก yfinance (และหากออฟไลน์จะ fallback จากผลจำลองใน session_state)"""
+    - สำหรับหุ้นตัวอื่น หรือเมื่อกดดึงข้อมูลสด จะดึงจาก yfinance หรือ Webull OpenAPI SDK (สูงสุด 180d intraday แบบ paginated)"""
     default_d_meta, default_d_data = get_default_explorer_payload()
     default_m15_meta, default_m15_data = get_default_m15_explorer_payload()
     tf_meta = EXPLORER_TIMEFRAMES.get(timeframe, EXPLORER_TIMEFRAMES["1d"])
 
+    prefer_template = (
+        explorer_source_prefers_template(data_source_mode)
+        if data_source_mode is not None
+        else bool(prefer_template_default)
+    )
+    use_webull = explorer_source_uses_webull(data_source_mode)
+    live_source = "webull" if use_webull else "yfinance"
+
     default_meta = default_m15_meta if timeframe == "15m" else default_d_meta
     default_data = default_m15_data if timeframe == "15m" else default_d_data
 
+    fetch_errors: Dict[str, str] = {}
+    try:
+        st.session_state["_explorer_fetch_errors"] = fetch_errors
+    except Exception:
+        pass
+
     if (
-        prefer_template_default
+        prefer_template
         and timeframe in ("1d", "15m")
         and window_mode == "half_month"
         and all(sym in default_data for sym in tickers)
@@ -2413,7 +3251,7 @@ def resolve_explorer_data_for_tickers(
 
     for sym in tickers:
         if (
-            prefer_template_default
+            prefer_template
             and timeframe in ("1d", "15m")
             and window_mode == "half_month"
             and sym in default_data
@@ -2423,14 +3261,19 @@ def resolve_explorer_data_for_tickers(
                 last_bars.append(default_data[sym][-1]["b"])
             continue
 
-        wins, last_bar = fetch_explorer_ticker_windows(
+        wins, last_bar, fetch_err = _fetch_explorer_ticker_windows_with_status(
             sym,
             timeframe=timeframe,
             lookback_days=lookback_days,
             window_mode=window_mode,
             fixed_window_size=fixed_window_size,
+            data_source=live_source,
+            webull_cfg=webull_cfg,
         )
-        if not wins:
+        if fetch_err:
+            fetch_errors[sym] = fetch_err
+
+        if not wins and not use_webull:
             for res_key in ("batch_results", "spectrum_results"):
                 cached_res = st.session_state.get(res_key, {}).get(sym)
                 if cached_res and "sim_results" in cached_res:
@@ -2444,7 +3287,7 @@ def resolve_explorer_data_for_tickers(
                         )
                         if wins:
                             break
-        if not wins and sym in default_d_data:
+        if not wins and prefer_template and timeframe == "1d" and sym in default_d_data:
             wins = default_d_data[sym]
             last_bar = wins[-1]["b"] if wins else None
 
@@ -2455,8 +3298,13 @@ def resolve_explorer_data_for_tickers(
         else:
             missing_tickers.append(sym)
 
+    try:
+        st.session_state["_explorer_fetch_errors"] = fetch_errors
+    except Exception:
+        pass
+
     asof_str = datetime.now().strftime("%Y-%m-%d")
-    if prefer_template_default and set(data_map.keys()).issubset(set(default_data.keys())):
+    if prefer_template and set(data_map.keys()).issubset(set(default_data.keys())):
         asof_str = str(default_meta.get("asof", asof_str))
 
     meta_dict = {
@@ -2553,30 +3401,14 @@ def render_dna_spectrum_explorer_tab():
                 ),
                 key="explorer_win_mode",
             )
-        with r2c3:
-            max_days_allowed = int(EXPLORER_TIMEFRAMES[tf_choice]["max_days"])
-            default_days_val = int(EXPLORER_TIMEFRAMES[tf_choice]["default_days"])
-            lookback_days = st.number_input(
-                "ย้อนหลัง (วัน)",
-                min_value=15,
-                max_value=max_days_allowed,
-                value=min(default_days_val, max_days_allowed),
-                step=15,
-                key="explorer_lookback_days",
-                help=f"จำนวนวันย้อนหลังสำหรับดึงข้อมูลจาก yfinance (สูงสุด {max_days_allowed} วันสำหรับ {tf_choice})",
-            )
-        with r2c4:
-            data_source_mode = st.selectbox(
-                "แหล่งข้อมูล AAPL / RGTI / QBTS / USAR",
-                options=["template_first", "live_yfinance"],
-                index=0,
-                format_func=lambda s: (
-                    "Template ต้นฉบับ 100% + ดึงสดหุ้นอื่น"
-                    if s == "template_first"
-                    else "ดึงข้อมูลสดจาก yfinance ทุกตัว"
-                ),
-                key="explorer_source_mode",
-            )
+        lookback_days, data_source_mode = render_explorer_lookback_and_source(
+            col_days=r2c3,
+            col_source=r2c4,
+            tf_choice=tf_choice,
+            days_key="explorer_lookback_days",
+            source_key="explorer_source_mode",
+            source_label="แหล่งข้อมูล AAPL / RGTI / QBTS / USAR",
+        )
 
     active_tickers = list(st.session_state.explorer_tickers)
     if not active_tickers:
@@ -2590,11 +3422,11 @@ def render_dna_spectrum_explorer_tab():
             lookback_days=int(lookback_days),
             window_mode=win_mode,
             fixed_window_size=int(st.session_state.window_size),
-            prefer_template_default=(data_source_mode == "template_first"),
+            prefer_template_default=explorer_source_prefers_template(data_source_mode),
+            data_source_mode=data_source_mode,
         )
 
-    if missing:
-        st.warning(f"⚠️ ไม่พบข้อมูลราคาสำหรับ: {', '.join(missing)} (ตรวจสอบชื่อ Ticker หรือการเชื่อมต่ออินเทอร์เน็ต)")
+    render_explorer_missing_warning(missing, "(ตรวจสอบชื่อ Ticker หรือการเชื่อมต่ออินเทอร์เน็ต)")
 
     if not data_map:
         st.info("ใช้ข้อมูลตั้งต้นจาก Template (AAPL · RGTI)")
@@ -2732,29 +3564,14 @@ def render_template_html_100_tab():
                 ),
                 key="template7_win_mode",
             )
-        with r2c4:
-            max_days_t7 = int(EXPLORER_TIMEFRAMES[tf_choice_t7]["max_days"])
-            def_days_t7 = int(EXPLORER_TIMEFRAMES[tf_choice_t7]["default_days"])
-            lookback_days_t7 = st.number_input(
-                "ย้อนหลัง (วัน)",
-                min_value=15,
-                max_value=max_days_t7,
-                value=min(def_days_t7, max_days_t7),
-                step=15,
-                key="template7_lookback_days",
-            )
-        with r2c5:
-            source_mode_t7 = st.selectbox(
-                "แหล่งข้อมูลตั้งต้น",
-                options=["template_first", "live_yfinance"],
-                index=0,
-                format_func=lambda s: (
-                    "Template ต้นฉบับ 100% + ดึงสดหุ้นอื่น"
-                    if s == "template_first"
-                    else "ดึงข้อมูลสดจาก yfinance ทุกตัว"
-                ),
-                key="template7_source_mode",
-            )
+        lookback_days_t7, source_mode_t7 = render_explorer_lookback_and_source(
+            col_days=r2c4,
+            col_source=r2c5,
+            tf_choice=tf_choice_t7,
+            days_key="template7_lookback_days",
+            source_key="template7_source_mode",
+            source_label="แหล่งข้อมูลตั้งต้น",
+        )
 
     active_t7_tickers = list(st.session_state.template_tickers)
     if not active_t7_tickers:
@@ -2773,11 +3590,11 @@ def render_template_html_100_tab():
                 lookback_days=int(lookback_days_t7),
                 window_mode=win_mode_t7,
                 fixed_window_size=int(st.session_state.window_size),
-                prefer_template_default=(source_mode_t7 == "template_first"),
+                prefer_template_default=explorer_source_prefers_template(source_mode_t7),
+                data_source_mode=source_mode_t7,
             )
 
-        if missing_t7:
-            st.warning(f"⚠️ ไม่พบข้อมูลราคาสำหรับ: {', '.join(missing_t7)}")
+        render_explorer_missing_warning(missing_t7)
 
         if not data_map_t7:
             default_m15_meta, default_m15_data = get_default_m15_explorer_payload()
@@ -2986,29 +3803,14 @@ def render_hybrid_multi_mutation_isolation_tab():
                 ),
                 key="iso_win_mode",
             )
-        with r2c3:
-            max_days_iso = int(EXPLORER_TIMEFRAMES[tf_choice_iso]["max_days"])
-            def_days_iso = int(EXPLORER_TIMEFRAMES[tf_choice_iso]["default_days"])
-            lookback_days_iso = st.number_input(
-                "ย้อนหลัง (วัน)",
-                min_value=15,
-                max_value=max_days_iso,
-                value=min(def_days_iso, max_days_iso),
-                step=15,
-                key="iso_lookback_days",
-            )
-        with r2c4:
-            source_mode_iso = st.selectbox(
-                "แหล่งข้อมูลตั้งต้น",
-                options=["template_first", "live_yfinance"],
-                index=0,
-                format_func=lambda s: (
-                    "Template ต้นฉบับ + ดึงสดหุ้นอื่น"
-                    if s == "template_first"
-                    else "ดึงข้อมูลสดจาก yfinance ทุกตัว"
-                ),
-                key="iso_source_mode",
-            )
+        lookback_days_iso, source_mode_iso = render_explorer_lookback_and_source(
+            col_days=r2c3,
+            col_source=r2c4,
+            tf_choice=tf_choice_iso,
+            days_key="iso_lookback_days",
+            source_key="iso_source_mode",
+            source_label="แหล่งข้อมูลตั้งต้น",
+        )
 
     active_iso_tickers = list(st.session_state.iso_tickers)
     if not active_iso_tickers:
@@ -3021,11 +3823,11 @@ def render_hybrid_multi_mutation_isolation_tab():
             lookback_days=int(lookback_days_iso),
             window_mode=win_mode_iso,
             fixed_window_size=int(st.session_state.window_size),
-            prefer_template_default=(source_mode_iso == "template_first"),
+            prefer_template_default=explorer_source_prefers_template(source_mode_iso),
+            data_source_mode=source_mode_iso,
         )
 
-    if missing_iso:
-        st.warning(f"⚠️ ไม่พบข้อมูลราคาสำหรับ: {', '.join(missing_iso)}")
+    render_explorer_missing_warning(missing_iso)
 
     if not data_map_iso:
         default_m15_meta, default_m15_data = get_default_m15_explorer_payload()
@@ -3065,6 +3867,7 @@ def render_hybrid_multi_mutation_isolation_tab():
 def main():
     config = load_config()
     initialize_session_state(config)
+    render_webull_sidebar_config()
 
     tab_list = [
         "⚙️ Settings",
