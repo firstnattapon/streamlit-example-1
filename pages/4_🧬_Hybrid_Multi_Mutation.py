@@ -2,6 +2,10 @@ import os
 import sys
 import logging
 import hashlib
+import importlib
+import importlib.util
+import subprocess
+import tempfile
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -19,22 +23,45 @@ try:
 except ImportError:
     _dotenv_load = None
 
-try:
-    from webull.core.client import ApiClient as _WebullApiClient
-    from webull.core.common.api_type import (
-        DEFAULT as _WEBULL_API_DEFAULT,
-        QUOTES as _WEBULL_API_QUOTES,
-        EVENTS as _WEBULL_API_EVENTS,
-    )
-    from webull.data.data_client import DataClient as _WebullDataClient
-    WEBULL_SDK_AVAILABLE = True
-except ImportError:
-    _WebullApiClient = None
-    _WEBULL_API_DEFAULT = None
-    _WEBULL_API_QUOTES = None
-    _WEBULL_API_EVENTS = None
-    _WebullDataClient = None
-    WEBULL_SDK_AVAILABLE = False
+_WebullApiClient = None
+_WEBULL_API_DEFAULT = None
+_WEBULL_API_QUOTES = None
+_WEBULL_API_EVENTS = None
+_WebullDataClient = None
+WEBULL_SDK_AVAILABLE = False
+_WEBULL_SDK_IMPORT_ERROR = ""
+
+def _try_import_webull_sdk() -> bool:
+    """โหลด Webull OpenAPI SDK และเก็บรายละเอียด error หาก import ไม่สำเร็จ."""
+    global _WebullApiClient, _WEBULL_API_DEFAULT, _WEBULL_API_QUOTES, _WEBULL_API_EVENTS, _WebullDataClient
+    global WEBULL_SDK_AVAILABLE, _WEBULL_SDK_IMPORT_ERROR
+    importlib.invalidate_caches()
+    if not WEBULL_SDK_AVAILABLE:
+        for mod_name in [m for m in list(sys.modules) if m == "webull" or m.startswith("webull.")]:
+            sys.modules.pop(mod_name, None)
+    try:
+        from webull.core.client import ApiClient as api_client_cls
+        from webull.core.common import api_type as wb_api_type
+        from webull.data.data_client import DataClient as data_client_cls
+        _WebullApiClient = api_client_cls
+        _WEBULL_API_DEFAULT = getattr(wb_api_type, "DEFAULT", "api")
+        _WEBULL_API_QUOTES = getattr(wb_api_type, "QUOTES", "quotes-api")
+        _WEBULL_API_EVENTS = getattr(wb_api_type, "EVENTS", "events-api")
+        _WebullDataClient = data_client_cls
+        WEBULL_SDK_AVAILABLE = True
+        _WEBULL_SDK_IMPORT_ERROR = ""
+        return True
+    except Exception as exc:
+        _WebullApiClient = None
+        _WEBULL_API_DEFAULT = None
+        _WEBULL_API_QUOTES = None
+        _WEBULL_API_EVENTS = None
+        _WebullDataClient = None
+        WEBULL_SDK_AVAILABLE = False
+        _WEBULL_SDK_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+        return False
+
+_try_import_webull_sdk()
 
 # ! NUMBA: Import Numba's Just-In-Time compiler for core acceleration
 from numba import njit
@@ -268,17 +295,93 @@ def _load_dotenv_once() -> None:
 
 def _read_env_or_secret(key: str, default: str = "") -> str:
     _load_dotenv_once()
-    val = os.environ.get(key)
-    if val is not None and str(val).strip():
-        return str(val).strip()
+    for env_k in (key, key.lower()):
+        val = os.environ.get(env_k)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    short_key = key[7:].lower() if key.upper().startswith("WEBULL_") else key.lower()
     try:
-        if key in st.secrets:
-            sec_val = st.secrets[key]
-            if sec_val is not None and str(sec_val).strip():
-                return str(sec_val).strip()
+        for top_k in (key, key.lower()):
+            if top_k in st.secrets:
+                sec_val = st.secrets[top_k]
+                if sec_val is not None and str(sec_val).strip():
+                    return str(sec_val).strip()
+        wb_sec = st.secrets.get("webull") if hasattr(st.secrets, "get") else None
+        if isinstance(wb_sec, dict) or hasattr(wb_sec, "__contains__"):
+            for sub_k in (key, key.lower(), short_key, short_key.upper()):
+                if sub_k in wb_sec:
+                    sub_val = wb_sec[sub_k]
+                    if sub_val is not None and str(sub_val).strip():
+                        return str(sub_val).strip()
     except Exception:
         pass
     return default
+
+
+def _parse_webull_token_seed(
+    raw_token_txt: str = "",
+    raw_access_token: str = "",
+    raw_expires: str = "0",
+    raw_status: str = "NORMAL",
+) -> Tuple[str, str, str]:
+    """แปลงข้อความ 3 บรรทัดของ token.txt (<token>, <expires_ms>, NORMAL) หรือ token เดี่ยวให้อยู่ในรูปมาตรฐาน"""
+    def _clean_digits(val: str, fallback: str = "0") -> str:
+        s = str(val or "").strip()
+        return s if s.isdigit() else fallback
+
+    raw_block = str(raw_token_txt or "").strip() or str(raw_access_token or "").strip()
+    if not raw_block:
+        return ("", "", "")
+
+    lines = [ln.strip() for ln in raw_block.splitlines() if ln.strip()]
+    if not lines:
+        return ("", "", "")
+
+    token = lines[0]
+    if not token:
+        return ("", "", "")
+
+    default_exp = _clean_digits(raw_expires, "0")
+    default_status = str(raw_status or "NORMAL").strip() or "NORMAL"
+
+    if len(lines) >= 2:
+        expires = _clean_digits(lines[1], default_exp)
+        status = lines[2] if len(lines) >= 3 and lines[2] else default_status
+    else:
+        expires = default_exp
+        status = default_status
+    return (token, expires, status)
+
+
+def _materialize_webull_token_file(
+    token_dir: str,
+    token_seed: str,
+    token_expires: str = "0",
+    token_status: str = "NORMAL",
+) -> Optional[str]:
+    """สร้างหรืออัปเดต token.txt (3 บรรทัด) ใน token_dir เมื่อผู้ใช้ส่ง 2FA token เข้ามาล่วงหน้า"""
+    if not token_seed or not token_dir:
+        return None
+    os.makedirs(token_dir, exist_ok=True)
+    token_path = os.path.join(token_dir, "token.txt")
+    marker_path = os.path.join(token_dir, ".seed_hash")
+    payload = f"{token_seed}\n{token_expires or '0'}\n{token_status or 'NORMAL'}\n"
+    seed_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+    prev_hash = ""
+    if os.path.isfile(marker_path):
+        try:
+            with open(marker_path, "r", encoding="utf-8") as mf:
+                prev_hash = mf.read().strip()
+        except Exception:
+            prev_hash = ""
+
+    if not os.path.isfile(token_path) or prev_hash != seed_hash:
+        with open(token_path, "w", encoding="utf-8", newline="\n") as tf:
+            tf.write(payload)
+        with open(marker_path, "w", encoding="utf-8", newline="\n") as mf:
+            mf.write(seed_hash)
+    return token_path
 
 
 def get_webull_credentials() -> Dict[str, str]:
@@ -302,13 +405,28 @@ def get_webull_credentials() -> Dict[str, str]:
     if category not in WEBULL_SUPPORTED_CATEGORIES:
         category = "US_STOCK"
 
+    seed_tok, seed_exp, seed_stat = _parse_webull_token_seed(
+        raw_token_txt=_pick("webull_token_txt", "WEBULL_TOKEN_TXT", ""),
+        raw_access_token=_pick("webull_access_token", "WEBULL_ACCESS_TOKEN", ""),
+        raw_expires=_pick("webull_token_expires", "WEBULL_TOKEN_EXPIRES", "0"),
+        raw_status=_pick("webull_token_status", "WEBULL_TOKEN_STATUS", "NORMAL"),
+    )
+
+    token_dir = _pick("webull_token_dir", "WEBULL_TOKEN_DIR", "")
+    if not token_dir and not os.environ.get("WEBULL_OPENAPI_TOKEN_DIR"):
+        if seed_tok or os.path.exists("/mount/src") or not os.access(os.getcwd(), os.W_OK):
+            token_dir = os.path.join(tempfile.gettempdir(), "webull_openapi_token")
+
     return {
         "app_key": _pick("webull_app_key", "WEBULL_APP_KEY", ""),
         "app_secret": _pick("webull_app_secret", "WEBULL_APP_SECRET", ""),
         "region_id": region,
         "environment": env_mode,
         "category": category,
-        "token_dir": _pick("webull_token_dir", "WEBULL_TOKEN_DIR", ""),
+        "token_dir": token_dir,
+        "token_seed": seed_tok,
+        "token_expires": seed_exp,
+        "token_status": seed_stat,
     }
 
 
@@ -320,6 +438,9 @@ def webull_config_signature(cfg: Dict[str, str]) -> str:
         cfg.get("environment", "prod"),
         cfg.get("category", "US_STOCK"),
         cfg.get("token_dir", ""),
+        cfg.get("token_seed", ""),
+        cfg.get("token_expires", ""),
+        cfg.get("token_status", ""),
     ])
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
@@ -332,21 +453,42 @@ def _get_cached_webull_data_client(
     region_id: str,
     environment: str,
     token_dir: str,
+    _token_seed: str = "",
+    token_expires: str = "0",
+    token_status: str = "NORMAL",
 ):
     if not WEBULL_SDK_AVAILABLE or _WebullApiClient is None or _WebullDataClient is None:
         raise RuntimeError("ไม่พบแพ็กเกจ webull-openapi-python-sdk ในสภาพแวดล้อม Python")
     if not _app_key or not _app_secret:
         raise RuntimeError("กรุณาระบุ Webull App Key และ App Secret ก่อนใช้งาน")
 
+    raw_wait = _read_env_or_secret("WEBULL_TOKEN_CHECK_SECONDS", "20")
+    try:
+        token_wait_sec = min(120, max(5, int(raw_wait)))
+    except Exception:
+        token_wait_sec = 20
+
+    effective_token_dir = token_dir
+    if _token_seed and not effective_token_dir:
+        effective_token_dir = os.path.join(tempfile.gettempdir(), "webull_openapi_token")
+    if _token_seed and effective_token_dir:
+        _materialize_webull_token_file(
+            token_dir=effective_token_dir,
+            token_seed=_token_seed,
+            token_expires=token_expires,
+            token_status=token_status,
+        )
+
     api_client = _WebullApiClient(
         _app_key,
         _app_secret,
         region_id,
-        token_check_duration_seconds=10,
+        token_check_duration_seconds=token_wait_sec,
         token_check_interval_seconds=2,
     )
-    if token_dir:
-        api_client.set_token_dir(token_dir)
+    if effective_token_dir:
+        os.makedirs(effective_token_dir, exist_ok=True)
+        api_client.set_token_dir(effective_token_dir)
 
     if environment == "uat":
         region_cfg = WEBULL_UAT_ENDPOINTS.get(region_id, {})
@@ -456,6 +598,9 @@ def _fetch_webull_bars_cached(
     region_id: str,
     environment: str,
     token_dir: str,
+    _token_seed: str = "",
+    token_expires: str = "0",
+    token_status: str = "NORMAL",
 ) -> pd.DataFrame:
     data_client = _get_cached_webull_data_client(
         cred_sig=cred_sig,
@@ -464,6 +609,9 @@ def _fetch_webull_bars_cached(
         region_id=region_id,
         environment=environment,
         token_dir=token_dir,
+        _token_seed=_token_seed,
+        token_expires=token_expires,
+        token_status=token_status,
     )
 
     is_intraday = _is_webull_intraday_timespan(timespan)
@@ -536,7 +684,12 @@ def fetch_webull_bars_df(
 ) -> Tuple[pd.DataFrame, Optional[str], bool]:
     """ดึงแท่งราคาจาก Webull OpenAPI SDK แบบ paginated ทีละสูงสุด 1,200 แท่ง (intraday สูงสุด 180 วัน)"""
     if not WEBULL_SDK_AVAILABLE:
-        return pd.DataFrame(), "ไม่พบแพ็กเกจ webull-openapi-python-sdk ใน Python environment นี้", False
+        detail = f" ({_WEBULL_SDK_IMPORT_ERROR})" if _WEBULL_SDK_IMPORT_ERROR else ""
+        return (
+            pd.DataFrame(),
+            f"ไม่พบแพ็กเกจ `webull-openapi-python-sdk` ใน `{sys.executable}`{detail} — ติดตั้งด้วย `{sys.executable} -m pip install webull-openapi-python-sdk`",
+            False,
+        )
 
     cfg = cfg or get_webull_credentials()
     if not cfg.get("app_key") or not cfg.get("app_secret"):
@@ -578,6 +731,9 @@ def fetch_webull_bars_df(
             region_id=cfg.get("region_id", "us"),
             environment=cfg.get("environment", "prod"),
             token_dir=cfg.get("token_dir", ""),
+            _token_seed=cfg.get("token_seed", ""),
+            token_expires=cfg.get("token_expires", "0"),
+            token_status=cfg.get("token_status", "NORMAL"),
         )
         if df.empty:
             hint = " (หมายเหตุ: UAT อาจไม่มีแท่งล่าสุดของหุ้นขนาดเล็ก ลองสลับเป็น prod)" if cfg.get("environment") == "uat" else ""
@@ -592,16 +748,57 @@ def render_webull_sidebar_config() -> None:
     with st.sidebar:
         st.markdown("### 🔌 Webull OpenAPI SDK")
         if not WEBULL_SDK_AVAILABLE:
-            st.error("ไม่พบ `webull-openapi-python-sdk`")
+            st.error("ไม่พบ `webull-openapi-python-sdk` ใน Python environment ที่รัน Streamlit อยู่")
+            if _WEBULL_SDK_IMPORT_ERROR:
+                st.caption(f"สาเหตุ: `{_WEBULL_SDK_IMPORT_ERROR}`")
+            st.caption(f"Python ที่กำลังรัน: `{sys.executable}`")
+            is_cloud = os.path.exists("/mount/src") or "/home/adminuser" in sys.executable
+            if is_cloud:
+                st.info(
+                    "**Streamlit Cloud:** เพิ่มบรรทัดด้านล่างลงใน `requirements.txt` บน GitHub repo แล้ว Reboot/Deploy แอปใหม่ "
+                    "(และใส่ Key ใน **App settings → Secrets**)"
+                )
+                st.code("webull-openapi-python-sdk>=3.0.4", language="text")
+            else:
+                install_cmd = f'"{sys.executable}" -m pip install webull-openapi-python-sdk'
+                st.code(install_cmd, language="powershell")
+            try:
+                wb_spec = importlib.util.find_spec("webull")
+            except Exception:
+                wb_spec = None
+            if wb_spec is not None:
+                wb_origin = getattr(wb_spec, "origin", None) or str(getattr(wb_spec, "submodule_search_locations", ""))
+                st.warning(
+                    f"⚠️ พบโมดูล `webull` อยู่แล้วที่ `{wb_origin}` แต่ไม่มี `webull.core.client` — "
+                    "อาจชนกับแพ็กเกจ `webull` ตัวอื่น ให้รัน `pip uninstall -y webull` ก่อนติดตั้ง `webull-openapi-python-sdk`"
+                )
+            if st.button("📦 ติดตั้ง webull-openapi-python-sdk ใน Python นี้", use_container_width=True, key="btn_install_webull_sdk"):
+                with st.spinner("กำลังติดตั้ง webull-openapi-python-sdk..."):
+                    proc = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", "webull-openapi-python-sdk"],
+                        capture_output=True,
+                        text=True,
+                        timeout=180,
+                    )
+                if proc.returncode == 0 and _try_import_webull_sdk():
+                    st.success("ติดตั้งสำเร็จ! กำลังโหลดใหม่...")
+                    st.rerun()
+                else:
+                    out_msg = (proc.stderr or proc.stdout or _WEBULL_SDK_IMPORT_ERROR or "").strip()
+                    st.error(f"ติดตั้ง/โหลด SDK ไม่สำเร็จ:\n{out_msg[-400:]}")
             return
 
         env_has_key = bool(_read_env_or_secret("WEBULL_APP_KEY", ""))
         env_has_sec = bool(_read_env_or_secret("WEBULL_APP_SECRET", ""))
+        env_has_tok = bool(_read_env_or_secret("WEBULL_TOKEN_TXT", "") or _read_env_or_secret("WEBULL_ACCESS_TOKEN", ""))
         cfg_now = get_webull_credentials()
         if cfg_now["app_key"] and cfg_now["app_secret"]:
-            st.success(f"พร้อมใช้งาน · `{cfg_now['environment'].upper()}` · `{cfg_now['region_id'].upper()}`")
+            tok_badge = " · `2FA Token พร้อม`" if cfg_now.get("token_seed") else ""
+            st.success(f"พร้อมใช้งาน · `{cfg_now['environment'].upper()}` · `{cfg_now['region_id'].upper()}`{tok_badge}")
+        elif cfg_now.get("token_seed"):
+            st.warning("พบเฉพาะ 2FA `token.txt` แต่ยังขาด `App Key / App Secret` — SDK ต้องใช้คู่กันเพื่อเซ็น HMAC-SHA256")
         else:
-            st.warning("ยังไม่พบ App Key / App Secret (ใส่ด้านล่างหรือตั้งใน Env / `.env`)")
+            st.warning("ยังไม่พบ App Key / App Secret (ใส่ด้านล่างหรือตั้งใน Env / `.env` / Secrets)")
 
         with st.expander("ตั้งค่า Credentials & Endpoint", expanded=not (cfg_now["app_key"] and cfg_now["app_secret"])):
             st.text_input(
@@ -615,6 +812,13 @@ def render_webull_sidebar_config() -> None:
                 type="password",
                 placeholder="ใช้จาก Env/Secrets แล้ว (พิมพ์เพื่อแทนที่)" if env_has_sec else "ใส่ WEBULL_APP_SECRET",
                 key="webull_app_secret",
+            )
+            st.text_area(
+                "2FA token.txt (ไม่บังคับ — วางได้ 3 บรรทัด)",
+                height=80,
+                placeholder="ใช้จาก Env/Secrets แล้ว (วางทับได้)" if env_has_tok else "วาง 3 บรรทัด: <token> / <expires_ms> / NORMAL (ใช้คู่กับ App Key & Secret)",
+                key="webull_token_txt",
+                help="ไฟล์ token.txt มีไว้ยืนยัน 2FA คู่กับ App Key & Secret เท่านั้น (ใช้โดดๆ แทน App Key/Secret ไม่ได้) ช่วยให้รันบน Cloud โดยนำ token ที่ NORMAL อยู่แล้วไปลองใช้ต่อได้",
             )
             def_env = _read_env_or_secret("WEBULL_ENVIRONMENT", "prod").lower()
             env_opts = ["prod", "uat"]
