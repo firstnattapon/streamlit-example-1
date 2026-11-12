@@ -4068,6 +4068,644 @@ def render_hybrid_multi_mutation_isolation_tab():
     components.html(rendered_iso_html, height=1400, scrolling=True)
 
 
+# ==============================================================================
+# 5c. Tab 9: Now Panel (fx-now-section) — "ตอนนี้ Spectrum เป็นอะไร ต้องปรับ k ยังไง"
+#     วางบนสุดของ DNA Spectrum Explorer (template เดิมทุกส่วนไม่ถูกแก้ · แทรกตอนประกอบ HTML)
+# ==============================================================================
+# ตัววัด  ratio(k) = E เฉลี่ยทุก phase ของ k ÷ E ของ k1 · E = 1500·Σ(x − 1 − ln x), x = อัตราส่วนราคาระหว่างจุดเคาะติดกัน
+#         >1 มีแนวโน้มต่อเนื่อง → เพิ่ม k · <1 แกว่งกลับตัว → ลด k · ≈1 ไม่ชัด → คงไว้ (ราคาเดินสุ่มจะได้ ≈1 ทุก k)
+# ladder  M15 = [1,2,4,8,13,26] · D = [1,2,3,5]  ·  lookback  M15 = 3 window ล่าสุด · D = ทุก window
+# เกณฑ์   z = (ratio − 1)/se, se = √(2(2k−1)(k−1)/(3k·n)) · |z| ≥ 2.5 จึงถือว่าไม่ใช่สัญญาณรบกวน
+#         k แนะนำเมื่อมีแนวโน้ม = k เล็กสุดที่ ratio ≥ 1 + 0.9·(ratio สูงสุด − 1) · เมื่อแกว่งกลับตัว = k1
+# ห้ามใช้ phase ที่ดีที่สุด/แชมเปียนตัดสิน (k ใหญ่มี phase ให้เลือกมากกว่าจึงดูดีเกินจริง) · ไม่รวมค่าธรรมเนียม · ไม่แนะนำ ph · ไม่พยากรณ์
+
+FX_NOW_STYLES_HTML: str = r'''<style id="fx-now-styles">
+/* fx-now-panel: ตอนนี้ Spectrum เป็นอะไร ต้องปรับ k ยังไง
+   พื้นการ์ด #131722 · เส้นขอบ #242B3D · ตัวอักษรรอง #94A3B8 · ตัวเลข JetBrains Mono */
+.fx-card {
+  display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  background: #131722; border: 1px solid #242B3D; border-radius: 16px; padding: 14px;
+}
+.fx-kicker {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px;
+  font-size: 13px; font-weight: 700; color: #F1F5F9;
+}
+.fx-kicker small { font-size: 11px; font-weight: 400; color: #94A3B8; }
+
+/* แถว 1: แถบคำตัดสิน */
+.fx-verdict {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  background: #0B0E14; border: 1px solid #242B3D; border-radius: 12px; padding: 10px 12px;
+}
+.fx-badge {
+  display: inline-block; flex: 0 0 auto; white-space: nowrap;
+  font-size: 13px; font-weight: 700; line-height: 1; padding: 7px 14px; border-radius: 999px;
+  border: 1px solid transparent;
+}
+.fx-badge-trend  { color: #FBBF24; background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.5); }
+.fx-badge-revert { color: #22D3EE; background: rgba(34,211,238,0.12); border-color: rgba(34,211,238,0.5); }
+.fx-badge-flat   { color: #94A3B8; background: rgba(148,163,184,0.12); border-color: rgba(148,163,184,0.35); }
+.fx-verdict-text { flex: 1 1 260px; min-width: 0; font-size: 13px; line-height: 1.55; color: #E2E8F0; }
+.fx-apply {
+  flex: 0 0 auto; cursor: pointer; border: 0; border-radius: 10px; padding: 8px 14px;
+  font: 700 12px 'JetBrains Mono', monospace; color: #020617; background: #22D3EE;
+  transition: filter .15s ease, opacity .15s ease;
+}
+.fx-apply:hover:not(:disabled) { filter: brightness(1.12); }
+.fx-apply:disabled { opacity: .4; cursor: not-allowed; }
+
+/* แถว 2: กราฟคู่ ซ้าย = ราคา × เวลา · ขวา = ตาราง ratio */
+.fx-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fx-panel {
+  min-width: 0; background: #0B0E14; border: 1px solid #242B3D; border-radius: 12px; padding: 10px;
+}
+.fx-title { font-size: 12px; font-weight: 600; color: #CBD5E1; margin-bottom: 8px; }
+.fx-svg { display: block; width: 100%; height: auto; }
+.fx-svg text {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; fill: #94A3B8;
+  paint-order: stroke; stroke: #0B0E14; stroke-width: 3px; stroke-linejoin: round;
+}
+.fx-svg .fx-band-label { fill: #67E8F9; font-size: 9.5px; }
+.fx-svg .fx-cur-label { fill: #FB7185; font-weight: 600; }
+
+.fx-grid-wrap { min-width: 0; }
+.fx-grid {
+  --fx-lab: 120px; --fx-n: 6; --fx-head-h: 44px;
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  max-height: 340px; overflow: auto;
+  font-family: 'JetBrains Mono', monospace;
+}
+.fx-row {
+  display: grid; grid-template-columns: var(--fx-lab) repeat(var(--fx-n), minmax(0, 1fr)); gap: 3px;
+  align-items: stretch; padding: 2px; border: 1px solid transparent; border-radius: 8px;
+}
+/* ตรึงแถวหัวคอลัมน์ + 'ตอนนี้' ไว้บน และแถว 'ทั้งหมด' ไว้ล่าง เมื่อมี window มากจนต้องเลื่อน */
+.fx-row-head { position: sticky; top: 0; z-index: 3; background: #0B0E14; box-shadow: 0 3px 0 0 #0B0E14; }
+.fx-row-now { position: sticky; top: var(--fx-head-h); z-index: 2; background: #0B0E14; border-color: #F43F5E; box-shadow: 0 3px 0 0 #0B0E14; }
+.fx-row-all { position: sticky; bottom: 0; z-index: 2; background: #0B0E14; }
+.fx-corner, .fx-rowlabel {
+  display: flex; align-items: center; min-width: 0; padding: 0 4px; border-radius: 6px;
+  font-size: 10px; line-height: 1.25; color: #94A3B8;
+}
+.fx-rowlabel { overflow-wrap: break-word; }
+.fx-row-now .fx-rowlabel { font-weight: 700; color: #F1F5F9; }
+.fx-rowlabel-click { cursor: pointer; }
+.fx-rowlabel-click:hover { color: #F1F5F9; }
+.fx-rowlabel-sel { background: #1A1F2E; color: #F1F5F9; }
+.fx-colhead {
+  display: flex; align-items: center; justify-content: center; text-align: center; min-width: 0;
+  padding: 5px 2px; border: 1px solid #242B3D; border-radius: 6px; background: #131722;
+  font-size: 10px; line-height: 1.2; color: #CBD5E1; cursor: pointer; transition: border-color .15s ease;
+}
+.fx-colhead:hover { border-color: #333C54; }
+.fx-colhead-off { cursor: not-allowed; opacity: .4; }
+.fx-col-sel.fx-colhead { border-color: #22D3EE; color: #67E8F9; }
+.fx-cell {
+  display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 30px;
+  border-radius: 6px; font-size: 11px; color: #F1F5F9; background: #131722;
+}
+.fx-cell.fx-col-sel { box-shadow: inset 0 0 0 1px #22D3EE; }
+.fx-cell-dim { opacity: .45; }
+.fx-cell-sig { font-weight: 700; }
+.fx-cell-na { color: #64748B; }
+
+/* แถว 3: วิธีอ่าน */
+.fx-howto {
+  background: #0B0E14; border: 1px solid #242B3D; border-radius: 12px; padding: 10px 12px;
+  font-size: 12px; line-height: 1.65; color: #94A3B8;
+}
+.fx-howto b { color: #CBD5E1; }
+.fx-howto ul { margin: 4px 0 0; padding: 0; list-style: none; }
+.fx-howto li { display: flex; gap: 8px; align-items: baseline; }
+.fx-chip { display: inline-block; flex: 0 0 auto; width: 9px; height: 9px; border-radius: 2px; transform: translateY(1px); }
+.fx-chip-amber { background: rgba(245,158,11,0.9); }
+.fx-chip-cyan { background: rgba(34,211,238,0.9); }
+.fx-chip-dim { background: rgba(148,163,184,0.45); }
+.fx-chip-note { background: transparent; border: 1px solid #94A3B8; }
+
+@media (max-width: 899px) {
+  .fx-pair { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .fx-card { padding: 10px; }
+  .fx-grid { --fx-lab: 88px; }
+  .fx-colhead { font-size: 9px; }
+  .fx-cell { font-size: 10px; }
+}
+</style>'''
+
+FX_NOW_SECTION_HTML: str = r'''<section id="fx-now-section" class="fx-card" aria-label="ตอนนี้ Spectrum เป็นอะไร ต้องปรับ k ยังไง">
+      <div class="fx-kicker">
+        <span>🧭 ตอนนี้ Spectrum เป็นอะไร · ต้องปรับ k ยังไง</span>
+        <small>เทียบ E เฉลี่ยทุก phase ของแต่ละ k กับ k1 · ไม่ใช้ phase ที่ดีที่สุด</small>
+      </div>
+      <div id="fx-verdict" class="fx-verdict">
+        <span id="fx-regime-badge" class="fx-badge fx-badge-flat">กำลังคำนวณ</span>
+        <span id="fx-verdict-text" class="fx-verdict-text">กำลังคำนวณคำตัดสิน…</span>
+        <button id="fx-apply-btn" type="button" class="fx-apply" style="display:none">ใช้ k นี้</button>
+      </div>
+      <div class="fx-pair">
+        <div class="fx-panel">
+          <div class="fx-title">ราคา × เวลา</div>
+          <svg id="fx-price-svg" class="fx-svg" viewBox="0 0 560 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="กราฟราคาตามเวลา"></svg>
+        </div>
+        <div class="fx-panel">
+          <div class="fx-title">Spectrum: E(k) เทียบกับ k1 (เฉลี่ยทุก phase)</div>
+          <div class="fx-grid-wrap"><div id="fx-ratio-grid" class="fx-grid"></div></div>
+        </div>
+      </div>
+      <div id="fx-howto" class="fx-howto">
+        <b>วิธีอ่าน</b>
+        <ul>
+          <li><i class="fx-chip fx-chip-amber"></i><span>สีส้ม (มากกว่า ×1.00): เคาะห่างขึ้นได้ E มากกว่า = ราคามีแนวโน้มต่อเนื่อง → เพิ่ม k</span></li>
+          <li><i class="fx-chip fx-chip-cyan"></i><span>สีฟ้า (น้อยกว่า ×1.00): เคาะถี่ได้ E มากกว่า = ราคาแกว่งกลับตัว → ลด k</span></li>
+          <li><i class="fx-chip fx-chip-dim"></i><span>ช่องจาง: ความต่างยังไม่เกินระดับสัญญาณรบกวน อย่าใช้ตัดสิน</span></li>
+          <li><i class="fx-chip fx-chip-note"></i><span>หมายเหตุ: ดูจากข้อมูลย้อนหลัง ไม่ใช่การพยากรณ์ · ยังไม่รวมค่าธรรมเนียม · ช่วงที่ความผันผวนเปลี่ยนเร็วอาจให้สัญญาณหลอก</span></li>
+        </ul>
+      </div>
+    </section>'''
+
+FX_NOW_JS_CONSTS: str = r'''// fx-now-panel: ค่าคงที่ของแผง "ตอนนี้ Spectrum เป็นอะไร ต้องปรับ k ยังไง"
+const FX_LADDER = {
+  M15: [1, 2, 4, 8, 13, 26],        // 15 นาที, 30 นาที, 1 ชม., 2 ชม., ครึ่งวัน, 1 วัน
+  D: [1, 2, 3, 5]                   // 1 วัน, 2 วัน, 3 วัน, 1 สัปดาห์
+};
+const FX_LOOKBACK = { M15: 3, D: 0 }; // จำนวน window ล่าสุดที่รวมเป็น 'ตอนนี้' (0 = ใช้ทุก window)
+const FX_Z_THR = 2.5;               // |z| ที่ถือว่าต่างจาก k1 เกินระดับสัญญาณรบกวน
+const FX_ELBOW = 0.9;               // เลือก k ตัวเล็กสุดที่ได้ ≥ 90% ของส่วนเกินสูงสุด
+'''
+
+FX_NOW_JS_FUNCS: str = r'''// =========================================================================
+// Now panel (fx-now-section): ตอนนี้ Spectrum เป็นอะไร ต้องปรับ k ยังไง
+//   ratio(k) = E เฉลี่ยทุก phase ของ k ÷ E ของ k1   (>1 มีแนวโน้ม · <1 แกว่งกลับตัว · ≈1 ไม่ชัด)
+//   E = 1500 × Σ(x − 1 − ln x) โดย x = อัตราส่วนราคาระหว่างจุดเคาะติดกัน ดังนั้นราคาเดินสุ่มจะได้ ratio ≈ 1 ทุก k
+//   ห้ามใช้ phase ที่ดีที่สุด (kStats[k].maxNet / bestPh / champ) ตัดสิน เพราะ k ใหญ่มี phase ให้เลือกมากกว่าจึงดูดีเกินจริง
+// =========================================================================
+function fxRatioRow(wins, ladder) {
+  return ladder.map(k => {
+    let a = 0, b = 0, n = 0;
+    for (const m of wins) {
+      if (k > m.K) continue;
+      a += m.kStats[k].meanNet;
+      b += m.kStats[1].meanNet;
+      n += m.N - 1;
+    }
+    if (b <= 0 || n < 2) return { k, ok: false };
+    const ratio = a / b;
+    let se = null, z = 0;
+    if (k !== 1) {
+      se = Math.sqrt(2 * (2 * k - 1) * (k - 1) / (3 * k * n));
+      z = (ratio - 1) / se;
+    }
+    const sig = (k > 1) && Math.abs(z) >= FX_Z_THR;
+    return { k, ok: true, ratio, z, n, sig };
+  });
+}
+
+function computeFxVerdict(allWins) {
+  const tf = MT.tf === 'D' ? 'D' : 'M15';
+  const ladder = FX_LADDER[tf];
+  const R = FX_LOOKBACK[tf];
+  const nowWins = (R === 0 || R >= allWins.length) ? allWins : allWins.slice(allWins.length - R);
+  const cells = fxRatioRow(nowWins, ladder).filter(c => c.ok);
+  const cand = cells.filter(c => c.k > 1);
+  if (!cand.length) return { regime: 'nodata', kRec: null, action: 'hold', best: null, cells, nowWins, ladder };
+
+  let best = cand[0];
+  for (const c of cand) if (Math.abs(c.z) > Math.abs(best.z)) best = c;
+
+  let regime, kRec;
+  if (Math.abs(best.z) < FX_Z_THR) {
+    regime = 'flat'; kRec = null;
+  } else if (best.z < 0) {
+    regime = 'revert'; kRec = 1;
+  } else {
+    regime = 'trend';
+    const mx = Math.max(...cells.map(c => c.ratio));
+    const bar = 1 + FX_ELBOW * (mx - 1);
+    kRec = Math.min(...cells.filter(c => c.ratio >= bar).map(c => c.k));
+    if (!Number.isFinite(kRec)) kRec = best.k;   // กันกรณีปัดเศษทศนิยม (ตามสูตร ช่อง mx ผ่านเกณฑ์เสมอ)
+  }
+
+  let action;
+  if (regime === 'flat') action = 'hold';
+  else if (regime === 'revert') action = state.selK === 1 ? 'hold' : 'down';
+  else action = state.selK >= kRec ? 'hold' : 'up';
+
+  return { regime, kRec, action, best, cells, nowWins, ladder };
+}
+
+// ซ้าย: ราคา × เวลา (ต่อราคาทุก window เป็นเส้นเดียว)
+function renderFxPrice(v, allWins) {
+  const svg = document.getElementById('fx-price-svg');
+  if (!svg) return;
+  const W = 560, H = 320, padL = 54, padR = 10, padT = 16, padB = 28;
+  const plotR = W - padR, plotB = H - padB;
+  const all = [], starts = [];
+  for (const m of allWins) {
+    starts.push(all.length);
+    for (let i = 0; i < m.prices.length; i++) all.push(m.prices[i]);
+  }
+  const n = all.length;
+  if (n < 2) {
+    svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle">ยังไม่มีข้อมูลราคา</text>`;
+    return;
+  }
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < n; i++) { const p = all[i]; if (p < lo) lo = p; if (p > hi) hi = p; }
+  if (!(hi > lo)) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * 0.05;
+  lo -= pad; hi += pad;
+  const xOf = (i) => padL + (i / (n - 1)) * (plotR - padL);
+  const yOf = (p) => padT + (1 - (p - lo) / (hi - lo)) * (plotB - padT);
+  let g = '';
+
+  // แกน y 5 ระดับ
+  for (let j = 0; j <= 4; j++) {
+    const p = lo + (hi - lo) * (j / 4);
+    const yy = yOf(p);
+    g += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${plotR}" y2="${yy.toFixed(1)}" stroke="#1A1F2E" stroke-width="1"></line>`;
+    g += `<text x="${padL - 6}" y="${(yy + 3).toFixed(1)}" text-anchor="end">$${p.toFixed(2)}</text>`;
+  }
+
+  // แถบพื้นหลังช่วงที่ใช้ตัดสิน
+  const first = v.nowWins.length ? allWins.indexOf(v.nowWins[0]) : -1;
+  if (first >= 0) {
+    const x0 = xOf(starts[first]);
+    g += `<rect x="${x0.toFixed(1)}" y="${padT}" width="${(plotR - x0).toFixed(1)}" height="${plotB - padT}" fill="rgba(34,211,238,0.08)"></rect>`;
+    g += `<text class="fx-band-label" x="${(x0 + 4).toFixed(1)}" y="${padT + 11}">ช่วงที่ใช้ตัดสิน</text>`;
+  }
+
+  // รอยต่อ window + ป้าย W1..Wn (ไม่เกิน 12 ป้าย)
+  const nW = allWins.length;
+  const labelEvery = Math.ceil(nW / 12);
+  for (let i = 0; i < nW; i++) {
+    const xx = xOf(starts[i]);
+    if (i > 0) g += `<line x1="${xx.toFixed(1)}" y1="${padT}" x2="${xx.toFixed(1)}" y2="${plotB}" stroke="#242B3D" stroke-width="1"></line>`;
+    if (i % labelEvery === 0) g += `<text x="${(xx + 2).toFixed(1)}" y="${plotB + 13}">W${i + 1}</text>`;
+  }
+
+  // เส้นราคา (เกิน 1200 จุดให้ข้ามทีละ ceil(n/1200) และต้องมีจุดสุดท้ายเสมอ)
+  const step = Math.ceil(n / 1200);
+  const pts = [];
+  for (let i = 0; i < n; i += step) pts.push(`${xOf(i).toFixed(1)},${yOf(all[i]).toFixed(1)}`);
+  if ((n - 1) % step !== 0) pts.push(`${xOf(n - 1).toFixed(1)},${yOf(all[n - 1]).toFixed(1)}`);
+  g += `<polyline points="${pts.join(' ')}" fill="none" stroke="#22D3EE" stroke-width="1.6" stroke-linejoin="round"></polyline>`;
+
+  // เส้นแดง Current Price (ราคาแท่งสุดท้าย)
+  const last = all[n - 1];
+  const yl = yOf(last);
+  const above = yl - 5 >= padT + 12;
+  g += `<line x1="${padL}" y1="${yl.toFixed(1)}" x2="${plotR}" y2="${yl.toFixed(1)}" stroke="#F43F5E" stroke-width="1.2"></line>`;
+  g += `<text class="fx-cur-label" x="${plotR - 4}" y="${(above ? yl - 5 : yl + 13).toFixed(1)}" text-anchor="end">Current Price $${last.toFixed(2)}</text>`;
+
+  svg.innerHTML = g;
+}
+
+// ขวา: ตาราง ratio ตาม ladder (ตอนนี้ / รายwindow ใหม่→เก่า / ทั้งหมด)
+function renderFxGrid(v, allWins) {
+  const host = document.getElementById('fx-ratio-grid');
+  if (!host) return;
+  const ladder = v.ladder;
+  const m0 = M();
+  host.style.setProperty('--fx-n', String(ladder.length));
+
+  const cellHtml = (label, c) => {
+    const sel = c.k === state.selK ? ' fx-col-sel' : '';
+    if (!c.ok) return `<div class="fx-cell fx-cell-na${sel}" title="${label} · ${kLabel(c.k)} · ข้อมูลไม่พอ">–</div>`;
+    let bg = '#131722', alpha = 0;
+    if (c.k !== 1 && c.ratio !== 1) {
+      const t = Math.min(1, Math.abs(c.ratio - 1) / 0.5);
+      alpha = 0.15 + 0.75 * t;
+      bg = c.ratio > 1 ? `rgba(245,158,11,${alpha.toFixed(3)})` : `rgba(34,211,238,${alpha.toFixed(3)})`;
+    }
+    const fg = alpha > 0.6 ? '#0B0E14' : '#F1F5F9';
+    const cls = 'fx-cell' + (c.k > 1 && !c.sig ? ' fx-cell-dim' : '') + (c.sig ? ' fx-cell-sig' : '') + sel;
+    const txt = (c.sig ? '● ' : '') + '×' + c.ratio.toFixed(2);
+    const tip = `${label} · ${kLabel(c.k)} · E เทียบ k1 = ×${c.ratio.toFixed(2)} · z = ${c.z.toFixed(1)} · ${c.n} แท่ง`;
+    return `<div class="${cls}" style="background:${bg};color:${fg}" title="${tip}">${txt}</div>`;
+  };
+
+  const rowHtml = (kind, label, cells, wi) => {
+    const clickable = kind === 'win';
+    const lblCls = 'fx-rowlabel' + (clickable ? ' fx-rowlabel-click' : '') + (clickable && wi === state.wi ? ' fx-rowlabel-sel' : '');
+    let h = `<div class="fx-row fx-row-${kind}" data-kind="${kind}">`;
+    h += `<div class="${lblCls}"${clickable ? ` data-wi="${wi}" onclick="setWindow(${wi})"` : ''}>${label}</div>`;
+    for (const c of cells) h += cellHtml(label, c);
+    return h + '</div>';
+  };
+
+  // หัวคอลัมน์: kLabel(k) · คลิกเลือก k ได้เฉพาะ k ≤ M().K
+  let html = '<div class="fx-row fx-row-head"><div class="fx-corner">E(k) ÷ E(k1)</div>';
+  for (const k of ladder) {
+    const ok = k <= m0.K;
+    const cls = 'fx-colhead' + (k === state.selK ? ' fx-col-sel' : '') + (ok ? '' : ' fx-colhead-off');
+    const tip = ok ? `เลือก ${kLabel(k)}` : `${kLabel(k)} เกินจำนวนแท่งของ window ที่เลือก`;
+    html += `<div class="${cls}" data-k="${k}"${ok ? ` onclick="selectCoordinate(${k}, Math.min(state.selPh, ${k - 1}))"` : ''} title="${tip}">${kLabel(k)}</div>`;
+  }
+  html += '</div>';
+
+  html += rowHtml('now', `ตอนนี้ (${v.nowWins.length} window)`, fxRatioRow(v.nowWins, ladder), -1);
+  for (let i = allWins.length - 1; i >= 0; i--) {
+    const m = allWins[i];
+    html += rowHtml('win', `W${i + 1} · ${halfLabel(m.win)}${m.win.partial ? ' ⏳' : ''}`, fxRatioRow([m], ladder), i);
+  }
+  if (v.nowWins.length < allWins.length) html += rowHtml('all', 'ทั้งหมด', fxRatioRow(allWins, ladder), -1);
+  const keepTop = host.scrollTop, keepLeft = host.scrollLeft;   // render ใหม่แล้วต้องไม่เด้งกลับบนสุด
+  host.innerHTML = html;
+  const head = host.querySelector('.fx-row-head');
+  host.style.setProperty('--fx-head-h', (head ? head.offsetHeight + 3 : 0) + 'px');
+  host.scrollTop = keepTop;
+  host.scrollLeft = keepLeft;
+}
+
+// บน: แถบคำตัดสิน (ป้ายสถานะ + ข้อความ + ปุ่ม 'ใช้ k นี้')
+function renderFxVerdict(v) {
+  const badge = document.getElementById('fx-regime-badge');
+  const txt = document.getElementById('fx-verdict-text');
+  const btn = document.getElementById('fx-apply-btn');
+  if (!badge || !txt || !btn) return;
+  const META_BADGE = {
+    trend:  { cls: 'fx-badge-trend',  label: 'มีแนวโน้มต่อเนื่อง' },
+    revert: { cls: 'fx-badge-revert', label: 'แกว่งกลับตัว' },
+    flat:   { cls: 'fx-badge-flat',   label: 'ไม่ชัด' },
+    nodata: { cls: 'fx-badge-flat',   label: 'ข้อมูลไม่พอ' }
+  };
+  const mb = META_BADGE[v.regime] || META_BADGE.nodata;
+  badge.className = 'fx-badge ' + mb.cls;
+  badge.textContent = mb.label;
+
+  const selK = state.selK;
+  const pct = (c) => Math.round(Math.abs(c.ratio - 1) * 100);
+  let text;
+  if (v.regime === 'trend') {
+    const c = v.cells.find(x => x.k === v.kRec) || v.best;
+    text = v.action === 'up'
+      ? `E ที่ ${kLabel(v.kRec)} สูงกว่า k1 อยู่ ${pct(c)}% · ตอนนี้เลือก k${selK} → เพิ่ม k เป็นประมาณ ${kLabel(v.kRec)}`
+      : `E ที่ ${kLabel(v.kRec)} สูงกว่า k1 อยู่ ${pct(c)}% · ตอนนี้เลือก k${selK} อยู่ในช่วงที่ดีแล้ว → คงไว้`;
+  } else if (v.regime === 'revert') {
+    const c = v.best;
+    text = v.action === 'down'
+      ? `E ที่ ${kLabel(c.k)} ต่ำกว่า k1 อยู่ ${pct(c)}% · ตอนนี้เลือก k${selK} → ลด k ไปที่ k1`
+      : `E ที่ ${kLabel(c.k)} ต่ำกว่า k1 อยู่ ${pct(c)}% · ตอนนี้เลือก k1 อยู่แล้ว → คงไว้`;
+  } else if (v.regime === 'flat') {
+    text = 'ทุก k ให้ E ใกล้เคียงกัน (ต่างกันไม่เกินระดับสัญญาณรบกวน) · k ไม่มีผลชัดเจน → คงไว้';
+  } else {
+    text = 'แท่งราคายังน้อยเกินไปที่จะตัดสิน';
+  }
+  txt.textContent = text;
+
+  // ปุ่ม 'ใช้ k นี้' แสดงเฉพาะเมื่อ action เป็น up/down · disabled ถ้า kRec > M().K
+  const show = v.action === 'up' || v.action === 'down';
+  btn.style.display = show ? '' : 'none';
+  if (show) {
+    const tooBig = v.kRec > M().K;
+    btn.disabled = tooBig;
+    btn.title = tooBig ? `${kLabel(v.kRec)} เกินจำนวนแท่งของ window ที่เลือก` : `เลือก ${kLabel(v.kRec)}`;
+    btn.onclick = () => selectCoordinate(v.kRec, Math.min(state.selPh, v.kRec - 1));
+  } else {
+    btn.disabled = false;
+    btn.onclick = null;
+  }
+}
+
+function renderFxNow() {
+  if (!document.getElementById('fx-now-section')) return;
+  const allWins = state.models[state.ticker];
+  if (!allWins || !allWins.length) return;
+  const v = computeFxVerdict(allWins);
+  renderFxPrice(v, allWins);
+  renderFxGrid(v, allWins);
+  renderFxVerdict(v);
+}
+
+'''
+
+FX_NOW_MAIN_ANCHOR: str = '<main class="max-w-7xl mx-auto px-3 sm:px-6 pt-4 space-y-4">'
+FX_NOW_TIMEFRAME_OPTIONS: List[str] = ["15m", "1d"]  # ladder ของ k สอบเทียบไว้เฉพาะ M15 และ D
+FX_NOW_IFRAME_HEIGHT: int = 3000
+
+
+def inject_fx_now_panel(html_in: str) -> str:
+    """แทรกแผง Now Panel (CSS + section + JS) ลงใน HTML ของ DNA Spectrum Explorer โดยไม่แก้ส่วนเดิม
+
+    จุดยึดแต่ละจุดต้องพบ 1 ครั้งพอดี มิฉะนั้นโยน ValueError (กัน template เปลี่ยนแล้วแผงหายเงียบ ๆ)
+    """
+    import re as _re
+
+    if 'id="fx-now-section"' in html_in:
+        return html_in
+
+    def _need(ok: bool, what: str) -> None:
+        if not ok:
+            raise ValueError(f"fx-now: จุดยึด {what} หายไปหรือซ้ำ — template ของ DNA Spectrum Explorer ถูกแก้?")
+
+    out = html_in
+
+    # 1) CSS: ต่อจาก <style> ตัวสุดท้ายใน <head>
+    _need(out.count("</head>") == 1, "</head>")
+    head_end = out.index("</head>")
+    _need(out[:head_end].rstrip().endswith("</style>"), "</style> ท้าย <head>")
+    out = out[:head_end] + FX_NOW_STYLES_HTML + "\n" + out[head_end:]
+
+    # 2) section: เป็นตัวแรกใน <main> (ไม่แก้บรรทัดแท็ก <main ...> เอง)
+    _need(out.count(FX_NOW_MAIN_ANCHOR) == 1, "<main ...>")
+    out = out.replace(FX_NOW_MAIN_ANCHOR, FX_NOW_MAIN_ANCHOR + "\n    " + FX_NOW_SECTION_HTML, 1)
+
+    # 3) ค่าคงที่ FX_*: ต่อจากบรรทัด const COMPACT_COLS
+    out, n = _re.subn(r"^(const COMPACT_COLS\b[^\n]*\n)", lambda m: m.group(1) + FX_NOW_JS_CONSTS, out, count=1, flags=_re.M)
+    _need(n == 1, "const COMPACT_COLS")
+
+    # 4) ฟังก์ชัน: วางก่อน function renderAll (ก่อนป้าย Controllers ถ้ามี)
+    _need(len(_re.findall(r"^function renderAll\(\) \{", out, flags=_re.M)) == 1, "function renderAll")
+    out, n = _re.subn(
+        r"(?:^// =+\n// Controllers\n// =+\n)?^function renderAll\(\) \{",
+        lambda m: FX_NOW_JS_FUNCS + m.group(0),
+        out,
+        count=1,
+        flags=_re.M,
+    )
+    _need(n == 1, "function renderAll")
+
+    # 5) renderFxNow(); ต่อจาก renderEquityCurve(); ใน renderAll()
+    found = _re.search(r"^function renderAll\(\) \{\n.*?^\}\n", out, flags=_re.M | _re.S)
+    _need(found is not None, "ตัวฟังก์ชัน renderAll")
+    body = found.group(0)
+    call = "renderEquityCurve();"
+    pos = body.rfind(call)
+    _need(pos >= 0, "renderEquityCurve(); ใน renderAll")
+    body = body[: pos + len(call)] + "\n  renderFxNow();" + body[pos + len(call):]
+    return out[: found.start()] + body + out[found.end():]
+
+
+def build_fx_now_html(
+    data_map: Dict[str, List[Dict[str, Any]]],
+    meta_dict: Dict[str, Any],
+    max_k_cap: Optional[int] = None,
+    window_mode: str = "half_month",
+    fixed_window_size: int = 30,
+) -> str:
+    """ประกอบ HTML ของแท็บ 9 = DNA Spectrum Explorer (ส่วนเดิมครบ) + แผง Now Panel ด้านบนสุด"""
+    base_html = build_dna_spectrum_explorer_html(
+        data_map=data_map,
+        meta_dict=meta_dict,
+        max_k_cap=max_k_cap,
+        window_mode=window_mode,
+        fixed_window_size=fixed_window_size,
+    )
+    return inject_fx_now_panel(base_html)
+
+
+def render_fx_now_tab():
+    """แท็บที่ 9: Now Panel — ตอนนี้ Spectrum เป็นอะไร ต้องปรับ k ยังไง (แผง fx-now-section บน DNA Spectrum Explorer)"""
+    default_meta, default_data = get_default_explorer_payload()
+    default_m15_meta, default_m15_data = get_default_m15_explorer_payload()
+    config = load_config()
+    base_assets = config.get("assets", ["RGTI", "QBTS", "USAR"])
+
+    if "fxnow_tickers" not in st.session_state or not isinstance(st.session_state.get("fxnow_tickers"), list):
+        st.session_state.fxnow_tickers = ["RGTI", "QBTS", "USAR"]
+
+    all_known_tickers = list(dict.fromkeys(
+        _as_ticker_list(base_assets)
+        + _as_ticker_list(list(default_data.keys()))
+        + _as_ticker_list(st.session_state.get("hybrid_custom_tickers"))
+        + _as_ticker_list(st.session_state.get("custom_tickers"))
+        + _as_ticker_list(st.session_state.get("selected_tickers"))
+        + _as_ticker_list(st.session_state.get("fxnow_tickers"))
+    ))
+
+    with st.expander("🎛️ **ตั้งค่า Tickers & Data Pipeline (Now Panel · ตอนนี้ต้องปรับ k ยังไง)**", expanded=True):
+        r1c1, r1c2, r1c3 = st.columns([3, 2, 1.6])
+        with r1c2:
+            custom_input_fx = st.text_input(
+                "➕ เพิ่ม Tickers แบบ Dynamic",
+                value="",
+                placeholder="เช่น NVDA TSLA AAPL IONQ QUBT",
+                key="fxnow_dynamic_input",
+                help="พิมพ์ชื่อหุ้นใดก็ได้ (คั่นด้วยเว้นวรรคหรือ ,) แล้วกด Enter เพื่อเพิ่มเข้าสู่ Now Panel ทันที",
+            )
+            if custom_input_fx.strip():
+                new_syms = parse_dynamic_tickers(custom_input_fx)
+                added = []
+                for s in new_syms:
+                    if s not in all_known_tickers:
+                        all_known_tickers.append(s)
+                    if s not in st.session_state.hybrid_custom_tickers:
+                        st.session_state.hybrid_custom_tickers.append(s)
+                    if s not in st.session_state.fxnow_tickers:
+                        st.session_state.fxnow_tickers.append(s)
+                        added.append(s)
+                if added:
+                    st.toast(f"เพิ่ม Dynamic Tickers (Tab 9): {', '.join(added)}")
+
+        with r1c3:
+            st.write("")
+            b1, b2 = st.columns(2)
+            if b1.button("📌 Settings", use_container_width=True, key="fxnow_btn_settings", help="ดึงรายชื่อ Tickers ที่เลือกไว้ในแท็บ Settings"):
+                sel_from_settings = _as_ticker_list(st.session_state.get("selected_tickers"))
+                if sel_from_settings:
+                    st.session_state.fxnow_tickers = list(sel_from_settings)
+                    st.rerun()
+            if b2.button("🧬 3 หุ้นหลัก", use_container_width=True, key="fxnow_btn_3t", help="รีเซ็ตเป็น RGTI · QBTS · USAR"):
+                st.session_state.fxnow_tickers = ["RGTI", "QBTS", "USAR"]
+                st.rerun()
+
+        with r1c1:
+            valid_current_fx = [t for t in _as_ticker_list(st.session_state.get("fxnow_tickers")) if t in all_known_tickers]
+            if not valid_current_fx:
+                valid_current_fx = ["RGTI", "QBTS", "USAR"]
+            selected_fx_tickers = st.multiselect(
+                "Tickers ที่ต้องการวิเคราะห์ (สลับดูแต่ละตัวได้บนแถบปุ่มใน Dashboard)",
+                options=all_known_tickers,
+                default=valid_current_fx,
+                key="fxnow_tickers_multiselect",
+            )
+            st.session_state.fxnow_tickers = selected_fx_tickers
+
+        r2c1, r2c2, r2c3 = st.columns([1.5, 1.2, 1.8])
+        with r2c1:
+            tf_choice_fx = st.selectbox(
+                "Timeframe",
+                options=FX_NOW_TIMEFRAME_OPTIONS,
+                index=0,
+                format_func=lambda k: f"{k} ({EXPLORER_TIMEFRAMES[k]['tfLabel']})",
+                key="fxnow_tf",
+                help="ladder ของ k ในแผงนี้สอบเทียบไว้เฉพาะ 15 นาที (M15) และรายวัน (D)",
+            )
+        lookback_days_fx, source_mode_fx = render_explorer_lookback_and_source(
+            col_days=r2c2,
+            col_source=r2c3,
+            tf_choice=tf_choice_fx,
+            days_key="fxnow_lookback_days",
+            source_key="fxnow_source_mode",
+            source_label="แหล่งข้อมูลตั้งต้น",
+        )
+        st.caption(
+            "ตัววัด **ratio(k) = E เฉลี่ยทุก phase ของ k ÷ E ของ k1** (>1 มีแนวโน้ม · <1 แกว่งกลับตัว · ≈1 ไม่ชัด) · "
+            "รวม 3 window ล่าสุดสำหรับ 15m และทุก window สำหรับ 1d · เกณฑ์ |z| ≥ 2.5 · "
+            "ยังไม่รวมค่าธรรมเนียม ไม่แนะนำ phase และไม่พยากรณ์อนาคต"
+        )
+
+    active_fx_tickers = list(st.session_state.fxnow_tickers)
+    if not active_fx_tickers:
+        st.warning("กรุณาเลือก Ticker อย่างน้อย 1 ตัว (ระบบแสดงผล RGTI · QBTS · USAR เป็นค่าเริ่มต้น)")
+        active_fx_tickers = ["RGTI", "QBTS", "USAR"]
+
+    with st.spinner(f"กำลังเตรียมข้อมูล Now Panel สำหรับ {', '.join(active_fx_tickers)}..."):
+        data_map_fx, meta_dict_fx, _is_exact_fx, missing_fx = resolve_explorer_data_for_tickers(
+            tickers=active_fx_tickers,
+            timeframe=tf_choice_fx,
+            lookback_days=int(lookback_days_fx),
+            window_mode="half_month",
+            fixed_window_size=int(st.session_state.window_size),
+            prefer_template_default=explorer_source_prefers_template(source_mode_fx),
+            data_source_mode=source_mode_fx,
+        )
+
+    render_explorer_missing_warning(missing_fx, "(ตรวจสอบชื่อ Ticker หรือการเชื่อมต่ออินเทอร์เน็ต)")
+
+    if not data_map_fx:
+        if tf_choice_fx == "15m":
+            data_map_fx, meta_dict_fx = default_m15_data, default_m15_meta
+        else:
+            data_map_fx = {s: default_data[s] for s in ("RGTI", "QBTS", "USAR") if s in default_data}
+            meta_dict_fx = default_meta
+
+    try:
+        rendered_fx_html = build_fx_now_html(
+            data_map=data_map_fx,
+            meta_dict=meta_dict_fx,
+            max_k_cap=None,
+            window_mode="half_month",
+            fixed_window_size=int(st.session_state.window_size),
+        )
+    except ValueError as exc:
+        st.error(f"ประกอบแผง Now Panel ไม่สำเร็จ: {exc}")
+        return
+
+    loaded_syms_fx = list(data_map_fx.keys())
+    file_tag_syms_fx = "_".join(loaded_syms_fx[:5])
+    win_counts_fx = ", ".join(f"{s} ({len(data_map_fx[s])}W)" for s in loaded_syms_fx)
+    dl_c1, dl_c2 = st.columns([4, 1])
+    with dl_c1:
+        st.caption(
+            f"✅ พร้อมแสดงผล: **{win_counts_fx}** · แผง Now Panel อยู่บนสุดของ Dashboard · "
+            "คลิกชื่อ window หรือหัวคอลัมน์ k ในตารางเพื่อเลือก (k, window) ได้ทันที"
+        )
+    with dl_c2:
+        st.download_button(
+            label="💾 ดาวน์โหลด Tab 9 HTML",
+            data=rendered_fx_html,
+            file_name=f"Now_Panel_{file_tag_syms_fx}_{tf_choice_fx}.html",
+            mime="text/html",
+            use_container_width=True,
+            key="btn_download_fxnow_tab9_html",
+        )
+
+    components.html(rendered_fx_html, height=FX_NOW_IFRAME_HEIGHT, scrolling=True)
+
+
 def main():
     config = load_config()
     initialize_session_state(config)
@@ -4082,6 +4720,7 @@ def main():
         "🧪 DNA Spectrum Explorer",
         "📈 (Dynamic Tickers)",
         "⚡ (Dynamic Solver & E-Curve)",
+        "🧭 (Now Panel · ปรับ k)",
     ]
     tabs = st.tabs(tab_list)
 
@@ -4101,6 +4740,8 @@ def main():
         render_template_html_100_tab()
     with tabs[7]:
         render_hybrid_multi_mutation_isolation_tab()
+    with tabs[8]:
+        render_fx_now_tab()
 
 if __name__ == "__main__":
     main()
