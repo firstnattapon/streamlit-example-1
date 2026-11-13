@@ -4077,7 +4077,10 @@ def render_hybrid_multi_mutation_isolation_tab():
 # ladder  M15 = [1,2,4,8,13,26] · D = [1,2,3,5]  ·  lookback  M15 = 3 window ล่าสุด · D = ทุก window
 # เกณฑ์   z = (ratio − 1)/se, se = √(2(2k−1)(k−1)/(3k·n)) · |z| ≥ 2.5 จึงถือว่าไม่ใช่สัญญาณรบกวน
 #         k แนะนำเมื่อมีแนวโน้ม = k เล็กสุดที่ ratio ≥ 1 + 0.9·(ratio สูงสุด − 1) · เมื่อแกว่งกลับตัว = k1
-# ห้ามใช้ phase ที่ดีที่สุด/แชมเปียนตัดสิน (k ใหญ่มี phase ให้เลือกมากกว่าจึงดูดีเกินจริง) · ไม่รวมค่าธรรมเนียม · ไม่แนะนำ ph · ไม่พยากรณ์
+# ห้ามใช้ phase ที่ดีที่สุด/แชมเปียนตัดสิน (k ใหญ่มี phase ให้เลือกมากกว่าจึงดูดีเกินจริง) · ไม่แนะนำ ph · ไม่พยากรณ์
+# ต้นทุน  คำตัดสินและตาราง ratio ไม่รวมต้นทุน · ตาราง fx-cost แสดง E หลังหักต้นทุนตามความถี่การเคาะ 15m·30m·1h·4h·1d·1w
+#         ออเดอร์ 1 ครั้ง = ปรับมูลค่าหุ้นกลับมาที่ FIX → มูลค่าเทรด = FIX·|x − 1| · ต้นทุน = มูลค่าเทรด × pct% + จำนวนออเดอร์ × fee
+#         ตารางไม่ประกาศ "ความถี่ที่ดีที่สุด" เพราะ E ก่อนต้นทุนของความถี่ห่าง ๆ แกว่งมาก (เลือกค่าสูงสุดจากค่าที่แกว่ง = ดูดีเกินจริง)
 
 FX_NOW_STYLES_HTML: str = r'''<style id="fx-now-styles">
 /* fx-now-panel: ตอนนี้ Spectrum เป็นอะไร ต้องปรับ k ยังไง
@@ -4183,6 +4186,36 @@ FX_NOW_STYLES_HTML: str = r'''<style id="fx-now-styles">
 .fx-chip-dim { background: rgba(148,163,184,0.45); }
 .fx-chip-note { background: transparent; border: 1px solid #94A3B8; }
 
+/* แถว 3: E หลังหักต้นทุนเทรด ตามความถี่การเคาะ (15m · 30m · 1h · 4h · 1d · 1w) */
+.fx-cost-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 8px;
+}
+.fx-cost-head .fx-title { margin-bottom: 0; }
+.fx-cost-inputs { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.fx-cost-field { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #94A3B8; }
+.fx-cost-input {
+  width: 78px; padding: 5px 6px; border: 1px solid #242B3D; border-radius: 6px; background: #131722;
+  font: 600 12px 'JetBrains Mono', monospace; color: #F1F5F9; text-align: right;
+}
+.fx-cost-input:focus { outline: none; border-color: #22D3EE; }
+.fx-cost-wrap { min-width: 0; overflow-x: auto; }
+.fx-cost-table {
+  width: 100%; min-width: 660px; border-collapse: separate; border-spacing: 0 3px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; font-variant-numeric: tabular-nums;
+}
+.fx-cost-table th {
+  padding: 4px 8px; font-size: 10px; font-weight: 400; line-height: 1.3; color: #94A3B8; text-align: right; white-space: nowrap;
+}
+.fx-cost-table td { padding: 7px 8px; background: #131722; color: #F1F5F9; text-align: right; white-space: nowrap; }
+.fx-cost-table th:first-child, .fx-cost-table td:first-child { text-align: left; }
+.fx-cost-table td:first-child { border-radius: 6px 0 0 6px; font-weight: 700; color: #CBD5E1; }
+.fx-cost-table td:last-child { border-radius: 0 6px 6px 0; }
+.fx-cost-table td.fx-cost-net { font-weight: 700; }
+.fx-cost-table td.fx-cost-neg { color: #FB7185; }
+.fx-cost-table td.fx-cost-na { color: #64748B; text-align: left; }
+.fx-cost-note { margin-top: 8px; font-size: 12px; line-height: 1.65; color: #94A3B8; }
+.fx-cost-note b { color: #E2E8F0; font-weight: 600; }
+
 @media (max-width: 899px) {
   .fx-pair { grid-template-columns: 1fr; }
 }
@@ -4214,13 +4247,26 @@ FX_NOW_SECTION_HTML: str = r'''<section id="fx-now-section" class="fx-card" aria
           <div class="fx-grid-wrap"><div id="fx-ratio-grid" class="fx-grid"></div></div>
         </div>
       </div>
+      <div id="fx-cost" class="fx-panel">
+        <div class="fx-cost-head">
+          <div class="fx-title">E หลังหักต้นทุนเทรด · ตามความถี่การเคาะ</div>
+          <div class="fx-cost-inputs">
+            <label class="fx-cost-field">ต้นทุนตามมูลค่าเทรด
+              <input id="fx-cost-pct" class="fx-cost-input" type="number" min="0" step="0.01" value="__FX_COST_PCT__" inputmode="decimal" oninput="renderFxNow()"> %</label>
+            <label class="fx-cost-field">ค่าธรรมเนียมต่อออเดอร์ $
+              <input id="fx-cost-fee" class="fx-cost-input" type="number" min="0" step="0.01" value="__FX_COST_FEE__" inputmode="decimal" oninput="renderFxNow()"></label>
+          </div>
+        </div>
+        <div class="fx-cost-wrap"><table id="fx-cost-table" class="fx-cost-table"></table></div>
+        <div id="fx-cost-note" class="fx-cost-note"></div>
+      </div>
       <div id="fx-howto" class="fx-howto">
         <b>วิธีอ่าน</b>
         <ul>
           <li><i class="fx-chip fx-chip-amber"></i><span>สีส้ม (มากกว่า ×1.00): เคาะห่างขึ้นได้ E มากกว่า = ราคามีแนวโน้มต่อเนื่อง → เพิ่ม k</span></li>
           <li><i class="fx-chip fx-chip-cyan"></i><span>สีฟ้า (น้อยกว่า ×1.00): เคาะถี่ได้ E มากกว่า = ราคาแกว่งกลับตัว → ลด k</span></li>
           <li><i class="fx-chip fx-chip-dim"></i><span>ช่องจาง: ความต่างยังไม่เกินระดับสัญญาณรบกวน อย่าใช้ตัดสิน</span></li>
-          <li><i class="fx-chip fx-chip-note"></i><span>หมายเหตุ: ดูจากข้อมูลย้อนหลัง ไม่ใช่การพยากรณ์ · ยังไม่รวมค่าธรรมเนียม · ช่วงที่ความผันผวนเปลี่ยนเร็วอาจให้สัญญาณหลอก</span></li>
+          <li><i class="fx-chip fx-chip-note"></i><span>หมายเหตุ: ดูจากข้อมูลย้อนหลัง ไม่ใช่การพยากรณ์ · คำตัดสินและตาราง ratio ยังไม่รวมต้นทุน (ต้นทุนอยู่ในตาราง "E หลังหักต้นทุนเทรด") · ช่วงที่ความผันผวนเปลี่ยนเร็วอาจให้สัญญาณหลอก</span></li>
         </ul>
       </div>
     </section>'''
@@ -4233,6 +4279,11 @@ const FX_LADDER = {
 const FX_LOOKBACK = { M15: 3, D: 0 }; // จำนวน window ล่าสุดที่รวมเป็น 'ตอนนี้' (0 = ใช้ทุก window)
 const FX_Z_THR = 2.5;               // |z| ที่ถือว่าต่างจาก k1 เกินระดับสัญญาณรบกวน
 const FX_ELBOW = 0.9;               // เลือก k ตัวเล็กสุดที่ได้ ≥ 90% ของส่วนเกินสูงสุด
+// ตาราง 'E หลังหักต้นทุน': [ป้ายความถี่, จำนวนแท่งต่อการเคาะ 1 รอบ] · null = แท่งของ timeframe นี้หยาบเกินไป
+const FX_COST_LADDER = {
+  M15: [['15m', 1], ['30m', 2], ['1h', 4], ['4h', 16], ['1d', 26], ['1w', 130]],
+  D: [['15m', null], ['30m', null], ['1h', null], ['4h', null], ['1d', 1], ['1w', 5]]
+};
 '''
 
 FX_NOW_JS_FUNCS: str = r'''// =========================================================================
@@ -4469,6 +4520,107 @@ function renderFxVerdict(v) {
   }
 }
 
+// =========================================================================
+// ตาราง 'E หลังหักต้นทุนเทรด' (fx-cost): เคาะทุก k แท่ง เฉลี่ยทุก phase · จุดเคาะชุดเดียวกับ calcNetPeriodic
+//   ออเดอร์ 1 ครั้ง = ปรับมูลค่าหุ้นกลับมาที่ FIX_CAP → มูลค่าเทรด = FIX_CAP × |x − 1| (x = อัตราส่วนราคาจากจุดเคาะก่อนหน้า)
+//   ราคาไม่ขยับ (x = 1) ไม่ต้องส่งออเดอร์ · ต้นทุน = มูลค่าเทรด × pct% + จำนวนออเดอร์ × fee · E สุทธิ = E − ต้นทุน
+//   k มากกว่าจำนวนแท่งของ window ได้: phase ที่ไม่ตกใน window เคาะแค่แท่งสุดท้าย (ตัวจำลองบังคับเคาะปิด window เสมอ)
+//   ไม่ประกาศ 'ความถี่ที่ดีที่สุด': E ก่อนต้นทุนของความถี่ห่าง ๆ มาจากการเคาะไม่กี่ครั้ง เลือกค่าสูงสุดจากค่าที่แกว่งจะดูดีเกินจริง
+// =========================================================================
+function fxCostStats(prices, k) {
+  const N = prices.length;
+  if (N < 2) return { e: 0, turn: 0, ord: 0 };
+  const phases = Math.min(k, N);
+  let e = 0, turn = 0, ord = 0;
+  for (let ph = 0; ph < phases; ph++) {
+    // k > N: phase N..k−1 ไม่มีจุดเคาะใน window จึงเคาะแค่แท่งสุดท้าย เหมือน phase N−1 ทุกประการ
+    const w = ph === phases - 1 ? k - phases + 1 : 1;
+    let t = 0, o = 0, prev = 0;
+    const hit = (i) => {
+      const d = Math.abs(prices[i] / prices[prev] - 1);
+      if (d > 0) { t += FIX_CAP * d; o++; }
+      prev = i;
+    };
+    for (let i = ph === 0 ? k : ph; i < N; i += k) hit(i);
+    if (prev !== N - 1) hit(N - 1);
+    e += w * calcNetPeriodic(prices, k, ph);
+    turn += w * t;
+    ord += w * o;
+  }
+  return { e: e / k, turn: turn / k, ord: ord / k };
+}
+
+function fxCostRows(wins, tf, pct, fee) {
+  return (FX_COST_LADDER[tf] || []).map(([label, k]) => {
+    if (k === null) return { label, k, ok: false };
+    let e = 0, turn = 0, ord = 0;
+    for (const m of wins) {
+      const cache = m._fxCost || (m._fxCost = {});
+      const s = cache[k] || (cache[k] = fxCostStats(m.prices, k));
+      e += s.e; turn += s.turn; ord += s.ord;
+    }
+    const cost = turn * pct / 100 + ord * fee;
+    return {
+      label, k, ok: true, e, turn, ord, cost, net: e - cost,
+      bePct: turn > 0 ? e / turn * 100 : null,    // ต้นทุนตามมูลค่าเทรด (%) ที่ทำให้ E สุทธิ = 0 เมื่อไม่มีค่าธรรมเนียมต่อออเดอร์
+      beFee: ord > 0 ? e / ord : null             // ค่าธรรมเนียมต่อออเดอร์ ($) ที่ทำให้ E สุทธิ = 0 เมื่อไม่มีต้นทุนตามมูลค่าเทรด
+    };
+  });
+}
+
+function fxCostInputs() {
+  const read = (id) => {
+    const el = document.getElementById(id);
+    const x = el ? parseFloat(el.value) : 0;
+    return Number.isFinite(x) && x > 0 ? x : 0;
+  };
+  return { pct: read('fx-cost-pct'), fee: read('fx-cost-fee') };
+}
+
+// ล่าง: ตาราง E หลังหักต้นทุน ของช่วง 'ตอนนี้' (window ชุดเดียวกับคำตัดสิน)
+function renderFxCost(v) {
+  const table = document.getElementById('fx-cost-table');
+  const note = document.getElementById('fx-cost-note');
+  if (!table || !note) return;
+  const tf = MT.tf === 'D' ? 'D' : 'M15';
+  const { pct, fee } = fxCostInputs();
+  const rows = fxCostRows(v.nowWins, tf, pct, fee);
+  const usd = (x, d = 2) => (x < 0 ? '−$' : '$') + Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const cnt = (x) => x >= 100 ? Math.round(x).toLocaleString('en-US') : x.toFixed(1);
+
+  let html = '<thead><tr><th>เคาะทุก</th><th>E ก่อนต้นทุน</th><th>ออเดอร์</th><th>เฉลี่ยต่อออเดอร์</th>'
+    + '<th>ต้นทุน</th><th>ต้นทุนกิน E</th><th>E สุทธิ</th>'
+    + '<th title="คิดทีละแบบ: ต้นทุนตามมูลค่าเทรดอย่างเดียว หรือค่าธรรมเนียมต่อออเดอร์อย่างเดียว">E สุทธิเป็น 0 เมื่อต้นทุนถึง</th></tr></thead><tbody>';
+  for (const r of rows) {
+    if (!r.ok) {
+      html += `<tr><td>${r.label}</td><td class="fx-cost-na" colspan="7">แท่ง${MT.tfLabel || ''}หยาบเกินไป · เลือก Timeframe 15m เพื่อดูความถี่นี้</td></tr>`;
+      continue;
+    }
+    const share = r.e > 0 ? `${(r.cost / r.e * 100).toFixed(r.cost / r.e >= 10 ? 0 : 1)}%` : '–';
+    const be = (r.bePct === null || r.beFee === null) ? '–' : `${r.bePct.toFixed(2)}% หรือ ${usd(r.beFee)}/ออเดอร์`;
+    const tip = `เคาะทุก ${r.label} (${r.k} แท่ง) · มูลค่าเทรดรวม ${usd(r.turn, 0)} · ${cnt(r.ord)} ออเดอร์`;
+    html += `<tr title="${tip}"><td>${r.label}</td><td>${usd(r.e)}</td><td>${cnt(r.ord)}</td>`
+      + `<td>${r.ord > 0 ? usd(r.turn / r.ord) : '–'}</td><td>${usd(r.cost)}</td><td>${share}</td>`
+      + `<td class="fx-cost-net${r.net < 0 ? ' fx-cost-neg' : ''}">${usd(r.net)}</td><td>${be}</td></tr>`;
+  }
+  table.innerHTML = html + '</tbody>';
+
+  const live = rows.filter(r => r.ok);
+  const bars = v.nowWins.reduce((s, m) => s + m.N, 0);
+  const parts = [`ช่วง "ตอนนี้" (${v.nowWins.length} window · ${bars.toLocaleString('en-US')} แท่ง) · FIX = ${usd(FIX_CAP, 0)} ต่อหุ้น`];
+  if (!(pct > 0 || fee > 0)) {
+    parts.push('<b>ยังไม่ได้ใส่ต้นทุน</b> E สุทธิจึงเท่ากับ E ก่อนต้นทุน · คอลัมน์ขวาสุดบอกว่าต้นทุนสูงได้แค่ไหนก่อนที่ E ของความถี่นั้นจะหมด');
+  } else {
+    const lost = live.filter(r => r.net < 0).map(r => r.label);
+    parts.push(lost.length
+      ? `<b>ต้นทุนมากกว่า E ที่ความถี่: ${lost.join(' · ')}</b>`
+      : '<b>ทุกความถี่ยังเหลือ E หลังหักต้นทุน</b>');
+  }
+  parts.push('E ก่อนต้นทุนของความถี่ห่าง ๆ มาจากการเคาะไม่กี่ครั้งจึงแกว่งมาก อย่าตัดสินจาก E ที่ต่างกันเล็กน้อย ส่วนต้นทุนเป็นค่าที่นับได้จริง');
+  parts.push('ค่าธรรมเนียมต่อออเดอร์ไม่โตตาม FIX แต่ E โตตาม FIX · ยังไม่รวมต้นทุนเปิดสถานะครั้งแรก');
+  note.innerHTML = parts.slice(0, 2).join(' · ') + '<br>' + parts.slice(2).join(' · ');
+}
+
 function renderFxNow() {
   if (!document.getElementById('fx-now-section')) return;
   const allWins = state.models[state.ticker];
@@ -4477,6 +4629,7 @@ function renderFxNow() {
   renderFxPrice(v, allWins);
   renderFxGrid(v, allWins);
   renderFxVerdict(v);
+  renderFxCost(v);
 }
 
 '''
@@ -4486,11 +4639,13 @@ FX_NOW_TIMEFRAME_OPTIONS: List[str] = ["15m", "1d"]  # ladder ของ k สอ
 FX_NOW_IFRAME_HEIGHT: int = 3000
 
 
-def inject_fx_now_panel(html_in: str) -> str:
+def inject_fx_now_panel(html_in: str, cost_pct: float = 0.0, cost_fee: float = 0.0) -> str:
     """แทรกแผง Now Panel (CSS + section + JS) ลงใน HTML ของ DNA Spectrum Explorer โดยไม่แก้ส่วนเดิม
 
     จุดยึดแต่ละจุดต้องพบ 1 ครั้งพอดี มิฉะนั้นโยน ValueError (กัน template เปลี่ยนแล้วแผงหายเงียบ ๆ)
+    cost_pct = ต้นทุนตามมูลค่าเทรด (%) · cost_fee = ค่าธรรมเนียมต่อออเดอร์ ($) → ค่าตั้งต้นของช่องกรอกในตาราง fx-cost
     """
+    import math as _math
     import re as _re
 
     if 'id="fx-now-section"' in html_in:
@@ -4499,6 +4654,21 @@ def inject_fx_now_panel(html_in: str) -> str:
     def _need(ok: bool, what: str) -> None:
         if not ok:
             raise ValueError(f"fx-now: จุดยึด {what} หายไปหรือซ้ำ — template ของ DNA Spectrum Explorer ถูกแก้?")
+
+    def _cost_value(raw: Any) -> str:
+        # ค่าที่ไม่ใช่ตัวเลข ติดลบ หรือไม่จำกัด ให้เป็น 0 · จำกัดทศนิยม 4 ตำแหน่ง (ผลลัพธ์มีแต่ตัวเลขกับจุด จึงใส่ใน attribute ได้ตรง ๆ)
+        try:
+            number = float(raw)
+        except (TypeError, ValueError):
+            return "0"
+        if not _math.isfinite(number) or number <= 0:
+            return "0"
+        return f"{min(number, 1_000_000.0):.4f}".rstrip("0").rstrip(".") or "0"
+
+    section_html = FX_NOW_SECTION_HTML
+    for token, value in (("__FX_COST_PCT__", _cost_value(cost_pct)), ("__FX_COST_FEE__", _cost_value(cost_fee))):
+        _need(section_html.count(token) == 1, token)
+        section_html = section_html.replace(token, value, 1)
 
     out = html_in
 
@@ -4510,7 +4680,7 @@ def inject_fx_now_panel(html_in: str) -> str:
 
     # 2) section: เป็นตัวแรกใน <main> (ไม่แก้บรรทัดแท็ก <main ...> เอง)
     _need(out.count(FX_NOW_MAIN_ANCHOR) == 1, "<main ...>")
-    out = out.replace(FX_NOW_MAIN_ANCHOR, FX_NOW_MAIN_ANCHOR + "\n    " + FX_NOW_SECTION_HTML, 1)
+    out = out.replace(FX_NOW_MAIN_ANCHOR, FX_NOW_MAIN_ANCHOR + "\n    " + section_html, 1)
 
     # 3) ค่าคงที่ FX_*: ต่อจากบรรทัด const COMPACT_COLS
     out, n = _re.subn(r"^(const COMPACT_COLS\b[^\n]*\n)", lambda m: m.group(1) + FX_NOW_JS_CONSTS, out, count=1, flags=_re.M)
@@ -4544,8 +4714,13 @@ def build_fx_now_html(
     max_k_cap: Optional[int] = None,
     window_mode: str = "half_month",
     fixed_window_size: int = 30,
+    cost_pct: float = 0.0,
+    cost_fee: float = 0.0,
 ) -> str:
-    """ประกอบ HTML ของแท็บ 9 = DNA Spectrum Explorer (ส่วนเดิมครบ) + แผง Now Panel ด้านบนสุด"""
+    """ประกอบ HTML ของแท็บ 9 = DNA Spectrum Explorer (ส่วนเดิมครบ) + แผง Now Panel ด้านบนสุด
+
+    cost_pct / cost_fee = ค่าตั้งต้นของช่องต้นทุนในตาราง "E หลังหักต้นทุนเทรด" (แก้ต่อได้ในแผงโดยไม่ต้อง rerun)
+    """
     base_html = build_dna_spectrum_explorer_html(
         data_map=data_map,
         meta_dict=meta_dict,
@@ -4553,7 +4728,7 @@ def build_fx_now_html(
         window_mode=window_mode,
         fixed_window_size=fixed_window_size,
     )
-    return inject_fx_now_panel(base_html)
+    return inject_fx_now_panel(base_html, cost_pct=cost_pct, cost_fee=cost_fee)
 
 
 def render_fx_now_tab():
@@ -4641,10 +4816,39 @@ def render_fx_now_tab():
             source_key="fxnow_source_mode",
             source_label="แหล่งข้อมูลตั้งต้น",
         )
+        r3c1, r3c2, r3c3 = st.columns([1.5, 1.2, 1.8])
+        with r3c1:
+            cost_pct_fx = st.number_input(
+                "ต้นทุนตามมูลค่าเทรด (%)",
+                min_value=0.0,
+                max_value=5.0,
+                value=0.0,
+                step=0.01,
+                format="%.3f",
+                key="fxnow_cost_pct",
+                help="ส่วนต่างราคาเสนอซื้อ-ขาย (spread) + ค่าคอมมิชชั่นแบบ % ต่อมูลค่าที่เทรดแต่ละครั้ง เช่น 0.10 = 0.10%",
+            )
+        with r3c2:
+            cost_fee_fx = st.number_input(
+                "ค่าธรรมเนียมต่อออเดอร์ ($)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.05,
+                format="%.2f",
+                key="fxnow_cost_fee",
+                help="ค่าธรรมเนียมคงที่หรือค่าคอมมิชชั่นขั้นต่ำต่อ 1 ออเดอร์ (ไม่ขึ้นกับขนาดออเดอร์)",
+            )
+        with r3c3:
+            st.caption(
+                "ตาราง **E หลังหักต้นทุนเทรด** เทียบการเคาะทุก 15m · 30m · 1h · 4h · 1d · 1w "
+                "(ใช้ Timeframe 15m จึงเห็นครบ 6 ความถี่ · 1d เห็นเฉพาะ 1d และ 1w) · "
+                "ค่าที่กรอกตรงนี้เป็นค่าตั้งต้น แก้ต่อในแผงได้ทันที"
+            )
         st.caption(
             "ตัววัด **ratio(k) = E เฉลี่ยทุก phase ของ k ÷ E ของ k1** (>1 มีแนวโน้ม · <1 แกว่งกลับตัว · ≈1 ไม่ชัด) · "
             "รวม 3 window ล่าสุดสำหรับ 15m และทุก window สำหรับ 1d · เกณฑ์ |z| ≥ 2.5 · "
-            "ยังไม่รวมค่าธรรมเนียม ไม่แนะนำ phase และไม่พยากรณ์อนาคต"
+            "คำตัดสินและตาราง ratio ยังไม่รวมต้นทุน ไม่แนะนำ phase และไม่พยากรณ์อนาคต"
         )
 
     active_fx_tickers = list(st.session_state.fxnow_tickers)
@@ -4679,6 +4883,8 @@ def render_fx_now_tab():
             max_k_cap=None,
             window_mode="half_month",
             fixed_window_size=int(st.session_state.window_size),
+            cost_pct=float(cost_pct_fx),
+            cost_fee=float(cost_fee_fx),
         )
     except ValueError as exc:
         st.error(f"ประกอบแผง Now Panel ไม่สำเร็จ: {exc}")
