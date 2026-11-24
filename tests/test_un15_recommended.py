@@ -29,7 +29,8 @@ PURE_NAMES = {
     "build_actions", "constant_value_core", "simulate_constant_value_path", "aggregate_portfolio", "running_floor",
     "capital_at_risk_path", "annualized_vol", "risk_parity_allocation", "equal_allocation", "correlation_summary",
     "dalio_risk_ratio", "diversification_ratio", "trap_flags", "projected_annual_excess", "rolling_window_stats",
-    "build_detailed_simulation_frame",
+    "build_detailed_simulation_frame", "PARADOX_UNIVERSE", "RUNWAY_FIELDS", "RUNWAY_SOURCE", "parse_tickers",
+    "drawdown_entry_index", "paradox_terms", "runway_months", "survival_pass", "extract_runway_inputs", "basket_backtest",
 }
 
 
@@ -183,6 +184,77 @@ class Formulas(unittest.TestCase):
         self.assertTrue(np.isnan(NEW["annualized_vol"]([1.0, 2.0])))
 
 
+class ParadoxBasket(unittest.TestCase):
+    def test_parse_tickers(self):
+        self.assertEqual(NEW["parse_tickers"]("bynd, SPCE  bynd\nqs"), ["BYND", "SPCE", "QS"])
+        self.assertIn("QBTS", NEW["parse_tickers"](NEW["PARADOX_UNIVERSE"]))
+
+    def test_drawdown_entry_index(self):
+        f = NEW["drawdown_entry_index"]
+        prices = [10, 12, 6, 3, 2.3, 2.5, 20, 3]
+        self.assertEqual(f(prices, -0.80), 4)          # 2.3 / 12 − 1 = −80.8%
+        self.assertEqual(f(prices, -0.50), 2)
+        self.assertIsNone(f([10, 9, 8.5], -0.8))
+
+    def test_runway_matches_skill_examples(self):
+        f = NEW["runway_months"]
+        usar = f(1530.1, 451.5, -56.9, 5.8, -69.7)       # skill calibration: USAR Q2'26
+        self.assertAlmostEqual(usar["burn"], 44.13, places=2)
+        self.assertAlmostEqual(usar["floor"], 24.4, places=1)
+        self.assertAlmostEqual(usar["ceiling"], 34.7, places=1)
+        self.assertEqual(usar["status"], "ปลอดภัย")          # > 24 months
+        bynd = f(154.623, 441.984, -14.102, 64.529, -1.497)   # liabilities > cash → floor 0, ceiling 5.8
+        self.assertEqual(bynd["floor"], 0.0)
+        self.assertAlmostEqual(bynd["ceiling"], 5.79, places=2)
+        self.assertEqual(f(100, 10, 50, 0, 0)["status"], "ไม่เผาเงิน")
+        self.assertEqual(f(100, 500, 20, 300, -5)["status"], "CFO บวก")
+        self.assertEqual(f(None, 1, 1, 1, 1)["status"], "ข้อมูลไม่ครบ")
+        self.assertEqual(f(100, 0, -10, 0, 5)["burn"], 10 / 3)      # positive CapEx = inflow → ignored
+
+    def test_survival_pass(self):
+        f, rw = NEW["survival_pass"], NEW["runway_months"]
+        self.assertTrue(f(rw(1530.1, 451.5, -56.9, 5.8, -69.7), 12))
+        self.assertFalse(f(rw(1530.1, 451.5, -56.9, 5.8, -69.7), 30))
+        debt_heavy = rw(2800, 4600, -170, 42, -314)          # floor 0, ceiling ≈ 16
+        self.assertFalse(f(debt_heavy, 12))
+        self.assertTrue(f(debt_heavy, 12, use_ceiling=True))
+        cfo_pos = rw(100, 500, 20, 300, -5)
+        self.assertTrue(f(cfo_pos, 12))
+        self.assertFalse(f(cfo_pos, 12, allow_cfo_positive=False))
+        self.assertFalse(f(rw(None, 1, 1, 1, 1), 0))
+
+    def test_extract_runway_inputs_from_yfinance_frames(self):
+        d1, d0 = pd.Timestamp("2026-09-30"), pd.Timestamp("2026-06-30")
+        bs = pd.DataFrame({d0: [1.0, 2.0], d1: [300.0, 100.0]},
+                          index=["Cash Cash Equivalents And Short Term Investments", "Total Liabilities Net Minority Interest"])
+        cf = pd.DataFrame({d1: [-30.0, np.nan], d0: [-20.0, -5.0]}, index=["Operating Cash Flow", "Capital Expenditure"])
+        inc = pd.DataFrame({d1: [12.0]}, index=["Total Revenue"])
+        out = NEW["extract_runway_inputs"](bs, cf, inc)
+        self.assertEqual(out, {"end_date": "2026-09-30", "cash": 300.0, "liabilities": 100.0, "cfo": -30.0,
+                               "capex": -5.0, "revenue": 12.0})
+        self.assertEqual(NEW["extract_runway_inputs"](pd.DataFrame(), pd.DataFrame(), pd.DataFrame())["capex"], 0.0)
+
+    def test_paradox_identity_cash_equals_sum_of_returns(self):
+        prices = np.concatenate([gbm(300, 1.0, 11, 50.0)[:150] * np.linspace(1, 0.15, 150), gbm(150, 1.0, 12, 7.5)])
+        re, _ = NEW["constant_value_core"](prices, np.ones(len(prices), dtype=np.int8), 1500.0, 0.0)
+        sum_r, ln_ratio, half_var = NEW["paradox_terms"](prices)
+        self.assertAlmostEqual(re.sum() / 1500.0, sum_r, places=10)        # act every bar: A/F = Σr exactly
+        self.assertAlmostEqual(sum_r, ln_ratio + half_var, delta=0.05 * abs(half_var) + 0.05)
+
+    def test_basket_backtest_starts_each_chain_at_entry(self):
+        idx = pd.date_range("2024-01-01", periods=200, freq="B")
+        a = pd.Series(gbm(200, 0.9, 13, 40.0), index=idx)
+        b = pd.Series(gbm(200, 0.9, 14, 15.0), index=idx)
+        total, per = NEW["basket_backtest"]({"A": a, "B": b}, {"A": 50, "B": 120}, {"A": 700.0, "B": 800.0}, 0.0)
+        self.assertEqual(total.index[0], idx[50])                          # basket starts at the first entry
+        re_a, _ = NEW["constant_value_core"](a.to_numpy()[50:], np.ones(150, dtype=np.int8), 700.0, 0.0)
+        np.testing.assert_allclose(total.loc[:idx[119]].to_numpy(), np.cumsum(re_a)[:70])   # only A before B enters
+        self.assertAlmostEqual(total.iloc[-1], per["A"]["A"] + per["B"]["A"], places=8)
+        self.assertEqual(per["B"]["entry"], idx[120])
+        self.assertAlmostEqual(per["A"]["A"], re_a.sum(), places=8)
+        self.assertGreaterEqual(per["A"]["E"], -1e-9)
+
+
 def _fake_yfinance() -> types.ModuleType:
     module = types.ModuleType("yfinance")
 
@@ -193,7 +265,23 @@ def _fake_yfinance() -> types.ModuleType:
         def history(self, period="max", auto_adjust=True):
             idx = pd.date_range("2023-01-02", periods=700, freq="B", tz="America/New_York")
             seed = sum(map(ord, self.symbol))
-            return pd.DataFrame({"Close": gbm(len(idx), 0.6, seed, 20.0 + seed % 50)}, index=idx)
+            prices = gbm(len(idx), 0.6 if not self.symbol.startswith("CRASH") else 1.1, seed, 20.0 + seed % 50)
+            if self.symbol.startswith("CRASH"):
+                prices = prices * np.concatenate([np.linspace(1.0, 0.1, 300), np.full(400, 0.1)])
+            return pd.DataFrame({"Close": prices}, index=idx)
+
+        @property
+        def quarterly_balance_sheet(self):
+            return pd.DataFrame({pd.Timestamp("2026-09-30"): [900.0, 100.0]},
+                                index=["Cash Cash Equivalents And Short Term Investments", "Total Liabilities Net Minority Interest"])
+
+        @property
+        def quarterly_cashflow(self):
+            return pd.DataFrame({pd.Timestamp("2026-09-30"): [-30.0, -3.0]}, index=["Operating Cash Flow", "Capital Expenditure"])
+
+        @property
+        def quarterly_income_stmt(self):
+            return pd.DataFrame({pd.Timestamp("2026-09-30"): [6.0]}, index=["Total Revenue"])
 
     module.Ticker = Ticker
     return module
@@ -234,6 +322,20 @@ class PageSmoke(unittest.TestCase):
         for sizing in ("เท่ากัน · งบรวมคงที่", "กำหนดเองรายตัว (แบบหน้าเดิม)"):
             at.radio(key="un15r_sizing").set_value(sizing).run()
             self.assertFalse(at.exception, at.exception)
+
+    def test_paradox_mode_runs(self):
+        at = AppTest.from_file(str(PAGE), default_timeout=120)
+        at.run()
+        at.radio(key="un15r_mode").set_value("🧩 Paradox basket").run()
+        self.assertFalse(at.exception, at.exception)
+        at.text_area(key="un15r_px_universe").set_value("CRASHA, CRASHB, CRASHC, SAFE, ZSL").run()
+        self.assertFalse(at.exception, at.exception)
+        labels = [m.label for m in at.metric]
+        for label in ("ΣA · เงินสดจริง", "Cash Burn", "Diversification ratio", "A > 0"):
+            self.assertIn(label, labels)
+        self.assertTrue(any("ZSL" in w.value for w in at.warning))
+        at.radio(key="un15r_px_sizing").set_value("Risk parity (σ 60 แท่งก่อนเข้า)").run()
+        self.assertFalse(at.exception, at.exception)
 
 
 if __name__ == "__main__":
