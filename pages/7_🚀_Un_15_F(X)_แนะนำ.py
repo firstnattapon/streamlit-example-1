@@ -9,6 +9,9 @@
   5. Projection   E ต่อปีจาก σ ล่าสุด: Σ ½·FAVᵢ·σᵢ²  แทน "ค่าเฉลี่ยในอดีต × 252"
   6. Survival     Cash_Balan (หน้าเดิมหักล้างตัวเองใน net_pv) → เทียบกับเงินสำรองที่ต้องใช้จริง
   7. อื่น ๆ        Return on capital ไม่มี look-ahead · ราคาไม่ปรับปันผลเป็นค่าเริ่มต้น · DIFF threshold แบบ bot
+โหมด 🧩 Paradox basket:
+  หุ้นที่ลง ≥ X% จากยอด → เข้า LEGO เมื่อแตะเกณฑ์ครั้งแรก → กรองความอยู่รอดด้วย Zero-Inflow Runway
+  เงินสด A/F = Σr ≈ ln(P_จบ/P_เข้า) + ½·Σr²  → ราคาลงแต่ A บวกได้เมื่อความผันผวนชนะการขาดทุนแบบ log
 
 ฟังก์ชันส่วนบน (ก่อน "Data + UI") เป็น pure: ไม่เรียก streamlit / yfinance — tests/test_un15_recommended.py อ่านด้วย ast
 """
@@ -330,6 +333,137 @@ def build_detailed_simulation_frame(data, successful_tickers, detail_period="ALL
 
 
 # --------------------------------
+# Paradox basket (pure)
+# --------------------------------
+PARADOX_UNIVERSE = (
+    "BYND, SPCE, LCID, CHPT, AMC, FUBO, TLRY, DNA, NVAX, SEDG, ENPH, SMR, TDOC, UPST, OPEN, RIVN, SNAP, QS, NIO, "
+    "TTD, NTLA, MARA, PTON, LUNR, OKLO, SOUN, BTDR, BBAI, RGTI, QBTS, NNE, MSTR, RUN, USAR, QUBT, JOBY, IREN, ASTS"
+)
+RUNWAY_FIELDS = {
+    "cash": ("Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents"),
+    "liabilities": ("Total Liabilities Net Minority Interest", "Total Liabilities"),
+    "cfo": ("Operating Cash Flow", "Cash Flow From Continuing Operating Activities"),
+    "capex": ("Capital Expenditure", "Purchase Of PPE"),
+    "revenue": ("Total Revenue", "Operating Revenue"),
+}
+RUNWAY_SOURCE = {"cash": "bs", "liabilities": "bs", "cfo": "cf", "capex": "cf", "revenue": "is"}
+
+
+def parse_tickers(text):
+    """"A, b  c" → ["A", "B", "C"] (ไม่ซ้ำ เรียงตามที่พิมพ์)"""
+    seen, out = set(), []
+    for raw in str(text).replace(",", " ").split():
+        ticker = raw.strip().upper()
+        if ticker and ticker not in seen:
+            seen.add(ticker)
+            out.append(ticker)
+    return out
+
+
+def drawdown_entry_index(prices, threshold):
+    """แท่งแรกที่ราคา ÷ ยอดสะสม − 1 ≤ threshold (เช่น −0.8) · ไม่เคยแตะ → None"""
+    prices = np.asarray(prices, dtype=np.float64)
+    if len(prices) == 0:
+        return None
+    drawdown = prices / np.maximum.accumulate(prices) - 1.0
+    hits = np.flatnonzero(drawdown <= threshold)
+    return int(hits[0]) if len(hits) else None
+
+
+def paradox_terms(prices):
+    """(Σr, ln(P_จบ/P_เข้า), ½·Σr²) · LEGO ที่ act ทุกแท่ง: A/F = Σr ≈ ln + ½Σr² → A > 0 ⇔ ½Σr² > −ln"""
+    prices = np.asarray(prices, dtype=np.float64)
+    returns = prices[1:] / prices[:-1] - 1.0
+    return float(returns.sum()), float(np.log(prices[-1] / prices[0])), float(0.5 * np.sum(returns * returns))
+
+
+def runway_months(cash, liabilities, cfo, revenue, capex, interest_income=0.0, months=3.0):
+    """Zero-Inflow Runway (สูตรเดียวกับ skill webull-runway)
+
+    Burn = (−CFO + Revenue + Interest Income + |CapEx|) ÷ เดือน · floor = (Cash − Liabilities) ÷ Burn · เพดาน = Cash ÷ Burn
+    CapEx บวก (ขายสินทรัพย์) = เงินเข้า → ไม่นับ · Burn ≤ 0 = ไม่เผาเงิน
+    """
+    values = [cash, liabilities, cfo, revenue, capex]
+    if any(v is None or not np.isfinite(float(v)) for v in values):
+        return {"burn": float("nan"), "floor": float("nan"), "ceiling": float("nan"), "status": "ข้อมูลไม่ครบ"}
+    cash, liabilities, cfo, revenue, capex = (float(v) for v in values)
+    burn = (-cfo + revenue + float(interest_income) + max(-capex, 0.0)) / float(months)
+    if burn <= 0:
+        return {"burn": burn, "floor": float("inf"), "ceiling": float("inf"), "status": "ไม่เผาเงิน"}
+    net_cash = cash - liabilities
+    floor = net_cash / burn if net_cash > 0 else 0.0
+    ceiling = max(cash, 0.0) / burn
+    if cfo >= 0:
+        status = "CFO บวก"
+    elif floor < 12:
+        status = "เสี่ยงสูง"
+    elif floor <= 24:
+        status = "เฝ้าระวัง"
+    else:
+        status = "ปลอดภัย"
+    return {"burn": burn, "floor": floor, "ceiling": ceiling, "status": status}
+
+
+def survival_pass(runway, min_months=12.0, use_ceiling=False, allow_cfo_positive=True):
+    """ผ่านเมื่อ floor (หรือเพดาน) ≥ min_months · CFO บวก / ไม่เผาเงิน ผ่านได้ตามตัวเลือก · ข้อมูลไม่ครบ = ไม่ผ่าน"""
+    status = runway.get("status")
+    if status == "ข้อมูลไม่ครบ":
+        return False
+    if status == "ไม่เผาเงิน":
+        return True
+    if status == "CFO บวก" and allow_cfo_positive:
+        return True
+    value = runway.get("ceiling" if use_ceiling else "floor", float("nan"))
+    return bool(value is not None and not np.isnan(value) and value >= min_months)
+
+
+def extract_runway_inputs(balance_sheet, cashflow, income):
+    """งบรายไตรมาสของ yfinance (แถว = รายการ, คอลัมน์ = วันสิ้นงวด) → ค่าล่าสุดของ cash / liabilities / cfo / capex / revenue"""
+    frames = {"bs": balance_sheet, "cf": cashflow, "is": income}
+    out = {"end_date": None}
+    for key, names in RUNWAY_FIELDS.items():
+        frame = frames[RUNWAY_SOURCE[key]]
+        value = None
+        if frame is not None and not frame.empty:
+            ordered = frame.loc[:, sorted(frame.columns, reverse=True)]
+            for name in names:
+                if name in ordered.index:
+                    series = pd.to_numeric(ordered.loc[name], errors="coerce").dropna()
+                    if len(series):
+                        value = float(series.iloc[0])
+                        if key == "cash":
+                            out["end_date"] = str(pd.Timestamp(series.index[0]).date())
+                        break
+        out[key] = value
+    if out["capex"] is None:
+        out["capex"] = 0.0
+    return out
+
+
+def basket_backtest(price_map, entries, favs, diff_pct=0.0):
+    """เริ่ม chain ของแต่ละตัวที่แท่งเข้า (act ทุกแท่ง + DIFF) → (ΣA ตามเวลา, รายตัว)"""
+    paths, per = {}, {}
+    for ticker, start in entries.items():
+        series = price_map[ticker]
+        prices = series.to_numpy(dtype=np.float64)[start:]
+        fav = float(favs.get(ticker, 0.0))
+        if len(prices) < 2 or fav <= 0:
+            continue
+        re, amount = constant_value_core(prices, np.ones(len(prices), dtype=np.int8), fav, diff_pct * fav)
+        cash = np.cumsum(re)
+        excess = float(cash[-1] + amount[-1] * prices[-1] - fav - fav * np.log(prices[-1] / prices[0]))
+        sum_r, ln_ratio, half_var = paradox_terms(prices)
+        paths[ticker] = pd.Series(cash, index=series.index[start:])
+        per[ticker] = {"entry": series.index[start], "entry_price": float(prices[0]), "last": float(prices[-1]),
+                       "fav": fav, "A": float(cash[-1]), "E": excess, "floor": min(0.0, float(cash.min())),
+                       "sum_r": sum_r, "ln": ln_ratio, "half_var": half_var}
+    if not paths:
+        return pd.Series(dtype=np.float64), per
+    total = pd.concat(paths, axis=1).sort_index().ffill().fillna(0.0).sum(axis=1)
+    return total, per
+
+
+# --------------------------------
 # Data + UI
 # --------------------------------
 def load_config(filename="un15_fx_config.json"):
@@ -402,6 +536,175 @@ def ticker_controls(full_config, default_config):
     return {t: dict(full_config.get(t) or custom.get(t)) for t in selected}
 
 
+@st.cache_data(ttl=24 * 3600, show_spinner=False)
+def fetch_runway_inputs(ticker):
+    """งบรายไตรมาสล่าสุดจาก yfinance → input ของ runway_months"""
+    t = yf.Ticker(ticker)
+    return extract_runway_inputs(t.quarterly_balance_sheet, t.quarterly_cashflow, t.quarterly_income_stmt)
+
+
+def paradox_page():
+    """โหมด Paradox basket: คัด → ตั้งจุดเข้า → กรองความอยู่รอด → backtest LEGO จากจุดเข้า"""
+    st.subheader("🧩 Paradox basket")
+    st.caption(
+        "หุ้นที่ราคาตก ≥ X% จากยอด รวมเป็นตะกร้า LEGO: เงินสด A/F = Σr ≈ ln(P_จบ/P_เข้า) + ½·Σr² — "
+        "ราคาลงต่อแต่ A ยังบวกได้ถ้า ½Σr² ชนะการขาดทุนแบบ log · เข้าเมื่อแตะเกณฑ์ (ส่วนที่ลงพร้อมกันทั้งตลาดผ่านไปแล้ว) · "
+        "กระจายหลายตัวเพื่อกันตัวที่ไปศูนย์ · กรองด้วย Zero-Inflow Runway"
+    )
+    with st.expander("⚙️ ตั้งค่า Paradox", expanded=True):
+        c1, c2, c3 = st.columns(3)
+        universe = parse_tickers(c1.text_area("รายชื่อหุ้นที่จะสแกน (คั่นด้วย , หรือเว้นวรรค)", PARADOX_UNIVERSE,
+                                              height=160, key="un15r_px_universe"))
+        threshold = -float(c2.slider("จุดเข้า: ราคาลงจากยอด (%)", 50, 95, 80, 5, key="un15r_px_threshold")) / 100.0
+        lookback = c2.selectbox("หายอดย้อนหลัง", ["5 ปี", "3 ปี", "10 ปี", "ทั้งหมด"], key="un15r_px_lookback")
+        budget = float(c2.number_input("งบรวม ΣFAV (USD)", min_value=0.0, value=FIXED_ASSET_RESET_USD, step=100.0,
+                                       key="un15r_px_budget"))
+        sizing = c2.radio("แบ่งเงิน", ["เท่ากัน", "Risk parity (σ 60 แท่งก่อนเข้า)"], key="un15r_px_sizing")
+        diff_pct = float(c3.number_input("DIFF (% ของ FAV)", min_value=0.0, max_value=50.0, value=round(LEGO_DIFF_PCT, 2),
+                                         step=0.5, key="un15r_px_diff")) / 100.0
+        check_runway = c3.checkbox("กรองความอยู่รอด (Zero-Inflow Runway จากงบ yfinance)", value=True,
+                                   key="un15r_px_check")
+        min_runway = float(c3.number_input("Runway ขั้นต่ำ (เดือน)", min_value=0.0, max_value=120.0, value=12.0,
+                                           step=3.0, key="un15r_px_min_runway"))
+        use_ceiling = c3.checkbox("หนี้ ≥ เงินสด → ใช้เพดาน Cash ÷ Burn แทน", value=False, key="un15r_px_ceiling")
+        allow_cfo = c3.checkbox("CFO บวก (หาเงินเองได้) = ผ่าน", value=True, key="un15r_px_cfo")
+
+    skipped = [t for t in universe if t.split("-")[0] in LEVERAGED_OR_INVERSE]
+    if skipped:
+        st.warning("ข้าม ETF leveraged/inverse (E ไม่ใช่เงินจริง): " + ", ".join(skipped))
+    universe = [t for t in universe if t not in skipped]
+    if not universe:
+        st.info("ใส่รายชื่อหุ้นอย่างน้อย 1 ตัว")
+        return
+    years = {"3 ปี": 3, "5 ปี": 5, "10 ปี": 10}.get(lookback)
+    start = "1970-01-01 00:00:00+07:00" if years is None else str(
+        (pd.Timestamp.now(tz="Asia/Bangkok") - pd.DateOffset(years=years)).date()) + " 00:00:00+07:00"
+
+    closes, failed = {}, []
+    with st.spinner(f"Downloading {len(universe)} price histories..."):
+        for ticker in universe:
+            try:
+                series = fetch_close(ticker, start, False)
+            except Exception:
+                series = pd.Series(dtype=np.float64)
+            if len(series) >= 30:
+                closes[ticker] = series
+            else:
+                failed.append(ticker)
+    if failed:
+        st.caption("ไม่มีข้อมูลราคาพอ: " + ", ".join(failed))
+    if not closes:
+        st.error("ไม่มีข้อมูลราคา")
+        return
+
+    rows, entries = [], {}
+    for ticker, series in closes.items():
+        prices = series.to_numpy(dtype=np.float64)
+        entry = drawdown_entry_index(prices, threshold)
+        dd_now = prices[-1] / prices.max() - 1.0
+        if entry is not None:
+            entries[ticker] = entry
+        rows.append({"Ticker": ticker, "ราคา": prices[-1], "ยอด": prices.max(),
+                     "วันยอด": series.index[int(np.argmax(prices))].date(), "ลงจากยอดตอนนี้": dd_now,
+                     "แตะเกณฑ์ครั้งแรก": None if entry is None else series.index[entry].date(),
+                     "σ 1 ปี": annualized_vol(prices, TRADING_DAYS), "อยู่ในโซน": dd_now <= threshold})
+    screen = pd.DataFrame(rows).set_index("Ticker").sort_values("ลงจากยอดตอนนี้")
+    in_zone = list(screen.index[screen["อยู่ในโซน"]])
+
+    runway = {}
+    if check_runway and in_zone:
+        with st.spinner(f"Checking runway for {len(in_zone)} tickers..."):
+            for ticker in in_zone:
+                try:
+                    inputs = fetch_runway_inputs(ticker)
+                    runway[ticker] = runway_months(inputs["cash"], inputs["liabilities"], inputs["cfo"],
+                                                   inputs["revenue"], inputs["capex"]) | {"end_date": inputs["end_date"]}
+                except Exception:
+                    runway[ticker] = runway_months(None, None, None, None, None) | {"end_date": None}
+    passed = [t for t in in_zone if not check_runway or survival_pass(runway[t], min_runway, use_ceiling, allow_cfo)]
+
+    # ---- screen table ----
+    st.markdown(f"**สแกน {len(closes)} ตัว · อยู่ในโซน ≤ {threshold:.0%} จากยอด {len(in_zone)} ตัว · "
+                f"ผ่านกรองความอยู่รอด {len(passed)} ตัว**")
+    table = screen.copy()
+    table["Runway floor"] = [runway.get(t, {}).get("floor") for t in table.index]
+    table["เพดาน"] = [runway.get(t, {}).get("ceiling") for t in table.index]
+    table["สถานะ runway"] = [runway.get(t, {}).get("status", "—" if t in in_zone else "") for t in table.index]
+    table["ตะกร้าวันนี้"] = ["✅" if t in passed else ("❌" if t in in_zone else "") for t in table.index]
+    show = table.drop(columns=["อยู่ในโซน"])
+    for col in ("ราคา", "ยอด", "Runway floor", "เพดาน"):
+        show[col] = [_money(float(v)) if v is not None and np.isfinite(v) else ("∞" if v == np.inf else "—")
+                     for v in show[col]]
+    show["ลงจากยอดตอนนี้"] = [_pct(100 * float(v), 0) for v in show["ลงจากยอดตอนนี้"]]
+    show["σ 1 ปี"] = [_pct(100 * float(v), 0) for v in show["σ 1 ปี"]]
+    st.dataframe(show, width="stretch")
+    if check_runway:
+        st.caption("Runway = (Cash − Liabilities) ÷ Burn · Burn = (−CFO + Revenue + |CapEx|) ÷ 3 · งบไตรมาสล่าสุดจาก yfinance · "
+                   "เป็นตัววัดความเสี่ยง ไม่ใช่สัญญาณซื้อขาย")
+
+    # ---- cycle gate: ρ of today's basket ----
+    if len(passed) >= 2:
+        recent = pd.DataFrame({t: closes[t] for t in passed}).pct_change().iloc[-60:].dropna(how="all")
+        _, rho60, bets = correlation_summary(recent.dropna(axis=1, thresh=40).dropna())
+        message = (f"ตะกร้าวันนี้ {len(passed)} ตัว · ρ เฉลี่ย 60 แท่ง {_ratio(rho60)} · effective bets {bets:.1f}")
+        if np.isfinite(rho60) and rho60 > 0.5:
+            st.warning(message + " — ρ > 0.5 = ยังเป็นช่วงที่ลงพร้อมกันทั้งกลุ่ม (หลัก Cycle: รอ หรือทยอยเข้า และเลือกตัวต่างธีม)")
+        else:
+            st.success(message + " — ρ ≤ 0.5 การกระจายเริ่มทำงาน")
+
+    # ---- backtest from first touch (no survival filter → no look-ahead) ----
+    st.subheader(f"Backtest: เข้าเมื่อแตะ {threshold:.0%} ครั้งแรก")
+    if not entries:
+        st.info("ยังไม่มีตัวไหนแตะเกณฑ์ในช่วงข้อมูล")
+        return
+    if sizing.startswith("Risk parity"):
+        vols = {}
+        for ticker, entry in entries.items():
+            window = closes[ticker].to_numpy(dtype=np.float64)[max(0, entry - 60):entry + 1]
+            vols[ticker] = annualized_vol(window) if len(window) >= 3 else float("nan")
+        favs = risk_parity_allocation(vols, budget)
+    else:
+        favs = equal_allocation(entries, budget)
+    total, per = basket_backtest(closes, entries, favs, diff_pct)
+    if total.empty:
+        st.info("ไม่มีข้อมูลพอสำหรับ backtest")
+        return
+    floors = [v["floor"] for v in per.values()]
+    cash_burn = min(0.0, float(total.min()))
+    a_pos = sum(v["A"] > 0 for v in per.values())
+    paradox = sum(v["A"] > 0 and v["last"] < v["entry_price"] for v in per.values())
+    below = sum(v["last"] < v["entry_price"] for v in per.values())
+    k = st.columns(5)
+    k[0].metric("ΣA · เงินสดจริง", _money(float(total.iloc[-1])))
+    k[1].metric("ΣE", _money(float(sum(v["E"] for v in per.values()))))
+    k[2].metric("Cash Burn", _money(cash_burn), help="min(0, ค่าต่ำสุดของ ΣA) — สูตรเดียวกับ LEGO")
+    k[3].metric("Diversification ratio", _ratio(diversification_ratio(cash_burn, floors)))
+    k[4].metric("A > 0", f"{a_pos}/{len(per)}", help=f"paradox: ราคาจบต่ำกว่าราคาเข้า {below} ตัว แต่ A > 0 {paradox} ตัว")
+    st.caption(f"Paradox: {below} ตัวราคาจบต่ำกว่าราคาที่เข้า — ในนั้น {paradox} ตัวยังได้เงินสด A > 0 · "
+               "backtest นี้ไม่ใช้ตัวกรองความอยู่รอด (งบวันนี้ใช้กับอดีตไม่ได้ = look-ahead) · "
+               "รายชื่อที่ยังซื้อขายได้วันนี้มี survivorship bias")
+
+    g1, g2 = st.columns(2)
+    g1.plotly_chart(px.line(total.rename("ΣA · Cumulative Cash"), title="เงินสดสะสมของตะกร้า (chain เริ่มที่จุดเข้าของแต่ละตัว)",
+                            labels={"value": "USD", "index": "", "variable": ""}), width="stretch")
+    scatter = pd.DataFrame([{"Ticker": t, "−ln(P_จบ/P_เข้า)": -v["ln"], "½Σr²": v["half_var"],
+                             "A > 0": "A > 0" if v["A"] > 0 else "A ≤ 0"} for t, v in per.items()])
+    fig = px.scatter(scatter, x="−ln(P_จบ/P_เข้า)", y="½Σr²", color="A > 0", text="Ticker",
+                     color_discrete_map={"A > 0": "#16A34A", "A ≤ 0": "#DC2626"},
+                     title="กฎ Paradox: เหนือเส้นทแยง = ความผันผวนชนะการขาดทุนของราคา → A > 0")
+    edge = float(max(scatter["−ln(P_จบ/P_เข้า)"].abs().max(), scatter["½Σr²"].max(), 0.1))
+    fig.add_trace(go.Scatter(x=[-edge, edge], y=[-edge, edge], mode="lines", name="½Σr² = −ln",
+                             line={"dash": "dash", "color": "gray"}))
+    fig.update_traces(textposition="top center", selector={"mode": "markers+text"})
+    g2.plotly_chart(fig, width="stretch")
+
+    detail = pd.DataFrame([{"Ticker": t, "เข้า": v["entry"].date(), "ราคาเข้า": _money(v["entry_price"]),
+                            "ราคาล่าสุด": _money(v["last"]), "ราคาเปลี่ยน": _pct(100 * (v["last"] / v["entry_price"] - 1), 0),
+                            "FAV": _money(v["fav"]), "A": _money(v["A"]), "E": _money(v["E"]), "Floor": _money(v["floor"]),
+                            "ตะกร้าวันนี้": "✅" if t in passed else ""} for t, v in per.items()]).set_index("Ticker")
+    st.dataframe(detail, width="stretch")
+
+
 def main():
     st.set_page_config(page_title="Un_15_F(X) แนะนำ", page_icon="🚀", layout="wide")
     st.title("🚀 Un_15 F(X) · แนะนำ")
@@ -409,6 +712,10 @@ def main():
         "เครื่องยนต์เดิมของ Un_15 (constant value + log reference) + ข้อแนะนำ: A guard · Correlation · "
         "Rolling start · Risk parity · E projection จาก σ · Survival test · ไม่มี look-ahead"
     )
+    mode = st.radio("โหมด", ["Un_15 · พอร์ตที่เลือก", "🧩 Paradox basket"], horizontal=True, key="un15r_mode")
+    if mode == "🧩 Paradox basket":
+        paradox_page()
+        return
 
     full_config, default_config = load_config()
     if not (full_config or default_config):
